@@ -1,4 +1,5 @@
 #include "query/execution/OrderByComparison.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 /**
  * @file LogicalPlanProcedureRuntime.cpp
  * @brief Implementation of bounded logical stored procedures.

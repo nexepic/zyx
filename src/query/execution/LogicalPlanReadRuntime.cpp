@@ -1,4 +1,5 @@
 #include "graph/storage/LogicalGraphNodeScan.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #ifndef ZYX_EXPERIMENTAL_STREAMING_COUNT
 #define ZYX_EXPERIMENTAL_STREAMING_COUNT 0
 #endif
@@ -181,7 +182,7 @@ namespace graph::query::execution {
             if (!state.shared.snapshot.bindingSchemaIdentity()) return;
             bindProgramWithHeadroom(state.shared, [&] {
                 detail::BudgetMemoryResource memory(state.shared.materialized_budget);
-                std::pmr::vector<std::string_view> names(&memory);
+                utils::AdmissionPmrVector<std::string_view> names(&memory);
                 for (const auto &[name, value] : row.values) { checkGuardNow(state); names.push_back(name); }
                 std::ranges::sort(names);
                 state.shared.bound_program.emplace(root, state.shared.snapshot, state.shared.materialized_budget,

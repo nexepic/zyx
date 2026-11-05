@@ -6,6 +6,7 @@
  * Licensed under the Apache License, Version 2.0.
  */
 
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include "graph/query/gds/LogicalGraphProjection.hpp"
 
 #include "graph/core/PropertyTypes.hpp"
@@ -34,7 +35,7 @@ namespace graph::query::gds {
 		constexpr size_t MAXIMUM_WEIGHT_COLUMN_BATCH = 256U;
 
 		[[nodiscard]] bool containsLabel(const storage::LogicalGraphNode &node,
-												const std::pmr::unordered_set<std::string_view> &labels) {
+												const utils::AdmissionPmrUnorderedSet<std::string_view> &labels) {
 			if (labels.empty()) {
 				return true;
 			}
@@ -140,7 +141,7 @@ namespace graph::query::gds {
 		}
 
 		const auto workspaceOwner = utils::sharedAllocationOwner();
-		std::pmr::unordered_set<std::string_view> labelFilter(workspaceOwner.get());
+		utils::AdmissionPmrUnorderedSet<std::string_view> labelFilter(workspaceOwner.get());
 		labelFilter.reserve(spec.node_labels.size());
 		for (const std::string &label: spec.node_labels) {
 			if (label.empty() || !labelFilter.insert(label).second) {
@@ -154,7 +155,7 @@ namespace graph::query::gds {
 		if (relationships->empty()) {
 			relationships = nullptr;
 		}
-		std::pmr::unordered_map<std::string_view, const LogicalRelationshipProjection *> byType(workspaceOwner.get());
+		utils::AdmissionPmrUnorderedMap<std::string_view, const LogicalRelationshipProjection *> byType(workspaceOwner.get());
 		const LogicalRelationshipProjection *allTypes = relationships == nullptr ? &defaultRelationship : nullptr;
 		if (relationships != nullptr) {
 			byType.reserve(relationships->size());
@@ -232,7 +233,7 @@ namespace graph::query::gds {
 			}
 			afterNodeId = page.nodes.back().node_id;
 		}
-		std::pmr::unordered_set<uint64_t> selectedNodes(workspaceOwner.get());
+		utils::AdmissionPmrUnorderedSet<uint64_t> selectedNodes(workspaceOwner.get());
 		selectedNodes.reserve(projection.node_ids_.size());
 		selectedNodes.insert(projection.node_ids_.begin(), projection.node_ids_.end());
 
@@ -244,7 +245,7 @@ namespace graph::query::gds {
 			const LogicalRelationshipProjection *relationship = nullptr;
 			double weight = 1.0;
 		};
-		std::pmr::map<std::string_view, size_t> weightColumnBytes(workspaceOwner.get());
+		utils::AdmissionPmrMap<std::string_view, size_t> weightColumnBytes(workspaceOwner.get());
 		for (const uint64_t nodeId: projection.node_ids_) {
 			// A physical adjacency page may be smaller than the logical per-Node
 			// budget. Consume its continuation until the bounded budget is exhausted;
@@ -269,7 +270,7 @@ namespace graph::query::gds {
 				}
 				utils::OwnedStdVector<PendingRelationship> pending;
 				pending.reserve(page.edges.size());
-				std::pmr::map<std::string_view, utils::OwnedStdVector<size_t>> weightColumns(workspaceOwner.get());
+				utils::AdmissionPmrMap<std::string_view, utils::OwnedStdVector<size_t>> weightColumns(workspaceOwner.get());
 				for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
 				checkBuild();
 				if (edge.edge_id == 0U || edge.edge_id <= previousEdgeId || edge.source_node_id == 0U ||

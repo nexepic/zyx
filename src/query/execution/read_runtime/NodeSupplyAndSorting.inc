@@ -269,9 +269,9 @@
 										directLayout.emplace(propertyKeys, state.shared.materialized_budget,
 											std::pmr::get_default_resource(), directGuard);
 										detail::BudgetMemoryResource metadataMemory(state.shared.materialized_budget);
-										std::pmr::vector<detail::BatchColumnSource> sources(&metadataMemory);
-										std::pmr::vector<uint32_t> selectedRows(&metadataMemory);
-										std::pmr::vector<uint64_t> originalOrdinals(nodeIds.size(), 0U, &metadataMemory);
+										utils::AdmissionPmrVector<detail::BatchColumnSource> sources(&metadataMemory);
+										utils::AdmissionPmrVector<uint32_t> selectedRows(&metadataMemory);
+										utils::AdmissionPmrVector<uint64_t> originalOrdinals(nodeIds.size(), 0U, &metadataMemory);
 										for (size_t c = 0; c < propertyKeys.size(); ++c) sources.push_back(detail::BatchColumnSource::direct(*direct, c));
 										for (size_t original = 0; original < lookupOrdinals.size(); ++original) {
 											directGuard(); const auto sorted = lookupOrdinals[original]; originalOrdinals[sorted] = original;
@@ -457,7 +457,7 @@
                 state.shared.snapshot.hasImmutableReadIdentity()) {
                 MaterializedByteReservation batchSourceBytes(&state.shared.materialized_budget);
                 detail::BudgetMemoryResource sourceKeyMemory(state.shared.materialized_budget);
-                std::pmr::vector<std::string_view> sourceKeys(&sourceKeyMemory);
+                utils::AdmissionPmrVector<std::string_view> sourceKeys(&sourceKeyMemory);
                 bool emittedBatch = false;
                 std::optional<bool> result;
                 try {

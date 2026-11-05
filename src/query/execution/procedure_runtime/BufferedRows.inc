@@ -352,6 +352,7 @@
 			releaseProcedureContainer(buffered.row.values);
 			releaseProcedureContainer(buffered.row.property_cache);
 			releaseProcedureContainer(buffered.row.entity_metadata_cache);
+			releaseProcedureContainer(buffered.row.complete_entity_property_cache);
 			releaseProcedureContainer(buffered.row.path_cache);
 			releaseProcedureContainer(buffered.node_properties);
 			const size_t liveBytes = checkedProcedureSizeAdd(retainedSourceBytes,

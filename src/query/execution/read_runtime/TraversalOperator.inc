@@ -106,7 +106,7 @@
 									if (!edgePredicates.empty() && state.shared.snapshot.supportsNodeExistenceProbes() &&
 											!std::ranges::any_of(edgePredicates, [](const auto &predicate) { return isNull(predicate.second); })) {
 										detail::BudgetMemoryResource endpointMemory(state.shared.materialized_budget);
-										std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
+										utils::AdmissionPmrVector<uint64_t> endpointIds{&endpointMemory};
 										endpointIds.reserve(pendingReferences.size());
 										for (const auto &reference: pendingReferences) {
 											endpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
@@ -259,7 +259,7 @@
 									// previous per-reference complete read made a high-degree
 									// anchored traversal pay one Entity/Property lookup per Edge.
 									detail::BudgetMemoryResource targetScratchMemory(state.shared.materialized_budget);
-									std::pmr::vector<TargetCandidate> targets{&targetScratchMemory};
+									utils::AdmissionPmrVector<TargetCandidate> targets{&targetScratchMemory};
 									targets.reserve(pendingReferences.size());
 									for (size_t index = 0U; index < pendingReferences.size(); ++index) {
 										if (!selection.includes(index)) {
@@ -276,7 +276,7 @@
 										pendingReferences.clear();
 										return true;
 									}
-									std::pmr::vector<uint64_t> targetIds{&targetScratchMemory};
+									utils::AdmissionPmrVector<uint64_t> targetIds{&targetScratchMemory};
 									targetIds.reserve(targets.size());
 									for (const TargetCandidate &target: targets) {
 										// Deduplicate after sorting.  A linear search here turns a
@@ -326,7 +326,7 @@
 											}
 										}
 									}
-									std::pmr::vector<std::string_view> targetKeyViews{&targetScratchMemory};
+									utils::AdmissionPmrVector<std::string_view> targetKeyViews{&targetScratchMemory};
 									targetKeyViews.reserve(targetPredicates.size());
 									for (const auto &[key, expected]: targetPredicates) targetKeyViews.push_back(key);
 									MaterializedByteReservation targetPropertyBytes(&state.shared.materialized_budget);
@@ -604,13 +604,13 @@
 										 state.shared.snapshot.supportsNodeExistenceProbes()) &&
 										(traversal.getTargetProperties().empty() || targetPropertiesCanBeSelected);
 								detail::BudgetMemoryResource pageTargetMemory(state.shared.materialized_budget);
-								std::pmr::unordered_map<uint64_t, bool> pageTargetMatches{&pageTargetMemory};
+								utils::AdmissionPmrUnorderedMap<uint64_t, bool> pageTargetMatches{&pageTargetMemory};
 								// Both topology and complete adjacency pages already carry endpoint
 								// IDs. Validate their liveness once per bounded page instead of
 								// performing a Directory lookup for every Edge. The map is page-local
 								// so memory remains bounded by the adjacency page limit and
 								// early-stop semantics stay unchanged at the visitor boundary.
-								std::pmr::unordered_map<uint64_t, bool> pageTargetPresence{&pageTargetMemory};
+								utils::AdmissionPmrUnorderedMap<uint64_t, bool> pageTargetPresence{&pageTargetMemory};
 								if (state.shared.snapshot.supportsNodeExistenceProbes() &&
 									traversal.getTargetLabels().empty() && traversal.getTargetProperties().empty()) {
 									// Validate the topology record before building a batch request.  The
@@ -626,7 +626,7 @@
 											validateEdge(edge);
 										}
 									}
-									std::pmr::vector<uint64_t> pageTargetIds{&pageTargetMemory};
+									utils::AdmissionPmrVector<uint64_t> pageTargetIds{&pageTargetMemory};
 									pageTargetIds.reserve(pageSize);
 									if (topologyPage.has_value()) {
 										for (const auto &topology: topologyPage->edges) {
@@ -661,7 +661,7 @@
 									}
 								}
 								if (canBatchTargetShape) {
-									std::pmr::vector<uint64_t> targetIds{&pageTargetMemory};
+									utils::AdmissionPmrVector<uint64_t> targetIds{&pageTargetMemory};
 									targetIds.reserve(pageSize);
 									if (topologyPage.has_value()) {
 										for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
@@ -697,7 +697,7 @@
 													"logical graph backend changed target label-match cardinality");
 										}
 									}
-									std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> orderedTargetPredicates{&pageTargetMemory};
+									utils::AdmissionPmrVector<std::pair<std::string_view, const PropertyValue *>> orderedTargetPredicates{&pageTargetMemory};
 									orderedTargetPredicates.reserve(traversal.getTargetProperties().size());
 									for (const auto &[key, expected]: traversal.getTargetProperties()) {
 										checkGuardNow(state);
@@ -705,7 +705,7 @@
 										orderedTargetPredicates.emplace_back(key, &expected);
 									}
 									std::ranges::sort(orderedTargetPredicates, {}, [](const auto &predicate) { return predicate.first; });
-									std::pmr::vector<std::string_view> targetKeyViews{&pageTargetMemory};
+									utils::AdmissionPmrVector<std::string_view> targetKeyViews{&pageTargetMemory};
 									targetKeyViews.reserve(orderedTargetPredicates.size());
 									for (const auto &[key, expected] : orderedTargetPredicates) targetKeyViews.push_back(key);
 									MaterializedByteReservation targetPropertyBytes(&state.shared.materialized_budget);
@@ -911,7 +911,7 @@
 									// endpoint validation, duplicate handling, and early-stop
 									// semantics remain identical to the complete-page path.
 									detail::BudgetMemoryResource matchingIdMemory(state.shared.materialized_budget);
-									std::pmr::vector<uint64_t> matchingIds{&matchingIdMemory};
+									utils::AdmissionPmrVector<uint64_t> matchingIds{&matchingIdMemory};
 									matchingIds.reserve(topologyPage->edges.size());
 									for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
 										checkGuardNow(state);

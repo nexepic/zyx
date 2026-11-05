@@ -99,10 +99,10 @@
 			// entity must not turn this convenience cache into an unbounded copy of
 			// the Property store.
 			detail::BudgetMemoryResource entity_cache_memory{materialized_budget};
-			std::pmr::unordered_map<uint64_t, storage::LogicalGraphNode> node_cache{&entity_cache_memory};
+			utils::AdmissionPmrUnorderedMap<uint64_t, storage::LogicalGraphNode> node_cache{&entity_cache_memory};
 			// Keep the same bounded reuse for Edge references that cross a result
 			// boundary more than once (for example, a repeated path or projection).
-			std::pmr::unordered_map<uint64_t, storage::LogicalGraphEdge> edge_cache{&entity_cache_memory};
+			utils::AdmissionPmrUnorderedMap<uint64_t, storage::LogicalGraphEdge> edge_cache{&entity_cache_memory};
 			size_t materialized_cache_bytes = 0U;
 			std::optional<detail::BoundExecutionProgram> bound_program{};
 		};
@@ -251,6 +251,16 @@
 		[[nodiscard]] size_t logicalReadRowBytesIncluding(const LogicalPlanReadRow &row, Include includes, const QueryContext *context = nullptr, bool includeValues = true, bool excludeBoundEntityCaches = false) {
 			if (context != nullptr) context->checkGuardNow();
 			size_t bytes = sizeof(row);
+			size_t retained = sizeof(row);
+			const auto retainEntry = [&](const auto &entries, const std::string &name, const auto &value) {
+				using Container = std::remove_cvref_t<decltype(entries)>;
+				retained = checkedSizeAdd(retained, detail::executionBindingNodeBytes<Container>(),
+					"logical-plan row node bytes overflowed");
+				retained = checkedSizeAdd(retained, detail::dynamicStringBufferBytes(name),
+					"logical-plan row key bytes overflowed");
+				retained = checkedSizeAdd(retained, detail::procedurePayloadHeapUpper<false>(value),
+					"logical-plan row payload bytes overflowed");
+			};
 			const auto invalidatedCache = [&](const std::string &alias) {
 				if (!excludeBoundEntityCaches) return false;
 				const auto binding = row.values.find(alias);
@@ -269,6 +279,7 @@
 				checkpoint();
 				if (!includeValues || !includes(name))
 					continue;
+				retainEntry(row.values, name, value);
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row materialization size overflowed");
 				bytes = checkedSizeAdd(bytes, sizeof(value), "logical-plan row materialization size overflowed");
 				bytes = checkedSizeAdd(bytes, logicalReadValueBytes(value, context),
@@ -278,6 +289,7 @@
 				checkpoint();
 				if (!includes(name) || invalidatedCache(name))
 					continue;
+				retainEntry(row.property_cache, name, properties);
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row materialization size overflowed");
 				for (const auto &[key, value]: properties) {
 					bytes = checkedSizeAdd(bytes, key.size(), "logical-plan row materialization size overflowed");
@@ -289,6 +301,7 @@
 				checkpoint();
 				if (!includes(name) || invalidatedCache(name))
 					continue;
+				retainEntry(row.entity_metadata_cache, name, metadata);
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row metadata size overflowed");
 				for (const auto &[key, value]: metadata) {
 					bytes = checkedSizeAdd(bytes, key.size(), "logical-plan row metadata size overflowed");
@@ -300,6 +313,7 @@
 				checkpoint();
 				if (!includes(name))
 					continue;
+				retainEntry(row.path_cache, name, path);
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row path materialization size overflowed");
 				// Entity estimates include live record objects; charge only spare outer slots here.
 				bytes = checkedSizeAdd(bytes, checkedSizeMul(path.nodes.capacity() - path.nodes.size(),
@@ -325,7 +339,15 @@
 													  "logical-plan row path materialization size overflowed"),
 									   "logical-plan row path materialization size overflowed");
 			}
-			return bytes;
+			for (const auto &name : row.complete_entity_property_cache) {
+				checkpoint();
+				if (!includes(name) || invalidatedCache(name)) continue;
+				retained = checkedSizeAdd(retained, detail::executionBindingNodeBytes<decltype(row.complete_entity_property_cache)>(),
+					"logical-plan row completeness bytes overflowed");
+				retained = checkedSizeAdd(retained, detail::dynamicStringBufferBytes(name),
+					"logical-plan row completeness key bytes overflowed");
+			}
+			return std::max(bytes, retained);
 		}
 
 		[[nodiscard]] size_t logicalReadRowBytes(const LogicalPlanReadRow &row, const QueryContext *context = nullptr) {

@@ -805,7 +805,7 @@
 								sourceNeedsPredicate ? readPredicateNode(sourceId, sourcePredicateBytes)
 													 : patternSourceIdentity(state, sourceBinding);
 						detail::BudgetMemoryResource pathIdentityMemory(state.shared.materialized_budget);
-						std::pmr::unordered_set<uint64_t> pathEdges(&pathIdentityMemory);
+						utils::AdmissionPmrUnorderedSet<uint64_t> pathEdges(&pathIdentityMemory);
 						std::vector<storage::LogicalGraphNode> pathNodeRecords{source};
 						// A variable-length topology traversal does not need a complete
 						// endpoint Node when no target label/Property predicate exists. Keep

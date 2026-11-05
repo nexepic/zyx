@@ -29,7 +29,7 @@
 														std::vector<LogicalGraphWriteProperty> &properties,
 														const LogicalPlanReadRow &row,
 														storage::LogicalGraphReadSnapshot &snapshot,
-														std::unordered_map<std::string, PropertyMap> &propertyCache) {
+														PropertyCache &propertyCache) {
 				if (properties.size() > bounds.maximum_property_entries ||
 					propertyExpressions.size() > bounds.maximum_property_entries - properties.size())
 					throw std::runtime_error("logical CREATE expression Properties exceeded their entry bound");
@@ -56,7 +56,7 @@
 			const auto applyPropertySet = [&](PropertyMap &properties, const logical::LogicalSetItem &item,
 											  const LogicalPlanReadRow &row,
 											  storage::LogicalGraphReadSnapshot &snapshot,
-											  std::unordered_map<std::string, PropertyMap> &propertyCache) {
+											  PropertyCache &propertyCache) {
 				if (!item.expression) {
 					throw std::logic_error("logical CREATE/SET has a Property assignment without an expression");
 				}
@@ -140,7 +140,7 @@
 					std::unordered_map<std::string, LogicalGraphMutationEntityReference> entities =
 							entityReferencesForRow(source);
 					entities.reserve(entities.size() + createsPerInputRow);
-					std::unordered_map<std::string, PropertyMap> propertyCache = source.property_cache;
+					PropertyCache propertyCache = source.property_cache;
 					// A repeated FOREACH input still carries its snapshot cache. Restore
 					// all staged bindings before CREATE or expressions read another entity.
 					for (const auto &[variable, reference] : entities) {

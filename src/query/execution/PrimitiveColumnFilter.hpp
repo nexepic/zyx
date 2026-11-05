@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <limits>
 #include <span>
@@ -103,7 +104,7 @@ template <typename T, typename Guard>
 
 	FixedWidthColumn<T> column(source.size(), budget, upstream);
 	BudgetMemoryResource constantsMemory(budget, upstream);
-	std::pmr::vector<TypedColumnPredicate<T>> constants(&constantsMemory);
+	utils::AdmissionPmrVector<TypedColumnPredicate<T>> constants(&constantsMemory);
 	try {
 		column.reserve(source.size());
 		constants.reserve(predicates.size());

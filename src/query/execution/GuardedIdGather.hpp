@@ -10,8 +10,8 @@ namespace graph::query::execution::detail {
 // Sort private gather storage in place. A failed checkpoint may change its
 // contents, so callers publish or probe IDs only after this function succeeds.
 // Capacity is unchanged and remains charged by the owning reservation.
-template<class Allocator, class Check>
-void sortUniqueIdsGuarded(std::vector<uint64_t, Allocator> &ids, Check &&check) {
+template<class Vector, class Check>
+void sortUniqueIdsGuarded(Vector &ids, Check &&check) {
 	check();
 	std::size_t comparisons = 0U;
 	std::sort(ids.begin(), ids.end(), [&](uint64_t left, uint64_t right) {

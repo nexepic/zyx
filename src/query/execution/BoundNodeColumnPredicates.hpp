@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <span>
@@ -175,7 +176,7 @@ public:
 private:
 	size_t column_count_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<ColumnPredicate> predicates_;
+	utils::AdmissionPmrVector<ColumnPredicate> predicates_;
 };
 
 } // namespace graph::query::execution::detail

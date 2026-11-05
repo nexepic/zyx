@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -52,7 +53,7 @@ public:
 		if(!rows_.empty())flush();
 		for(size_t level=0;runs_.size()>1U;++level){
 			if(level==12U)throw std::runtime_error("external Sort exceeded its merge-depth bound");
-			std::pmr::vector<Run> next(&memory_);next.reserve((runs_.size()+1U)/2U);
+			utils::AdmissionPmrVector<Run> next(&memory_);next.reserve((runs_.size()+1U)/2U);
 			for(size_t i=0;i<runs_.size();i+=2U){checkpoint_();if(i+1U==runs_.size())next.push_back(std::move(runs_[i]));else next.push_back(merge(runs_[i],runs_[i+1U]));}
 			runs_=std::move(next);
 		}
@@ -69,31 +70,29 @@ public:
 private:
 	struct Run {
 		explicit Run(std::pmr::memory_resource *resource):handles(resource){}
-		std::pmr::vector<uint64_t> handles;uint64_t rows=0U;
+		utils::AdmissionPmrVector<uint64_t> handles;uint64_t rows=0U;
 	};
 	static constexpr uint64_t BLOCK_MAGIC=UINT64_C(0x3154525358595A);
 	static void put(std::vector<std::byte> &bytes,uint64_t value,size_t width){for(size_t i=0;i<width;++i)bytes.push_back(static_cast<std::byte>((value>>(8*i))&255U));}
 	static uint64_t get(std::span<const std::byte> bytes,size_t &offset,size_t width){if(offset>bytes.size() || width>bytes.size()-offset)throw std::invalid_argument("external Sort block is truncated");uint64_t value=0;for(size_t i=0;i<width;++i)value|=uint64_t(std::to_integer<unsigned>(bytes[offset+i]))<<(8*i);offset+=width;return value;}
 	struct Writer {
 		ExternalQuerySort &sort;Run run;std::vector<std::byte> block, encoded;
-        std::pmr::vector<const QuerySpillRowCodec::Binding *> names;
         uint32_t count=0;
-		explicit Writer(ExternalQuerySort &owner):sort(owner),run(&owner.memory_),names(&owner.memory_){block.reserve(storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES);start();}
+		explicit Writer(ExternalQuerySort &owner):sort(owner),run(&owner.memory_){block.reserve(storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES);start();}
 		void start(){block.clear();put(block,BLOCK_MAGIC,8);put(block,0,4);put(block,0,4);count=0;}
 		void flush(){if(!count)return;for(size_t i=0;i<4;++i)block[8+i]=static_cast<std::byte>((count>>(8*i))&255U);
 			// Reserve route capacity before publishing private bytes.
 			if(run.handles.size()==run.handles.capacity())run.handles.reserve(std::max<size_t>(1,run.handles.size()*2));
 			sort.publication_checkpoint_();run.handles.push_back(sort.scratch_->write(block));start();}
-		void append(const Record &record){sort.checkpoint_();QuerySpillRowCodec::encodeInto(record,MAX_RECORD_BYTES,encoded,names);
+        void append(const Record &record){sort.checkpoint_();QuerySpillRowCodec::encodeInto(record,MAX_RECORD_BYTES,encoded);
             // One <=MAX_RECORD_BYTES encoded buffer remains within the existing
-            // fixed spill workspace; names has its own budgeted PMR authority.
+            // fixed spill workspace; binding order needs no separate scratch.
 			if(block.size()+4U+encoded.size()>sort.scratch_->maximumFragmentBytes())flush();put(block,encoded.size(),4);block.insert(block.end(),encoded.begin(),encoded.end());++count;++run.rows;}
 		Run finish(){flush();return std::move(run);}
 	};
 	struct Cursor {
 		ExternalQuerySort &sort;Run &run;size_t handle=0,offset=0;uint32_t remaining=0;std::vector<std::byte> block;std::optional<Record> current;std::optional<Record> prior;uint64_t seen=0U;
-        std::pmr::vector<std::string_view> bindings;
-		Cursor(ExternalQuerySort &owner,Run &input):sort(owner),run(input),bindings(&owner.memory_){advance();}
+		Cursor(ExternalQuerySort &owner,Run &input):sort(owner),run(input){advance();}
 		void advance(){sort.checkpoint_();
 			if(remaining==0){if(!block.empty() && offset!=block.size())throw std::invalid_argument("external Sort block has trailing bytes");
 				if(handle==run.handles.size()){if(seen!=run.rows)throw std::invalid_argument("external Sort run cardinality changed");current.reset();block.clear();return;}
@@ -103,7 +102,7 @@ private:
 			}
 			const auto bytes=get(block,offset,4);if(bytes>MAX_RECORD_BYTES || bytes>block.size()-offset)throw std::invalid_argument("external Sort record is oversized or truncated");
 			if (!current) current.emplace();
-            QuerySpillRowCodec::decodeInto(std::span(block).subspan(offset,static_cast<size_t>(bytes)),MAX_RECORD_BYTES,*current,bindings);offset+=bytes;--remaining;
+            QuerySpillRowCodec::decodeInto(std::span(block).subspan(offset,static_cast<size_t>(bytes)),MAX_RECORD_BYTES,*current);offset+=bytes;--remaining;
 			if(current->keys.size()!=sort.ascending_.size() || current->ordinal>=sort.total_ || !qualified(*current) || sort.size_(*current)>MAX_RECORD_BYTES*64U)
 				throw std::invalid_argument("external Sort decoded record failed its layout/ownership bound");
 			if(prior && (sort.precedes(*current,*prior) || prior->ordinal==current->ordinal))throw std::invalid_argument("external Sort run is unordered or has duplicate adjacent ordinals");
@@ -134,8 +133,8 @@ private:
 		while(a.current || b.current){checkpoint_();if(!b.current || (a.current && precedes(*a.current,*b.current))){writer.append(*a.current);a.advance();}else{writer.append(*b.current);b.advance();}}
 		auto result=writer.finish();for(const auto handle:left.handles)scratch_->release(handle);for(const auto handle:right.handles)scratch_->release(handle);return result;}
 	storage::LogicalQueryScratchProvider &provider_;MaterializedByteBudget &budget_;size_t maximum_rows_,buffer_target_,total_=0;
-	MaterializedByteReservation workspace_;BudgetMemoryResource memory_;std::pmr::vector<uint8_t> ascending_;
-	SizeFunction size_;std::function<void()> checkpoint_,publication_checkpoint_;size_t maximum_disk_,maximum_fragments_;std::shared_ptr<ResourceAccount> account_;std::pmr::vector<Run> runs_;BoundedBatch<Record> rows_;
+	MaterializedByteReservation workspace_;BudgetMemoryResource memory_;utils::AdmissionPmrVector<uint8_t> ascending_;
+	SizeFunction size_;std::function<void()> checkpoint_,publication_checkpoint_;size_t maximum_disk_,maximum_fragments_;std::shared_ptr<ResourceAccount> account_;utils::AdmissionPmrVector<Run> runs_;BoundedBatch<Record> rows_;
 	std::unique_ptr<storage::LogicalQueryScratchSession> scratch_;bool spillable_=true,finished_=false;
 };
 }

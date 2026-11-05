@@ -20,7 +20,7 @@ public:
 private:ScratchState &state_;size_t maximum_,fragments_;bool finished_=false;
 };
 class Provider final:public storage::LogicalQueryScratchProvider {public:mutable ScratchState state;std::unique_ptr<storage::LogicalQueryScratchSession> openQueryScratchSession(size_t bytes,size_t fragments) const override {if(state.readonly)return nullptr;return std::make_unique<Scratch>(state,bytes,fragments);}};
-size_t size(const QuerySpillRowCodec::Record &record){size_t bytes=sizeof(record)+record.row.values.bucket_count()*sizeof(void *)+record.keys.capacity()*sizeof(PropertyValue);for(const auto &[name,value]:record.row.values){bytes+=sizeof(decltype(record.row.values)::value_type)+32U+name.capacity();if(const auto *primitive=std::get_if<PropertyValue>(&value))bytes+=propertyHeapBufferBytes(*primitive);}for(const auto &key:record.keys)bytes+=propertyHeapBufferBytes(key);return bytes;}
+size_t size(const QuerySpillRowCodec::Record &record){size_t bytes=sizeof(record)+executionBindingStructuralBytes(record.row.values)+record.keys.capacity()*sizeof(PropertyValue);for(const auto &[name,value]:record.row.values){bytes+=dynamicStringBufferBytes(name);if(const auto *primitive=std::get_if<PropertyValue>(&value))bytes+=propertyHeapBufferBytes(*primitive);}for(const auto &key:record.keys)bytes+=propertyHeapBufferBytes(key);return bytes;}
 QuerySpillRowCodec::Record row(size_t id){QuerySpillRowCodec::Record record;record.row.values.emplace("id",PropertyValue(static_cast<int64_t>(id)));record.keys={id%17==0?PropertyValue():PropertyValue(static_cast<int64_t>(id%11))};return record;}
 }
 TEST(ExternalQuerySortTest, MemoryPathPreservesStableNullOrderWithoutOpeningScratch) {

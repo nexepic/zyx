@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -44,7 +45,7 @@ public:
 		if (limits.operators == 0U || limits.operators > UINT32_MAX || limits.depth == 0U || limits.depth > 256U)
 			throw std::invalid_argument("bound program requires bounded operators and recursion");
 		if (schema_ && !schema_->isValid()) throw std::invalid_argument("bound program received an invalid schema identity");
-		std::pmr::vector<std::pmr::string> imports(&memory_);
+		utils::AdmissionPmrVector<std::pmr::string> imports(&memory_);
 		for (const auto name : injectedNames) {
 			guard(); if (name.empty()) throw std::invalid_argument("injected input has an empty name");
 			imports.emplace_back(name);
@@ -86,8 +87,8 @@ private:
 			children(memory), inputs(memory), outputs(memory), declared_outputs(memory) {}
 		const logical::LogicalOperator *source;
 		BoundScopeId inputs_scope, outputs_scope;
-		std::pmr::vector<BoundOperatorId> children;
-		std::pmr::vector<BoundSlotId> inputs, outputs, declared_outputs;
+		utils::AdmissionPmrVector<BoundOperatorId> children;
+		utils::AdmissionPmrVector<BoundSlotId> inputs, outputs, declared_outputs;
 		BoundOperatorMode mode = BoundOperatorMode::BOM_ROW_ADAPTER;
 	};
 	static size_t checkedScopeCount(size_t operators) {
@@ -104,7 +105,7 @@ private:
 	}
 	template<class Guard>
 	BoundOperatorId compile(const logical::LogicalOperator &source,
-		const std::pmr::vector<std::pmr::string> &imports, size_t depth, Guard &guard) {
+		const utils::AdmissionPmrVector<std::pmr::string> &imports, size_t depth, Guard &guard) {
 		guard();
 		if (depth > limits_.depth || nodes_.size() == limits_.operators)
 			throw std::runtime_error("bound program exceeded its operator/depth work limit");
@@ -128,7 +129,7 @@ private:
 		const auto *subquery = dynamic_cast<const logical::LogicalCallSubquery *>(&source);
 		for (const auto *child : children) {
 			if (!child) throw std::invalid_argument("logical operator has a null child");
-			std::pmr::vector<std::pmr::string> childImports(&memory_);
+			utils::AdmissionPmrVector<std::pmr::string> childImports(&memory_);
 			for (const auto &name : imports) childImports.emplace_back(name);
 			if (subquery && child == subquery->getSubquery()) {
 				childImports.clear();
@@ -172,9 +173,9 @@ private:
 	BoundProgramLimits limits_;
 	BoundSlotRegistry registry_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<Node> nodes_;
-	std::pmr::unordered_map<const logical::LogicalOperator *, uint32_t> sources_;
-	std::pmr::unordered_set<const logical::LogicalOperator *> active_;
+	utils::AdmissionPmrVector<Node> nodes_;
+	utils::AdmissionPmrUnorderedMap<const logical::LogicalOperator *, uint32_t> sources_;
+	utils::AdmissionPmrUnorderedSet<const logical::LogicalOperator *> active_;
 	MaterializedByteBudget &budget_;
 	std::optional<storage::LogicalGraphSchemaIdentity> schema_;
 	bool tokens_;

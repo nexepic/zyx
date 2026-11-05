@@ -279,7 +279,7 @@
 				throw std::runtime_error("logical graph backend returned an invalid Node");
 			}
 			detail::BudgetMemoryResource labelMemory(state.shared.materialized_budget);
-			std::pmr::unordered_set<std::string_view> labels(&labelMemory);
+			utils::AdmissionPmrUnorderedSet<std::string_view> labels(&labelMemory);
 			detail::procedureVectorReserve(labels, node.labels.size());
 			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {

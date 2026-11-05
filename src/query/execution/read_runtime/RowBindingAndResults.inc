@@ -137,7 +137,7 @@
                             return owner ? owner.get() : std::pmr::new_delete_resource();
                         } else return std::pmr::new_delete_resource();
 					};
-					std::pmr::vector<const PropertyValue::MapType::value_type *> entries{scratchResource()};
+					utils::AdmissionPmrVector<const PropertyValue::MapType::value_type *> entries{scratchResource()};
 					entries.reserve(map.size());
 					for (const auto &entry: map) {
 						entries.push_back(&entry);
@@ -201,7 +201,7 @@
 
 		[[nodiscard]] std::pmr::string distinctRowKey(const LogicalPlanReadRow &row,
 												 const std::vector<logical::LogicalProjectItem> &items, std::pmr::memory_resource *memory) {
-			std::pmr::string result{memory};
+			auto result=utils::makeEmptyAdmissionPmrString(memory);
 			for (const logical::LogicalProjectItem &item: items) {
 				const auto found = row.values.find(item.alias);
 				if (found == row.values.end()) { // ZYX_COV_EXCL_LINE: Project validates aliases and emplaces every
@@ -268,7 +268,7 @@
 		}
 
 		void mergeCompatibleRowCaches(LogicalPlanReadRow &destination, const LogicalPlanReadRow &source, ExecutionState &state,
-									  const std::pmr::unordered_set<std::string_view> *excludedAliases = nullptr) {
+									  const utils::AdmissionPmrUnorderedSet<std::string_view> *excludedAliases = nullptr) {
 			const auto checkpoint = [&] { checkGuardNow(state); };
 			const auto includeAlias = [excludedAliases](const std::string &alias) {
 				return excludedAliases == nullptr || !excludedAliases->contains(alias);
@@ -396,7 +396,7 @@
 													  const std::vector<std::string> &columns,
 			std::pmr::memory_resource *memory = std::pmr::new_delete_resource()) {
 			String result = [&] {
-				if constexpr (std::is_same_v<String, std::pmr::string>) return String{memory};
+				if constexpr (std::is_same_v<String, std::pmr::string>) return utils::makeEmptyAdmissionPmrString(memory);
 				else return String{};
 			}();
 			for (const std::string &column: columns) {
@@ -413,7 +413,7 @@
 
 		[[nodiscard]] std::pmr::string bindingKey(const LogicalPlanReadRow &row,
 			std::span<const std::string *const> columns, std::pmr::memory_resource *memory) {
-			std::pmr::string result{memory};
+			auto result=utils::makeEmptyAdmissionPmrString(memory);
 			for (const auto *name: columns) {
 				const auto &column = *name;
 				const auto value = row.values.find(column);
@@ -504,7 +504,7 @@
 			}
 		};
 		using MaterializedPropertyCache =
-			std::pmr::unordered_map<MaterializedEntityKey, PropertyMap, MaterializedEntityKeyHash>;
+			utils::AdmissionPmrUnorderedMap<MaterializedEntityKey, PropertyMap, MaterializedEntityKeyHash>;
 		using FinalRowVisitor = std::function<bool(LogicalPlanReadRow &, ExecutionState &)>;
 		using BatchSelectionPredicate = std::function<bool(LogicalPlanReadRow &, ExecutionState &)>;
 
@@ -616,7 +616,7 @@
 		[[nodiscard]] size_t completeResultPropertyBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 														 ExecutionState &state) {
 			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
-			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
+			utils::AdmissionPmrUnorderedSet<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
 			size_t bytes = sizeof(PropertyMap);
 			for (const auto &entry: entries) {
@@ -765,7 +765,7 @@
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
 			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
-			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
+			utils::AdmissionPmrUnorderedSet<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
 			size_t bytes = sizeof(PropertyMap);
 			for (const auto &entry: entries) {
@@ -1225,7 +1225,7 @@
                 outputStorage.emplace(allocationAllowance, allocationContext->resource_account);
             MaterializedByteReservation bufferedReservation;
             bool budgetBound = false;
-            std::pmr::vector<LogicalPlanReadRow> rows(outputStorage
+            utils::AdmissionPmrVector<LogicalPlanReadRow> rows(outputStorage
                 ? static_cast<std::pmr::memory_resource *>(&*outputStorage) : std::pmr::get_default_resource());
 			rows.reserve(batchCapacity);
 			const size_t residentOutputBatchBytes = checkedSizeMul(rows.capacity(), sizeof(LogicalPlanReadRow),
@@ -1311,7 +1311,7 @@
 				if (!finalized) {
 					finalized = true;
 					const auto release = [&] {
-						std::pmr::vector<LogicalPlanReadRow>(rows.get_allocator().resource()).swap(rows);
+						utils::AdmissionPmrVector<LogicalPlanReadRow>(rows.get_allocator().resource()).swap(rows);
 						// Detach while the ExecutionState budget is still alive, including zero-charge owners.
 						bufferedReservation = MaterializedByteReservation{};
 					};

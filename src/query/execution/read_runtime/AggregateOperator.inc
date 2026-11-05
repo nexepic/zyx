@@ -29,7 +29,7 @@
 					std::optional<detail::BoundExpressionInputs> boundInputs;
 					if (state.shared.bound_program) {
 						detail::BudgetMemoryResource bindingMemory(state.shared.materialized_budget);
-						std::pmr::vector<const expressions::Expression *> expressionInputs(&bindingMemory);
+						utils::AdmissionPmrVector<const expressions::Expression *> expressionInputs(&bindingMemory);
 						for (const auto &expression : groupExpressions) expressionInputs.push_back(expression.get());
 						for (const auto &item : aggregations) expressionInputs.push_back(item.argument.get());
 						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op), expressionInputs,
@@ -77,7 +77,7 @@
 					struct AggregateGroup {
 						std::vector<PropertyValue> values;
 						std::vector<std::unique_ptr<AggregateAccumulator>> accumulators;
-						std::vector<std::pmr::unordered_set<std::pmr::string>> distinct_values;
+						std::vector<utils::AdmissionPmrUnorderedSet<std::pmr::string>> distinct_values;
 						size_t accounted_bytes = 0U;
 					};
 					MaterializedByteReservation aggregateStateBytes(&state.shared.materialized_budget);
@@ -87,9 +87,9 @@
 					detail::BudgetMemoryResource borrowedIndexMemory(state.shared.materialized_budget);
 #endif
 					std::vector<AggregateGroup> groups;
-					std::pmr::unordered_map<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
+					utils::AdmissionPmrUnorderedMap<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
 #if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
-					using BorrowedIndex = std::pmr::unordered_multimap<uint64_t, std::pair<const std::pmr::string *, size_t>>;
+					using BorrowedIndex = utils::AdmissionPmrUnorderedMultiMap<uint64_t, std::pair<const std::pmr::string *, size_t>>;
 					std::optional<BorrowedIndex> borrowedIndexes;
 #endif
 					size_t aggregateMemoryBytes = 0U;
@@ -120,7 +120,7 @@
 						groupBytes =
 								checkedSizeAdd(groupBytes,
 											   aggregations.size() * (sizeof(std::unique_ptr<AggregateAccumulator>) +
-																	  sizeof(std::pmr::unordered_set<std::pmr::string>)),
+																	  sizeof(utils::AdmissionPmrUnorderedSet<std::pmr::string>)),
 											   "logical-plan Aggregate group size overflowed");
 						const size_t prepaidBytes = prepaid ? std::min(prepaid->bytes(), groupBytes) : 0U;
 						if (prepaidBytes) {
@@ -202,8 +202,8 @@
 
 					size_t inputRows = 0U;
 					const logical::LogicalOperator &aggregateChild = requireOnlyChild(aggregate);
-					std::pmr::vector<std::string_view> aggregateColumnKeys(&aggregateIndexMemory);
-					std::pmr::vector<size_t> aggregateColumnBindings(&aggregateIndexMemory);
+					utils::AdmissionPmrVector<std::string_view> aggregateColumnKeys(&aggregateIndexMemory);
+					utils::AdmissionPmrVector<size_t> aggregateColumnBindings(&aggregateIndexMemory);
 					std::optional<NodeColumnReceiver> aggregateColumnReceiver;
 					bool aggregateColumnsBound = false;
 					std::optional<detail::BoundColumnLayout> aggregateInputLayout;
@@ -331,9 +331,9 @@
 									try {
 										numericStateHeadroom.set(numericStateBytes);
 										detail::BudgetMemoryResource metadataMemory(state.shared.materialized_budget);
-										std::pmr::vector<detail::BatchColumnSource> sources(&metadataMemory);
-										std::pmr::vector<uint32_t> selectedRows(&metadataMemory);
-										std::pmr::vector<uint64_t> sourceOrdinals(&metadataMemory);
+										utils::AdmissionPmrVector<detail::BatchColumnSource> sources(&metadataMemory);
+										utils::AdmissionPmrVector<uint32_t> selectedRows(&metadataMemory);
+										utils::AdmissionPmrVector<uint64_t> sourceOrdinals(&metadataMemory);
 										for (size_t column = 0U; column < numericColumns.columnCount(); ++column) {
 											checkGuard(state); sources.push_back(detail::BatchColumnSource::numeric(numericColumns, column));
 										}
@@ -404,16 +404,16 @@
 								return true;
 							}});
 					} else {
-						std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
-						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
+						utils::AdmissionPmrVector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
+						utils::AdmissionPmrVector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
 					}
-					std::pmr::vector<std::string_view> directKeys(&aggregateIndexMemory);
-					std::pmr::vector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
+					utils::AdmissionPmrVector<std::string_view> directKeys(&aggregateIndexMemory);
+					utils::AdmissionPmrVector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
 					struct DirectFilterTerm { size_t column; const expressions::LiteralExpression *literal; detail::ColumnPredicateOp operation; };
-					std::pmr::vector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
+					utils::AdmissionPmrVector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
 #if ZYX_BUILD_STREAMING_COUNT_PATH
-                    std::pmr::vector<PropertyValue> countConstants(&aggregateIndexMemory);
-                    std::pmr::vector<detail::ColumnPredicate> countPredicates(&aggregateIndexMemory);
+                    utils::AdmissionPmrVector<PropertyValue> countConstants(&aggregateIndexMemory);
+                    utils::AdmissionPmrVector<detail::ColumnPredicate> countPredicates(&aggregateIndexMemory);
 #endif
 					const auto *directFilter = dynamic_cast<const logical::LogicalFilter *>(&aggregateChild);
 					const auto *directInput = directFilter ? &requireOnlyChild(*directFilter) : &aggregateChild;
@@ -491,10 +491,10 @@
 						} catch (const MaterializedByteLimitExceeded &) { directEligible = false; }
 					}
 					if (!directEligible) {
-						std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(directKeys);
-						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directGroups);
-						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directArguments);
-						std::pmr::vector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
+						utils::AdmissionPmrVector<std::string_view>(&aggregateIndexMemory).swap(directKeys);
+						utils::AdmissionPmrVector<size_t>(&aggregateIndexMemory).swap(directGroups);
+						utils::AdmissionPmrVector<size_t>(&aggregateIndexMemory).swap(directArguments);
+						utils::AdmissionPmrVector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
 					}
 					if (directEligible) {
 #if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
@@ -561,8 +561,8 @@
                                 }
                                 if (batchCountEligible && textColumn != rowCountBinding) {
                                     struct PartialCount { size_t first, rows; };
-                                    std::pmr::vector<PartialCount> partials(&aggregateIndexMemory);
-                                    std::pmr::unordered_map<std::optional<std::string_view>, size_t> indexes(&aggregateIndexMemory);
+                                    utils::AdmissionPmrVector<PartialCount> partials(&aggregateIndexMemory);
+                                    utils::AdmissionPmrUnorderedMap<std::optional<std::string_view>, size_t> indexes(&aggregateIndexMemory);
                                     size_t accepted = 0U, rejected = 0U;
                                     bool prepared = false;
                                     try {
@@ -593,7 +593,7 @@
                                             checkGuard(state); size_t groupIndex = 0U;
                                             if (!directGroups.empty()) {
                                                 const auto row = columns.rowId(partial.first);
-                                                std::pmr::string key{&aggregateIndexMemory}; appendCellKey(key, textColumn, row);
+                                                auto key=utils::makeEmptyAdmissionPmrString(&aggregateIndexMemory); appendCellKey(key, textColumn, row);
                                                 const auto found = groupIndexes.find(key);
                                                 if (found != groupIndexes.end()) groupIndex = found->second;
                                                 else {
@@ -622,7 +622,7 @@
                                 }
 								size_t filterRejected = 0U;
 								// Reuse charged lookup scratch within this batch. Only new groups own keys.
-								std::pmr::string lookupKey{&aggregateIndexMemory};
+								auto lookupKey=utils::makeEmptyAdmissionPmrString(&aggregateIndexMemory);
                                 for (const auto ordinal : ordinals) {
 									checkGuard(state);
 									if (ordinal >= columns.size()) throw std::logic_error("direct aggregate ordinal changed");
@@ -737,7 +737,7 @@
 										if (column == rowCountBinding) { accumulator.updateRow(); continue; }
 										const auto cell = columns.cell(column, row);
 										if (aggregations[index].distinct) {
-											std::pmr::string key{&aggregateIndexMemory}; appendCellKey(key, column, row);
+											auto key=utils::makeEmptyAdmissionPmrString(&aggregateIndexMemory); appendCellKey(key, column, row);
 											if (!group.distinct_values[index].insert(std::move(key)).second) continue;
 										}
 										if (functions[index] == AggregateFunctionType::AGG_COUNT) {
@@ -774,8 +774,8 @@
                                 }
                             } catch (const MaterializedByteLimitExceeded &) {
                                 streamingCountEligible = false;
-                                std::pmr::vector<detail::ColumnPredicate>(&aggregateIndexMemory).swap(countPredicates);
-                                std::pmr::vector<PropertyValue>(&aggregateIndexMemory).swap(countConstants);
+                                utils::AdmissionPmrVector<detail::ColumnPredicate>(&aggregateIndexMemory).swap(countPredicates);
+                                utils::AdmissionPmrVector<PropertyValue>(&aggregateIndexMemory).swap(countConstants);
                             }
                         }
                         if (streamingCountEligible) {
@@ -815,7 +815,7 @@
 						groupValueScratch.set(groupValueBytes);
 						std::vector<PropertyValue> groupValues;
 						groupValues.reserve(groupExpressions.size());
-						std::pmr::string groupKey{&aggregateIndexMemory};
+						auto groupKey=utils::makeEmptyAdmissionPmrString(&aggregateIndexMemory);
 						for (const std::shared_ptr<expressions::Expression> &expression: groupExpressions) {
 							PropertyValue value = scalarValue(evaluateExpression(*expression, row, state));
 							groupValueBytes = checkedSizeAdd(groupValueBytes,
@@ -890,7 +890,7 @@
 								}
 								const PropertyValue value = scalarValue(evaluateExpression(*item.argument, row, state));
 								if (item.distinct) {
-									std::pmr::string key{&aggregateIndexMemory};
+									auto key=utils::makeEmptyAdmissionPmrString(&aggregateIndexMemory);
 									appendDistinctPropertyValue(key, value);
 									if (!group.distinct_values[index].insert(std::move(key)).second) continue;
 								}
@@ -965,13 +965,13 @@
 					// Release lookup nodes and buckets before downstream output is
 					// admitted. Per-group DISTINCT keys live until their group is consumed.
 					aggregateColumnReceiver.reset();
-					std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(directKeys);
-					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directGroups);
-					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directArguments);
-					std::pmr::vector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
+					utils::AdmissionPmrVector<std::string_view>(&aggregateIndexMemory).swap(directKeys);
+					utils::AdmissionPmrVector<size_t>(&aggregateIndexMemory).swap(directGroups);
+					utils::AdmissionPmrVector<size_t>(&aggregateIndexMemory).swap(directArguments);
+					utils::AdmissionPmrVector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
 					aggregateInputLayout.reset();
-					std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
-					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
+					utils::AdmissionPmrVector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
+					utils::AdmissionPmrVector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
 					decltype(groupIndexes){&aggregateIndexMemory}.swap(groupIndexes);
 					const size_t outputGroupCount = groups.size();
 					for (size_t groupIndex = 0U; groupIndex < outputGroupCount; ++groupIndex) {

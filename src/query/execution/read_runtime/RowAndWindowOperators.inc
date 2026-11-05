@@ -482,7 +482,7 @@
 								"logical-plan UNION children must declare the same nonempty output columns");
 					}
 					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
-					std::pmr::unordered_set<std::string_view> uniqueColumns(state.shared.bound_program
+					utils::AdmissionPmrUnorderedSet<std::string_view> uniqueColumns(state.shared.bound_program
 						? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource());
 					uniqueColumns.reserve(columns.size());
 					for (const std::string &column: columns) {
@@ -492,7 +492,7 @@
 					}
 
 					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
-					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					utils::AdmissionPmrUnorderedSet<std::pmr::string> distinctRows{&distinctMemory};
 					std::optional<detail::ExternalQueryKeySet> externalDistinct;
 					if (!unionOperator.isAll() && state.shared.allow_cross_row_entity_batches &&
 					        state.shared.bounds.maximum_materialized_bytes >= detail::ExternalQueryKeySet::MINIMUM_QUERY_BYTES) {

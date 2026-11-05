@@ -416,7 +416,7 @@
 						}
 						if (state.shared.snapshot.supportsNodeExistenceProbes() && !candidates.empty()) {
 							detail::BudgetMemoryResource endpointMemory(state.shared.materialized_budget);
-							std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
+							utils::AdmissionPmrVector<uint64_t> endpointIds{&endpointMemory};
 							endpointIds.reserve(candidates.size());
 							for (const auto *candidate: candidates) {
 								endpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING

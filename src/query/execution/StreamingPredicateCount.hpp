@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <bit>
 #include "graph/storage/LogicalGraphRead.hpp"
@@ -115,7 +116,7 @@ private:
     bool token_support_;
     std::span<const ColumnPredicate> predicates_;
     BudgetMemoryResource memory_;
-    std::pmr::vector<uint8_t> seen_;
+    utils::AdmissionPmrVector<uint8_t> seen_;
     size_t accepted_ = 0;
     bool active_ = false, failed_ = false, finished_ = false;
 };

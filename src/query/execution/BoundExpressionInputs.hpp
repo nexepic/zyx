@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include "query/execution/BoundExecutionProgram.hpp"
 #include "query/execution/BoundPropertyBindings.hpp"
@@ -35,8 +36,8 @@ public:
 		: program_(program), op_(op), context_(context), memory_(budget, upstream), instructions_(&memory_), values_(&memory_), input_ordinals_(&memory_), parameters_(&memory_) {
 		if (!upstream) throw std::invalid_argument("bound expression inputs require an allocator");
 		program.validateSnapshot(snapshot);
-		std::pmr::vector<BoundPropertyRequest> requests(&memory_);
-		std::pmr::vector<const expressions::Expression *> properties(&memory_);
+		utils::AdmissionPmrVector<BoundPropertyRequest> requests(&memory_);
+		utils::AdmissionPmrVector<const expressions::Expression *> properties(&memory_);
 		for (const auto *expression : expressions) collect(expression, requests, properties, 1U, guard);
 		values_.resize(program.view(op).inputs.size(), nullptr);
 		const auto inputs = program.view(op).inputs;
@@ -87,8 +88,8 @@ public:
 	}
 private:
 	template<class Guard>
-	void collect(const expressions::Expression *expression, std::pmr::vector<BoundPropertyRequest> &requests,
-		std::pmr::vector<const expressions::Expression *> &properties, size_t depth, Guard &guard) {
+	void collect(const expressions::Expression *expression, utils::AdmissionPmrVector<BoundPropertyRequest> &requests,
+		utils::AdmissionPmrVector<const expressions::Expression *> &properties, size_t depth, Guard &guard) {
 		if (!expression) return;
 		guard(); if (depth > 256U || ++visited_ > 65536U) throw std::runtime_error("bound expression work limit exceeded");
 		if (instructions_.contains(expression)) return;
@@ -183,10 +184,10 @@ private:
 		Parameter(std::string_view key, const PropertyValue *source, std::pmr::memory_resource *memory) : name(key, memory), value(source) {}
 	};
 	BudgetMemoryResource memory_;
-	std::pmr::unordered_map<const expressions::Expression *, BoundExpressionInput> instructions_;
-	std::pmr::vector<const LogicalPlanReadValue *> values_;
-	std::pmr::unordered_map<uint32_t, uint32_t> input_ordinals_;
-	std::pmr::vector<Parameter> parameters_;
+	utils::AdmissionPmrUnorderedMap<const expressions::Expression *, BoundExpressionInput> instructions_;
+	utils::AdmissionPmrVector<const LogicalPlanReadValue *> values_;
+	utils::AdmissionPmrUnorderedMap<uint32_t, uint32_t> input_ordinals_;
+	utils::AdmissionPmrVector<Parameter> parameters_;
 	std::optional<BoundPropertyBindings> properties_;
 	const LogicalPlanReadRow *row_ = nullptr;
 	size_t visited_ = 0U;

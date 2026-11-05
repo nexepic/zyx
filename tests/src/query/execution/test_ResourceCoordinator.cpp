@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include <atomic>
 #include <barrier>
 #include <thread>
@@ -122,7 +123,7 @@ TEST(ResourceCoordinatorTest, AllocatorAdmitsBeforeUpstreamRefundsBadAllocAndCha
 	EXPECT_EQ(process.usage().total, 0U);
 	upstream.fail = false;
 	{
-		std::pmr::vector<uint64_t> values(&memory);
+		graph::utils::AdmissionPmrVector<uint64_t> values(&memory);
 		values.reserve(8U);
 		EXPECT_EQ(account.used(), values.capacity() * sizeof(uint64_t));
 		EXPECT_THROW(values.reserve(16U), ResourceAdmissionDenied); // Old/new overlap is 192 bytes.

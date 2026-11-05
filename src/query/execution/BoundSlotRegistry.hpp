@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -119,7 +120,7 @@ private:
 		Scope(Scope &&) = default;
 		std::optional<BoundScopeId> parent;
 		BindingScopeVisibility visibility;
-		std::pmr::unordered_map<std::pmr::string, BoundSlotId, NameHash, NameEqual> names;
+		utils::AdmissionPmrUnorderedMap<std::pmr::string, BoundSlotId, NameHash, NameEqual> names;
 	};
 	struct SlotInfo {
 		SlotInfo(std::string_view text, BoundScopeId source, std::pmr::memory_resource *resource)
@@ -165,8 +166,8 @@ private:
 	uint64_t identity_ = 0U;
 	bool sealed_ = false;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<Scope> scopes_;
-	std::pmr::vector<SlotInfo> slots_;
+	utils::AdmissionPmrVector<Scope> scopes_;
+	utils::AdmissionPmrVector<SlotInfo> slots_;
 };
 
 } // namespace graph::query::execution::detail

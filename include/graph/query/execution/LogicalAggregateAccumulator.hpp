@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "graph/utils/AdmissionPmrContainers.hpp"
+
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -679,7 +681,7 @@ public:
 	[[nodiscard]] PropertyValue takeResult() override {
 		std::sort(values_.begin(), values_.end());
 		PropertyValue result = resultFromSorted(values_);
-		std::pmr::vector<PropertyValue>(values_.get_allocator()).swap(values_);
+		utils::AdmissionPmrVector<PropertyValue>(values_.get_allocator()).swap(values_);
 		return result;
 	}
 	[[nodiscard]] size_t retainedBytes() const override {
@@ -714,7 +716,7 @@ private:
 	}
 	double percentile_;
 	bool externally_accounted_;
-	std::pmr::vector<PropertyValue> values_;
+	utils::AdmissionPmrVector<PropertyValue> values_;
 };
 
 /**
@@ -743,7 +745,7 @@ public:
 	[[nodiscard]] PropertyValue takeResult() override {
 		std::sort(values_.begin(), values_.end());
 		PropertyValue result = resultFromSorted(values_);
-		std::pmr::vector<PropertyValue>(values_.get_allocator()).swap(values_);
+		utils::AdmissionPmrVector<PropertyValue>(values_.get_allocator()).swap(values_);
 		return result;
 	}
 	[[nodiscard]] size_t retainedBytes() const override {
@@ -790,7 +792,7 @@ private:
 	}
 	double percentile_;
 	bool externally_accounted_;
-	std::pmr::vector<PropertyValue> values_;
+	utils::AdmissionPmrVector<PropertyValue> values_;
 };
 
 /**

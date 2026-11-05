@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include <array>
 #include <barrier>
 #include <thread>
@@ -19,7 +20,7 @@ TEST(PrepaidMemoryResourceTest, UnusedGrantStaysChargedAndContainersChargeActual
 		PrepaidMemoryResource memory(account, 800U);
 		EXPECT_EQ(account->used(), 800U); EXPECT_EQ(memory.used(), 0U);
 		{
-			std::pmr::vector<uint64_t> values(&memory); values.reserve(20U);
+			graph::utils::AdmissionPmrVector<uint64_t> values(&memory); values.reserve(20U);
 			EXPECT_EQ(memory.used(), values.capacity() * sizeof(uint64_t));
 			values.push_back(7U); values.clear();
 			EXPECT_GT(memory.used(), 0U); EXPECT_EQ(account->used(), 800U);
@@ -31,11 +32,11 @@ TEST(PrepaidMemoryResourceTest, UnusedGrantStaysChargedAndContainersChargeActual
 
 TEST(PrepaidMemoryResourceTest, VectorGrowthOverlapIsAdmittedBeforeReplacingTheOldBuffer) {
 	auto account = prepaidAccount(); PrepaidMemoryResource memory(account, 80U);
-	std::pmr::vector<uint64_t> values(&memory); values.reserve(4U); values.push_back(42U);
+	graph::utils::AdmissionPmrVector<uint64_t> values(&memory); values.reserve(4U); values.push_back(42U);
 	EXPECT_THROW(values.reserve(8U), ResourceAdmissionDenied);
 	EXPECT_EQ(values.size(), 1U); EXPECT_EQ(values[0], 42U); EXPECT_EQ(values.capacity(), 4U);
 	EXPECT_EQ(memory.used(), 32U); EXPECT_EQ(memory.denials(), 1U);
-	std::pmr::vector<uint64_t>(&memory).swap(values);
+	graph::utils::AdmissionPmrVector<uint64_t>(&memory).swap(values);
 	values.reserve(8U); EXPECT_EQ(memory.used(), 64U);
 }
 
@@ -76,7 +77,7 @@ TEST(PrepaidMemoryResourceTest, ParentLifetimeExtendsUntilEveryGrantedContainerI
 	{
 		auto account = prepaidAccount(); lifetime = account;
 		PrepaidMemoryResource memory(account, 100U); account.reset();
-		std::pmr::vector<uint64_t> values(&memory); values.push_back(42U);
+		graph::utils::AdmissionPmrVector<uint64_t> values(&memory); values.push_back(42U);
 		ASSERT_FALSE(lifetime.expired()); EXPECT_EQ(lifetime.lock()->used(), 100U);
 	}
 	EXPECT_TRUE(lifetime.expired());

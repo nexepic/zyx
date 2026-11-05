@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <exception>
 #include "graph/storage/LogicalGraphJointPropertyRead.hpp"
@@ -130,7 +131,7 @@ private:
     size_t rows_, presenceColumns_;
     BudgetMemoryResource memory_;
     DirectPropertyColumns columns_;
-    std::pmr::vector<uint8_t> seen_, nonnull_;
+    utils::AdmissionPmrVector<uint8_t> seen_, nonnull_;
     std::exception_ptr firstError_;
     bool reading_ = false, active_ = false, delivered_ = false, sealed_ = false, failed_ = false, sourceAdmitted_ = false;
 };

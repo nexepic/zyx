@@ -728,7 +728,7 @@
 				}
 			};
 
-			std::pmr::vector<uint64_t> seedIds(&intermediateMemory);
+			utils::AdmissionPmrVector<uint64_t> seedIds(&intermediateMemory);
 			static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
 				const uint64_t id = nodeBindingId(requireBinding(row, seed.getVariable()), state);
 				if (id == 0U || seedIds.size() == state.shared.bounds.maximum_node_records) {
@@ -742,18 +742,18 @@
 			});
 
 			using Multiplicity = uint64_t;
-			const auto expand = [&](const std::pmr::vector<uint64_t> &sources, const std::string &direction,
+			const auto expand = [&](const utils::AdmissionPmrVector<uint64_t> &sources, const std::string &direction,
 									const std::optional<uint64_t> &type,
-									std::pmr::unordered_map<uint64_t, Multiplicity> *next) {
-				std::pmr::unordered_set<uint64_t> sourceSet(&intermediateMemory);
+									utils::AdmissionPmrUnorderedMap<uint64_t, Multiplicity> *next) {
+				utils::AdmissionPmrUnorderedSet<uint64_t> sourceSet(&intermediateMemory);
 				sourceSet.reserve(sources.size());
 				for (const uint64_t id: sources) {
 					checkGuard(state);
 					sourceSet.insert(id);
 				}
-				std::pmr::unordered_map<uint64_t, size_t> sourceEdgeCounts(&intermediateMemory);
+				utils::AdmissionPmrUnorderedMap<uint64_t, size_t> sourceEdgeCounts(&intermediateMemory);
 				sourceEdgeCounts.reserve(sources.size());
-				std::pmr::vector<uint64_t> targetIds(&intermediateMemory);
+				utils::AdmissionPmrVector<uint64_t> targetIds(&intermediateMemory);
 				size_t scanned = 0U;
 				const auto consume = [&](const storage::EntityRef &reference) {
 					checkGuard(state);
@@ -851,11 +851,11 @@
 					}
 				}
 			};
-			std::pmr::unordered_map<uint64_t, Multiplicity> intermediate(&intermediateMemory);
+			utils::AdmissionPmrUnorderedMap<uint64_t, Multiplicity> intermediate(&intermediateMemory);
 			if (!seedIds.empty()) {
 				expand(seedIds, inner.getDirection(), innerType, &intermediate);
 			}
-			std::pmr::vector<uint64_t> intermediateIds(&intermediateMemory);
+			utils::AdmissionPmrVector<uint64_t> intermediateIds(&intermediateMemory);
 			intermediateIds.reserve(intermediate.size());
 			for (const auto &[id, multiplicity]: intermediate) {
 				checkGuard(state);
@@ -868,15 +868,15 @@
 			uint64_t resultCount = 0U;
 			// The second pass retains multiplicity from the first hop.  It uses the same
 			// endpoint/type checks but does not materialize intermediate rows.
-			std::pmr::unordered_set<uint64_t> sourceSet(&intermediateMemory);
+			utils::AdmissionPmrUnorderedSet<uint64_t> sourceSet(&intermediateMemory);
 			sourceSet.reserve(intermediate.size());
 			for (const uint64_t id: intermediateIds) {
 				checkGuard(state);
 				sourceSet.insert(id);
 			}
-			std::pmr::unordered_map<uint64_t, size_t> edgeCounts(&intermediateMemory);
-			std::pmr::unordered_map<uint64_t, Multiplicity> finalCandidates(&intermediateMemory);
-			std::pmr::vector<uint64_t> finalTargetIds(&intermediateMemory);
+			utils::AdmissionPmrUnorderedMap<uint64_t, size_t> edgeCounts(&intermediateMemory);
+			utils::AdmissionPmrUnorderedMap<uint64_t, Multiplicity> finalCandidates(&intermediateMemory);
+			utils::AdmissionPmrVector<uint64_t> finalTargetIds(&intermediateMemory);
 			size_t scanned = 0U;
 			const auto consumeOuterReference = [&](const storage::EntityRef &reference) {
 				checkGuard(state);
@@ -2372,7 +2372,7 @@
 			const size_t edgeBatchCapacity = std::min(desiredEdgeBatchCapacity,
 					std::max<size_t>(1U, state.shared.materialized_budget.available() / (8U * sizeof(PendingEdge))));
 			detail::BudgetMemoryResource pendingMemory(state.shared.materialized_budget);
-			std::pmr::vector<PendingEdge> pending{&pendingMemory};
+			utils::AdmissionPmrVector<PendingEdge> pending{&pendingMemory};
 			pending.reserve(edgeBatchCapacity);
 			const auto flushPending = [&]() {
 				if (pending.empty()) {

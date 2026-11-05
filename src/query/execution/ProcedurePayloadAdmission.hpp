@@ -8,6 +8,7 @@
 #include <optional>
 #include "graph/core/PropertyDecodeAllocationScope.hpp"
 #include <utility>
+#include <tuple>
 #include "graph/core/PropertyHeapRequestBytes.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
@@ -134,8 +135,27 @@ public:
     }
 };
 
+// Tree insertion has a strong exception guarantee and no bucket side effects.
+// Its provisional node/key/value grants can therefore be returned immediately
+// if construction fails; an existing row and its charges remain untouched.
+class ProcedureTreeInsertionCredit final {
+public:
+    ProcedureTreeInsertionCredit() noexcept
+        : credit_(ProcedurePayloadAdmissionScope::credit()), before_(credit_ ? credit_->bytes() : 0U) {}
+    ~ProcedureTreeInsertionCredit() noexcept {
+        if (!committed_ && credit_ && credit_->bytes() > before_) credit_->set(before_);
+    }
+    void commit() noexcept { committed_ = true; }
+private:
+    ProcedurePayloadCredit *credit_;
+    size_t before_;
+    bool committed_ = false;
+};
+
 template<class Map>
 [[nodiscard]] size_t procedureEmptyMapHeapUpper() {
+    if constexpr (isExecutionBindingTree<Map>) return 0U;
+    else {
 #if defined(_MSVC_STL_VERSION)
     using namespace utils::detail;
     using Entry = typename Map::value_type;
@@ -146,6 +166,7 @@ template<class Map>
 #else
     return 0U;
 #endif
+    }
 }
 
 template<bool Copy, class T>
@@ -182,16 +203,24 @@ template<bool Copy, class T>
         return total;
     } else if constexpr (requires { typename Type::mapped_type; }) {
         size_t total = 0U;
+        if constexpr (isExecutionBindingTree<Type>) total = executionBindingStructuralBytes(value);
+        else {
 #if !defined(_MSVC_STL_VERSION)
         if (!value.empty() || value.bucket_count() != 1U)
 #endif
             total = standardUnorderedMapStructuralHeapBytes(value);
+        }
         for (const auto &[key, item] : value) {
             add(total, procedurePayloadHeapUpper<Copy>(key));
             add(total, procedurePayloadHeapUpper<Copy>(item));
         }
         return total;
     } else if constexpr (requires { typename Type::key_type; }) {
+        if constexpr (isExecutionBindingTree<Type>) {
+            size_t total = executionBindingStructuralBytes(value);
+            for (const auto &item : value) add(total, procedurePayloadHeapUpper<Copy>(item));
+            return total;
+        } else {
         // A set has the same linked-node/bucket policy, with a value-only node.
         using Entry = typename Type::value_type;
         constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
@@ -206,6 +235,7 @@ template<bool Copy, class T>
 #endif
         for (const auto &item : value) add(total, procedurePayloadHeapUpper<Copy>(item));
         return total;
+        }
     } else if constexpr (requires { value.capacity(); value.data(); typename Type::value_type; }) {
         using Element = typename Type::value_type;
         const size_t count = Copy ? value.size() : value.capacity();
@@ -226,6 +256,8 @@ template<bool Copy, class T>
 // each insertion would accumulate quadratic unused grants in a wide cache.
 template<class Map>
 void procedureMapReserve(Map &map, size_t count) {
+    if constexpr (isExecutionBindingTree<Map>) { map.reserve(count); }
+    else {
     if (!count) return;
     if (ProcedurePayloadAdmissionScope::active()) {
         using namespace utils::detail;
@@ -241,6 +273,7 @@ void procedureMapReserve(Map &map, size_t count) {
         ProcedurePayloadAdmissionScope::admit(standardAllocatorRequestBytes(buckets * width, alignof(void *)));
     }
     map.reserve(count);
+    }
 }
 
 template<class Map, class Key>
@@ -248,21 +281,39 @@ void procedureAdmitMapNode(Map &map, const Key &key) {
     if (!ProcedurePayloadAdmissionScope::active()) return;
     using namespace utils::detail;
     using Entry = typename Map::value_type;
-    constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
-    ProcedurePayloadAdmissionScope::admit(addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Entry)),
+    const size_t nodeBytes = [] {
+        if constexpr (isExecutionBindingTree<Map>) return executionBindingNodeBytes<Map>();
+        else return standardAllocatorRequestBytes(sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U, alignof(Entry));
+    }();
+    ProcedurePayloadAdmissionScope::admit(addStandardHeapBytes(nodeBytes,
         ([](const auto &input) {
             if constexpr (std::is_same_v<typename Map::key_type, std::string_view>) return size_t{0U};
             else return procedurePayloadHeapUpper<true>(input);
         }(key))));
+    if constexpr (!isExecutionBindingTree<Map>) {
     const size_t count = addStandardHeapBytes(map.size(), 1U);
     if (map.empty() || count > map.bucket_count() * map.max_load_factor()) {
         const size_t doubled = addStandardHeapBytes(map.size(), map.size());
         procedureMapReserve(map, (std::max)(count, doubled));
     }
+    }
 }
 
 template<class Map, class Key, class Value>
 auto procedureMapEmplace(Map &map, Key &&key, Value &&value) {
+    if constexpr (isExecutionBindingTree<Map>) {
+        const auto found = map.find(key);
+        if (found != map.end()) return std::pair<typename Map::iterator, bool>{found, false};
+        ProcedureTreeInsertionCredit rollback;
+        if (ProcedurePayloadAdmissionScope::active()) {
+            procedureAdmitMapNode(map, key);
+            ProcedurePayloadAdmissionScope::admit(procedurePayloadHeapUpper<true>(value));
+        }
+        auto inserted = map.emplace(std::piecewise_construct, std::forward_as_tuple(std::forward<Key>(key)),
+            std::forward_as_tuple(std::forward<Value>(value)));
+        if (inserted.second) rollback.commit();
+        return inserted;
+    } else {
     if constexpr (std::is_same_v<typename Map::key_type, std::string> && !std::is_same_v<std::remove_cvref_t<Key>, std::string>)
         ProcedurePayloadAdmissionScope::admit(procedurePayloadHeapUpper<true>(key));
     if (ProcedurePayloadAdmissionScope::active() && map.find(key) == map.end()) {
@@ -270,10 +321,29 @@ auto procedureMapEmplace(Map &map, Key &&key, Value &&value) {
         ProcedurePayloadAdmissionScope::admit(procedurePayloadHeapUpper<true>(value));
     }
     return map.emplace(std::forward<Key>(key), std::forward<Value>(value));
+    }
 }
 
 template<class Map, class Key>
 auto procedureMapTryEmplace(Map &map, Key &&key) {
+    if constexpr (isExecutionBindingTree<Map>) {
+        const auto found = map.find(key);
+        if (found != map.end()) return std::pair<typename Map::iterator, bool>{found, false};
+        ProcedureTreeInsertionCredit rollback;
+        if (ProcedurePayloadAdmissionScope::active()) {
+            procedureAdmitMapNode(map, key);
+            using Value = typename Map::mapped_type;
+            if constexpr (requires { typename Value::mapped_type; })
+                ProcedurePayloadAdmissionScope::admit(procedureEmptyMapHeapUpper<Value>());
+            else if constexpr (requires { std::declval<Value>().values; std::declval<Value>().complete; })
+                ProcedurePayloadAdmissionScope::admit(procedureEmptyMapHeapUpper<std::remove_cvref_t<decltype(std::declval<Value>().values)>>());
+            else if constexpr (std::is_same_v<Value, LogicalPlanReadPath>)
+                ProcedurePayloadAdmissionScope::admit(4U * utils::detail::standardContainerProxyBytes());
+        }
+        auto inserted = map.emplace(std::piecewise_construct, std::forward_as_tuple(std::forward<Key>(key)), std::tuple<>{});
+        if (inserted.second) rollback.commit();
+        return inserted;
+    } else {
     if constexpr (std::is_same_v<typename Map::key_type, std::string> && !std::is_same_v<std::remove_cvref_t<Key>, std::string>)
         ProcedurePayloadAdmissionScope::admit(procedurePayloadHeapUpper<true>(key));
     if (ProcedurePayloadAdmissionScope::active() && map.find(key) == map.end()) {
@@ -285,21 +355,41 @@ auto procedureMapTryEmplace(Map &map, Key &&key) {
             ProcedurePayloadAdmissionScope::admit(procedureEmptyMapHeapUpper<std::remove_cvref_t<decltype(std::declval<Value>().values)>>());
     }
     return map.try_emplace(std::forward<Key>(key));
+    }
 }
 
 template<class Map, class Key, class Value>
 auto procedureMapInsertOrAssign(Map &map, Key &&key, Value &&value) {
+    if constexpr (isExecutionBindingTree<Map>) {
+        const auto found = map.find(key);
+        if (found == map.end()) return procedureMapEmplace(map, std::forward<Key>(key), std::forward<Value>(value));
+        if (ProcedurePayloadAdmissionScope::active())
+            ProcedurePayloadAdmissionScope::admit(procedurePayloadHeapUpper<true>(value));
+        found->second = std::forward<Value>(value);
+        return std::pair<typename Map::iterator, bool>{found, false};
+    } else {
     if (ProcedurePayloadAdmissionScope::active()) {
         if (map.find(key) == map.end()) procedureAdmitMapNode(map, key);
         ProcedurePayloadAdmissionScope::admit(procedurePayloadHeapUpper<true>(value));
     }
     return map.insert_or_assign(std::forward<Key>(key), std::forward<Value>(value));
+    }
 }
 
 template<class Set, class Key>
 auto procedureSetInsert(Set &set, Key &&key) {
+    if constexpr (isExecutionBindingTree<Set>) {
+        const auto found = set.find(key);
+        if (found != set.end()) return std::pair<typename Set::iterator, bool>{found, false};
+        ProcedureTreeInsertionCredit rollback;
+        if (ProcedurePayloadAdmissionScope::active()) procedureAdmitMapNode(set, key);
+        auto inserted = set.emplace(std::forward<Key>(key));
+        if (inserted.second) rollback.commit();
+        return inserted;
+    } else {
     if (ProcedurePayloadAdmissionScope::active() && set.find(key) == set.end()) procedureAdmitMapNode(set, key);
     return set.insert(std::forward<Key>(key));
+    }
 }
 
 template<class Vector>

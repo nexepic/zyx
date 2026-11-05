@@ -653,7 +653,7 @@
 			MaterializedByteBudget scratchBudget(maximumScratchBytes);
 			detail::BudgetMemoryResource scratchResource(scratchBudget);
 			using OriginalProperty = std::pair<std::string_view, const PropertyValue *>;
-			std::pmr::vector<OriginalProperty> original{&scratchResource};
+			utils::AdmissionPmrVector<OriginalProperty> original{&scratchResource};
 			original.reserve(entity.direct_properties.size());
 			for (const auto &property : entity.direct_properties) {
 				context.checkGuard();

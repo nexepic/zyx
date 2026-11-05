@@ -375,7 +375,7 @@
 						}
 					}
 					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
-					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					utils::AdmissionPmrUnorderedSet<std::pmr::string> distinctRows{&distinctMemory};
 					std::optional<detail::ExternalQueryKeySet> externalDistinct;
 					if (project.isDistinct() && state.shared.allow_cross_row_entity_batches &&
 					        state.shared.bounds.maximum_materialized_bytes >= detail::ExternalQueryKeySet::MINIMUM_QUERY_BYTES) {
@@ -404,7 +404,7 @@
 					std::optional<detail::BoundProjectionReferences> boundReferences;
 					std::optional<detail::BoundExpressionInputs> boundInputs;
 					if (state.shared.bound_program) {
-						std::pmr::vector<const expressions::Expression *> expressionInputs(&distinctMemory);
+						utils::AdmissionPmrVector<const expressions::Expression *> expressionInputs(&distinctMemory);
 						expressionInputs.reserve(items.size());
 						for (const auto &item : items) expressionInputs.push_back(item.expression.get());
 						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op), expressionInputs,
@@ -416,7 +416,7 @@
                             const auto *ref = dynamic_cast<const expressions::VariableReferenceExpression *>(items.front().expression.get());
                             return ref && ref->hasProperty();
                         }
-                        std::pmr::vector<const expressions::VariableReferenceExpression *> sources(&distinctMemory);
+                        utils::AdmissionPmrVector<const expressions::VariableReferenceExpression *> sources(&distinctMemory);
                         sources.reserve(items.size());
                         for (const auto &item : items) {
                             const auto *ref = dynamic_cast<const expressions::VariableReferenceExpression *>(item.expression.get());
@@ -547,7 +547,7 @@
 									return;
 								}
 								if (source == alias) {
-									std::erase_if(cache,
+									detail::eraseExecutionBindingsIf(cache,
 												  [&](const auto &candidate) { return candidate.first != alias; });
 									return;
 								}
@@ -561,7 +561,7 @@
 								row.complete_entity_property_cache.clear();
 								row.complete_entity_property_cache.insert(alias);
 							} else {
-								std::erase_if(row.complete_entity_property_cache,
+									detail::eraseExecutionBindingsIf(row.complete_entity_property_cache,
 											  [&](const std::string &variable) { return variable != alias; });
 							}
 							retainAndRenameAlias(row.entity_metadata_cache);

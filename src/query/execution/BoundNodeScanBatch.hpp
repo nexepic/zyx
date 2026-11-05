@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include "query/execution/BatchEnvelope.hpp"
 #include "query/execution/BoundExecutionProgram.hpp"
@@ -28,7 +29,7 @@ public:
 		for (const auto &key : keys) { guard(); names_.push_back(key); }
 		names_.push_back(entity_name_);
 		layout_.emplace(std::in_place, std::span<const std::string_view>(names_), budget, std::pmr::get_default_resource(), guard);
-		std::pmr::vector<size_t> requested(&memory_);
+		utils::AdmissionPmrVector<size_t> requested(&memory_);
 		for (size_t index = 0U; index < keys.size(); ++index) { guard(); requested.push_back(index); }
 		if (!numeric_.tryPrepare(columns, requested, guard)) throw MaterializedByteLimitExceeded();
 		for (size_t index = 0U; index < keys.size(); ++index) { guard(); sources_.push_back(BatchColumnSource::numeric(numeric_, index)); }
@@ -64,10 +65,10 @@ private:
 	const storage::LogicalGraphReadSnapshot &snapshot_;
 	BudgetMemoryResource memory_;
 	std::pmr::string entity_name_;
-	std::pmr::vector<std::string_view> names_;
-	std::pmr::vector<BatchColumnSource> sources_;
-	std::pmr::vector<uint32_t> selected_;
-	std::pmr::vector<uint64_t> ordinals_;
+	utils::AdmissionPmrVector<std::string_view> names_;
+	utils::AdmissionPmrVector<BatchColumnSource> sources_;
+	utils::AdmissionPmrVector<uint32_t> selected_;
+	utils::AdmissionPmrVector<uint64_t> ordinals_;
 	PrimitiveNumericColumns numeric_;
 	EntityRefColumn entities_;
 	std::optional<BoundColumnLayout> layout_;

@@ -1589,7 +1589,7 @@
 							"logical-plan selected scatter size overflowed");
 						if (scratchBytes > state.shared.materialized_budget.available()) throw PrefetchBytePressure{__LINE__};
 						detail::BudgetMemoryResource scatterMemory(state.shared.materialized_budget);
-						std::pmr::vector<size_t> lastSelected(columns.ids.size(), rows.size(), &scatterMemory);
+						utils::AdmissionPmrVector<size_t> lastSelected(columns.ids.size(), rows.size(), &scatterMemory);
 						const auto ordinalFor = [&](const LogicalPlanReadRow &row) -> std::optional<size_t> {
 							const auto *reference = std::get_if<storage::EntityRef>(&row.values.at(*columns.variable));
 							if (reference == nullptr || reference->is_edge) return std::nullopt;
@@ -1699,9 +1699,9 @@
                             std::ranges::any_of(metadataRequests, [&](const auto &request) { return request.variable == name; }) ||
                             std::ranges::find(completeEntityVariables, name) != completeEntityVariables.end();
                     };
-                    const auto prune = [&](auto &entries) { std::erase_if(entries, [&](const auto &entry) { return !needed(entry.first); }); };
+                    const auto prune = [&](auto &entries) { detail::eraseExecutionBindingsIf(entries, [&](const auto &entry) { return !needed(entry.first); }); };
                     prune(row.values); prune(row.property_cache); prune(row.entity_metadata_cache); prune(row.path_cache);
-                    std::erase_if(row.complete_entity_property_cache, [&](const auto &name) { return !needed(name); });
+                    detail::eraseExecutionBindingsIf(row.complete_entity_property_cache, [&](const auto &name) { return !needed(name); });
                     if (charge.bytes()) charge.set((std::min)(charge.bytes(), logicalReadRowBytes(row, state.shared.context)));
                 }
 				// Leave room for cache enrichment rather than filling the entire

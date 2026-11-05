@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <array>
@@ -81,8 +82,8 @@ private:
     static constexpr uint64_t MAGIC = UINT64_C(0x3159454B58595A); // ZYXKEY1
     struct Partition {
         explicit Partition(std::pmr::memory_resource *memory) : block(memory), handles(memory) {}
-        std::pmr::vector<std::byte> block;
-        std::pmr::vector<uint64_t> handles;
+        utils::AdmissionPmrVector<std::byte> block;
+        utils::AdmissionPmrVector<uint64_t> handles;
         std::array<uint64_t, BLOOM_WORDS> bloom{};
         uint32_t count = 0U;
     };
@@ -107,7 +108,7 @@ private:
         partition.bloom[a / 64U] |= UINT64_C(1) << (a % 64U);
         partition.bloom[b / 64U] |= UINT64_C(1) << (b % 64U);
     }
-    static void put(std::pmr::vector<std::byte> &bytes, uint64_t value, size_t width) {
+    static void put(utils::AdmissionPmrVector<std::byte> &bytes, uint64_t value, size_t width) {
         for (size_t i = 0U; i < width; ++i) bytes.push_back(static_cast<std::byte>((value >> (8U * i)) & 255U));
     }
     static uint64_t get(std::span<const std::byte> bytes, size_t &offset, size_t width) {
@@ -225,8 +226,8 @@ private:
     std::function<void()> checkpoint_, publication_checkpoint_;
     size_t maximum_disk_, maximum_fragments_, maximum_fragment_ = 0U, sealed_fragments_ = 0U, size_ = 0U;
     std::shared_ptr<ResourceAccount> account_;
-    std::pmr::unordered_set<std::pmr::string> cached_;
-    std::pmr::vector<Partition> partitions_;
+    utils::AdmissionPmrUnorderedSet<std::pmr::string> cached_;
+    utils::AdmissionPmrVector<Partition> partitions_;
     std::unique_ptr<storage::LogicalQueryScratchSession> scratch_;
     bool failed_ = false, finished_ = false;
 };

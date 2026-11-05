@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include "graph/utils/AdmissionPmrContainers.hpp"
+#include "graph/utils/StandardContainerHeapBytes.hpp"
 #include <memory_resource>
 #include <unordered_map>
 #include <unordered_set>
@@ -51,7 +53,7 @@ TEST(BudgetMemoryResourceTest, UpstreamFailureRollsBackAndContainersReleaseBucke
 	EXPECT_EQ(budget.used(), 0U);
 	detail::BudgetMemoryResource resource(budget);
 	{
-		std::pmr::unordered_map<uint64_t, uint64_t> values(&resource);
+		graph::utils::AdmissionPmrUnorderedMap<uint64_t, uint64_t> values(&resource);
 		values.reserve(16U);
 		const auto bucketBytes = budget.used();
 		EXPECT_GT(bucketBytes, 0U);
@@ -67,7 +69,7 @@ TEST(BudgetMemoryResourceTest, VectorGrowthChargesOverlapAndKeepsOldElementsAfte
 	MaterializedByteBudget budget(8U * sizeof(uint64_t));
 	detail::BudgetMemoryResource resource(budget);
 	{
-		std::pmr::vector<uint64_t> values(&resource);
+		graph::utils::AdmissionPmrVector<uint64_t> values(&resource);
 		values.reserve(8U);
 		values.assign(8U, 42U);
 		const auto retained = budget.used();
@@ -84,7 +86,7 @@ TEST(BudgetMemoryResourceTest, HashRehashRejectsOverlapEvenWhenFinalBucketsFit) 
 	{
 		MaterializedByteBudget probeBudget(1024U * 1024U);
 		detail::BudgetMemoryResource probeResource(probeBudget);
-		std::pmr::unordered_map<uint64_t, uint64_t> probe(&probeResource);
+		graph::utils::AdmissionPmrUnorderedMap<uint64_t, uint64_t> probe(&probeResource);
 		probe.reserve(8U);
 		probe.emplace(1U, 42U);
 		probe.rehash(64U);
@@ -94,7 +96,7 @@ TEST(BudgetMemoryResourceTest, HashRehashRejectsOverlapEvenWhenFinalBucketsFit) 
 	CountingResource upstream;
 	detail::BudgetMemoryResource resource(budget, &upstream);
 	{
-		std::pmr::unordered_map<uint64_t, uint64_t> values(&resource);
+		graph::utils::AdmissionPmrUnorderedMap<uint64_t, uint64_t> values(&resource);
 		values.reserve(8U);
 		values.emplace(1U, 42U);
 		const size_t retained = budget.used();
@@ -113,7 +115,7 @@ TEST(BudgetMemoryResourceTest, NestedHashMatchListsInheritBudgetAndPreserveEntri
 	CountingResource upstream;
 	detail::BudgetMemoryResource resource(budget, &upstream);
 	{
-		std::pmr::unordered_map<std::string, std::pmr::vector<size_t>> index(&resource);
+		graph::utils::AdmissionPmrUnorderedMap<std::string, graph::utils::AdmissionPmrVector<size_t>> index(&resource);
 		auto &matches = index["binding"];
 		ASSERT_EQ(matches.get_allocator().resource(), &resource);
 		const size_t metadataBytes = budget.used();
@@ -126,7 +128,7 @@ TEST(BudgetMemoryResourceTest, NestedHashMatchListsInheritBudgetAndPreserveEntri
 		EXPECT_THROW(matches.reserve(1024U), std::runtime_error);
 		EXPECT_EQ(upstream.allocations, allocations);
 		EXPECT_EQ(budget.used(), retained);
-		EXPECT_EQ(matches, (std::pmr::vector<size_t>{3U, 3U}));
+		EXPECT_EQ(matches, (graph::utils::AdmissionPmrVector<size_t>{3U, 3U}));
 	}
 	EXPECT_EQ(budget.used(), 0U);
 	EXPECT_EQ(upstream.allocations, upstream.deallocations);
@@ -137,10 +139,10 @@ TEST(BudgetMemoryResourceTest, HashOwningKeysAndTransientEncodingShareTheBudget)
 	detail::BudgetMemoryResource resource(budget);
 	const std::string literal(256U, 'x');
 	{
-		std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> index(&resource);
+		graph::utils::AdmissionPmrUnorderedMap<std::pmr::string, graph::utils::AdmissionPmrVector<size_t>> index(&resource);
 		std::pmr::string key{literal, &resource};
 		const size_t transientBytes = budget.used();
-		EXPECT_EQ(transientBytes, key.capacity() + 1U);
+		EXPECT_EQ(transientBytes, key.capacity() + 1U + graph::utils::detail::standardContainerProxyBytes());
 		index[key].push_back(7U);
 		ASSERT_EQ(index.begin()->first.get_allocator().resource(), &resource);
 		EXPECT_GT(budget.used(), transientBytes + index.begin()->first.capacity());
@@ -158,7 +160,7 @@ TEST(BudgetMemoryResourceTest, DistinctSetChargesOwningKeysRehashOverlapAndRolls
 	CountingResource upstream;
 	detail::BudgetMemoryResource resource(budget, &upstream);
 	{
-		std::pmr::unordered_set<std::pmr::string> keys{&resource};
+		graph::utils::AdmissionPmrUnorderedSet<std::pmr::string> keys{&resource};
 		keys.emplace(std::pmr::string(256U, 'a', &resource));
 		keys.emplace(std::pmr::string(256U, 'b', &resource));
 		ASSERT_EQ(keys.size(), 2U);
