@@ -145,6 +145,33 @@ TEST(BoundColumnLayoutTest, EveryGuardFailureRefundsOwnedAndValidationAllocation
 		EXPECT_EQ(budget.used(), 0U);
 	}
 }
+TEST(BoundColumnLayoutTest, WideLayoutUsesConstantAllocationCountAndBoundedOwnedBytes) {
+	std::vector<std::string> names;
+	for (size_t index = 0U; index < 256U; ++index) names.push_back("c" + std::to_string(index));
+	MaterializedByteBudget budget(8192U); LayoutAllocator allocator;
+	{
+		BoundColumnLayout layout(names, budget, &allocator);
+		EXPECT_LE(allocator.calls, 3U); // No per-name tree, string or iterator-proxy allocations.
+		EXPECT_EQ(budget.used(), allocator.live);
+		EXPECT_LE(budget.used(), 8192U); // Reviewed efficiency ceiling, independent of observations.
+		for (size_t index = 0U; index < names.size(); ++index) {
+			EXPECT_EQ(layout.name(layout.column(index)), names[index]);
+			EXPECT_EQ(layout.find(names[index]), layout.column(index));
+		}
+	}
+	EXPECT_EQ(allocator.live, 0U); EXPECT_EQ(budget.used(), 0U);
+}
+TEST(BoundColumnLayoutTest, PackedNamesPreserveEmbeddedNullsAndExactDuplicateSemantics) {
+	MaterializedByteBudget budget(4096U);
+	std::vector<std::string> names{std::string("a\0b", 3U), "a", "b"};
+	BoundColumnLayout layout(names, budget);
+	EXPECT_EQ(layout.find(std::string_view("a\0b", 3U)), layout.column(0U));
+	EXPECT_EQ(layout.find("a"), layout.column(1U));
+	EXPECT_EQ(layout.name(layout.column(0U)), std::string_view("a\0b", 3U));
+	names.push_back(std::string("a\0b", 3U));
+	EXPECT_THROW((BoundColumnLayout(names, budget)), std::invalid_argument);
+	layout.validate(std::span(names).first(3U));
+}
 } // namespace
 } // namespace graph::query::execution::detail
 
