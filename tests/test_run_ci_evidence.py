@@ -112,3 +112,16 @@ def test_tier_evidence_survives_failure_or_timeout(tmp_path, hang):
         assert len(record['xml_documents'])==2
         assert all(x['parse_state']=='complete' for x in record['xml_documents'])
         assert any(x['raw_exit_code']==9 for x in statuses['shards'])
+
+
+def test_diagnostic_profile_output_is_outside_source_and_artifacts(tmp_path):
+    program="import os;from pathlib import Path;p=Path(os.environ['LLVM_PROFILE_FILE'].replace('%p',str(os.getpid())));p.write_bytes(b'profile')"
+    env={'RUNNER_TEMP':str(tmp_path/'runner-temp')}
+    # The child inherits no caller profile setting in this dedicated process.
+    original=os.environ.pop('LLVM_PROFILE_FILE',None)
+    try:p,r=invoke(tmp_path,program,extra_env=env)
+    finally:
+        if original is not None:os.environ['LLVM_PROFILE_FILE']=original
+    assert p.returncode==0
+    assert list((tmp_path/'runner-temp/zyx-ci-diagnostic-profiles').glob('*.profraw'))
+    assert not list((tmp_path/'case').rglob('*.profraw'))

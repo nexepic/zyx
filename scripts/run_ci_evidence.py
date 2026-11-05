@@ -14,6 +14,7 @@ import signal
 import subprocess
 import sys
 import time
+import tempfile
 import xml.etree.ElementTree as ET
 
 LOG_LIMIT = 8 * 1024 * 1024
@@ -34,6 +35,11 @@ def run_evidence(command, directory, timeout, *, gtest=False):
     env.setdefault('ZYX_TEST_HEARTBEAT_SECONDS', '30')
     if gtest:
         env['GTEST_OUTPUT'] = 'xml:' + str(directory / 'tests.xml')
+        if 'LLVM_PROFILE_FILE' not in env:
+            # Coverage intermediates are neither diagnostic artifacts nor source files.
+            profiles = Path(env.get('RUNNER_TEMP') or tempfile.gettempdir()) / 'zyx-ci-diagnostic-profiles'
+            profiles.mkdir(parents=True, exist_ok=True)
+            env['LLVM_PROFILE_FILE'] = str(profiles / 'code-%p.profraw')
     actual_sha = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=False)
     record = {'command': list(command), 'checkout_sha': actual_sha.stdout.strip(),
               'event_sha': env.get('GITHUB_SHA'), 'started_at': time.time(), 'state': 'running',
