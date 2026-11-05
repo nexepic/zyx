@@ -1,0 +1,149 @@
+{
+  "production_source_commit": "561460b30174e3dbc167f7a87bfceae6e1e7f138",
+  "production_unchanged_since_full_pass": true,
+  "attribution_uses_test_only_hooks_and_phase_stop": true,
+  "allocator_metrics_bytes": {
+    "before": {
+      "live": 351037,
+      "heap": 21663744,
+      "free": 16409936,
+      "calls": 0,
+      "requested": 0,
+      "free_calls": 0,
+      "freed": 0
+    },
+    "rejection-before-unwind": {
+      "live": 5112314,
+      "heap": 70004736,
+      "free": 23155072,
+      "calls": 112509,
+      "requested": 37027539,
+      "free_calls": 97033,
+      "freed": 32266262
+    },
+    "after": {
+      "live": 4629662,
+      "heap": 73560064,
+      "free": 23483064,
+      "calls": 117264,
+      "requested": 40066458,
+      "free_calls": 101931,
+      "freed": 35787833
+    },
+    "after-gtest-cleanup": {
+      "live": 969612,
+      "heap": 73822208,
+      "free": 23685296,
+      "calls": 117264,
+      "requested": 40066458,
+      "free_calls": 101931,
+      "freed": 35787833
+    }
+  },
+  "query_allocated_minus_freed_equals_live_growth": true,
+  "cold_unmodified_instrumented_result": {
+    "source_commit": "561460b30174e3dbc167f7a87bfceae6e1e7f138",
+    "command": [
+      "/workspace/zyx-ci228-full-asan-core/final-native-tests",
+      "--gtest_filter=RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "--gtest_output=xml:/tmp/zyx-rss-current-attribution/unmodified-cold.xml"
+    ],
+    "exit": 1,
+    "test_source_unmodified": true,
+    "note": "Same native executable as passing131 subset, now in a fresh process with a single test."
+  },
+  "normal_sampled_result": {
+    "source_commit": "561460b3",
+    "build": "normal DebugO0 coverage; no ASan/UBSan",
+    "exit": 0,
+    "reported_before_query_rss": 99631104,
+    "external_observed_peak_after_marker": 127098880,
+    "observed_growth": 27467776,
+    "sampling_interval_seconds": 0.005,
+    "samples": 538,
+    "limitations": "Sampled lower bound on peak; includes end-of-test cleanup and profile flush, not exact allocation accounting or comparable-instrumentation speed benchmark."
+  },
+  "mapping_delta": [
+    {
+      "path": "[anonymous]",
+      "rss_delta_KiB": 53844,
+      "before": {
+        "Rss_KiB": 29112,
+        "Pss_KiB": 29112,
+        "Shared_Clean_KiB": 0,
+        "Private_Clean_KiB": 0,
+        "Private_Dirty_KiB": 29112,
+        "Anonymous_KiB": 29112
+      },
+      "at_rejection": {
+        "Rss_KiB": 82956,
+        "Pss_KiB": 82956,
+        "Shared_Clean_KiB": 0,
+        "Private_Clean_KiB": 0,
+        "Private_Dirty_KiB": 82956,
+        "Anonymous_KiB": 82956
+      }
+    },
+    {
+      "path": "/tmp/zyx-rss-current-attribution/suite",
+      "rss_delta_KiB": 17024,
+      "before": {
+        "Rss_KiB": 46080,
+        "Pss_KiB": 46076,
+        "Shared_Clean_KiB": 0,
+        "Private_Clean_KiB": 0,
+        "Private_Dirty_KiB": 46072,
+        "Anonymous_KiB": 1648
+      },
+      "at_rejection": {
+        "Rss_KiB": 63104,
+        "Pss_KiB": 63100,
+        "Shared_Clean_KiB": 0,
+        "Private_Clean_KiB": 0,
+        "Private_Dirty_KiB": 63096,
+        "Anonymous_KiB": 1652
+      }
+    },
+    {
+      "path": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+      "rss_delta_KiB": 4,
+      "before": {
+        "Rss_KiB": 560,
+        "Pss_KiB": 179,
+        "Shared_Clean_KiB": 500,
+        "Private_Clean_KiB": 36,
+        "Private_Dirty_KiB": 24,
+        "Anonymous_KiB": 24
+      },
+      "at_rejection": {
+        "Rss_KiB": 564,
+        "Pss_KiB": 181,
+        "Shared_Clean_KiB": 504,
+        "Private_Clean_KiB": 36,
+        "Private_Dirty_KiB": 24,
+        "Anonymous_KiB": 24
+      }
+    },
+    {
+      "path": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.33",
+      "rss_delta_KiB": 4,
+      "before": {
+        "Rss_KiB": 976,
+        "Pss_KiB": 976,
+        "Shared_Clean_KiB": 0,
+        "Private_Clean_KiB": 920,
+        "Private_Dirty_KiB": 56,
+        "Anonymous_KiB": 56
+      },
+      "at_rejection": {
+        "Rss_KiB": 980,
+        "Pss_KiB": 980,
+        "Shared_Clean_KiB": 0,
+        "Private_Clean_KiB": 924,
+        "Private_Dirty_KiB": 56,
+        "Anonymous_KiB": 56
+      }
+    }
+  ],
+  "constraints": "No ASan settings, product/RSS limits or production code changed. Allocator heap/free/mmap/StackDepot statistics overlap resident anonymous pages and must not be summed. Test hooks alter timing/layout; baseline executable independently reproduces failure."
+}
