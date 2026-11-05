@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="4.662" timestamp="2026-11-05T11:30:16.015" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="4.662" timestamp="2026-11-05T11:30:16.015">
+    <testcase name="NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp" line="44" status="run" result="completed" time="4.662" timestamp="2026-11-05T11:30:16.015" classname="RelocatableStorageBackendTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;Query exceeded memory limit of 64MB (query resident growth: 66MB, baseline RSS: 182MB, current RSS: 248MB)&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 66MB, baseline RSS: 182MB, current RSS: 248MB)" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

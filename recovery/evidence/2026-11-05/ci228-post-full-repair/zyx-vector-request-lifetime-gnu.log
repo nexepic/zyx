@@ -1,0 +1,2 @@
+REQUEST_LIFETIME string_size=32 name_capacity=16 vector_bytes=3000 charge=3017
+REQUEST_LIFETIME after_data_destroy_and_credit_refund=0
