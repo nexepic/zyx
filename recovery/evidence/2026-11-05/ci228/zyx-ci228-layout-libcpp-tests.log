@@ -1,0 +1,97 @@
+Running main() from /workspace/zyx-sysroot/usr/src/googletest/googletest/src/gtest_main.cc
+[==========] Running 38 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from TrivialBudgetBufferTest
+[ RUN      ] TrivialBudgetBufferTest.ConstructionAndReleaseNeverRequestHiddenStorage
+[       OK ] TrivialBudgetBufferTest.ConstructionAndReleaseNeverRequestHiddenStorage (0 ms)
+[ RUN      ] TrivialBudgetBufferTest.RefusedGrowthKeepsPrefixAndChargesOldNewOverlap
+[       OK ] TrivialBudgetBufferTest.RefusedGrowthKeepsPrefixAndChargesOldNewOverlap (0 ms)
+[ RUN      ] TrivialBudgetBufferTest.UpstreamFailureRefundsAdmissionAndAssignmentOwnsInput
+[       OK ] TrivialBudgetBufferTest.UpstreamFailureRefundsAdmissionAndAssignmentOwnsInput (0 ms)
+[ RUN      ] TrivialBudgetBufferTest.EmptyAndAlignedRangesPreserveStorageAndValidateBounds
+[       OK ] TrivialBudgetBufferTest.EmptyAndAlignedRangesPreserveStorageAndValidateBounds (0 ms)
+[----------] 4 tests from TrivialBudgetBufferTest (0 ms total)
+
+[----------] 12 tests from FixedWidthColumnTest
+[ RUN      ] FixedWidthColumnTest.BoundedReservationPreservesRowsAndAvoidsAppendGrowth
+[       OK ] FixedWidthColumnTest.BoundedReservationPreservesRowsAndAvoidsAppendGrowth (0 ms)
+[ RUN      ] FixedWidthColumnTest.PartialReservationFailureKeepsRowsAndChargesRetainedCapacity
+[       OK ] FixedWidthColumnTest.PartialReservationFailureKeepsRowsAndChargesRetainedCapacity (0 ms)
+[ RUN      ] FixedWidthColumnTest.DistinguishesValueNullAndMissingWithoutStringKeys
+[       OK ] FixedWidthColumnTest.DistinguishesValueNullAndMissingWithoutStringKeys (0 ms)
+[ RUN      ] FixedWidthColumnTest.BoolUsesContiguousByteStorageInsteadOfVectorBool
+[       OK ] FixedWidthColumnTest.BoolUsesContiguousByteStorageInsteadOfVectorBool (0 ms)
+[ RUN      ] FixedWidthColumnTest.ClearReusesCapacityAndReleaseRefundsIt
+[       OK ] FixedWidthColumnTest.ClearReusesCapacityAndReleaseRefundsIt (0 ms)
+[ RUN      ] FixedWidthColumnTest.DestructionRefundsOnlyItsOwnSharedCharge
+[       OK ] FixedWidthColumnTest.DestructionRefundsOnlyItsOwnSharedCharge (0 ms)
+[ RUN      ] FixedWidthColumnTest.FailedAllocationPreservesRowsAndAccountsRetainedCapacity
+[       OK ] FixedWidthColumnTest.FailedAllocationPreservesRowsAndAccountsRetainedCapacity (0 ms)
+[ RUN      ] FixedWidthColumnTest.GrowthChargesOldAndNewAllocationsWithoutLosingPreviousCells
+[       OK ] FixedWidthColumnTest.GrowthChargesOldAndNewAllocationsWithoutLosingPreviousCells (0 ms)
+[ RUN      ] FixedWidthColumnTest.RowBoundAndInvalidLimitFailExplicitly
+[       OK ] FixedWidthColumnTest.RowBoundAndInvalidLimitFailExplicitly (0 ms)
+[ RUN      ] FixedWidthColumnTest.UpstreamAllocationFailureRollsBackBudgetAdmission
+[       OK ] FixedWidthColumnTest.UpstreamAllocationFailureRollsBackBudgetAdmission (0 ms)
+[ RUN      ] FixedWidthColumnTest.NonPowerOfTwoBoundRetainsEveryCellAndRejectsNullAllocator
+[       OK ] FixedWidthColumnTest.NonPowerOfTwoBoundRetainsEveryCellAndRejectsNullAllocator (0 ms)
+[ RUN      ] FixedWidthColumnTest.BatchRollbackDropsUnpublishedCellsWithoutRefundingLiveCapacity
+[       OK ] FixedWidthColumnTest.BatchRollbackDropsUnpublishedCellsWithoutRefundingLiveCapacity (0 ms)
+[----------] 12 tests from FixedWidthColumnTest (0 ms total)
+
+[----------] 10 tests from BatchEnvelopeTest
+[ RUN      ] BatchEnvelopeTest.PreservesTypedStatesEntityKindNestedOwnersSelectionOrderAndDuplicates
+[       OK ] BatchEnvelopeTest.PreservesTypedStatesEntityKindNestedOwnersSelectionOrderAndDuplicates (0 ms)
+[ RUN      ] BatchEnvelopeTest.RejectsSourceReuseForeignLayoutsBudgetsSnapshotsAndPrograms
+[       OK ] BatchEnvelopeTest.RejectsSourceReuseForeignLayoutsBudgetsSnapshotsAndPrograms (0 ms)
+[ RUN      ] BatchEnvelopeTest.InvalidShapeKindSelectionAndFailedPublicationKeepTheOldCompletePrefix
+[       OK ] BatchEnvelopeTest.InvalidShapeKindSelectionAndFailedPublicationKeepTheOldCompletePrefix (0 ms)
+[ RUN      ] BatchEnvelopeTest.EntityAppendRollbackAndReaderEpochChangesRejectStaleValues
+[       OK ] BatchEnvelopeTest.EntityAppendRollbackAndReaderEpochChangesRejectStaleValues (0 ms)
+[ RUN      ] BatchEnvelopeTest.LegacyNumericBridgeExplicitlyDeclinesExactPresence
+[       OK ] BatchEnvelopeTest.LegacyNumericBridgeExplicitlyDeclinesExactPresence (0 ms)
+[ RUN      ] BatchEnvelopeTest.EveryMetadataAllocationFailurePreservesPublishedPrefixAndRefundsAdmission
+[       OK ] BatchEnvelopeTest.EveryMetadataAllocationFailurePreservesPublishedPrefixAndRefundsAdmission (0 ms)
+[ RUN      ] BatchEnvelopeTest.DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners
+[       OK ] BatchEnvelopeTest.DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners (0 ms)
+[ RUN      ] BatchEnvelopeTest.DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries
+[       OK ] BatchEnvelopeTest.DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries (0 ms)
+[ RUN      ] BatchEnvelopeTest.DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget
+[       OK ] BatchEnvelopeTest.DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget (1 ms)
+[ RUN      ] BatchEnvelopeTest.ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects
+[       OK ] BatchEnvelopeTest.ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects (0 ms)
+[----------] 10 tests from BatchEnvelopeTest (3 ms total)
+
+[----------] 9 tests from BoundColumnLayoutTest
+[ RUN      ] BoundColumnLayoutTest.OwnsOrderedNamesAfterProducerStringsChangeAndPreservesDescriptors
+[       OK ] BoundColumnLayoutTest.OwnsOrderedNamesAfterProducerStringsChangeAndPreservesDescriptors (0 ms)
+[ RUN      ] BoundColumnLayoutTest.ReorderedRenamedMissingAndAdditionalColumnsFailBeforeConsumerEffects
+[       OK ] BoundColumnLayoutTest.ReorderedRenamedMissingAndAdditionalColumnsFailBeforeConsumerEffects (0 ms)
+[ RUN      ] BoundColumnLayoutTest.ForeignZeroAndReconstructedLayoutsRejectDescriptors
+[       OK ] BoundColumnLayoutTest.ForeignZeroAndReconstructedLayoutsRejectDescriptors (0 ms)
+[ RUN      ] BoundColumnLayoutTest.InvalidNamesRefundConstructionAndEmptyLayoutsAreValid
+[       OK ] BoundColumnLayoutTest.InvalidNamesRefundConstructionAndEmptyLayoutsAreValid (0 ms)
+[ RUN      ] BoundColumnLayoutTest.AdmissionPrecedesUpstreamAndChargesOnlyRetainedAllocatorRequests
+[       OK ] BoundColumnLayoutTest.AdmissionPrecedesUpstreamAndChargesOnlyRetainedAllocatorRequests (0 ms)
+[ RUN      ] BoundColumnLayoutTest.EveryAllocationFailureRefundsBudgetAndAllowsRetry
+[       OK ] BoundColumnLayoutTest.EveryAllocationFailureRefundsBudgetAndAllowsRetry (0 ms)
+[ RUN      ] BoundColumnLayoutTest.EveryGuardFailureRefundsOwnedAndValidationAllocations
+[       OK ] BoundColumnLayoutTest.EveryGuardFailureRefundsOwnedAndValidationAllocations (0 ms)
+[ RUN      ] BoundColumnLayoutTest.WideLayoutUsesConstantAllocationCountAndBoundedOwnedBytes
+[       OK ] BoundColumnLayoutTest.WideLayoutUsesConstantAllocationCountAndBoundedOwnedBytes (1 ms)
+[ RUN      ] BoundColumnLayoutTest.PackedNamesPreserveEmbeddedNullsAndExactDuplicateSemantics
+[       OK ] BoundColumnLayoutTest.PackedNamesPreserveEmbeddedNullsAndExactDuplicateSemantics (0 ms)
+[----------] 9 tests from BoundColumnLayoutTest (2 ms total)
+
+[----------] 3 tests from MaterializedByteBudgetParentTest
+[ RUN      ] MaterializedByteBudgetParentTest.ChildChargesOnlyRetainedBytesAndRejectsSharedOvercommit
+[       OK ] MaterializedByteBudgetParentTest.ChildChargesOnlyRetainedBytesAndRejectsSharedOvercommit (0 ms)
+[ RUN      ] MaterializedByteBudgetParentTest.ChildRetainsParentAndReleasesCreditOnDestruction
+[       OK ] MaterializedByteBudgetParentTest.ChildRetainsParentAndReleasesCreditOnDestruction (0 ms)
+[ RUN      ] MaterializedByteBudgetParentTest.ChildPreservesSharedAccountAdmissionAndRefunds
+[       OK ] MaterializedByteBudgetParentTest.ChildPreservesSharedAccountAdmissionAndRefunds (0 ms)
+[----------] 3 tests from MaterializedByteBudgetParentTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 38 tests from 5 test suites ran. (6 ms total)
+[  PASSED  ] 38 tests.

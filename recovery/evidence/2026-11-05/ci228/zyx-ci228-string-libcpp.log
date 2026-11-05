@@ -1,0 +1,7 @@
+sizeof_string=24 libcxx=190107
+length=22 allocations=0 requested=0 capacity=22
+length=23 allocations=1 requested=26 capacity=25
+length=512 allocations=1 requested=520 capacity=519
+length=8192 allocations=1 requested=8200 capacity=8199
+range=0..65536 max_requested_minus_length=8 at_length=24 multiple_allocation_lengths=0
+fresh_string_upper_validated constructions=196647 maximum=1048576 modes=3

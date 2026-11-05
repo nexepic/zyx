@@ -1,0 +1,27 @@
+{
+  "base_head": "68f1220f79b95d7c5ff32b2fff95318901a8cb6f",
+  "uncommitted": true,
+  "modified_source_sha256": "47848ccc2002f16e3c90d2315ce5a80583e32acf36c0dc1d758da262e6620efb",
+  "files": {
+    "cmake/SourceSets.cmake": "e6a13504e31fd4dc11ef74b2630bf0fe6ee13320cacf90343c74723322f02218",
+    "include/graph/utils/StandardContainerHeapBytes.hpp": "4cdcfc7cbe3069ac6a05fdba87fd9e8a0e3b4b6b9204fe67d85abdc63cc89558",
+    "scripts/diagnose_string_allocations.cpp": "e8eb38aefb344ae1de8431c26a0b82d03f1aa40aaa560c827ff6df5ecc41269a",
+    "src/query/execution/BatchEnvelope.hpp": "edfa62bee38207a241ce71b8f71f7f52a656b4c63c165500e81b0bd83a744756",
+    "src/query/execution/BoundColumnLayout.hpp": "0b86b7f4fe9aa908910be83a60818d0dfc48d0bc663720b610ea84bf02b72800",
+    "src/query/execution/EntityRefColumn.hpp": "5642e04fb74d38e6296fc4ce1f235360e03f7a7aed52d88a9c327c35fdeb908d",
+    "src/query/execution/FixedWidthColumn.hpp": "56452ed6f98bba2356857c267531e142bcf92d75302e41aa0b12c2768f599eb1",
+    "src/query/execution/TrivialBudgetBuffer.hpp": "52f8b34304651851385a3e1a314a39a5edd388201401ece341eb2d28a60c05bd",
+    "tests/src/query/execution/test_BoundColumnLayout.cpp": "ebd012cd6492c32a91b4f03d016819d6e45f9054a9b7a33d4110ca014ad60426",
+    "tests/src/query/execution/test_TrivialBudgetBuffer.cpp": "92e35be5ee580285a1e09f893f36a555b70dacc49d060a3c5ee6cd964d2e71ec"
+  },
+  "build_directory": "/workspace/zyx-ci-config",
+  "configuration": "Linux Clang 19 Debug -O0 -g0 coverage ON; storage test hooks ON",
+  "remote_write_performed": false,
+  "verified_code_commit": "0b7edcd8013360a7215eec3d65ab0a2f69ab13b5",
+  "source_committed_after_verification": true,
+  "local_only_commits": [
+    "0b7edcd8013360a7215eec3d65ab0a2f69ab13b5",
+    "d9cb29215572f9e52dc377481b3d39d2780725ad",
+    "46f3442f963b8cf402e7deb67c263d7995b00bf2"
+  ]
+}

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="43" failures="0" disabled="0" errors="0" time="0.598" timestamp="2026-11-05T06:56:50.874" name="AllTests">
+  <testsuite name="LogicalVectorBufferedSortTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.166" timestamp="2026-11-05T06:56:50.877">
+    <testcase name="SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorBufferedSort.cpp" line="71" status="run" result="completed" time="0.165" timestamp="2026-11-05T06:56:50.877" classname="LogicalVectorBufferedSortTest" />
+  </testsuite>
+  <testsuite name="LogicalVectorPropertyBatchTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.002" timestamp="2026-11-05T06:56:51.043">
+    <testcase name="RetainsConvertedQueryVectorThroughResultPublication" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="576" status="run" result="completed" time="0.002" timestamp="2026-11-05T06:56:51.043" classname="LogicalVectorPropertyBatchTest" />
+  </testsuite>
+  <testsuite name="BatchEnvelopeTest" tests="10" failures="0" disabled="0" skipped="0" errors="0" time="0.004" timestamp="2026-11-05T06:56:51.046">
+    <testcase name="PreservesTypedStatesEntityKindNestedOwnersSelectionOrderAndDuplicates" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="41" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.046" classname="BatchEnvelopeTest" />
+    <testcase name="RejectsSourceReuseForeignLayoutsBudgetsSnapshotsAndPrograms" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="77" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.046" classname="BatchEnvelopeTest" />
+    <testcase name="InvalidShapeKindSelectionAndFailedPublicationKeepTheOldCompletePrefix" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="99" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.046" classname="BatchEnvelopeTest" />
+    <testcase name="EntityAppendRollbackAndReaderEpochChangesRejectStaleValues" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="122" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.046" classname="BatchEnvelopeTest" />
+    <testcase name="LegacyNumericBridgeExplicitlyDeclinesExactPresence" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="136" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.046" classname="BatchEnvelopeTest" />
+    <testcase name="EveryMetadataAllocationFailurePreservesPublishedPrefixAndRefundsAdmission" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="150" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.046" classname="BatchEnvelopeTest" />
+    <testcase name="DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="169" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.047" classname="BatchEnvelopeTest" />
+    <testcase name="DirectBorrowedTextOwnsItsBytesAndImmutableIdentityChecksAtBatchBoundaries" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="191" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.047" classname="BatchEnvelopeTest" />
+    <testcase name="DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="220" status="run" result="completed" time="0.002" timestamp="2026-11-05T06:56:51.047" classname="BatchEnvelopeTest" />
+    <testcase name="ShortTextKernelPreservesSelectionDuplicatesAbsenceAndDeclinesBeforeEffects" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BatchEnvelope.cpp" line="240" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BatchEnvelopeTest" />
+  </testsuite>
+  <testsuite name="BoundColumnLayoutTest" tests="9" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T06:56:51.050">
+    <testcase name="OwnsOrderedNamesAfterProducerStringsChangeAndPreservesDescriptors" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="26" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="ReorderedRenamedMissingAndAdditionalColumnsFailBeforeConsumerEffects" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="42" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="ForeignZeroAndReconstructedLayoutsRejectDescriptors" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="61" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="InvalidNamesRefundConstructionAndEmptyLayoutsAreValid" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="83" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="AdmissionPrecedesUpstreamAndChargesOnlyRetainedAllocatorRequests" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="99" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="EveryAllocationFailureRefundsBudgetAndAllowsRetry" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="116" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="EveryGuardFailureRefundsOwnedAndValidationAllocations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="135" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="WideLayoutUsesConstantAllocationCountAndBoundedOwnedBytes" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="148" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.050" classname="BoundColumnLayoutTest" />
+    <testcase name="PackedNamesPreserveEmbeddedNullsAndExactDuplicateSemantics" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="164" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="BoundColumnLayoutTest" />
+  </testsuite>
+  <testsuite name="MaterializedByteBudgetParentTest" tests="3" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T06:56:51.051">
+    <testcase name="ChildChargesOnlyRetainedBytesAndRejectsSharedOvercommit" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="178" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="MaterializedByteBudgetParentTest" />
+    <testcase name="ChildRetainsParentAndReleasesCreditOnDestruction" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="199" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="MaterializedByteBudgetParentTest" />
+    <testcase name="ChildPreservesSharedAccountAdmissionAndRefunds" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_BoundColumnLayout.cpp" line="212" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="MaterializedByteBudgetParentTest" />
+  </testsuite>
+  <testsuite name="FixedWidthColumnTest" tests="12" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T06:56:51.051">
+    <testcase name="BoundedReservationPreservesRowsAndAvoidsAppendGrowth" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="8" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="PartialReservationFailureKeepsRowsAndChargesRetainedCapacity" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="23" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="DistinguishesValueNullAndMissingWithoutStringKeys" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="33" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="BoolUsesContiguousByteStorageInsteadOfVectorBool" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="49" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="ClearReusesCapacityAndReleaseRefundsIt" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="60" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="DestructionRefundsOnlyItsOwnSharedCharge" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="79" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="FailedAllocationPreservesRowsAndAccountsRetainedCapacity" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="93" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="GrowthChargesOldAndNewAllocationsWithoutLosingPreviousCells" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="104" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="RowBoundAndInvalidLimitFailExplicitly" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="114" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="UpstreamAllocationFailureRollsBackBudgetAdmission" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="124" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="NonPowerOfTwoBoundRetainsEveryCellAndRejectsNullAllocator" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="132" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+    <testcase name="BatchRollbackDropsUnpublishedCellsWithoutRefundingLiveCapacity" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_FixedWidthColumn.cpp" line="142" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="FixedWidthColumnTest" />
+  </testsuite>
+  <testsuite name="TrivialBudgetBufferTest" tests="4" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T06:56:51.051">
+    <testcase name="ConstructionAndReleaseNeverRequestHiddenStorage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_TrivialBudgetBuffer.cpp" line="23" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="TrivialBudgetBufferTest" />
+    <testcase name="RefusedGrowthKeepsPrefixAndChargesOldNewOverlap" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_TrivialBudgetBuffer.cpp" line="40" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.051" classname="TrivialBudgetBufferTest" />
+    <testcase name="UpstreamFailureRefundsAdmissionAndAssignmentOwnsInput" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_TrivialBudgetBuffer.cpp" line="53" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.052" classname="TrivialBudgetBufferTest" />
+    <testcase name="EmptyAndAlignedRangesPreserveStorageAndValidateBounds" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_TrivialBudgetBuffer.cpp" line="67" status="run" result="completed" time="0." timestamp="2026-11-05T06:56:51.052" classname="TrivialBudgetBufferTest" />
+  </testsuite>
+  <testsuite name="RelocatableStorageBackendTest" tests="3" failures="0" disabled="0" skipped="0" errors="0" time="0.417" timestamp="2026-11-05T06:56:51.052">
+    <testcase name="NativeEdgeCellsKeepTightAndRetryReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="28" status="run" result="completed" time="0.168" timestamp="2026-11-05T06:56:51.052" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="241664"/>
+        <property name="tight_logical_peak_bytes" value="3739"/>
+        <property name="retry_data_read_bytes" value="266240"/>
+        <property name="retry_logical_peak_bytes" value="4472"/>
+        <property name="ample_data_read_bytes" value="266240"/>
+        <property name="ample_logical_peak_bytes" value="25938"/>
+      </properties>
+    </testcase>
+    <testcase name="NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1301" status="run" result="completed" time="0.098" timestamp="2026-11-05T06:56:51.221" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="204800"/>
+        <property name="tight_logical_peak_bytes" value="3659"/>
+        <property name="retry_data_read_bytes" value="229376"/>
+        <property name="retry_logical_peak_bytes" value="4156"/>
+        <property name="ample_data_read_bytes" value="229376"/>
+        <property name="ample_logical_peak_bytes" value="24042"/>
+      </properties>
+    </testcase>
+    <testcase name="CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp" line="193" status="run" result="completed" time="0.147" timestamp="2026-11-05T06:56:51.320" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+</testsuites>

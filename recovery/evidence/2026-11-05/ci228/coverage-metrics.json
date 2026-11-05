@@ -1,0 +1,23 @@
+{
+  "regions": {
+    "count": 103343,
+    "not_covered": 6293,
+    "percent": 93.91
+  },
+  "functions": {
+    "count": 11998,
+    "not_covered": 224,
+    "percent": 98.13
+  },
+  "lines": {
+    "count": 134385,
+    "not_covered": 5581,
+    "percent": 95.85
+  },
+  "branches": {
+    "count": 79394,
+    "not_covered": 10418,
+    "percent": 86.88
+  },
+  "all_metrics_at_least_95": false
+}

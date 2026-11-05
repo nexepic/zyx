@@ -1,0 +1,435 @@
+{
+  "run": 41962296906,
+  "url": "https://github.com/nexepic/zyx/actions/runs/41962296906",
+  "source": "68f1220f79b95d7c5ff32b2fff95318901a8cb6f",
+  "linux": "success",
+  "tsan": "success",
+  "failures": {
+    "windows": {
+      "job": 127031243447,
+      "url": "https://github.com/nexepic/zyx/actions/runs/41962296906/job/127031243447",
+      "unique_names_union_of_diagnostics_and_main": [
+        {
+          "test": "SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads",
+          "first_details": [
+            "2026-11-05T04:04:49.4621724Z               <unknown>:-1",
+            "2026-11-05T04:04:49.4622366Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:49.4622942Z ",
+            "2026-11-05T04:04:49.4623361Z [100% |   1/  1] FAIL LogicalVectorBufferedSortTest (1 failures, 35 ms)"
+          ]
+        },
+        {
+          "test": "GdsDijkstraProcedureForwardsMaterializedByteBudget",
+          "first_details": [
+            "2026-11-05T04:04:51.3678915Z               <unknown>:-1",
+            "2026-11-05T04:04:51.3679335Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:51.3679966Z ",
+            "2026-11-05T04:04:51.3681414Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)"
+          ]
+        },
+        {
+          "test": "SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+          "first_details": [
+            "2026-11-05T04:04:52.2779059Z               <unknown>:-1",
+            "2026-11-05T04:04:52.2779485Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:52.2779892Z ",
+            "2026-11-05T04:04:52.2780646Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 3 ms)"
+          ]
+        },
+        {
+          "test": "BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+          "first_details": [
+            "2026-11-05T04:04:53.1802892Z               <unknown>:-1",
+            "2026-11-05T04:04:53.1803320Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:53.1803726Z ",
+            "2026-11-05T04:04:53.1804586Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)"
+          ]
+        },
+        {
+          "test": "CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+          "first_details": [
+            "2026-11-05T04:04:54.1140096Z               <unknown>:-1",
+            "2026-11-05T04:04:54.1140715Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:54.1141257Z ",
+            "2026-11-05T04:04:54.1141734Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 18 ms)"
+          ]
+        },
+        {
+          "test": "MetadataSemanticErrorsPrecedeJointPressureSplitting",
+          "first_details": [
+            "2026-11-05T04:04:56.8896693Z               <unknown>:-1",
+            "2026-11-05T04:04:56.8897115Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:56.8898537Z ",
+            "2026-11-05T04:04:56.8899090Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 3 ms)"
+          ]
+        },
+        {
+          "test": "FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+          "first_details": [
+            "2026-11-05T04:04:57.7996732Z               <unknown>:-1",
+            "2026-11-05T04:04:57.7997222Z               C++ exception with description \"logical procedure Property columns exceeded their byte bound (retained rows=4315, IDs=24, limit=5424)\" thrown in the test body.",
+            "2026-11-05T04:04:57.7998354Z ",
+            "2026-11-05T04:04:57.7999194Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 1 ms)"
+          ]
+        },
+        {
+          "test": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+          "first_details": [
+            "2026-11-05T04:04:58.7076904Z               <unknown>:-1",
+            "2026-11-05T04:04:58.7077334Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:58.7078004Z ",
+            "2026-11-05T04:04:58.7078366Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)"
+          ]
+        },
+        {
+          "test": "ExpandsDistinctTopKForFilterAfterSkip",
+          "first_details": [
+            "2026-11-05T04:04:59.6199116Z               <unknown>:-1",
+            "2026-11-05T04:04:59.6199483Z               C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+            "2026-11-05T04:04:59.6199797Z ",
+            "2026-11-05T04:04:59.6200217Z [100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)"
+          ]
+        },
+        {
+          "test": "ShortestPathWithoutExistenceProbeRequestsOnlyIdentity",
+          "first_details": [
+            "2026-11-05T04:14:46.2591645Z               <unknown>:-1",
+            "2026-11-05T04:14:46.2592397Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:46.2593086Z ",
+            "2026-11-05T04:14:46.2593578Z [ 13% |  82/597] FAIL LogicalProcedureIdentityTest (1 failures, 16 ms)"
+          ]
+        },
+        {
+          "test": "AuthenticatesDescendingPathInBoundedSlicesAndRejectsMissingNodes",
+          "first_details": [
+            "2026-11-05T04:14:47.7922177Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7922691Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7923390Z ",
+            "2026-11-05T04:14:47.7923394Z "
+          ]
+        },
+        {
+          "test": "ShortestPathShrinksUnprocessedTopologyPagesUnderSharedBytePressure",
+          "first_details": [
+            "2026-11-05T04:14:47.7924320Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7924833Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7925210Z ",
+            "2026-11-05T04:14:47.7925533Z [ 14% |  84/597] FAIL LogicalGdsPathBudgetTest (2 failures, 5 ms)"
+          ]
+        },
+        {
+          "test": "VectorProcedureMaterializesLargeHitSetsInBoundedNodeBatches",
+          "first_details": [
+            "2026-11-05T04:14:47.7926597Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7927092Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7927462Z ",
+            "2026-11-05T04:14:47.7927465Z "
+          ]
+        },
+        {
+          "test": "AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget",
+          "first_details": [
+            "2026-11-05T04:14:47.7928294Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7928716Z               C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7929761Z ",
+            "2026-11-05T04:14:47.7929765Z "
+          ]
+        },
+        {
+          "test": "VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance",
+          "first_details": [
+            "2026-11-05T04:14:47.7930574Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7930984Z               C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7931325Z ",
+            "2026-11-05T04:14:47.7931328Z "
+          ]
+        },
+        {
+          "test": "GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget",
+          "first_details": [
+            "2026-11-05T04:14:47.7932254Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7932694Z               C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7933007Z ",
+            "2026-11-05T04:14:47.7933371Z [ 14% |  85/597] FAIL QueryEngineLogicalBackendBoundaryTest (4 failures, 1201 ms)"
+          ]
+        },
+        {
+          "test": "CountsRetainedQueryResultRowsAcrossProcedureBatches",
+          "first_details": [
+            "2026-11-05T04:14:47.7934493Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7934989Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7935361Z ",
+            "2026-11-05T04:14:47.7935364Z "
+          ]
+        },
+        {
+          "test": "ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads",
+          "first_details": [
+            "2026-11-05T04:14:47.7938208Z               <unknown>:-1",
+            "2026-11-05T04:14:47.7938856Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:47.7939433Z ",
+            "2026-11-05T04:14:47.7939437Z "
+          ]
+        },
+        {
+          "test": "ShortestPathBfsStateObeysMaterializedByteBudget",
+          "first_details": [
+            "2026-11-05T04:14:47.7949031Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6089803Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6091118Z ",
+            "2026-11-05T04:14:50.6091122Z "
+          ]
+        },
+        {
+          "test": "BatchesMetadataAndSelectedPropertiesInTheSameExpression",
+          "first_details": [
+            "2026-11-05T04:14:50.6092199Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6092705Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6093106Z ",
+            "2026-11-05T04:14:50.6093109Z "
+          ]
+        },
+        {
+          "test": "BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder",
+          "first_details": [
+            "2026-11-05T04:14:50.6094483Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6094951Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6095350Z ",
+            "2026-11-05T04:14:50.6095353Z "
+          ]
+        },
+        {
+          "test": "CompleteSemanticErrorsPrecedeJointPressureRetry",
+          "first_details": [
+            "2026-11-05T04:14:50.6096066Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6096524Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6096920Z ",
+            "2026-11-05T04:14:50.6096924Z "
+          ]
+        },
+        {
+          "test": "ShortestPathScalarOutputSkipsFullNodesUnderSmallByteBound",
+          "first_details": [
+            "2026-11-05T04:14:50.6097691Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6098160Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6098555Z ",
+            "2026-11-05T04:14:50.6098559Z "
+          ]
+        },
+        {
+          "test": "ShortestPathProjectedResultCountsLivePathIds",
+          "first_details": [
+            "2026-11-05T04:14:50.6099254Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6099707Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6100076Z ",
+            "2026-11-05T04:14:50.6100079Z "
+          ]
+        },
+        {
+          "test": "ScalarHeapProjectionSharesRetainedResultBudget",
+          "first_details": [
+            "2026-11-05T04:14:50.6102505Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6102963Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6103355Z ",
+            "2026-11-05T04:14:50.6103361Z "
+          ]
+        },
+        {
+          "test": "CompleteSourceAdmissionRejectsBeforeCopyAndDoesNotRetrySourceErrors",
+          "first_details": [
+            "2026-11-05T04:14:50.6108208Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6108689Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6109092Z ",
+            "2026-11-05T04:14:50.6109096Z "
+          ]
+        },
+        {
+          "test": "UsesExpandableTopKWhenFilterFollowsSkipBeforeLimit",
+          "first_details": [
+            "2026-11-05T04:14:50.6110241Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6110701Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6111363Z ",
+            "2026-11-05T04:14:50.6111367Z "
+          ]
+        },
+        {
+          "test": "UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow",
+          "first_details": [
+            "2026-11-05T04:14:50.6112404Z               <unknown>:-1",
+            "2026-11-05T04:14:50.6112865Z               C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+            "2026-11-05T04:14:50.6113230Z ",
+            "2026-11-05T04:14:50.6113233Z "
+          ]
+        },
+        {
+          "test": "EntityAppendRollbackAndReaderEpochChangesRejectStaleValues",
+          "first_details": [
+            "2026-11-05T04:14:50.6260060Z               D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_BatchEnvelope.cpp:133",
+            "2026-11-05T04:14:50.6260449Z               Expected equality of these values:",
+            "2026-11-05T04:14:50.6260737Z                 budget.used()",
+            "2026-11-05T04:14:50.6260977Z                   Which is: 32"
+          ]
+        }
+      ],
+      "address_or_undefined_behavior_report_seen": false
+    },
+    "macos": {
+      "job": 127031243486,
+      "url": "https://github.com/nexepic/zyx/actions/runs/41962296906/job/127031243486",
+      "unique_names_union_of_diagnostics_and_main": [
+        {
+          "test": "FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure",
+          "first_details": [
+            "2026-11-05T03:53:14.4661680Z               <unknown>:-1",
+            "2026-11-05T03:53:14.4662120Z               C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+            "2026-11-05T03:53:14.4662470Z ",
+            "2026-11-05T03:53:14.4662790Z [100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 13 ms)"
+          ]
+        },
+        {
+          "test": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+          "first_details": [
+            "2026-11-05T03:53:15.1944600Z               <unknown>:-1",
+            "2026-11-05T03:53:15.1944980Z               C++ exception with description \"hierarchical resource admission denied\" thrown in the test body.",
+            "2026-11-05T03:53:15.1945310Z ",
+            "2026-11-05T03:53:15.1945630Z [100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 206 ms)"
+          ]
+        },
+        {
+          "test": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+          "first_details": [
+            "2026-11-05T03:53:37.8833090Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/property/test_HybridPropertyShapeCosts.cpp:150",
+            "2026-11-05T03:53:37.8833870Z               Expected: run(conversion) doesn't throw an exception.",
+            "2026-11-05T03:53:37.8835470Z                 Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description \"shared materialization exceeded its byte bound\".",
+            "2026-11-05T03:53:37.8836750Z               Google Test trace:"
+          ]
+        },
+        {
+          "test": "GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget",
+          "first_details": [
+            "2026-11-05T04:14:27.8485250Z               /Users/runner/work/zyx/zyx/tests/src/query/api/test_QueryEngineLogicalBackend.cpp:1885",
+            "2026-11-05T04:14:27.8486080Z               Failed",
+            "2026-11-05T04:14:27.8486590Z               GDS catalog pipeline omitted its retained QueryResult row from the shared byte budget",
+            "2026-11-05T04:14:27.8486990Z "
+          ]
+        },
+        {
+          "test": "GdsPageRankPipelineSharesAlgorithmRowsAndQueryResultBudget",
+          "first_details": [
+            "2026-11-05T04:14:27.8493000Z               /Users/runner/work/zyx/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1291",
+            "2026-11-05T04:14:27.8496590Z               Expected: static_cast<void>(executeGds(20U * 1024U)) throws an exception of type std::runtime_error.",
+            "2026-11-05T04:14:27.8497900Z                 Actual: it throws nothing.",
+            "2026-11-05T04:14:27.8498360Z "
+          ]
+        },
+        {
+          "test": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+          "first_details": [
+            "2026-11-05T04:14:27.8753660Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:88",
+            "2026-11-05T04:14:27.8755380Z               Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000UMULTI_CELL limit=4096 peak=3522 data_read_bytes=282624",
+            "2026-11-05T04:14:27.8760230Z MULTI_CELL limit=6000 peak=5167 data_read_bytes=274432",
+            "2026-11-05T04:14:27.8760630Z MULTI_CELL limit=100000 peak=19846 data_read_bytes=307200"
+          ]
+        },
+        {
+          "test": "NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+          "first_details": [
+            "2026-11-05T04:14:27.8791050Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1359",
+            "2026-11-05T04:14:27.8796350Z               Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1353, gtest_ar.failure_message()) = ::testing::Message(); if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') { ++seen[static_cast<size_t>(value.front() - 'a')]; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(std::ranges::all_of(value, [&](char character) { return character == value.front(); }))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1356, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, \"std::ranges::all_of(value, [&](char character) { return character == value.front(); })\", \"false\", \"true\") .c_str()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1357, \"Failed\") = ::testing::Message() << \"unexpected payload\"; return true; })) doesn't throw an exception.",
+            "2026-11-05T04:14:27.8802160Z                 Actual: it throws std::runtime_error with description \"bounded batch exceeded its byte limit\".",
+            "2026-11-05T04:14:27.8802560Z               Google Test trace:"
+          ]
+        },
+        {
+          "test": "VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance",
+          "first_details": [
+            "2026-11-05T04:14:27.9146670Z               /Users/runner/work/zyx/zyx/tests/src/query/api/test_QueryEngineLogicalBackend.cpp:1102",
+            "2026-11-05T04:14:27.9148710Z               Failed",
+            "2026-11-05T04:14:27.9149400Z               training must not commit after shared-account publication denial",
+            "2026-11-05T04:14:27.9150230Z "
+          ]
+        },
+        {
+          "test": "SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+          "first_details": [
+            "2026-11-05T04:14:27.9152200Z               /Users/runner/work/zyx/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:352",
+            "2026-11-05T04:14:27.9152850Z               Expected: static_cast<void>(execute(project)) throws an exception of type std::runtime_error.",
+            "2026-11-05T04:14:27.9153240Z                 Actual: it throws nothing.",
+            "2026-11-05T04:14:27.9153390Z "
+          ]
+        },
+        {
+          "test": "RetainsConvertedQueryVectorThroughResultPublication",
+          "first_details": [
+            "2026-11-05T04:14:27.9154350Z               /Users/runner/work/zyx/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:606",
+            "2026-11-05T04:14:27.9154770Z               Failed",
+            "2026-11-05T04:14:27.9155070Z               the live converted Vector query and retained result should share the byte bound",
+            "2026-11-05T04:14:27.9155340Z "
+          ]
+        },
+        {
+          "test": "ShortestPathProjectedResultCountsLivePathIds",
+          "first_details": [
+            "2026-11-05T04:14:27.9156500Z               /Users/runner/work/zyx/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1254",
+            "2026-11-05T04:14:27.9156930Z               Failed",
+            "2026-11-05T04:14:27.9157190Z               shortestPath result publication ignored its live path-ID vector",
+            "2026-11-05T04:14:27.9157440Z "
+          ]
+        },
+        {
+          "test": "PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget",
+          "first_details": [
+            "2026-11-05T04:14:27.9187630Z               /Users/runner/work/zyx/zyx/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp:824",
+            "2026-11-05T04:14:27.9188720Z               Expected: static_cast<void>(runtime.execute(*combined, constrained, [&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())) throws an exception of type std::runtime_error.",
+            "2026-11-05T04:14:27.9189380Z                 Actual: it throws nothing.",
+            "2026-11-05T04:14:27.9189850Z               /Users/runner/work/zyx/zyx/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp:825"
+          ]
+        }
+      ],
+      "address_or_undefined_behavior_report_seen": false
+    },
+    "asan": {
+      "job": 127031243329,
+      "url": "https://github.com/nexepic/zyx/actions/runs/41962296906/job/127031243329",
+      "unique_names_union_of_diagnostics_and_main": [
+        {
+          "test": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+          "first_details": [
+            "2026-11-05T03:46:17.0802540Z               <unknown>:-1",
+            "2026-11-05T03:46:17.0803140Z               C++ exception with description \"Query exceeded memory limit of 64MB (query resident growth: 64MB, baseline RSS: 433MB, current RSS: 497MB)\" thrown in the test body.",
+            "2026-11-05T03:46:17.0803610Z ",
+            "2026-11-05T03:46:17.0803930Z [100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 2716 ms)"
+          ]
+        },
+        {
+          "test": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+          "first_details": [
+            "2026-11-05T04:11:35.4476180Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:88",
+            "2026-11-05T04:11:35.4481110Z               Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 82, gtest_ar.failure_message()) = ::testing::Message(); if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') { ++seen[static_cast<size_t>(value.front() - 'a')]; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(std::ranges::all_of(value, [&](char character) { return character == value.front(); }))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 85, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, \"std::ranges::all_of(value, [&](char character) { return character == value.front(); })\", \"false\", \"true\") .c_str()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 86, \"Failed\") = ::testing::Message() << \"unexpected payload\"; return true; })) doesn't throw an exception.",
+            "2026-11-05T04:11:35.4497590Z                 Actual: it throws std::runtime_error with description \"logical-plan Property batch exceeded its byte bound\".",
+            "2026-11-05T04:11:35.4497960Z               Google Test trace:"
+          ]
+        },
+        {
+          "test": "NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+          "first_details": [
+            "2026-11-05T04:11:35.4508510Z               /Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1359",
+            "2026-11-05T04:11:35.4512940Z               Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1353, gtest_ar.failure_message()) = ::testing::Message(); if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') { ++seen[static_cast<size_t>(value.front() - 'a')]; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(std::ranges::all_of(value, [&](char character) { return character == value.front(); }))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1356, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, \"std::ranges::all_of(value, [&](char character) { return character == value.front(); })\", \"false\", \"true\") .c_str()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1357, \"Failed\") = ::testing::Message() << \"unexpected payload\"; return true; })) doesn't throw an exception.",
+            "2026-11-05T04:11:35.4517540Z                 Actual: it throws std::runtime_error with description \"bounded batch exceeded its byte limit\".",
+            "2026-11-05T04:11:35.4517870Z               Google Test trace:"
+          ]
+        },
+        {
+          "test": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+          "first_details": [
+            "2026-11-05T04:11:35.4528480Z               <unknown>:-1",
+            "2026-11-05T04:11:35.4528790Z               C++ exception with description \"hierarchical resource admission denied\" thrown in the test body.",
+            "2026-11-05T04:11:35.4529070Z ",
+            "2026-11-05T04:11:35.4529070Z "
+          ]
+        }
+      ],
+      "address_or_undefined_behavior_report_seen": false
+    }
+  }
+}

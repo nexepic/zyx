@@ -1,0 +1,7 @@
+sizeof_string=32
+length=22 allocations=1 requested=23 capacity=22
+length=23 allocations=1 requested=24 capacity=23
+length=512 allocations=1 requested=513 capacity=512
+length=8192 allocations=1 requested=8193 capacity=8192
+range=0..65536 max_requested_minus_length=1 at_length=16 multiple_allocation_lengths=0
+fresh_string_upper_validated constructions=196647 maximum=1048576 modes=3
