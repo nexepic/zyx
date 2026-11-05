@@ -1,0 +1,18 @@
+{
+  "source_commit": "b462b0177fa2a5b3480867702d8539a4fe9c5e40",
+  "command": "./scripts/run_tests.sh --quick",
+  "run_id": "ci-fix-20261105",
+  "shards": 2,
+  "configuration": {
+    "CMAKE_BUILD_TYPE": "Debug",
+    "CMAKE_CXX_COMPILER": "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "CMAKE_CXX_FLAGS_DEBUG": "-O0 -g0",
+    "ZYX_BUILD_APPS": "ON",
+    "ZYX_BUILD_TESTS": "ON",
+    "ZYX_ENABLE_COVERAGE": "ON"
+  },
+  "status": "running; no full pass claimed",
+  "precoverage_focused_passed": 108,
+  "native_windows_macos": "not executed in this Linux environment",
+  "partial_linux_asan_rss": "still fails 64 MiB guard; see retained raw probe log"
+}
