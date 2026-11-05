@@ -104,3 +104,41 @@ was reached before denial. A separately compiled candidate test TU against the
 same frozen production objects passes all 68 boundary tests. An initial missing
 typed-exception include was corrected before that pass. Final same-tree build
 and another full unfiltered coverage run are still pending.
+
+## Final same-tree covered run
+
+Validated production/test source: `dce421b6dd02924b8167f48512f0700748e2d1ec`.
+The required unfiltered `./scripts/run_tests.sh --quick` completed with exit 0,
+including report generation, using two shards and run id
+`ci-fix-20261105-v2`. Actual discovery/XML comparison: **11019 enabled, 11019
+executed exactly once, all passed**, 20 disabled, zero missing, extra, duplicate,
+failure or skipped cases. All six stress cases passed in this same run; their
+individual names are preserved in `final-full/stress-inventory.json`. The two
+shards took 1610.011 and 1522.948 seconds respectively.
+
+The repository coverage script's adjusted whole-source metrics are lines
+**95.85%**, functions **98.15%**, regions **93.92%**, branches **86.89%**. The
+region/branch figures do not meet the 95% goal; a passing script exit is not
+claimed as meeting all four targets. No exclusions or checks were added to
+accept these values. Full compressed XML, discovery, runner result, report log,
+coverage summary and hashes are preserved under `final-full/`; raw profiles
+and executable remain local rather than being committed as large binaries.
+
+### Remaining verification and blockers
+
+This is Linux Debug with LLVM coverage, not a fresh Windows/macOS or full ASan
+pass. The MSVC-debug PlanCache tree-index exception-safety change and all
+platform-specific accounting still need native verification. The ASan RSS issue
+is **not fully solved**: the retained Linux partial-instrumentation comparator
+still exceeds the unchanged 64 MiB real process-RSS limit. The production buffer
+reuse and Linux sampler fix reduce unnecessary allocation churn, but are not a
+proof of that Apple gate. The native default-options preflight and optional
+allocator diagnostics are included to expose this remaining issue without
+weakening the mandatory sanitizer gate. No CI dispatch, package publication or
+main update is part of this delivery.
+
+The original checkpoint `377ca857bc689c98638ee2fac547bca270530741` and isolated
+experimental branches remain local. Rejected CACHE-domain and extra-IO precheck
+prototypes are not presented as production fixes. After evidence-only delivery,
+production/test/workflow content must remain identical to the validated source
+above; the diagnostic-branch push is followed by a pause, without CI polling.

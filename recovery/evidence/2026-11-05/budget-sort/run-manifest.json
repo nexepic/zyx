@@ -1,18 +1,43 @@
 {
-  "source_commit": "b462b0177fa2a5b3480867702d8539a4fe9c5e40",
+  "source_commit": "dce421b6dd02924b8167f48512f0700748e2d1ec",
   "command": "./scripts/run_tests.sh --quick",
-  "run_id": "ci-fix-20261105",
+  "run_id": "ci-fix-20261105-v2",
   "shards": 2,
   "configuration": {
-    "CMAKE_BUILD_TYPE": "Debug",
-    "CMAKE_CXX_COMPILER": "/workspace/zyx-sysroot/usr/bin/clang++-19",
-    "CMAKE_CXX_FLAGS_DEBUG": "-O0 -g0",
-    "ZYX_BUILD_APPS": "ON",
-    "ZYX_BUILD_TESTS": "ON",
-    "ZYX_ENABLE_COVERAGE": "ON"
+    "build_type": "Debug",
+    "compiler": "Clang 19",
+    "debug_flags": "-O0 -g0",
+    "coverage": true
   },
-  "status": "running; no full pass claimed",
-  "precoverage_focused_passed": 108,
+  "status": "passed including coverage report generation",
+  "inventory": "final-full/inventory.json",
+  "coverage": {
+    "regions": {
+      "count": 103265,
+      "missed": 6281,
+      "percent": 93.92
+    },
+    "functions": {
+      "count": 11974,
+      "missed": 222,
+      "percent": 98.15
+    },
+    "lines": {
+      "count": 134331,
+      "missed": 5570,
+      "percent": 95.85
+    },
+    "branches": {
+      "count": 79356,
+      "missed": 10400,
+      "percent": 86.89
+    }
+  },
+  "all_coverage_metrics_at_least_95_percent": false,
+  "sha256": {
+    "test_binary": "bd0639f397d3d5dbafdd1a477f09adcf745fa9551d20236239050cc99d85ceba",
+    "merged_profile": "5fa1f12d169b2573a2bcacecd950794933a8c29d719ffad940a6941b2c360ae3"
+  },
   "native_windows_macos": "not executed in this Linux environment",
-  "partial_linux_asan_rss": "still fails 64 MiB guard; see retained raw probe log"
+  "partial_linux_asan_rss": "still fails 64 MiB guard; raw probe log retained; not a sanitizer pass"
 }

@@ -1,0 +1,22 @@
+{
+  "regions": {
+    "count": 103265,
+    "missed": 6281,
+    "percent": 93.92
+  },
+  "functions": {
+    "count": 11974,
+    "missed": 222,
+    "percent": 98.15
+  },
+  "lines": {
+    "count": 134331,
+    "missed": 5570,
+    "percent": 95.85
+  },
+  "branches": {
+    "count": 79356,
+    "missed": 10400,
+    "percent": 86.89
+  }
+}

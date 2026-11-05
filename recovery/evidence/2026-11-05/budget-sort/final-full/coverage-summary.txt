@@ -1,0 +1,5 @@
+src/query/QueryGuard.cpp                                                                             72              13   81.94%          5                 0  100.00%      39             1   97.44%        44               13   70.45%
+src/query/execution/ExternalQuerySort.hpp                                                           236              32   86.44%         24                 2   91.67%      76             0  100.00%       166               40   75.90%
+src/query/execution/QuerySpillRowCodec.hpp                                                          114              11   90.35%         13                 0  100.00%      48             0  100.00%        96               25   73.96%
+src/query/execution/procedure_runtime/BufferedRows.inc                                              152              16   89.47%         28                 2   92.86%     300            37   87.67%       108               17   84.26%
+TOTAL                                                                                            103265            6281   93.92%      11974               222   98.15%  134331          5570   95.85%     79356            10400   86.89%
