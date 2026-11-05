@@ -457,6 +457,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveNumericColumns.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_FixedWidthBatch.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_FixedWidthColumn.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_TrivialBudgetBuffer.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/test_main.cpp"
     "${PROJECT_SOURCE_DIR}/tests/integration/test_BugVerification.cpp"
     "${PROJECT_SOURCE_DIR}/tests/integration/test_IntegrationAggregateProjection.cpp"
