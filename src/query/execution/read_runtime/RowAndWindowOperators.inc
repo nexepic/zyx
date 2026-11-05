@@ -642,7 +642,14 @@
 							keySlotBytes > state.shared.materialized_budget.available()) {
 							// Diagnostics must not change the budget rejection if tracing fails.
 							try { debug::PerfTrace::addValue("query.sort.key_slot_admission_rejected", 1); } catch (...) {}
-							throw MaterializedByteLimitExceeded();
+							#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 						}
 						keySlots.set(keySlotBytes);
 						size_t additionalEnrichmentBytes = 0U;
@@ -658,7 +665,14 @@
 							if (extraSlots > state.shared.bounds.maximum_materialized_bytes -
 									std::min(retainedBytes, state.shared.bounds.maximum_materialized_bytes) ||
 								extraSlots > state.shared.materialized_budget.available()) {
-								throw MaterializedByteLimitExceeded();
+								#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 							}
 							keySlotBytes = checkedSizeAdd(keySlotBytes, extraSlots,
 								"logical-plan Sort key-slot size overflowed");
@@ -684,11 +698,25 @@
 																   additionalEnrichmentBytes,
 																   "logical-plan Sort materialization size overflowed"),
 													state.shared.bounds.maximum_materialized_bytes)) {
-									throw MaterializedByteLimitExceeded();
+									#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 								}
 								if (enrichmentBytes >
 									state.shared.materialized_budget.available()) {
-									throw MaterializedByteLimitExceeded();
+									#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 								}
 								additionalEnrichmentBytes =
 										checkedSizeAdd(additionalEnrichmentBytes, enrichmentBytes,

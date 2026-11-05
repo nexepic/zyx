@@ -19,7 +19,7 @@
         using ProcedureOrderedDistinctRows = std::set<utils::OwnedStdString, std::less<>,
             utils::OwnedPmrAllocator<utils::OwnedStdString>>;
 
-		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
+		using PropertyMap = decltype(LogicalPlanReadRow::property_cache)::mapped_type;
 		[[nodiscard]] size_t checkedProcedureSizeAdd(size_t left, size_t right);
 		[[nodiscard]] size_t checkedProcedureSizeMul(size_t left, size_t right);
 		struct CachedNodeProperties {
@@ -58,7 +58,8 @@
 			return children.front();
 		}
 
-		[[nodiscard]] PropertyMap takeNodeProperties(storage::LogicalGraphNode &node,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map takeNodeProperties(storage::LogicalGraphNode &node,
 				size_t maximumEntries, const QueryContext &context) {
 			context.checkGuard();
 			if (node.properties.size() > maximumEntries) throw std::runtime_error("logical Vector procedure Node Properties exceeded its caller-supplied bound");
@@ -69,8 +70,8 @@
 					if (entry.key.empty() || !keys.insert(entry.key).second) throw std::runtime_error("logical Vector procedure read an invalid Node Property entry set");
 				}
 			}
-            detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<PropertyMap>());
-			PropertyMap properties;
+            detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<Map>());
+			Map properties;
 			detail::procedureMapReserve(properties, node.properties.size());
 			for (auto &entry: node.properties) {
 				context.checkGuard();
@@ -851,7 +852,7 @@
 			if (auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				validateNode(*node);
 				nodeProperties.erase(node->node_id);
-				auto properties = takeNodeProperties(*node, readBounds.maximum_property_entries, context);
+				auto properties = takeNodeProperties<PropertyValue::MapType>(*node, readBounds.maximum_property_entries, context);
 				return LogicalNodeResult{node->node_id, std::move(node->labels), std::move(properties)};
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {

@@ -488,16 +488,14 @@
 								const LogicalPlanReadValue &binding = requireBinding(row, projection.getVariable());
 								const auto *mapValue = std::get_if<PropertyValue>(&binding);
 								const auto cached = row.property_cache.find(projection.getVariable());
-								const PropertyMap &properties =
-										mapValue != nullptr && cached == row.property_cache.end()
-												? mapValue->getMap()
-												: readBindingProperties(state.shared.snapshot, row, projection.getVariable(),
-																		state);
-								sourceBytes.set(propertyMapBytes(properties,
-																 "logical-plan Map projection source size overflowed"));
-								for (const auto &[key, value]: properties) {
-									insertResult(key, value);
-								}
+                                const auto appendProperties=[&](const auto &properties) {
+                                    sourceBytes.set(propertyMapBytes(properties,
+                                        "logical-plan Map projection source size overflowed"));
+                                    for(const auto &[key,value]:properties) insertResult(key,value);
+                                };
+                                if(mapValue!=nullptr && cached==row.property_cache.end())
+                                    appendProperties(mapValue->getMap());
+                                else appendProperties(readBindingProperties(state.shared.snapshot,row,projection.getVariable(),state));
 								break;
 							}
 						}

@@ -62,11 +62,11 @@ namespace graph::query::execution {
 		// A row owns only the Property collections it has already resolved from its
 		// pinned snapshot. Operators use this cache to avoid duplicate reads while
 		// keeping the cache lifetime bounded by the row.
-		detail::ExecutionBindingMap<std::string, std::unordered_map<std::string, PropertyValue>> property_cache;
+		detail::ExecutionBindingMap<std::string, detail::ExecutionBindingMap<std::string, PropertyValue>> property_cache;
 		// Snapshot-local results for metadata-only entity functions such as
 		// labels() and type().  These values are separate from Property data so a
 		// repeated introspection expression does not rematerialize the entity.
-		detail::ExecutionBindingMap<std::string, std::unordered_map<std::string, PropertyValue>> entity_metadata_cache;
+		detail::ExecutionBindingMap<std::string, detail::ExecutionBindingMap<std::string, PropertyValue>> entity_metadata_cache;
 		// EntityRef property reads normally cache only selected fields. This set
 		// records the aliases whose cache has been expanded to the complete native
 		// Property collection, so `properties()` and map projections never mistake

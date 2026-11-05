@@ -360,7 +360,8 @@
 			}
 		}
 
-		[[nodiscard]] size_t propertyMapBytes(const PropertyMap &properties, const char *message,
+		template<class Map>
+        [[nodiscard]] size_t propertyMapBytes(const Map &properties, const char *message,
 			const QueryContext *context = nullptr) {
 			return detail::retainedPropertyMapBytes(properties, [&] {
 				if (context != nullptr) context->checkGuardNow();
@@ -372,9 +373,9 @@
 									  const char *message, const QueryContext *context) {
 			size_t bytes = checkedSizeAdd(
 					sizeof(PropertyMap),
-					checkedSizeMul(entries.size(), sizeof(PropertyMap::value_type) + sizeof(void *), message), message);
+					checkedSizeMul(entries.size(), detail::executionBindingNodeBytes<PropertyMap>(), message), message);
 			for (const storage::LogicalGraphPropertyEntry &entry: entries) {
-				bytes = checkedSizeAdd(bytes, entry.key.size(), message);
+				bytes = checkedSizeAdd(bytes, (std::max)(entry.key.size(), utils::detail::standardFreshStringHeapUpper(entry.key.size())), message);
 				bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(entry.value, [&] { if (context != nullptr) context->checkGuardNow(); }), message);
 			}
 			return bytes;
@@ -398,12 +399,12 @@
 					}
 					bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), message);
 				}
-				return checkedSizeAdd(bytes, propertyMapBytes(node.properties, message, context), message);
+				return checkedSizeAdd(bytes, propertyMapBytes(node.properties, message, context) - sizeof(PropertyValue::MapType), message);
 			}
 			if (value.isLogicalEdge()) {
 				const LogicalEdgeResult &edge = value.asLogicalEdge();
 				const size_t bytes = checkedSizeAdd(sizeof(edge), std::max(edge.type.size(), detail::dynamicStringBufferBytes(edge.type)), message);
-				return checkedSizeAdd(bytes, propertyMapBytes(edge.properties, message, context), message);
+				return checkedSizeAdd(bytes, propertyMapBytes(edge.properties, message, context) - sizeof(PropertyValue::MapType), message);
 			}
 			throw std::logic_error("logical-plan runtime produced a physical Entity result");
 		}

@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="23" failures="9" disabled="0" errors="0" time="1.198" timestamp="2026-11-05T09:59:00.535" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="7" failures="0" disabled="0" skipped="0" errors="0" time="1.18" timestamp="2026-11-05T09:59:00.535">
+    <testcase name="NativeEdgeCellsKeepTightAndRetryReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="28" status="run" result="completed" time="0.14" timestamp="2026-11-05T09:59:00.535" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="241664"/>
+        <property name="tight_logical_peak_bytes" value="3842"/>
+        <property name="retry_data_read_bytes" value="266240"/>
+        <property name="retry_logical_peak_bytes" value="4472"/>
+        <property name="ample_data_read_bytes" value="266240"/>
+        <property name="ample_logical_peak_bytes" value="26556"/>
+      </properties>
+    </testcase>
+    <testcase name="StagedOverlayCellsMergeBaseOwnersAndRejectRevisionChanges" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="104" status="run" result="completed" time="0.207" timestamp="2026-11-05T09:59:00.676" classname="RelocatableStorageBackendTest" />
+    <testcase name="MultiKeyCellRetriesSkipEveryAlreadyRetainedValue" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="197" status="run" result="completed" time="0.31" timestamp="2026-11-05T09:59:00.883" classname="RelocatableStorageBackendTest" />
+    <testcase name="QueryCellRetriesAbortChangedOverlayAndCanReuseReadView" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="257" status="run" result="completed" time="0.147" timestamp="2026-11-05T09:59:01.193" classname="RelocatableStorageBackendTest" />
+    <testcase name="NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1301" status="run" result="completed" time="0.097" timestamp="2026-11-05T09:59:01.340" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="204800"/>
+        <property name="tight_logical_peak_bytes" value="3762"/>
+        <property name="retry_data_read_bytes" value="229376"/>
+        <property name="retry_logical_peak_bytes" value="4154"/>
+        <property name="ample_data_read_bytes" value="229376"/>
+        <property name="ample_logical_peak_bytes" value="24660"/>
+      </properties>
+    </testcase>
+    <testcase name="RetriedPropertyCellsKeepTheirSnapshotAndRefundAfterVisitorExit" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1375" status="run" result="completed" time="0.152" timestamp="2026-11-05T09:59:01.437" classname="RelocatableStorageBackendTest" />
+    <testcase name="NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1592" status="run" result="completed" time="0.124" timestamp="2026-11-05T09:59:01.590" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+  <testsuite name="QueryEngineLogicalBackendBoundaryTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0.001" timestamp="2026-11-05T09:59:01.715">
+    <testcase name="VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance" file="/workspace/zyx-ci-fix/tests/src/query/api/test_QueryEngineLogicalBackend.cpp" line="1088" status="run" result="completed" time="0.001" timestamp="2026-11-05T09:59:01.715" classname="QueryEngineLogicalBackendBoundaryTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_QueryEngineLogicalBackend.cpp:1102&#x0A;Failed&#x0A;training must not commit after shared-account publication denial&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_QueryEngineLogicalBackend.cpp:1102
+Failed
+training must not commit after shared-account publication denial
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalVectorPropertyBatchTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T09:59:01.716">
+    <testcase name="ShortestPathProjectedResultCountsLivePathIds" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1242" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.716" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1254&#x0A;Failed&#x0A;shortestPath result publication ignored its live path-ID vector&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1254
+Failed
+shortestPath result publication ignored its live path-ID vector
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalPlanLoadCsvRuntimeTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0.003" timestamp="2026-11-05T09:59:01.717">
+    <testcase name="NestedSortTransfersRowsWithoutDuplicatingSharedCharges" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp" line="694" status="run" result="completed" time="0.003" timestamp="2026-11-05T09:59:01.717" classname="LogicalPlanLoadCsvRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalPlanReadRuntimeTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T09:59:01.720">
+    <testcase name="SkipStreamsAnExactBudgetRowWithoutSelectionStorage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp" line="1841" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.720" classname="LogicalPlanReadRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp:1857&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(skip, constrained, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;value\&quot;))&quot;, &quot;payload&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;value&quot;)), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp&quot;, 1855, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description &quot;shared materialization exceeded its byte bound&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp:1857
+Expected: static_cast<void>(runtime.execute(skip, constrained, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"value\"))", "payload", std::get<PropertyValue>(row.values.at("value")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp", 1855, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp:1858&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp:1858
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalPlanDirectEdgeRuntimeTest" tests="9" failures="3" disabled="0" skipped="0" errors="0" time="0.011" timestamp="2026-11-05T09:59:01.720">
+    <testcase name="NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="62" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.720" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NestedSortPrefetchesOuterPropertyAndTransfersRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1228" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.721" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="FilterBetweenSortsTransfersSelectedRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1292" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.722" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ProjectBetweenSortsTransfersProjectedRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1326" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.722" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1091" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.723" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PendingPrefetchRowsRemainChargedWhileRetryEnrichesOneRow" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1147" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.723" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1186" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.724" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(sort, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;payload\&quot;))&quot;, &quot;payload&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;)), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::runtime_error with description &quot;bounded batch exceeded its byte limit&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215
+Expected: static_cast<void>(runtime.execute(sort, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"payload\"))", "payload", std::get<PropertyValue>(row.values.at("payload")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "bounded batch exceeded its byte limit".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(sort, bounds, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;payload\&quot;))&quot;, &quot;payload&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;payload&quot;)), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp&quot;, 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws std::runtime_error with description &quot;bounded batch exceeded its byte limit&quot;.&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215
+Expected: static_cast<void>(runtime.execute(sort, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"payload\"))", "payload", std::get<PropertyValue>(row.values.at("payload")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp", 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "bounded batch exceeded its byte limit".
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;Google Test trace:&#x0A;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+Google Test trace:
+/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true
+]]></failure>
+    </testcase>
+    <testcase name="TightAndAmplePropertyPrefetchReadEachNodeOnce" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1934" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.724" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="81" status="run" result="completed" time="0.006" timestamp="2026-11-05T09:59:01.725" classname="LogicalPlanDirectEdgeRuntimeTest" />
+  </testsuite>
+  <testsuite name="LogicalGraphReadExecutorIndexLookupContractsTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T09:59:01.732">
+    <testcase name="UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp" line="492" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.732" classname="LogicalGraphReadExecutorIndexLookupContractsTest" />
+  </testsuite>
+  <testsuite name="LogicalPlanUnionRuntimeTest" tests="2" failures="2" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T09:59:01.733">
+    <testcase name="LimitStreamsAnExactBudgetRowWithoutSelectionStorage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp" line="201" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.733" classname="LogicalPlanUnionRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp:217&#x0A;Expected: static_cast&lt;void&gt;(runtime.execute(limit, constrained, [&amp;](const LogicalPlanReadRow &amp;row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(&quot;std::get&lt;PropertyValue&gt;(row.values.at(\&quot;value\&quot;))&quot;, &quot;payload&quot;, std::get&lt;PropertyValue&gt;(row.values.at(&quot;value&quot;)), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, &quot;/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp&quot;, 215, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn&apos;t throw an exception.&#x0A;  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description &quot;shared materialization exceeded its byte bound&quot;.&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp:217
+Expected: static_cast<void>(runtime.execute(limit, constrained, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("std::get<PropertyValue>(row.values.at(\"value\"))", "payload", std::get<PropertyValue>(row.values.at("value")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp", 215, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.
+  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description "shared materialization exceeded its byte bound".
+]]></failure>
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp:218&#x0A;Expected equality of these values:&#x0A;  delivered&#x0A;    Which is: 0&#x0A;  1U&#x0A;    Which is: 1&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp:218
+Expected equality of these values:
+  delivered
+    Which is: 0
+  1U
+    Which is: 1
+]]></failure>
+    </testcase>
+    <testcase name="SortTransfersLargeRowsToDirectLimitAndSkipBuffers" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp" line="347" status="run" result="completed" time="0." timestamp="2026-11-05T09:59:01.733" classname="LogicalPlanUnionRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

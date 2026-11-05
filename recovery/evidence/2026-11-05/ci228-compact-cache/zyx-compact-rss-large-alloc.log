@@ -1,0 +1,81 @@
+Running main() from /workspace/zyx-sysroot/usr/src/googletest/googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+SAMPLED_SITES denominator=64 overflow=0
+ALLOC_SITE size=131072 samples=27 sample_bytes=3538944 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136bcb6 pc=136bbac pc=136cb11 pc=136caa3 pc=136ca3c pc=136c924 pc=1420b19 pc=141e60f pc=e977b3 pc=e97c3d
+ALLOC_SITE size=1572864 samples=2 sample_bytes=3145728 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+ALLOC_SITE size=4184 samples=672 sample_bytes=2811648 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=136c031 pc=136bc05
+ALLOC_SITE size=131072 samples=19 sample_bytes=2490368 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ceaf75 pc=90067a pc=8ff669 pc=8ff758 pc=225e96 pc=1ec41f pc=78306f pc=45ea8a pc=429488
+ALLOC_SITE size=786432 samples=3 sample_bytes=2359296 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+ALLOC_SITE size=130960 samples=17 sample_bytes=2226320 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=90067a pc=8ff669 pc=8ff758 pc=225e96 pc=1ec41f pc=78306f pc=45ea8a pc=429488 pc=41df7b
+ALLOC_SITE size=2097152 samples=1 sample_bytes=2097152 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+ALLOC_SITE size=130960 samples=12 sample_bytes=1571520 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786ed1 pc=78ec44 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=131072 samples=10 sample_bytes=1310720 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec52
+ALLOC_SITE size=393216 samples=3 sample_bytes=1179648 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+ALLOC_SITE size=4184 samples=278 sample_bytes=1163152 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9ced18 pc=9cfc70 pc=85a815 pc=e22a2a
+ALLOC_SITE size=1048576 samples=1 sample_bytes=1048576 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+ALLOC_SITE size=130960 samples=8 sample_bytes=1047680 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec52 pc=782b96
+ALLOC_SITE size=130960 samples=6 sample_bytes=785760 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786ed1 pc=785378 pc=784706 pc=5faa61 pc=5fa619 pc=5fa584 pc=5fa45c pc=677065 pc=5dfe07
+ALLOC_SITE size=4184 samples=168 sample_bytes=702912 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=df7111 pc=df79e7
+ALLOC_SITE size=196608 samples=3 sample_bytes=589824 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+ALLOC_SITE size=131072 samples=4 sample_bytes=524288 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ceaf75 pc=900d5b pc=78ed74 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9
+ALLOC_SITE size=131072 samples=4 sample_bytes=524288 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ceaf75 pc=900d5b pc=78ed0b pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9
+ALLOC_SITE size=524288 samples=1 sample_bytes=524288 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+ALLOC_SITE size=131072 samples=4 sample_bytes=524288 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec7f
+ALLOC_SITE size=131072 samples=4 sample_bytes=524288 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ef18
+ALLOC_SITE size=130960 samples=4 sample_bytes=523840 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786ed1 pc=78ec71 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=130960 samples=3 sample_bytes=392880 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=900d5b pc=78ed74 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=130960 samples=3 sample_bytes=392880 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=900d5b pc=78ed0b pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=98304 samples=3 sample_bytes=294912 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+ALLOC_SITE size=4184 samples=65 sample_bytes=271960 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=df7111 pc=dfa597
+ALLOC_SITE size=262144 samples=1 sample_bytes=262144 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+ALLOC_SITE size=131008 samples=2 sample_bytes=262016 pc=18ea21 pc=2025b6 pc=20253f pc=34f729 pc=786dbf pc=7852e9 pc=784706 pc=5faa61 pc=5fa619 pc=5fa584 pc=5fa45c pc=677065 pc=5dfe07 pc=5e5cba pc=5e5bd7 pc=5e5b4c
+ALLOC_SITE size=131008 samples=2 sample_bytes=262016 pc=18ea21 pc=2025b6 pc=20253f pc=34f729 pc=786dbf pc=78ea73 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5 pc=657a86 pc=430c7c pc=430481
+ALLOC_SITE size=130960 samples=2 sample_bytes=261920 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ef18 pc=78ea5e
+ALLOC_SITE size=130960 samples=2 sample_bytes=261920 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ef18 pc=78ea47
+ALLOC_SITE size=130960 samples=2 sample_bytes=261920 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec7f pc=782b96
+ALLOC_SITE size=8328 samples=30 sample_bytes=249840 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=e5e839 pc=e5e74c pc=e5e4e0 pc=e5e33f pc=e5e2e6 pc=e5e2a4 pc=e5b567 pc=e5ac81 pc=e59199 pc=e5883e pc=e582b0 pc=e58080
+ALLOC_SITE size=8328 samples=30 sample_bytes=249840 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=e5e839 pc=e5e74c pc=e5e4e0 pc=e5e33f pc=e5e2e6 pc=e5e2a4 pc=e5b567 pc=e5b9af pc=e5b0f3 pc=e59199 pc=e5883e pc=e582b0
+ALLOC_SITE size=8112 samples=30 sample_bytes=243360 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=e5a669 pc=e5a57c pc=e5a3d0 pc=e5a229 pc=e5a1be pc=e5a16c pc=e5a04f pc=e58b96 pc=e5867d pc=e582b0 pc=e58080 pc=e57d8e
+ALLOC_SITE size=4184 samples=58 sample_bytes=242672 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=df7111 pc=dfc663
+ALLOC_SITE size=104238 samples=2 sample_bytes=208476 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786fc9 pc=7853ab pc=784706 pc=5faa61 pc=5fa619 pc=5fa584 pc=5fa45c pc=677065 pc=5dfe07
+ALLOC_SITE size=4184 samples=40 sample_bytes=167360 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=df7111 pc=df7047
+ALLOC_SITE size=8112 samples=19 sample_bytes=154128 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=e0e859 pc=e0e76c pc=e0e520 pc=e0e379 pc=e0e30e pc=e0e2bc pc=e0e19f pc=dffd07 pc=df8049 pc=df861f pc=db0f4a pc=db1738
+ALLOC_SITE size=8112 samples=19 sample_bytes=154128 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=e0e859 pc=e0e76c pc=e0e520 pc=e0e379 pc=e0e30e pc=e0e2bc pc=e0e19f pc=dffd07 pc=df8049 pc=df861f pc=1362645 pc=1362442
+ALLOC_SITE size=49152 samples=3 sample_bytes=147456 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+ALLOC_SITE size=8112 samples=18 sample_bytes=146016 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=e0e859 pc=e0e76c pc=e0e520 pc=e0e379 pc=e0e30e pc=e0e2bc pc=e0e19f pc=dffd07 pc=df8049 pc=df861f pc=e43f7b pc=dadfda
+ALLOC_SITE size=131072 samples=1 sample_bytes=131072 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+ALLOC_SITE size=131008 samples=1 sample_bytes=131008 pc=18ea21 pc=2025b6 pc=20253f pc=34f729 pc=786dbf pc=7852e9 pc=78293d pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5 pc=657a86 pc=430c7c pc=430481
+ALLOC_SITE size=130960 samples=1 sample_bytes=130960 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786ed1 pc=785378 pc=78293d pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=4184 samples=30 sample_bytes=125520 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=df7111 pc=dfba67
+ALLOC_SITE size=114964 samples=1 sample_bytes=114964 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786fc9 pc=7853ab pc=78293d pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=114964 samples=1 sample_bytes=114964 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec7f pc=782b96
+ALLOC_SITE size=114964 samples=1 sample_bytes=114964 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=90067a pc=8ff669 pc=8ff758 pc=225e96 pc=1ec41f pc=78306f pc=45ea8a pc=429488 pc=41df7b
+ALLOC_SITE size=104238 samples=1 sample_bytes=104238 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=900d5b pc=78ed0b pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=104238 samples=1 sample_bytes=104238 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=900d5b pc=78ed74 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+ALLOC_SITE size=104238 samples=1 sample_bytes=104238 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec52 pc=782b96
+ALLOC_SITE size=104238 samples=1 sample_bytes=104238 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec7f pc=782b96
+ALLOC_SITE size=8168 samples=12 sample_bytes=98016 pc=18ea21 pc=dae210 pc=dad712 pc=141e52a pc=e977b3 pc=e97c3d pc=1369724 pc=ce5a1d pc=ce5011 pc=8ffc2b pc=78cec4 pc=786ed1 pc=78ec44 pc=782b96 pc=45e90e pc=429488
+ALLOC_SITE size=22528 samples=4 sample_bytes=90112 pc=18ea21 pc=1584bbe
+ALLOC_SITE size=81920 samples=1 sample_bytes=81920 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=34ee15 pc=34edbc pc=34eb6b pc=7615e8 pc=761501 pc=430a35 pc=430481 pc=253332 pc=251675 pc=24ca94 pc=24c917 pc=255cc8
+ALLOC_SITE size=4112 samples=19 sample_bytes=78128 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=e0f8e9 pc=e0f7fc pc=e0f5b0 pc=e0f409 pc=e0f39e pc=e0f34c pc=e0f22f pc=e01417 pc=dfb4a9 pc=dfcb6f pc=13629b0 pc=1362442
+ALLOC_SITE size=77516 samples=1 sample_bytes=77516 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec52 pc=782b96
+ALLOC_SITE size=77516 samples=1 sample_bytes=77516 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=90067a pc=8ff669 pc=8ff758 pc=225e96 pc=1ec41f pc=78306f pc=45ea8a pc=429488 pc=41df7b
+ALLOC_SITE size=77516 samples=1 sample_bytes=77516 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786fc9 pc=78eca2 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+REAL_RSS_PROBE calls=240867 baseline=39768064 peak_rss=107479040 growth=67710976 peak_allocated=7976266 heap=77606912 last_allocated=5545231
+unknown file: Failure
+C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 64MB, baseline RSS: 37MB, current RSS: 102MB)" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection (4254 ms)
+[----------] 1 test from RelocatableStorageBackendTest (4254 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (4255 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+
+ 1 FAILED TEST

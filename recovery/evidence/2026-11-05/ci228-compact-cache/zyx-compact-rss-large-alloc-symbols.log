@@ -1,0 +1,455 @@
+ALLOC_SITE size=131072 samples=27 sample_bytes=3538944 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136bcb6 pc=136bbac pc=136cb11 pc=136caa3 pc=136ca3c pc=136c924 pc=1420b19 pc=141e60f pc=e977b3 pc=e97c3d
+std::_Vector_base<std::byte, std::allocator<std::byte>>::_Vector_base(unsigned long, std::allocator<std::byte> const&)
+??:0:0
+
+std::vector<std::byte, std::allocator<std::byte>>::vector(unsigned long, std::allocator<std::byte> const&)
+??:0:0
+
+graph::storage::(anonymous namespace)::buildPreparedSegment(graph::storage::CatalogEntry const&, graph::storage::PhysicalSegmentAllocationRequest const&)
+PhysicalSegmentAllocator.cpp:0:0
+
+graph::storage::PhysicalSegmentAllocator::writePreparedSegments(std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>, std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>) const
+??:0:0
+
+graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0::operator()(std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>) const
+PhysicalSegmentAllocator.cpp:0:0
+
+void std::__invoke_impl<void, graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>>(std::__invoke_other, graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>&&)
+PhysicalSegmentAllocator.cpp:0:0
+
+std::enable_if<is_invocable_r_v<void, graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>>, void>::type std::__invoke_r<void, graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>>(graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>&&)
+PhysicalSegmentAllocator.cpp:0:0
+
+std::_Function_handler<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>), graph::storage::PhysicalSegmentAllocator::allocate(std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPublishOptions const&)::$_0>::_M_invoke(std::_Any_data const&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>&&)
+PhysicalSegmentAllocator.cpp:0:0
+
+std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)>::operator()(std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>) const
+??:0:0
+
+graph::storage::MetadataReservationCoordinator::prepare(graph::storage::MetadataWriteBatch&, graph::storage::CatalogReservationPublicationRequest const&) const
+??:0:0
+
+graph::storage::RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalogImpl(std::span<graph::storage::CatalogSlotReservationRequest const, 18446744073709551615ul>, std::span<graph::storage::PageLocation const, 18446744073709551615ul>, std::span<graph::storage::ExtentLocation const, 18446744073709551615ul>, std::span<graph::storage::EntityPageLocation const, 18446744073709551615ul>, std::span<graph::storage::EntityPageLocation const, 18446744073709551615ul>, std::span<graph::storage::VectorManifestLocation const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)> const*, std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>, std::span<graph::storage::PageLocation, 18446744073709551615ul>)> const*, std::span<graph::storage::PageLocation, 18446744073709551615ul>, graph::storage::MetadataPublishOptions const&)
+??:0:0
+
+graph::storage::RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalog(std::span<graph::storage::CatalogSlotReservationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)> const&, graph::storage::MetadataPublishOptions const&)
+??:0:0
+
+
+ALLOC_SITE size=1572864 samples=2 sample_bytes=3145728 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>::allocate(unsigned long)
+??:0:0
+
+std::allocator_traits<std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::allocate(std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>&, unsigned long)
+??:0:0
+
+std::_Vector_base<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::_M_allocate(unsigned long)
+??:0:0
+
+void std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::_M_realloc_append<graph::query::execution::detail::QuerySpillRowCodec::Record>(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+graph::query::execution::detail::QuerySpillRowCodec::Record& std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::emplace_back<graph::query::execution::detail::QuerySpillRowCodec::Record>(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::push_back(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+void graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendChargedValue<graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)::'lambda'()>(graph::query::execution::detail::QuerySpillRowCodec::Record&, graph::query::execution::MaterializedByteReservation&, graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)::'lambda'())
+??:0:0
+
+graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::append(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const
+LogicalPlanReadRuntime.cpp:0:0
+
+bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=4184 samples=672 sample_bytes=2811648 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9d0eeb pc=85957b pc=136c031 pc=136bc05
+std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>::allocate(unsigned long)
+??:0:0
+
+std::allocator_traits<std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>>::allocate(std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>&, unsigned long)
+??:0:0
+
+std::__allocated_ptr<std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>> std::__allocate_guarded<std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>>(std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>&)
+??:0:0
+
+std::__shared_count<(__gnu_cxx::_Lock_policy)2>::__shared_count<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(graph::storage::BufferPool::Entry*&, std::_Sp_alloc_shared_tag<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>)
+??:0:0
+
+std::__shared_ptr<graph::storage::BufferPool::Entry, (__gnu_cxx::_Lock_policy)2>::__shared_ptr<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(std::_Sp_alloc_shared_tag<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>)
+??:0:0
+
+std::shared_ptr<graph::storage::BufferPool::Entry>::shared_ptr<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(std::_Sp_alloc_shared_tag<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>)
+??:0:0
+
+std::shared_ptr<graph::storage::BufferPool::Entry> std::allocate_shared<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry> const&)
+??:0:0
+
+graph::storage::BufferPool::allocateEntryLocked()
+??:0:0
+
+graph::storage::BufferPool::writePage(graph::storage::BufferPoolPageKey, std::span<std::byte const, 4096ul>)
+??:0:0
+
+graph::storage::StorageIO::writeAt(graph::storage::BufferPoolPageKey, void const*, unsigned long)
+??:0:0
+
+graph::storage::(anonymous namespace)::writeCompleteSegment(graph::storage::StorageIO&, unsigned long, graph::storage::StrongUInt64<graph::storage::GenerationTag>, std::span<std::byte const, 18446744073709551615ul>)
+PhysicalSegmentAllocator.cpp:0:0
+
+graph::storage::PhysicalSegmentAllocator::writePreparedSegments(std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>, std::span<graph::storage::PhysicalSegmentAllocationRequest const, 18446744073709551615ul>) const
+??:0:0
+
+
+ALLOC_SITE size=131072 samples=19 sample_bytes=2490368 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ceaf75 pc=90067a pc=8ff669 pc=8ff758 pc=225e96 pc=1ec41f pc=78306f pc=45ea8a pc=429488
+std::_Vector_base<std::byte, std::allocator<std::byte>>::_Vector_base(unsigned long, std::allocator<std::byte> const&)
+??:0:0
+
+std::vector<std::byte, std::allocator<std::byte>>::vector(unsigned long, std::allocator<std::byte> const&)
+??:0:0
+
+graph::storage::PhysicalSegmentAllocator::read(graph::storage::MetadataSnapshotPin const&, graph::storage::StrongUInt64<graph::storage::SegmentIdTag>) const
+??:0:0
+
+graph::storage::NativeBulkRunStore::releaseBatch(std::span<graph::storage::NativeBulkRunFragmentLocation const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>)
+??:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::finish()
+RelocatableStorageBackend.cpp:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::~NativeQueryScratchSession()
+RelocatableStorageBackend.cpp:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::~NativeQueryScratchSession()
+RelocatableStorageBackend.cpp:0:0
+
+std::default_delete<graph::storage::LogicalQueryScratchSession>::operator()(graph::storage::LogicalQueryScratchSession*) const
+??:0:0
+
+std::unique_ptr<graph::storage::LogicalQueryScratchSession, std::default_delete<graph::storage::LogicalQueryScratchSession>>::~unique_ptr()
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::~ExternalQuerySort()
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=786432 samples=3 sample_bytes=2359296 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>::allocate(unsigned long)
+??:0:0
+
+std::allocator_traits<std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::allocate(std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>&, unsigned long)
+??:0:0
+
+std::_Vector_base<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::_M_allocate(unsigned long)
+??:0:0
+
+void std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::_M_realloc_append<graph::query::execution::detail::QuerySpillRowCodec::Record>(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+graph::query::execution::detail::QuerySpillRowCodec::Record& std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::emplace_back<graph::query::execution::detail::QuerySpillRowCodec::Record>(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::push_back(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+void graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendChargedValue<graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)::'lambda'()>(graph::query::execution::detail::QuerySpillRowCodec::Record&, graph::query::execution::MaterializedByteReservation&, graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)::'lambda'())
+??:0:0
+
+graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::append(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const
+LogicalPlanReadRuntime.cpp:0:0
+
+bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=130960 samples=17 sample_bytes=2226320 pc=18ea21 pc=2025b6 pc=20253f pc=9c4c3f pc=9c4781 pc=136b588 pc=ceaf75 pc=90067a pc=8ff669 pc=8ff758 pc=225e96 pc=1ec41f pc=78306f pc=45ea8a pc=429488 pc=41df7b
+std::vector<std::byte, std::allocator<std::byte>>::vector<__gnu_cxx::__normal_iterator<std::byte*, std::vector<std::byte, std::allocator<std::byte>>>, void>(__gnu_cxx::__normal_iterator<std::byte*, std::vector<std::byte, std::allocator<std::byte>>>, __gnu_cxx::__normal_iterator<std::byte*, std::vector<std::byte, std::allocator<std::byte>>>, std::allocator<std::byte> const&)
+??:0:0
+
+graph::storage::PhysicalSegmentAllocator::read(graph::storage::MetadataSnapshotPin const&, graph::storage::StrongUInt64<graph::storage::SegmentIdTag>) const
+??:0:0
+
+graph::storage::NativeBulkRunStore::releaseBatch(std::span<graph::storage::NativeBulkRunFragmentLocation const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>)
+??:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::finish()
+RelocatableStorageBackend.cpp:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::~NativeQueryScratchSession()
+RelocatableStorageBackend.cpp:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::~NativeQueryScratchSession()
+RelocatableStorageBackend.cpp:0:0
+
+std::default_delete<graph::storage::LogicalQueryScratchSession>::operator()(graph::storage::LogicalQueryScratchSession*) const
+??:0:0
+
+std::unique_ptr<graph::storage::LogicalQueryScratchSession, std::default_delete<graph::storage::LogicalQueryScratchSession>>::~unique_ptr()
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::~ExternalQuerySort()
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=2097152 samples=1 sample_bytes=2097152 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+graph::query::execution::(anonymous namespace)::evaluateRangeFunction(std::vector<graph::PropertyValue, std::allocator<graph::PropertyValue>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::evaluateFunctionExpression(graph::query::expressions::FunctionCallExpression const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::evaluateScalarExpression(graph::query::expressions::Expression const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&, graph::query::execution::(anonymous namespace)::ShortestPathResultMode)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::evaluateExpression(graph::query::expressions::Expression const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_55::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56::operator()(graph::query::execution::LogicalPlanReadRow) const
+LogicalPlanReadRuntime.cpp:0:0
+
+bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow), graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::function<bool (graph::query::execution::LogicalPlanReadRow)>::operator()(graph::query::execution::LogicalPlanReadRow) const
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=130960 samples=12 sample_bytes=1571520 pc=18ea21 pc=2025b6 pc=20253f pc=98964f pc=9892f1 pc=8ff93e pc=78cec4 pc=786ed1 pc=78ec44 pc=782b96 pc=45e90e pc=429488 pc=41df7b pc=421af8 pc=4314a9 pc=639fc5
+std::vector<std::byte, std::allocator<std::byte>>::vector<__gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, void>(__gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, __gnu_cxx::__normal_iterator<std::byte const*, std::span<std::byte const, 18446744073709551615ul>>, std::allocator<std::byte> const&)
+??:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::write(std::span<std::byte const, 18446744073709551615ul>)
+RelocatableStorageBackend.cpp:0:0
+
+graph::query::execution::detail::ExternalQuerySort::Writer::flush()
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::Writer::append(graph::query::execution::detail::QuerySpillRowCodec::Record const&)
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::merge(graph::query::execution::detail::ExternalQuerySort::Run&, graph::query::execution::detail::ExternalQuerySort::Run&)
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::finish(std::function<bool (graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)> const&)
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::executeOnSnapshot(graph::storage::LogicalGraphReadSnapshot&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::executeInternal(graph::storage::LogicalGraphReadBackend const&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=131072 samples=10 sample_bytes=1310720 pc=18ea21 pc=2025b6 pc=20253f pc=202360 pc=201f81 pc=9fa308 pc=136b20b pc=ce6017 pc=ced158 pc=ced0e7 pc=ced087 pc=cecf27 pc=98ab38 pc=900054 pc=78f20d pc=78ec52
+std::_Vector_base<std::byte, std::allocator<std::byte>>::_Vector_base(unsigned long, std::allocator<std::byte> const&)
+??:0:0
+
+std::vector<std::byte, std::allocator<std::byte>>::vector(unsigned long, std::allocator<std::byte> const&)
+??:0:0
+
+graph::storage::PhysicalSegmentAllocator::read(graph::storage::MetadataSnapshotPin const&, graph::storage::StrongUInt64<graph::storage::SegmentIdTag>) const
+??:0:0
+
+graph::storage::NativeBulkRunStore::readOpaquePayload(graph::storage::MetadataSnapshotPin const&, graph::storage::NativeBulkRunFragmentLocation const&) const
+??:0:0
+
+graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0::operator()(graph::storage::NativeBulkRunFragmentLocation const&) const
+NativeBulkRun.cpp:0:0
+
+std::vector<std::byte, std::allocator<std::byte>> std::__invoke_impl<std::vector<std::byte, std::allocator<std::byte>>, graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0&, graph::storage::NativeBulkRunFragmentLocation const&>(std::__invoke_other, graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0&, graph::storage::NativeBulkRunFragmentLocation const&)
+NativeBulkRun.cpp:0:0
+
+std::enable_if<is_invocable_r_v<std::vector<std::byte, std::allocator<std::byte>>, graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0&, graph::storage::NativeBulkRunFragmentLocation const&>, std::vector<std::byte, std::allocator<std::byte>>>::type std::__invoke_r<std::vector<std::byte, std::allocator<std::byte>>, graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0&, graph::storage::NativeBulkRunFragmentLocation const&>(graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0&, graph::storage::NativeBulkRunFragmentLocation const&)
+NativeBulkRun.cpp:0:0
+
+std::_Function_handler<std::vector<std::byte, std::allocator<std::byte>> (graph::storage::NativeBulkRunFragmentLocation const&), graph::storage::NativeBulkRunStore::openOpaquePayloadReader() const::$_0>::_M_invoke(std::_Any_data const&, graph::storage::NativeBulkRunFragmentLocation const&)
+NativeBulkRun.cpp:0:0
+
+std::function<std::vector<std::byte, std::allocator<std::byte>> (graph::storage::NativeBulkRunFragmentLocation const&)>::operator()(graph::storage::NativeBulkRunFragmentLocation const&) const
+??:0:0
+
+graph::storage::(anonymous namespace)::NativeQueryScratchSession::read(unsigned long)
+RelocatableStorageBackend.cpp:0:0
+
+graph::query::execution::detail::ExternalQuerySort::Cursor::advance()
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::merge(graph::query::execution::detail::ExternalQuerySort::Run&, graph::query::execution::detail::ExternalQuerySort::Run&)
+??:0:0
+
+
+ALLOC_SITE size=393216 samples=3 sample_bytes=1179648 pc=18ee66 pc=2217c0 pc=273101 pc=2217c0 pc=7814c5 pc=78146c pc=78123b pc=780c7a pc=780ba4 pc=780b0c pc=780869 pc=78044c pc=784791 pc=5faa61 pc=5fa619 pc=5fa584
+std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>::allocate(unsigned long)
+??:0:0
+
+std::allocator_traits<std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::allocate(std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>&, unsigned long)
+??:0:0
+
+std::_Vector_base<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::_M_allocate(unsigned long)
+??:0:0
+
+void std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::_M_realloc_append<graph::query::execution::detail::QuerySpillRowCodec::Record>(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+graph::query::execution::detail::QuerySpillRowCodec::Record& std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::emplace_back<graph::query::execution::detail::QuerySpillRowCodec::Record>(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+std::vector<graph::query::execution::detail::QuerySpillRowCodec::Record, std::pmr::polymorphic_allocator<graph::query::execution::detail::QuerySpillRowCodec::Record>>::push_back(graph::query::execution::detail::QuerySpillRowCodec::Record&&)
+??:0:0
+
+void graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendChargedValue<graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)::'lambda'()>(graph::query::execution::detail::QuerySpillRowCodec::Record&, graph::query::execution::MaterializedByteReservation&, graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)::'lambda'())
+??:0:0
+
+graph::query::execution::BoundedBatch<graph::query::execution::detail::QuerySpillRowCodec::Record>::appendCharged(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)
+??:0:0
+
+graph::query::execution::detail::ExternalQuerySort::append(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const
+LogicalPlanReadRuntime.cpp:0:0
+
+bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+
+ALLOC_SITE size=4184 samples=278 sample_bytes=1163152 pc=18ee66 pc=2217c0 pc=21ecac pc=2217c0 pc=9d73c5 pc=9d733c pc=9d71a0 pc=9d7080 pc=9d7026 pc=9d6fe4 pc=9d5227 pc=9cf407 pc=9ced18 pc=9cfc70 pc=85a815 pc=e22a2a
+std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>::allocate(unsigned long)
+??:0:0
+
+std::allocator_traits<std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>>::allocate(std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>&, unsigned long)
+??:0:0
+
+std::__allocated_ptr<std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>> std::__allocate_guarded<std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>>(std::pmr::polymorphic_allocator<std::_Sp_counted_ptr_inplace<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>, (__gnu_cxx::_Lock_policy)2>>&)
+??:0:0
+
+std::__shared_count<(__gnu_cxx::_Lock_policy)2>::__shared_count<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(graph::storage::BufferPool::Entry*&, std::_Sp_alloc_shared_tag<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>)
+??:0:0
+
+std::__shared_ptr<graph::storage::BufferPool::Entry, (__gnu_cxx::_Lock_policy)2>::__shared_ptr<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(std::_Sp_alloc_shared_tag<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>)
+??:0:0
+
+std::shared_ptr<graph::storage::BufferPool::Entry>::shared_ptr<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(std::_Sp_alloc_shared_tag<std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>)
+??:0:0
+
+std::shared_ptr<graph::storage::BufferPool::Entry> std::allocate_shared<graph::storage::BufferPool::Entry, std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry>>(std::pmr::polymorphic_allocator<graph::storage::BufferPool::Entry> const&)
+??:0:0
+
+graph::storage::BufferPool::allocateEntryLocked()
+??:0:0
+
+graph::storage::BufferPool::loadLocked(graph::storage::BufferPoolPageKey, graph::storage::BufferPoolReadHint)
+??:0:0
+
+graph::storage::BufferPool::readPage(graph::storage::BufferPoolPageKey, std::span<std::byte, 4096ul>, graph::storage::BufferPoolReadHint)
+??:0:0
+
+graph::storage::StorageIO::readAt(graph::storage::BufferPoolPageKey, void*, unsigned long, graph::storage::BufferPoolReadHint) const
+??:0:0
+
+graph::storage::(anonymous namespace)::readTypedControlPage(graph::storage::StorageIO const&, unsigned long, graph::storage::StrongUInt64<graph::storage::GenerationTag>, char const*)
+MetadataPagePool.cpp:0:0
+
+
+ALLOC_SITE size=1048576 samples=1 sample_bytes=1048576 pc=18ea21 pc=1feaef pc=1fea6f pc=3145a9 pc=4d6583 pc=4c6c69 pc=4ba740 pc=42e120 pc=5df5ff pc=5e5cba pc=5e5bd7 pc=5e5b4c pc=5e5a64 pc=6740c9 pc=418de7 pc=427bdc
+graph::query::execution::(anonymous namespace)::evaluateRangeFunction(std::vector<graph::PropertyValue, std::allocator<graph::PropertyValue>> const&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::evaluateFunctionExpression(graph::query::expressions::FunctionCallExpression const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::evaluateScalarExpression(graph::query::expressions::Expression const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&, graph::query::execution::(anonymous namespace)::ShortestPathResultMode)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::evaluateExpression(graph::query::expressions::Expression const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_55::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56::operator()(graph::query::execution::LogicalPlanReadRow) const
+LogicalPlanReadRuntime.cpp:0:0
+
+bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow), graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:0:0
+
+std::function<bool (graph::query::execution::LogicalPlanReadRow)>::operator()(graph::query::execution::LogicalPlanReadRow) const
+??:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:0:0
+

@@ -1,0 +1,20 @@
+Running main() from /workspace/zyx-sysroot/usr/src/googletest/googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+REAL_RSS_PROBE calls=240791 baseline=37650432 peak_rss=105373696 growth=67723264 peak_allocated=6775802 heap=77123584 last_allocated=4776367
+unknown file: Failure
+C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 64MB, baseline RSS: 35MB, current RSS: 100MB)" thrown in the test body.
+
+[  FAILED  ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection (1834 ms)
+[----------] 1 test from RelocatableStorageBackendTest (1834 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1834 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+
+ 1 FAILED TEST

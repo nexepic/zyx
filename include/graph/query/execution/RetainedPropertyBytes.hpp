@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include "graph/query/execution/ExecutionBindingContainers.hpp"
 #include <limits>
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"
@@ -100,12 +101,15 @@ inline size_t retainedPropertyValueBytes(const PropertyValue &value, Checkpoint 
 }
 // Includes the owning map object. Preserve the legacy per-value lower bound
 // while computing observed container capacity in the same guarded traversal.
-template<typename Checkpoint>
-inline size_t retainedPropertyMapBytes(const PropertyValue::MapType &map, Checkpoint checkpoint) {
+template<typename Map,typename Checkpoint>
+inline size_t retainedPropertyMapBytes(const Map &map, Checkpoint checkpoint) {
 	checkpoint();
 	size_t untilCheckpoint = 256U;
 	size_t logicalBytes = sizeof(map);
-    size_t heapBytes = addPropertyBufferBytes(sizeof(map), propertyMapStructuralHeapBufferBytes(map));
+    size_t heapBytes = addPropertyBufferBytes(sizeof(map),[&] {
+        if constexpr (isExecutionBindingTree<Map>) return executionBindingStructuralBytes(map);
+        else return propertyMapStructuralHeapBufferBytes(map);
+    }());
 	for (const auto &[key, value] : map) {
 		const auto child = propertyBufferEstimatesGuarded(value, checkpoint, untilCheckpoint);
 		logicalBytes = addPropertyBufferBytes(logicalBytes, addPropertyBufferBytes(

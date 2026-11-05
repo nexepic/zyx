@@ -41,12 +41,13 @@ ZYX automatically manages its dependencies through Conan:
 - **CLI11**: Command line interface
 - **ANTLR4 C++ Runtime**: Parser generation (4.13.1)
 
-MSVC core-only builds also require the header-only Boost.Container component,
-including when applications and tests are disabled. The existing Conan recipe
-provides these headers; a system dependency build must make them discoverable
-to CMake. This does not add a Boost runtime library requirement to the core.
-Linux, macOS and WASM core-only builds use standard-library binding containers
-and do not acquire this additional header requirement.
+All core builds, including Linux, macOS, Windows and WASM, require the
+header-only Boost.Container component for compact, stable-address query
+bindings. The existing Conan recipe provides these headers. System dependency
+builds must make them discoverable to CMake; source and WASM builds can set
+`ZYX_BOOST_HEADER_DIR` to the directory containing `boost/`. WASM receives only
+the Boost header directory, not host C/C++ standard headers. This adds no Boost
+runtime library dependency to the core; public result types remain unchanged.
 
 ## Runtime Requirements
 

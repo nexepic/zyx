@@ -1,0 +1,3 @@
+rows=2000 nanos=3301839 checksum=377200000 retained=147072
+rows=4000 nanos=6170819 checksum=1509062016 retained=294144
+rows=8000 nanos=14352686 checksum=6036772224 retained=588288

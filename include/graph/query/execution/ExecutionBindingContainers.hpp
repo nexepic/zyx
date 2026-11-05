@@ -1,16 +1,16 @@
 #pragma once
 
 #include <functional>
+#include <concepts>
+#include <utility>
 #include <limits>
 #include <memory>
 #include <map>
 #include <set>
 #include <stdexcept>
 #include <type_traits>
-#if defined(_MSVC_STL_VERSION)
 #include <boost/container/map.hpp>
 #include <boost/container/set.hpp>
-#endif
 
 namespace graph::query::execution::detail {
 
@@ -20,20 +20,9 @@ namespace graph::query::execution::detail {
 // array and iterator proxies for each unused row cache. Public result maps
 // and PropertyValue maps retain their existing representation.
 template<class Key, class Value, class Allocator>
-using ExecutionBindingMapBase =
-#if defined(_MSVC_STL_VERSION)
-    boost::container::map<Key, Value, std::less<>, Allocator>;
-#else
-    std::map<Key, Value, std::less<>, std::conditional_t<std::is_void_v<Allocator>,
-        std::allocator<std::pair<const Key, Value>>, Allocator>>;
-#endif
+using ExecutionBindingMapBase = boost::container::map<Key,Value,std::less<>,Allocator>;
 template<class Key, class Allocator>
-using ExecutionBindingSetBase =
-#if defined(_MSVC_STL_VERSION)
-    boost::container::set<Key, std::less<>, Allocator>;
-#else
-    std::set<Key, std::less<>, std::conditional_t<std::is_void_v<Allocator>, std::allocator<Key>, Allocator>>;
-#endif
+using ExecutionBindingSetBase = boost::container::set<Key,std::less<>,Allocator>;
 
 template<class Key, class Value, class Allocator = void>
 class ExecutionBindingMap : public ExecutionBindingMapBase<Key, Value, Allocator> {
@@ -41,6 +30,29 @@ class ExecutionBindingMap : public ExecutionBindingMapBase<Key, Value, Allocator
 public:
     using execution_binding_tree = void;
     using Base::Base;
+    template<class Map>
+        requires (!std::same_as<std::remove_cvref_t<Map>,ExecutionBindingMap> &&
+                  requires { typename std::remove_cvref_t<Map>::mapped_type; })
+    explicit ExecutionBindingMap(Map &&source) {
+        for(auto &[key,value]:source) {
+            if constexpr (std::is_lvalue_reference_v<Map> || std::is_const_v<std::remove_reference_t<Map>>)
+                this->emplace(key,value);
+            else this->emplace(key,std::move(value));
+        }
+    }
+    template<class Map>
+        requires (!std::same_as<std::remove_cvref_t<Map>,ExecutionBindingMap> &&
+                  requires { typename std::remove_cvref_t<Map>::mapped_type; })
+    ExecutionBindingMap &operator=(Map &&source) {
+        ExecutionBindingMap replacement(this->key_comp(), this->get_allocator());
+        for (auto &[key, value] : source) {
+            if constexpr (std::is_lvalue_reference_v<Map> || std::is_const_v<std::remove_reference_t<Map>>)
+                replacement.emplace(key, value);
+            else replacement.emplace(key, std::move(value));
+        }
+        this->swap(replacement);
+        return *this;
+    }
     Value &at(const Key &key) {
         const auto found=this->find(key);
         if(found==this->end()) throw std::out_of_range("execution binding key not found");
@@ -81,26 +93,11 @@ inline constexpr bool isExecutionBindingTree = requires { typename Container::ex
 template<class Container>
 [[nodiscard]] constexpr size_t executionBindingNodeBytes() {
     static_assert(isExecutionBindingTree<Container>);
-#if defined(_MSVC_STL_VERSION)
-    // The Boost allocator type exposes the complete allocated node. Boost is
-    // used on MSVC because its standard tree allocates an empty sentinel and
-    // debug proxy. String/payload heaps remain separate.
+    // The public stored allocator exposes the complete allocated node on
+    // every platform. Payload/string heaps are accounted separately.
     using Node = typename std::allocator_traits<typename Container::stored_allocator_type>::value_type;
-    static_assert(sizeof(Node) >= sizeof(typename Container::value_type));
+    static_assert(sizeof(Node)>=sizeof(typename Container::value_type));
     return sizeof(Node);
-#elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION)
-    // libstdc++/libc++ embed their empty header. Their red-black node has
-    // three links plus color/padding; four pointers bound the header. Round
-    // the value offset and complete node to both relevant alignments.
-    using Entry = typename Container::value_type;
-    constexpr size_t valueAlignment = alignof(Entry);
-    constexpr size_t alignment = valueAlignment > alignof(void *) ? valueAlignment : alignof(void *);
-    constexpr size_t valueOffset = (4U * sizeof(void *) + valueAlignment - 1U) / valueAlignment * valueAlignment;
-    static_assert(sizeof(Entry) <= (std::numeric_limits<size_t>::max)() - valueOffset - alignment + 1U);
-    return (valueOffset + sizeof(Entry) + alignment - 1U) / alignment * alignment;
-#else
-    static_assert(sizeof(Container) == 0U, "execution binding node accounting requires an audited STL");
-#endif
 }
 
 template<class Container>

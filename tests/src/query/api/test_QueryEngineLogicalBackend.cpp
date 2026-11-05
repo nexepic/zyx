@@ -1096,6 +1096,11 @@ namespace graph::query {
 		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U);
 		QueryContext context;
 		context.resource_account = account;
+        // Deny publication *after* prepare, independently of row-header size.
+        // A competing lease consumes the remaining shared account headroom;
+        // maintenance must not commit and retry must refund every query owner.
+        ResourceLease competing(account);
+        backend->state->training_prepare_hook = [&] { competing.set(account->available()); };
 		auto plan = constrained.buildPlan("CALL db.index.vector.train('memory_embedding') YIELD status RETURN status");
 		try {
 			static_cast<void>(constrained.executePlan(std::move(plan), context));
@@ -1105,6 +1110,9 @@ namespace graph::query {
 				dynamic_cast<const ResourceAdmissionDenied *>(&error) ||
 				dynamic_cast<const ProcedureByteBoundExceeded *>(&error)) << error.what();
 		}
+        EXPECT_GT(competing.bytes(), 0U);
+        competing.reset();
+        backend->state->training_prepare_hook = {};
 		EXPECT_EQ(backend->training_preparations, 1U);
 		EXPECT_EQ(backend->training_calls, 0U);
 		EXPECT_EQ(account->used(), 0U);

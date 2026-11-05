@@ -763,7 +763,8 @@
             // carriers. Split retries must retain their unprocessed siblings;
             // filling a tiny budget with carriers can starve even one payload.
             const size_t carrierCapacity = std::max<size_t>(1U,
-                state.shared.materialized_budget.available() / 8U / sizeof(LogicalPlanReadRow));
+                state.shared.materialized_budget.available() / 8U /
+                    (sizeof(LogicalPlanReadRow)+detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>()));
             const size_t batchCapacity = std::min({DEFAULT_PROPERTY_BATCH_ROWS,
                 state.shared.bounds.maximum_rows, carrierCapacity});
 			if (batchCapacity == 0U) {
@@ -782,22 +783,42 @@
 			size_t largestInputRowBytes = 0U;
 			std::function<bool()> flush;
 			struct PrefetchBytePressure { unsigned line; bool propertySource = false; };
+            const auto cacheMetadataBytes = [&](const auto &cache, const std::string &variable,
+                                                  const std::string &key) {
+                using Cache = std::remove_cvref_t<decltype(cache)>;
+                using Values = typename Cache::mapped_type;
+                const auto alias = cache.find(variable);
+                size_t metadata = 0U;
+                if (alias == cache.end()) metadata = checkedSizeAdd(
+                    detail::executionBindingNodeBytes<Cache>(),
+                    (std::max)(variable.size(), utils::detail::standardFreshStringHeapUpper(variable.size())),
+                    "logical-plan prefetch alias bytes overflowed");
+                if (alias == cache.end() || !alias->second.contains(key))
+                    metadata = checkedSizeAdd(metadata, checkedSizeAdd(
+                        detail::executionBindingNodeBytes<Values>(),
+                        (std::max)(key.size(), utils::detail::standardFreshStringHeapUpper(key.size())),
+                        "logical-plan prefetch key bytes overflowed"),
+                        "logical-plan prefetch cache bytes overflowed");
+                return metadata;
+            };
 			const auto putCacheValue = [&](auto &cache, const std::string &variable, const std::string &key,
 										   auto &&value, const size_t transferredPayloadCredit = 0U) {
 				const size_t previousBytes = bufferedRowsBytes.bytes();
                 if (transferredPayloadCredit > previousBytes)
                     throw std::logic_error("Property payload transfer exceeds its row reservation");
 				size_t nextBytes = previousBytes - transferredPayloadCredit;
-				const auto alias = cache.find(variable);
-				if (alias == cache.end()) {
-					nextBytes =
-							checkedSizeAdd(nextBytes, variable.size(), "logical-plan prefetch cache size overflowed");
-				}
-				if (alias != cache.end() && alias->second.contains(key)) {
-					nextBytes -= retainedExpressionValueBytes(alias->second.at(key), state);
-				} else {
-					nextBytes = checkedSizeAdd(nextBytes, key.size(), "logical-plan prefetch cache size overflowed");
-				}
+                const auto alias = cache.find(variable);
+                const bool newAlias = alias == cache.end();
+                const bool newKey = newAlias || !alias->second.contains(key);
+                // Producer payload and destination metadata credit share this
+                // query budget. Other callers pre-admit metadata here.
+                const size_t metadata = cacheMetadataBytes(cache, variable, key);
+                nextBytes = checkedSizeAdd(nextBytes, metadata,
+                    "logical-plan prefetch cache bytes overflowed");
+                // On replacement the old value remains live until insertion
+                // commits. Its reservation is refunded only afterwards.
+                const size_t replacedPayload = newKey ? 0U :
+                    retainedExpressionValueBytes(alias->second.at(key), state);
 				const size_t requestedPayloadBytes = retainedExpressionValueBytes(value, state);
 				nextBytes = checkedSizeAdd(nextBytes, requestedPayloadBytes,
 										   "logical-plan prefetch cache size overflowed");
@@ -816,14 +837,15 @@
 					} else {
 						cache[variable].insert_or_assign(key, std::forward<decltype(value)>(value));
 					}
-				} catch (...) {
-					bufferedRowsBytes.set(previousBytes);
-					throw;
-				}
+                } catch (...) {
+                    if (newAlias) cache.erase(variable);
+                    bufferedRowsBytes.set(previousBytes);
+                    throw;
+                }
 				// Copying a container can change its capacity. Reconcile the owned
 				// value before a pressure-driven split transfers charges to rows.
 				const size_t retainedBytes = retainedExpressionValueBytes(cache.at(variable).at(key), state);
-				const size_t actualBytes = checkedSizeAdd(nextBytes - requestedPayloadBytes, retainedBytes,
+				const size_t actualBytes = checkedSizeAdd(nextBytes - requestedPayloadBytes - replacedPayload, retainedBytes,
 					"logical-plan copied cache size overflowed");
 				// If a copy unexpectedly grows beyond admission, fail closed rather
 				// than entering a split with an undercharged, already-mutated row.
@@ -845,7 +867,8 @@
 				return found != row.entity_metadata_cache.end() && found->second.contains(key);
 			};
 			const auto splitBufferedRowsAndFlush = [&]() {
-				rows.recalculateBytes();
+                rows.recalculateBytes();
+                if (!coordinatedStorage) bufferedRowsBytes.set(rows.bytes());
 				MaterializedByteReservation pendingBytes(std::move(bufferedRowsBytes));
 				bufferedRowsBytes = MaterializedByteReservation(&state.shared.materialized_budget);
 				auto bufferedRows = std::move(rows.values());
@@ -1357,6 +1380,30 @@
                                     if (!same) break;
                                 }
                                 if (selectedKeys.empty()) { first = last; continue; }
+                                // Reserve every destination node/key before any
+                                // selected payload is decoded. A metadata denial
+                                // can then split without rereading a decoded cell.
+                                MaterializedByteReservation pendingMetadata(&state.shared.materialized_budget);
+                                size_t metadataUpper = 0U;
+                                for (size_t ordinal = first; ordinal < last; ++ordinal) {
+                                    const auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
+                                    bool chargedNewAlias = false;
+                                    for (const size_t column : selectedColumns) {
+                                        size_t bytes = cacheMetadataBytes(cache, group.variable, group.keys[column]);
+                                        if (!cache.contains(group.variable)) {
+                                            using Cache = std::remove_cvref_t<decltype(cache)>;
+                                            const size_t aliasBytes = checkedSizeAdd(detail::executionBindingNodeBytes<Cache>(),
+                                                (std::max)(group.variable.size(), utils::detail::standardFreshStringHeapUpper(group.variable.size())),
+                                                "Property cell cache alias overflowed");
+                                            if (chargedNewAlias) bytes -= aliasBytes;
+                                            chargedNewAlias = true;
+                                        }
+                                        metadataUpper = checkedSizeAdd(metadataUpper, bytes,
+                                            "Property cell destination metadata overflowed");
+                                    }
+                                }
+                                if (pendingMetadata.wouldExceed(metadataUpper)) throw PrefetchBytePressure{__LINE__};
+                                pendingMetadata.set(metadataUpper);
                                 const auto receiveValue = [&](size_t relative, size_t selected, std::optional<PropertyValue> value) {
                                     verifyPropertySource();
                                     if (relative >= last - first || selected >= selectedColumns.size())
@@ -1368,12 +1415,16 @@
                                     const size_t prior = propertyReadBytes.bytes();
                                     const size_t payload = retainedExpressionValueBytes(decoded, state);
                                     const size_t transfer = value ? (std::min)(payload, prior - (std::min)(prior, cellStructures)) : 0U;
+                                    auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
+                                    const size_t metadata = cacheMetadataBytes(cache, group.variable, group.keys[column]);
+                                    bufferedRowsBytes.absorb(pendingMetadata.splitOff(metadata));
                                     bufferedRowsBytes.absorb(propertyReadBytes.splitOff(transfer));
                                     try {
-                                        putCacheValue(rows.values()[rowOrdinals[ordinal]].property_cache,
-                                            group.variable, group.keys[column], std::move(decoded), transfer);
+                                        putCacheValue(cache, group.variable, group.keys[column], std::move(decoded),
+                                            checkedSizeAdd(transfer, metadata, "Property cell credit overflowed"));
                                     } catch (...) {
                                         propertyReadBytes.absorb(bufferedRowsBytes.splitOff(transfer));
+                                        pendingMetadata.absorb(bufferedRowsBytes.splitOff(metadata));
                                         throw;
                                     }
                                 };

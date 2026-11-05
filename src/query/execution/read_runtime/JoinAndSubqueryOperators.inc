@@ -327,14 +327,14 @@
 							injected.values.emplace(variable, detail::copyLogicalReadValueGuarded(value->second, [&] { checkGuardNow(state); }));
 							if (const auto properties = retainedInput.property_cache.find(variable);
 								properties != retainedInput.property_cache.end()) {
-								injected.property_cache.emplace(variable, detail::copyPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
+								injected.property_cache.emplace(variable, detail::copyBindingPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
 								if (retainedInput.complete_entity_property_cache.contains(variable)) {
 									injected.complete_entity_property_cache.insert(variable);
 								}
 							}
 							if (const auto metadata = retainedInput.entity_metadata_cache.find(variable);
 								metadata != retainedInput.entity_metadata_cache.end()) {
-								injected.entity_metadata_cache.emplace(variable, detail::copyPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
+								injected.entity_metadata_cache.emplace(variable, detail::copyBindingPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
 							}
 							if (const auto path = retainedInput.path_cache.find(variable);
 								path != retainedInput.path_cache.end()) {

@@ -1202,9 +1202,16 @@ namespace graph::query::execution {
 		auto bounds = directBounds();
 		// One retained payload plus source/output row slots and column staging.
 		bounds.maximum_materialized_bytes = 2U * sizeof(LogicalPlanReadRow) +
-				sizeof(LogicalPlanReadValue) + sizeof(PropertyValue) + 400U + 216U;
+				sizeof(LogicalPlanReadValue) + sizeof(PropertyValue) + 400U + 216U +
+                retainedBindingMetadataDelta() +
+                detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)>() +
+                detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)::mapped_type>() +
+                std::string("payload").size() + std::string("n").size() + 2U*sizeof(size_t);
+        ASSERT_LE(bounds.maximum_materialized_bytes, 1408U);
 		EXPECT_LT(bounds.maximum_materialized_bytes,
-				2U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 400U + 7U));
+				2U * (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>() + 401U) +
+                    detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)>() +
+                    detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)::mapped_type>());
 		for (const bool continueVisiting: {false, true}) {
 			SCOPED_TRACE(continueVisiting);
 			size_t delivered = 0U;

@@ -123,7 +123,7 @@ namespace graph::query::execution {
 
 	namespace {
 
-		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
+		using PropertyMap = decltype(LogicalPlanReadRow::property_cache)::mapped_type;
 		using InternalVisitor = std::function<bool(LogicalPlanReadRow)>;
 		using ChargedRowVisitor = std::function<bool(LogicalPlanReadRow, MaterializedByteReservation)>;
 #include "read_runtime/ExecutionStateAndBudgets.inc"
@@ -375,7 +375,7 @@ namespace graph::query::execution {
 				checkpoint();
 				if (invalidatedCache(alias)) continue;
 				destination.emplace(detail::copyPropertyStringGuarded(alias, checkpoint),
-					detail::copyPropertyMapGuarded(properties, checkpoint));
+					detail::copyBindingPropertyMapGuarded(properties, checkpoint));
 			}
 		};
 		copyCache(inputRow.property_cache, refreshed.property_cache);

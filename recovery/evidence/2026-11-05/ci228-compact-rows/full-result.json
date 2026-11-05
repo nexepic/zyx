@@ -1,0 +1,218 @@
+{
+  "source_commit": "212f82a3df2a885e1a20a2984b879b9f4cf4fa2c",
+  "source_fingerprint": "9e2e64c0f68a3c88a78ab081237a72c2c7846147c23e44e1e632b1b5b44c854b",
+  "source_files_match": true,
+  "enabled_discovered": 11042,
+  "disabled_discovered": 20,
+  "executed": 11042,
+  "executed_distinct": 11042,
+  "passed": 11019,
+  "failed": 23,
+  "skips": [],
+  "missing": [],
+  "extra": [],
+  "duplicate_count": 0,
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "PreadHelperTest.DISABLED_PerformanceComparison",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe"
+  ],
+  "failures": [
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:80\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:81\nExpected equality of these values:\n  ids\n    Which is: {}\n  stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})\n    Which is: { 3, 1, 2 }\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:83\nExpected: (graph.node_property_column_batch_reads) > (1U), actual: 0 vs 1\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:80\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:81\nExpected equality of these values:\n  ids\n    Which is: {}\n  stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})\n    Which is: { 3 }\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:82\nExpected equality of these values:\n  graph.node_property_column_batch_reads\n    Which is: 0\n  1U\n    Which is: 1\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:80\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:81\nExpected equality of these values:\n  ids\n    Which is: {}\n  stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})\n    Which is: { 3, 1, 2 }\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp:83\nExpected: (graph.node_property_column_batch_reads) > (1U), actual: 0 vs 1\n",
+        "unknown file\nC++ exception with description \"logical-plan Node Property batch exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "failures": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.PendingPrefetchRowsRemainChargedWhileRetryEnrichesOneRow",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1175\nExpected: static_cast<void>(runtime.execute(root, bounds, visit)) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1176\nExpected equality of these values:\n  delivered\n    Which is: 0\n  6U\n    Which is: 6\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1177\nExpected: (graph.node_property_column_batch_reads) > (readsBefore + 1U), actual: 1 vs 2\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.TightAndAmplePropertyPrefetchReadEachNodeOnce",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1961\nExpected: static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"std::get<PropertyValue>(row.values.at(\\\"payload\\\"))\", \"payload\", std::get<PropertyValue>(row.values.at(\"payload\")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp\", 1960, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Property batch exceeded its byte bound\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1936: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1962\nExpected equality of these values:\n  delivered\n    Which is: 0\n  6U\n    Which is: 6\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1936: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1967\nExpected equality of these values:\n  fetched\n    Which is: {}\n  (std::vector<uint64_t>{1U, 2U, 3U, 4U, 5U, 6U})\n    Which is: { 1, 2, 3, 4, 5, 6 }\nnode predicate splits=0, property prefetch splits=1\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1936: 4096\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanUnionRuntimeTest.LimitStreamsAnExactBudgetRowWithoutSelectionStorage",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp:217\nExpected: static_cast<void>(runtime.execute(limit, constrained, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"std::get<PropertyValue>(row.values.at(\\\"value\\\"))\", \"payload\", std::get<PropertyValue>(row.values.at(\"value\")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp\", 215, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.\n  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description \"shared materialization exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp:218\nExpected equality of these values:\n  delivered\n    Which is: 0\n  1U\n    Which is: 1\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:88\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 82, gtest_ar.failure_message()) = ::testing::Message(); if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') { ++seen[static_cast<size_t>(value.front() - 'a')]; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(std::ranges::all_of(value, [&](char character) { return character == value.front(); }))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 85, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, \"std::ranges::all_of(value, [&](char character) { return character == value.front(); })\", \"false\", \"true\") .c_str()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 86, \"Failed\") = ::testing::Message() << \"unexpected payload\"; return true; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Property batch exceeded its byte bound\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:68: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:91\nExpected equality of these values:\n  delivered\n    Which is: 0\n  6U\n    Which is: 6\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:68: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:92\nExpected equality of these values:\n  seen\n    Which is: { 0, 0, 0, 0, 0, 0 }\n  (std::array<size_t, 6U>{1U, 1U, 1U, 1U, 1U, 1U})\n    Which is: { 1, 1, 1, 1, 1, 1 }\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:68: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:97\nExpected: (trace.at(\"logical_plan.property_source.admitted_bytes\").totalValue) >= (18000), actual: 416 vs 18000\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:68: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:98\nValue of: trace.contains(\"native_graph.read.selected_values_decoded\")\n  Actual: false\nExpected: true\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:68: 4096\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.MultiKeyCellRetriesSkipEveryAlreadyRetainedValue",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:243\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { const auto &first = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"first\")).getVariant()); const auto &second = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"second\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"first.size()\", \"1200U\", first.size(), 1200U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 236, gtest_ar.failure_message()) = ::testing::Message(); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"second.size()\", \"1200U\", second.size(), 1200U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 236, gtest_ar.failure_message()) = ::testing::Message(); if (!first.empty() && first.front() >= 'a' && first.front() <= 'f') { ++seen[first.front() - 'a']; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"first\", \"std::string(1200U, first.front())\", first, std::string(1200U, first.front())))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 239, gtest_ar.failure_message()) = ::testing::Message(); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"second\", \"std::string(1200U, static_cast<char>('A' + first.front() - 'a'))\", second, std::string(1200U, static_cast<char>('A' + first.front() - 'a'))))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 240, gtest_ar.failure_message()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 241, \"Failed\") = ::testing::Message() << \"unexpected multi-key owner\"; return true; })) doesn't throw an exception.\n  Actual: it throws std::logic_error with description \"invalid materialized accounting transfer\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:221: 4096\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:220: MATCH (n:MultiCell) RETURN n.first AS first, n.second AS second\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.RetriedPropertyCellsKeepTheirSnapshotAndRefundAfterVisitorExit",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1426\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, visit)) doesn't throw an exception.\n  Actual: it throws std::logic_error with description \"invalid materialized accounting transfer\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1406: 2\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1427\nExpected equality of these values:\n  delivered\n    Which is: 2\n  mode == 2 ? 3U : 1U\n    Which is: 3\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1406: 2\n"
+      ]
+    },
+    {
+      "name": "QueryEngineLogicalBackendBoundaryTest.VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/api/test_QueryEngineLogicalBackend.cpp:1102\nFailed\ntraining must not commit after shared-account publication denial\n"
+      ]
+    },
+    {
+      "name": "LogicalVectorPropertyBatchTest.ShortestPathProjectedResultCountsLivePathIds",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1254\nFailed\nshortestPath result publication ignored its live path-ID vector\n"
+      ]
+    },
+    {
+      "name": "LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:529\nExpected: stats = runtime.execute(project, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at(\"payload\"))); return !stop; }) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan indexed Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:530\nExpected equality of these values:\n  delivered\n    Which is: {}\n  std::vector<PropertyValue>(stop ? 1U : 2U, PropertyValue(std::string(1000U, 'a')))\n    Which is: { 64-byte object <90-97 91-30 E9-55 00-00 E8-03 00-00 00-00 00-00 E8-03 00-00 00-00 00-00 72-72 6F-72 20-77 69-74 68-20 64-65 73-63 72-69 70-74 69-6F 6E-20 22-6C 6F-67 69-63 61-6C 2D-70 04-61 6E-20 69-6E 64-65>, 64-byte object <30-57 9A-30 E9-55 00-00 E8-03 00-00 00-00 00-00 E8-03 00-00 00-00 00-00 65-78 63-65 65-64 65-64 20-69 74-73 20-62 79-74 65-20 62-6F 75-6E 64-22 2E-00 BA-3F FD-7F 00-00 04-34 BA-3F FD-7F 00-00> }\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:532\nExpected equality of these values:\n  stats.nodes_scanned\n    Which is: 0\n  stop ? 1U : 4U\n    Which is: 4\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:529\nExpected: stats = runtime.execute(project, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at(\"payload\"))); return !stop; }) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan indexed Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:530\nExpected equality of these values:\n  delivered\n    Which is: {}\n  std::vector<PropertyValue>(stop ? 1U : 2U, PropertyValue(std::string(1000U, 'a')))\n    Which is: { 64-byte object <90-97 91-30 E9-55 00-00 E8-03 00-00 00-00 00-00 E8-03 00-00 00-00 00-00 72-72 6F-72 20-77 69-74 68-20 64-65 73-63 72-69 70-74 69-6F 6E-20 22-00 30-B2 BA-3F FD-7F 00-00 04-B1 BA-3F FD-7F 00-00> }\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:532\nExpected equality of these values:\n  stats.nodes_scanned\n    Which is: 0\n  stop ? 1U : 4U\n    Which is: 1\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:529\nExpected: stats = runtime.execute(project, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at(\"payload\"))); return !stop; }) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan indexed Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:530\nExpected equality of these values:\n  delivered\n    Which is: {}\n  std::vector<PropertyValue>(stop ? 1U : 2U, PropertyValue(std::string(1000U, 'a')))\n    Which is: { 64-byte object <90-97 91-30 E9-55 00-00 E8-03 00-00 00-00 00-00 E8-03 00-00 00-00 00-00 72-72 6F-72 20-77 69-74 68-20 64-65 73-63 72-69 70-74 69-6F 6E-20 22-6C 6F-67 69-63 61-6C 2D-70 04-61 6E-20 69-6E 64-65>, 64-byte object <30-57 9A-30 E9-55 00-00 E8-03 00-00 00-00 00-00 E8-03 00-00 00-00 00-00 65-78 63-65 65-64 65-64 20-69 74-73 20-62 79-74 65-20 62-6F 75-6E 64-22 2E-00 BA-3F FD-7F 00-00 04-34 BA-3F FD-7F 00-00> }\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp:532\nExpected equality of these values:\n  stats.nodes_scanned\n    Which is: 0\n  stop ? 1U : 4U\n    Which is: 4\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "failures": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "failures": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1123\nExpected: static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) { delivered.push_back(std::get<PropertyValue>(row.values.at(\"payload\"))); return !stopEarly; })) doesn't throw an exception.\n  Actual: it throws std::logic_error with description \"invalid materialized accounting transfer\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1126\nExpected equality of these values:\n  delivered\n    Which is: { 64-byte object <B0-4A 2C-31 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 04-00 00-00 00-00 00-00 05-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 70-61 79-6C 6F-61 64-00 04-00 00-00 00-00 00-00> }\n  expected\n    Which is: { 64-byte object <30-81 90-30 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-02 00-00 00-00 00-00 60-16 B8-FC E8-55 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <E0-72 9D-30 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 01-00 00-00 00-00 00-00 6E-00 20-62 6F-64 79-2E 0A-3B 8E-30 E9-55 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <D0-88 93-30 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <60-68 9D-30 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <50-5A A0-30 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00>, 64-byte object <50-B5 1F-30 E9-55 00-00 DC-05 00-00 00-00 00-00 DC-05 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 30-33 7B-30 E9-55 00-00 04-26 A0-30 E9-55 00-00> }\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1128\nExpected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1095: false\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1094: 1500\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215\nExpected: static_cast<void>(runtime.execute(sort, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"std::get<PropertyValue>(row.values.at(\\\"payload\\\"))\", \"payload\", std::get<PropertyValue>(row.values.at(\"payload\")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp\", 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"bounded batch exceeded its byte limit\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216\nExpected equality of these values:\n  delivered\n    Which is: 0\n  1U\n    Which is: 1\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: false\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1215\nExpected: static_cast<void>(runtime.execute(sort, bounds, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"std::get<PropertyValue>(row.values.at(\\\"payload\\\"))\", \"payload\", std::get<PropertyValue>(row.values.at(\"payload\")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp\", 1213, gtest_ar.failure_message()) = ::testing::Message(); return continueVisiting; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"bounded batch exceeded its byte limit\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1216\nExpected equality of these values:\n  delivered\n    Which is: 0\n  1U\n    Which is: 1\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1209: true\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure",
+      "failures": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "failures": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "failures": [
+        "unknown file\nC++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.\n"
+      ]
+    },
+    {
+      "name": "LogicalPlanReadRuntimeTest.SkipStreamsAnExactBudgetRowWithoutSelectionStorage",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp:1857\nExpected: static_cast<void>(runtime.execute(skip, constrained, [&](const LogicalPlanReadRow &row) { ++delivered; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"std::get<PropertyValue>(row.values.at(\\\"value\\\"))\", \"payload\", std::get<PropertyValue>(row.values.at(\"value\")), payload))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp\", 1855, gtest_ar.failure_message()) = ::testing::Message(); return true; })) doesn't throw an exception.\n  Actual: it throws graph::query::execution::MaterializedByteLimitExceeded with description \"shared materialization exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp:1858\nExpected equality of these values:\n  delivered\n    Which is: 0\n  1U\n    Which is: 1\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.StagedOverlayCellsMergeBaseOwnersAndRejectRevisionChanges",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:173\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { const auto &text = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"text.size()\", \"3000U\", text.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 169, gtest_ar.failure_message()) = ::testing::Message(); if (!text.empty() && text.front() >= 'a' && text.front() <= 'c') ++seen[text.front() - 'a']; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp\", 171, \"Failed\") = ::testing::Message() << \"unexpected staged payload\"; return true; })) doesn't throw an exception.\n  Actual: it throws std::logic_error with description \"invalid materialized accounting transfer\".\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.QueryCellRetriesAbortChangedOverlayAndCanReuseReadView",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:295\nExpected: static_cast<void>(runtime.executeWithSnapshot(*snapshot, *plan.root, bounds, [&](const auto &row) { ++delivered; if (std::get<PropertyValue>(row.values.at(\"payload\")) == PropertyValue(\"changed\")) ++changed; return true; }, context)) doesn't throw an exception.\n  Actual: it throws std::logic_error with description \"invalid materialized accounting transfer\".\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp:296\nExpected equality of these values:\n  delivered\n    Which is: 1\n  6U\n    Which is: 6\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1359\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1353, gtest_ar.failure_message()) = ::testing::Message(); if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') { ++seen[static_cast<size_t>(value.front() - 'a')]; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(std::ranges::all_of(value, [&](char character) { return character == value.front(); }))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1356, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, \"std::ranges::all_of(value, [&](char character) { return character == value.front(); })\", \"false\", \"true\") .c_str()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp\", 1357, \"Failed\") = ::testing::Message() << \"unexpected payload\"; return true; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Property batch exceeded its byte bound\".\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1339: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1362\nExpected equality of these values:\n  delivered\n    Which is: 0\n  6U\n    Which is: 6\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1339: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1363\nExpected equality of these values:\n  seen\n    Which is: { 0, 0, 0, 0, 0, 0 }\n  (std::array<size_t, 6U>{1U, 1U, 1U, 1U, 1U, 1U})\n    Which is: { 1, 1, 1, 1, 1, 1 }\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1339: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1368\nExpected: (trace.at(\"logical_plan.property_source.admitted_bytes\").totalValue) >= (18000), actual: 416 vs 18000\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1339: 4096\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1369\nValue of: trace.contains(\"native_graph.read.selected_values_decoded\")\n  Actual: false\nExpected: true\nGoogle Test trace:\n/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1339: 4096\n"
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "failures": [
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1622\nExpected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { results.push_back(std::get<PropertyValue>(row.values.at(\"id\"))); return !stop; })) doesn't throw an exception.\n  Actual: it throws std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1627\nExpected equality of these values:\n  results\n    Which is: {}\n  expected\n    Which is: { 64-byte object <01-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 75-6E 74-69 6D-65 5F-65 72-72 6F-72 20-77 69-74 68-20 64-65 73-63 72-69 70-74 69-6F 6E-20 22-6C 6F-67 69-63 61-6C 2D-70 02-61 6E-20 4E-6F 64-65>, 64-byte object <03-00 00-00 00-00 00-00 79-20 62-61 74-63 68-20 65-78 63-65 65-64 65-64 20-69 74-73 20-62 79-74 65-20 62-6F 75-6E 64-22 2E-00 CA-30 E9-55 00-00 C8-71 CA-30 E9-55 00-00 02-71 CA-30 E9-55 00-00> }\n",
+        "/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp:1628\nValue of: trace.contains(\"logical_plan.node_predicate_source_bytes\")\n  Actual: false\nExpected: true\n"
+      ]
+    }
+  ],
+  "coverage": "not generated: required unfiltered run exited 1 after real assertion failures"
+}

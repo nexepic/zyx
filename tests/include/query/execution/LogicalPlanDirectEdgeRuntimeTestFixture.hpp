@@ -868,6 +868,12 @@ namespace graph::query::execution::direct_edge_test {
 
 		// Keep tight row-transfer tests independent of newly admitted public map
 		// storage. Derive only the extra capacity charge of their actual outputs.
+        inline size_t retainedBindingMetadataDelta() {
+            using Bindings=decltype(LogicalPlanReadRow::values);
+            using Node=typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+            return sizeof(Node)>sizeof(LogicalPlanReadValue) ? sizeof(Node)-sizeof(LogicalPlanReadValue) : 0U;
+        }
+
 		inline size_t entityCacheMetadataDelta(const DirectEdgeGraph &graph, bool includeEdges = false) {
 			MaterializedByteBudget budget(16U * 1024U * 1024U);
 			detail::BudgetMemoryResource memory(budget);

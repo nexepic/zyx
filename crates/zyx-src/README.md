@@ -14,8 +14,8 @@ Vendored C++ source for the ZYX embedded graph database.
 
 This crate is consumed by `zyxdb-sys` to build ZYX from source. Most applications should depend on `zyxdb` instead.
 
-MSVC source builds require Boost.Container headers, including core-only builds.
-The project's Conan recipe supplies them; system dependency builds must make
-the headers discoverable to CMake. No Boost runtime library is added to the
-core by this requirement. Linux, macOS and WASM core-only builds do not require
-Boost.Container.
+All source builds, including core-only and WASM builds, require the header-only
+Boost.Container component for compact query-local containers. The project's
+Conan recipe supplies it; system dependency builds must make the headers
+available to CMake. `ZYX_BOOST_HEADER_DIR` may point to the directory containing
+`boost/`. No Boost runtime library is added to the core by this requirement.

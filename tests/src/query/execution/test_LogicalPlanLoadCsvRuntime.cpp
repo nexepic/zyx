@@ -697,12 +697,12 @@ namespace graph::query::execution {
 		QueryPlan plan = parse("UNWIND ['d','b','a','c'] AS value WITH value ORDER BY value RETURN value ORDER BY 0");
 		ASSERT_NE(plan.root, nullptr);
 		auto constrained = bounds();
-		// Leave room for the old and new QueryResult row-vector allocations to
-		// coexist during growth while remaining below the duplicated-row-charge case.
-		constrained.maximum_materialized_bytes =
-				5U * sizeof(LogicalPlanReadRow) + 8U * sizeof(PropertyValue) + 664U;
+        // Freeze the efficiency envelope instead of scaling it with empty
+        // container header sizes (the former GNU bound was 2576 bytes).
+        // The live public result-vector growth is still charged in full.
+        constrained.maximum_materialized_bytes = 2304U;
 		EXPECT_LT(constrained.maximum_materialized_bytes,
-				8U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 6U));
+				8U * (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>()));
 		const auto result = runtime.executeToQueryResult(*plan.root, constrained, context());
 		ASSERT_EQ(result.rowCount(), 4U);
 		for (size_t index = 0U; index < result.rowCount(); ++index) {

@@ -793,14 +793,15 @@
 			throw std::runtime_error("logical-plan expected a relationship variable");
 		}
 
-		[[nodiscard]] PropertyMap readInlineProperties(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map readInlineProperties(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 													   ExecutionState &state) {
 			if (entries.size() > state.shared.bounds.maximum_property_entries) {
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
 			incrementBounded(state.task.stats.property_sets_materialized,
 							 "logical-plan Property materialization counter overflowed");
-			PropertyMap properties;
+			Map properties;
 			properties.reserve(entries.size());
 			for (const storage::LogicalGraphPropertyEntry &entry: entries) {
 				checkGuard(state);
@@ -813,16 +814,18 @@
 			return properties;
 		}
 
-		[[nodiscard]] PropertyMap readNodeProperties(storage::LogicalGraphReadSnapshot &snapshot,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map readNodeProperties(storage::LogicalGraphReadSnapshot &snapshot,
 													 const storage::LogicalGraphNode &node, ExecutionState &state) {
 			static_cast<void>(snapshot);
-			return readInlineProperties(node.properties, state);
+			return readInlineProperties<Map>(node.properties, state);
 		}
 
-		[[nodiscard]] PropertyMap readEdgeProperties(storage::LogicalGraphReadSnapshot &snapshot,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map readEdgeProperties(storage::LogicalGraphReadSnapshot &snapshot,
 													 const storage::LogicalGraphEdge &edge, ExecutionState &state) {
 			static_cast<void>(snapshot);
-			return readInlineProperties(edge.properties, state);
+			return readInlineProperties<Map>(edge.properties, state);
 		}
 
 		[[nodiscard]] bool propertiesMatch(const PropertyMap &properties,
@@ -1283,7 +1286,7 @@
 					throw std::runtime_error(
 							"logical-plan entity Property function requires a node, relationship, or Map");
 				}
-				return detail::procedureMapEmplace(row.property_cache, variable, detail::copyPropertyMapGuarded(value->getMap(), [&] {
+				return detail::procedureMapEmplace(row.property_cache, variable, detail::copyBindingPropertyMapGuarded(value->getMap(), [&] {
 					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				})).first->second;
 			}
@@ -1406,7 +1409,7 @@
 			std::optional<LogicalPlanReadValue> previous_value_;
 			std::optional<PropertyMap> previous_properties_;
 			std::optional<bool> previous_properties_complete_;
-			std::optional<std::unordered_map<std::string, PropertyValue>> previous_metadata_;
+			std::optional<PropertyMap> previous_metadata_;
 		};
 
 		[[nodiscard]] const std::vector<PropertyValue> &

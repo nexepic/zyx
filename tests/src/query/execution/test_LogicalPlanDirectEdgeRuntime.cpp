@@ -1241,9 +1241,11 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "priority"), true);
 		logical::LogicalSort outer(std::move(inner), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Include buffered/source/output row frames and key/Property slots.
-		constrained.maximum_materialized_bytes =
-				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
+        // Fixed efficiency envelope, independent of sizeof(empty row maps).
+        // The pre-compaction GNU layout allowed 4758 bytes here. Freeze a
+        // smaller 4352-byte cap, including old/new public vector coexistence,
+        // while checking complete result order and one fetch per owner.
+        constrained.maximum_materialized_bytes = 4352U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
@@ -1342,9 +1344,11 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("m", "priority"), true);
 		logical::LogicalSort outer(std::move(projected), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Include buffered/source/output row frames and key/Property slots.
-		constrained.maximum_materialized_bytes =
-				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
+        // Fixed efficiency envelope, independent of sizeof(empty row maps).
+        // The pre-compaction GNU layout allowed 4758 bytes here. Freeze a
+        // smaller 4352-byte cap, including old/new public vector coexistence,
+        // while checking complete result order and one fetch per owner.
+        constrained.maximum_materialized_bytes = 4352U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 2U);

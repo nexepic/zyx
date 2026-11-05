@@ -59,14 +59,14 @@
 			}
 			if (const auto properties = input.property_cache.find(sourceVariable);
 				properties != input.property_cache.end()) {
-				projected.property_cache.emplace(alias, detail::copyPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
+				projected.property_cache.emplace(alias, detail::copyBindingPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
 				if (input.complete_entity_property_cache.contains(sourceVariable)) {
 					projected.complete_entity_property_cache.insert(alias);
 				}
 			}
 			if (const auto metadata = input.entity_metadata_cache.find(sourceVariable);
 				metadata != input.entity_metadata_cache.end()) {
-				projected.entity_metadata_cache.emplace(alias, detail::copyPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
+				projected.entity_metadata_cache.emplace(alias, detail::copyBindingPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
 			}
 		}
 
@@ -283,7 +283,7 @@
 							"logical-plan row combination received incompatible Property cache entries");
 				}
 				if (existing == destination.property_cache.end()) {
-					destination.property_cache.emplace(alias, detail::copyPropertyMapGuarded(properties, checkpoint));
+					destination.property_cache.emplace(alias, detail::copyBindingPropertyMapGuarded(properties, checkpoint));
 				}
 				if (source.complete_entity_property_cache.contains(alias)) {
 					destination.complete_entity_property_cache.insert(alias);
@@ -574,14 +574,14 @@
 			return materialized.emplace(cacheKey, std::move(properties)).first->second;
 		}
 
-		[[nodiscard]] PropertyMap copyResultPropertyMap(const PropertyMap &properties, ExecutionState &state) {
+		[[nodiscard]] PropertyValue::MapType copyResultPropertyMap(const PropertyMap &properties, ExecutionState &state) {
 			return detail::copyPropertyMapGuarded(properties, [&] {
 				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 		}
 
 		template<typename Entity>
-		[[nodiscard]] PropertyMap materializeUniqueEntityProperties(const LogicalPlanReadRow &row, const Entity &entity,
+		[[nodiscard]] PropertyValue::MapType materializeUniqueEntityProperties(const LogicalPlanReadRow &row, const Entity &entity,
 																	ExecutionState &state) {
 			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
 						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
@@ -589,18 +589,18 @@
 				return copyResultPropertyMap(*cached, state);
 			if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
 				validateNode(entity, state);
-				return readNodeProperties(state.shared.snapshot, entity, state);
+				return readNodeProperties<PropertyValue::MapType>(state.shared.snapshot, entity, state);
 			} else {
 				validateEdge(entity);
-				return readEdgeProperties(state.shared.snapshot, entity, state);
+				return readEdgeProperties<PropertyValue::MapType>(state.shared.snapshot, entity, state);
 			}
 		}
 
 		template<typename Entity>
-		[[nodiscard]] PropertyMap materializeCompleteEntityProperties(const Entity &entity, ExecutionState &state) {
+		[[nodiscard]] PropertyValue::MapType materializeCompleteEntityProperties(const Entity &entity, ExecutionState &state) {
 			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
 						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
-			PropertyMap properties;
+			PropertyValue::MapType properties;
 			properties.reserve(entity.properties.size());
 			for (const storage::LogicalGraphPropertyEntry &entry: entity.properties) {
 				checkGuard(state);
@@ -618,7 +618,7 @@
 			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
 			utils::AdmissionPmrUnorderedSet<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
-			size_t bytes = sizeof(PropertyMap);
+			size_t bytes = sizeof(PropertyValue::MapType);
 			for (const auto &entry: entries) {
 				checkGuard(state);
 				if (!keys.insert(entry.key).second) {
@@ -648,12 +648,12 @@
 					}
 					bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
 				}
-				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state),
+				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state) - sizeof(PropertyValue::MapType),
 									  "logical-plan result row size overflowed");
 			} else {
 				const size_t bytes = checkedSizeAdd(sizeof(LogicalEdgeResult), std::max(entity.type.size(), detail::dynamicStringBufferBytes(entity.type)),
 													"logical-plan result row size overflowed");
-				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state),
+				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state) - sizeof(PropertyValue::MapType),
 									  "logical-plan result row size overflowed");
 			}
 		}
@@ -717,7 +717,7 @@
 						loadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));
 					if (entityBytes)
 						admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
-					PropertyMap properties = materializeCompleteEntityProperties(*edge, state);
+					PropertyValue::MapType properties = materializeCompleteEntityProperties(*edge, state);
 					return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
 														 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
 				}
@@ -737,12 +737,12 @@
 					loadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));
 				if (entityBytes)
 					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
-				PropertyMap properties = materializeCompleteEntityProperties(*node, state);
+				PropertyValue::MapType properties = materializeCompleteEntityProperties(*node, state);
 				return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
 			}
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				if (!repeatedEntity) {
-					PropertyMap properties = materializeUniqueEntityProperties(row, *node, state);
+					PropertyValue::MapType properties = materializeUniqueEntityProperties(row, *node, state);
 					return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
 				}
 				const PropertyMap &properties = materializeEntityProperties(row, *node, state, materialized, &propertyCacheReservation);
@@ -750,7 +750,7 @@
 			}
 			const storage::LogicalGraphEdge &edge = std::get<storage::LogicalGraphEdge>(value);
 			if (!repeatedEntity) {
-				PropertyMap properties = materializeUniqueEntityProperties(row, edge, state);
+				PropertyValue::MapType properties = materializeUniqueEntityProperties(row, edge, state);
 				return ResultValue(LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, detail::copyPropertyStringGuarded(edge.type, copyCheckpoint),
 													 std::move(properties)});
 			}
@@ -767,7 +767,7 @@
 			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
 			utils::AdmissionPmrUnorderedSet<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
-			size_t bytes = sizeof(PropertyMap);
+			size_t bytes = sizeof(PropertyValue::MapType);
 			for (const auto &entry: entries) {
 				checkGuard(state);
 				if (entry.key.empty() || !keys.insert(entry.key).second) {
@@ -780,6 +780,27 @@
 			}
 			return bytes;
 		}
+
+        // A compact internal cache is not the public unordered result map.
+        // Admit the destination layout and copied heap before converting it.
+        [[nodiscard]] size_t copiedResultPropertyBytes(const PropertyMap &properties, ExecutionState &state) {
+            constexpr const char *message = "logical-plan result Property map size overflowed";
+            size_t logical = sizeof(PropertyValue::MapType);
+            size_t physical = checkedSizeAdd(sizeof(PropertyValue::MapType),
+                utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(
+                    graph::property_copy::freshMapReserveCount(properties.size())), message);
+            const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+            for (const auto &[key, value] : properties) {
+                checkpoint();
+                logical = checkedSizeAdd(logical, checkedSizeAdd(key.size(),
+                    checkedSizeAdd(sizeof(PropertyValue), retainedExpressionValueBytes(value, state), message), message), message);
+                physical = checkedSizeAdd(physical,
+                    utils::detail::standardFreshStringHeapUpper(key.size()), message);
+                physical = checkedSizeAdd(physical,
+                    storage::CanonicalPropertyValueCodec::guardedCopyHeapUpper(value, checkpoint), message);
+            }
+            return (std::max)(logical, physical);
+        }
 
 		[[nodiscard]] size_t predictableEntityResultBytes(const LogicalPlanReadRow &row,
 														  const storage::LogicalGraphNode &node,
@@ -799,9 +820,9 @@
 				bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
 			}
 			return checkedSizeAdd(bytes,
-								  cached != nullptr
-										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.shared.context)
-										  : inlineResultPropertyBytes(node.properties, state),
+								  (cached != nullptr
+										  ? copiedResultPropertyBytes(*cached, state)
+										  : inlineResultPropertyBytes(node.properties, state)) - sizeof(PropertyValue::MapType),
 								  "logical-plan result row size overflowed");
 		}
 
@@ -814,9 +835,9 @@
 			const size_t bytes = checkedSizeAdd(sizeof(LogicalEdgeResult), std::max(edge.type.size(), detail::dynamicStringBufferBytes(edge.type)),
 												"logical-plan result row size overflowed");
 			return checkedSizeAdd(bytes,
-								  cached != nullptr
-										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.shared.context)
-										  : inlineResultPropertyBytes(edge.properties, state),
+								  (cached != nullptr
+										  ? copiedResultPropertyBytes(*cached, state)
+										  : inlineResultPropertyBytes(edge.properties, state)) - sizeof(PropertyValue::MapType),
 								  "logical-plan result row size overflowed");
 		}
 
@@ -906,8 +927,16 @@
 				if (predictableBytes > state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 				}
-				if (predictableBytes > state.shared.materialized_budget.available()) {
-					throw std::runtime_error("shared materialization exceeded its byte bound");
+                if (predictableBytes > state.shared.materialized_budget.available()) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                        std::fprintf(stderr,"CI_RESULT_REJECTION requested=%zu source_row=%zu result_rows=%zu used=%zu available=%zu maximum=%zu\n",
+                            predictableBytes,logicalReadRowBytes(row,state.shared.context),result.rowCount(),
+                            state.shared.materialized_budget.used(),state.shared.materialized_budget.available(),state.shared.bounds.maximum_materialized_bytes);
+                        std::fflush(stderr);
+                    }
+#endif
+                    throw std::runtime_error("shared materialization exceeded its byte bound");
 				}
 				outputReservation.set(predictableBytes);
 			}

@@ -561,8 +561,7 @@
 			const PropertyMap &properties =
 					readBindingProperties(state.shared.snapshot, row, reference->getVariableName(), state);
 			if (name == "properties") {
-                detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(properties));
-				return PropertyValue(properties);
+                return PropertyValue(detail::copyPropertyMapGuarded(properties,[&] { checkGuardNow(state); }));
 			}
 			if (properties.size() > state.shared.bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan keys() exceeded the configured List bound");

@@ -1,0 +1,8 @@
+{
+  "tests": 31,
+  "failures": 0,
+  "source": "uncommitted compact cache change after 9a4cca5d; standard same-source core and test binary; full run pending",
+  "full_source_validation": false,
+  "native_windows_macos_validation": false,
+  "rss_64_mib_probe": "still fails; current large-allocation probe peak live 7976266, RSS growth 67710976; partial ASan instrumentation only"
+}

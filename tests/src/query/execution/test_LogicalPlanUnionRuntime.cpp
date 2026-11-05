@@ -205,10 +205,26 @@ TEST(LogicalPlanUnionRuntimeTest, LimitStreamsAnExactBudgetRowWithoutSelectionSt
 	auto source = std::make_unique<logical::LogicalUnwind>(
 		std::make_unique<logical::LogicalSingleRow>(), "value", std::vector<PropertyValue>{payload});
 	logical::LogicalLimit limit(std::move(source), 1);
-	auto constrained = bounds();
-	// Include the one resident output slot reserved while the source is running.
-	constrained.maximum_materialized_bytes = sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadRow) + std::string("value").size() +
-		sizeof(LogicalPlanReadValue) + property_utils::getPropertyValueSize(payload);
+    auto constrained = bounds();
+    // Independently account the allocated binding node, not only its embedded
+    // variant. The visitor owns one separate row slot. Preserve the logical
+    // payload floor as well as the actual retained string request.
+    using Bindings = decltype(LogicalPlanReadRow::values);
+    using Node = typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+    const auto &text = std::get<std::string>(payload.getVariant());
+    const size_t rowBytes = sizeof(LogicalPlanReadRow) + (std::max)(
+        std::string("value").size()+sizeof(LogicalPlanReadValue)+property_utils::getPropertyValueSize(payload),
+        sizeof(Node)+graph::query::execution::detail::dynamicStringBufferBytes(text));
+    constrained.maximum_materialized_bytes = rowBytes + sizeof(LogicalPlanReadRow);
+    // A layout regression must not silently expand this success boundary.
+    ASSERT_LE(constrained.maximum_materialized_bytes, 1792U);
+
+    auto insufficient = constrained;
+    --insufficient.maximum_materialized_bytes;
+    size_t rejectedDeliveries = 0U;
+    EXPECT_THROW(static_cast<void>(runtime.execute(limit, insufficient,
+        [&](const LogicalPlanReadRow &) { ++rejectedDeliveries; return true; })), graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(rejectedDeliveries, 0U);
 	size_t delivered = 0U;
 	EXPECT_NO_THROW(static_cast<void>(runtime.execute(limit, constrained, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -357,7 +373,8 @@ TEST(LogicalPlanUnionRuntimeTest, SortTransfersLargeRowsToDirectLimitAndSkipBuff
 		return std::make_unique<logical::LogicalSort>(std::move(source), std::move(keys));
 	};
 	const size_t rowBytes = sizeof(LogicalPlanReadRow) + std::string("value").size() +
-		sizeof(LogicalPlanReadValue) + 4096U + sizeof(size_t);
+		(std::max)(sizeof(LogicalPlanReadValue) + 4096U + sizeof(size_t),
+            graph::query::execution::detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>() + 4097U);
 	auto constrained = bounds();
 	constrained.maximum_materialized_bytes = 4U * rowBytes +
 		4U * sizeof(PropertyValue) + 4U * (4096U + sizeof(size_t)) +

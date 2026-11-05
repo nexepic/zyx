@@ -1248,10 +1248,17 @@ namespace graph::query {
 		logical::LogicalProject project(call(),
 				{{std::make_shared<expressions::VariableReferenceExpression>("step"), "step"},
 				 {std::make_shared<expressions::VariableReferenceExpression>("path_length"), "length"}});
-		options.bounds.maximum_materialized_bytes = 4096U;
+		// A compact row no longer needs 4096 bytes for this three-step path.
+        // Reject below the independently known live source/binding floor,
+        // rather than treating a layout optimization as a missing charge.
+        using Bindings=decltype(execution::LogicalPlanReadRow::values);
+        using Node=typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+        const size_t minimumSourceAndBindings = sizeof(std::vector<uint64_t>) + 3U*sizeof(uint64_t) +
+            3U*(sizeof(execution::LogicalPlanReadRow)+3U*sizeof(Node));
+        options.bounds.maximum_materialized_bytes = minimumSourceAndBindings - 1U;
 		try {
 			static_cast<void>(execute(project));
-			FAIL() << "shortestPath result publication ignored its live path-ID vector";
+			FAIL() << "shortestPath admitted less than its live source and binding storage";
 		} catch (const std::runtime_error &error) {
 			expectProcedureQuotaFailure(error);
 		}

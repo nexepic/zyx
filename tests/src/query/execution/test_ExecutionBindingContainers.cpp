@@ -131,6 +131,29 @@ TEST(ExecutionBindingContainersTest, CompletenessSetFailureAndDuplicateInsertion
 }
 } // namespace graph::query::execution::detail
 
+TEST(ExecutionBindingContainersTest, ConvertingAssignmentKeepsTheDestinationAllocatorAndFailureIsAtomic) {
+    using namespace graph::query::execution::detail;
+    BindingRequests upstream;
+    TestMap destination(std::less<>{}, TestMap::allocator_type(&upstream));
+    destination.emplace(7U, 42U);
+    const size_t retained = upstream.live;
+    const std::map<uint64_t, uint64_t> source{{1U, 11U}, {2U, 22U}};
+    upstream.deny = true;
+    EXPECT_THROW(destination = source, std::bad_alloc);
+    EXPECT_EQ(destination.size(), 1U);
+    EXPECT_EQ(destination.at(7U), 42U);
+    EXPECT_EQ(upstream.live, retained);
+    upstream.deny = false;
+    destination = source;
+    EXPECT_EQ(destination.get_allocator().resource(), &upstream);
+    EXPECT_EQ(destination.size(), 2U);
+    EXPECT_EQ(destination.at(1U), 11U);
+    EXPECT_EQ(destination.at(2U), 22U);
+    EXPECT_EQ(upstream.live, executionBindingStructuralBytes(destination));
+    destination.clear();
+    EXPECT_EQ(upstream.live, 0U);
+}
+
 TEST(ExecutionBindingContainersTest, MissingKeysKeepStandardExceptionCategoriesWithoutInsertion) {
     graph::query::execution::detail::ExecutionBindingMap<int,int> bindings;
     EXPECT_THROW(static_cast<void>(bindings.at(7)),std::out_of_range);

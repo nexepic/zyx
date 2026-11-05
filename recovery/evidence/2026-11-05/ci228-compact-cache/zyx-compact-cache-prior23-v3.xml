@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="23" failures="5" disabled="0" errors="0" time="1.241" timestamp="2026-11-05T10:05:16.970" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="7" failures="0" disabled="0" skipped="0" errors="0" time="1.22" timestamp="2026-11-05T10:05:16.970">
+    <testcase name="NativeEdgeCellsKeepTightAndRetryReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="28" status="run" result="completed" time="0.141" timestamp="2026-11-05T10:05:16.970" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="241664"/>
+        <property name="tight_logical_peak_bytes" value="3842"/>
+        <property name="retry_data_read_bytes" value="266240"/>
+        <property name="retry_logical_peak_bytes" value="4472"/>
+        <property name="ample_data_read_bytes" value="266240"/>
+        <property name="ample_logical_peak_bytes" value="26556"/>
+      </properties>
+    </testcase>
+    <testcase name="StagedOverlayCellsMergeBaseOwnersAndRejectRevisionChanges" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="104" status="run" result="completed" time="0.213" timestamp="2026-11-05T10:05:17.112" classname="RelocatableStorageBackendTest" />
+    <testcase name="MultiKeyCellRetriesSkipEveryAlreadyRetainedValue" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="197" status="run" result="completed" time="0.318" timestamp="2026-11-05T10:05:17.325" classname="RelocatableStorageBackendTest" />
+    <testcase name="QueryCellRetriesAbortChangedOverlayAndCanReuseReadView" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableEdgeCellAdmission.cpp" line="257" status="run" result="completed" time="0.161" timestamp="2026-11-05T10:05:17.643" classname="RelocatableStorageBackendTest" />
+    <testcase name="NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1301" status="run" result="completed" time="0.106" timestamp="2026-11-05T10:05:17.805" classname="RelocatableStorageBackendTest">
+      <properties>
+        <property name="tight_data_read_bytes" value="204800"/>
+        <property name="tight_logical_peak_bytes" value="3762"/>
+        <property name="retry_data_read_bytes" value="229376"/>
+        <property name="retry_logical_peak_bytes" value="4154"/>
+        <property name="ample_data_read_bytes" value="229376"/>
+        <property name="ample_logical_peak_bytes" value="24660"/>
+      </properties>
+    </testcase>
+    <testcase name="RetriedPropertyCellsKeepTheirSnapshotAndRefundAfterVisitorExit" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1375" status="run" result="completed" time="0.151" timestamp="2026-11-05T10:05:17.911" classname="RelocatableStorageBackendTest" />
+    <testcase name="NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns" file="/workspace/zyx-ci-fix/tests/src/storage/relocatable/backend/test_RelocatableLogicalGraphReadSnapshot.cpp" line="1592" status="run" result="completed" time="0.128" timestamp="2026-11-05T10:05:18.063" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+  <testsuite name="QueryEngineLogicalBackendBoundaryTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.002" timestamp="2026-11-05T10:05:18.191">
+    <testcase name="VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance" file="/workspace/zyx-ci-fix/tests/src/query/api/test_QueryEngineLogicalBackend.cpp" line="1088" status="run" result="completed" time="0.002" timestamp="2026-11-05T10:05:18.191" classname="QueryEngineLogicalBackendBoundaryTest" />
+  </testsuite>
+  <testsuite name="LogicalVectorPropertyBatchTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T10:05:18.194">
+    <testcase name="ShortestPathProjectedResultCountsLivePathIds" file="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1242" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.194" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1254&#x0A;Failed&#x0A;shortestPath result publication ignored its live path-ID vector&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1254
+Failed
+shortestPath result publication ignored its live path-ID vector
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalPlanLoadCsvRuntimeTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0.003" timestamp="2026-11-05T10:05:18.194">
+    <testcase name="NestedSortTransfersRowsWithoutDuplicatingSharedCharges" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp" line="694" status="run" result="completed" time="0.003" timestamp="2026-11-05T10:05:18.194" classname="LogicalPlanLoadCsvRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp:706&#x0A;Expected: (constrained.maximum_materialized_bytes) &lt; (8U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 6U)), actual: 2200 vs 2032&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp:706
+Expected: (constrained.maximum_materialized_bytes) < (8U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 6U)), actual: 2200 vs 2032
+]]></failure>
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="LogicalPlanReadRuntimeTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T10:05:18.197">
+    <testcase name="SkipStreamsAnExactBudgetRowWithoutSelectionStorage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp" line="1842" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.197" classname="LogicalPlanReadRuntimeTest" />
+  </testsuite>
+  <testsuite name="LogicalPlanDirectEdgeRuntimeTest" tests="9" failures="3" disabled="0" skipped="0" errors="0" time="0.013" timestamp="2026-11-05T10:05:18.198">
+    <testcase name="NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="62" status="run" result="completed" time="0.001" timestamp="2026-11-05T10:05:18.198" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="NestedSortPrefetchesOuterPropertyAndTransfersRows" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1228" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.199" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="FilterBetweenSortsTransfersSelectedRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1292" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.199" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="ProjectBetweenSortsTransfersProjectedRowReservations" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp" line="1326" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.200" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="unknown file&#x0A;C++ exception with description &quot;shared materialization exceeded its byte bound&quot; thrown in the test body.&#x0A;" type=""><![CDATA[unknown file
+C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+]]></failure>
+    </testcase>
+    <testcase name="PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1091" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.200" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PendingPrefetchRowsRemainChargedWhileRetryEnrichesOneRow" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1147" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.201" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1186" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.202" classname="LogicalPlanDirectEdgeRuntimeTest">
+      <failure message="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1211&#x0A;Expected: (bounds.maximum_materialized_bytes) &lt; (2U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 400U + 7U)), actual: 1376 vs 1310&#x0A;" type=""><![CDATA[/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp:1211
+Expected: (bounds.maximum_materialized_bytes) < (2U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 400U + 7U)), actual: 1376 vs 1310
+]]></failure>
+    </testcase>
+    <testcase name="TightAndAmplePropertyPrefetchReadEachNodeOnce" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp" line="1938" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.202" classname="LogicalPlanDirectEdgeRuntimeTest" />
+    <testcase name="FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanFilterSelectedColumns.cpp" line="81" status="run" result="completed" time="0.008" timestamp="2026-11-05T10:05:18.203" classname="LogicalPlanDirectEdgeRuntimeTest" />
+  </testsuite>
+  <testsuite name="LogicalGraphReadExecutorIndexLookupContractsTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T10:05:18.211">
+    <testcase name="UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalGraphReadExecutor_IndexLookupContracts.cpp" line="492" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.211" classname="LogicalGraphReadExecutorIndexLookupContractsTest" />
+  </testsuite>
+  <testsuite name="LogicalPlanUnionRuntimeTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-05T10:05:18.212">
+    <testcase name="LimitStreamsAnExactBudgetRowWithoutSelectionStorage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp" line="201" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.212" classname="LogicalPlanUnionRuntimeTest" />
+    <testcase name="SortTransfersLargeRowsToDirectLimitAndSkipBuffers" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp" line="363" status="run" result="completed" time="0." timestamp="2026-11-05T10:05:18.212" classname="LogicalPlanUnionRuntimeTest" />
+  </testsuite>
+</testsuites>
