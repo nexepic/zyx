@@ -75,33 +75,40 @@ private:
 	static void put(std::vector<std::byte> &bytes,uint64_t value,size_t width){for(size_t i=0;i<width;++i)bytes.push_back(static_cast<std::byte>((value>>(8*i))&255U));}
 	static uint64_t get(std::span<const std::byte> bytes,size_t &offset,size_t width){if(offset>bytes.size() || width>bytes.size()-offset)throw std::invalid_argument("external Sort block is truncated");uint64_t value=0;for(size_t i=0;i<width;++i)value|=uint64_t(std::to_integer<unsigned>(bytes[offset+i]))<<(8*i);offset+=width;return value;}
 	struct Writer {
-		ExternalQuerySort &sort;Run run;std::vector<std::byte> block;uint32_t count=0;
-		explicit Writer(ExternalQuerySort &owner):sort(owner),run(&owner.memory_){block.reserve(storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES);start();}
+		ExternalQuerySort &sort;Run run;std::vector<std::byte> block, encoded;
+        std::pmr::vector<const QuerySpillRowCodec::Binding *> names;
+        uint32_t count=0;
+		explicit Writer(ExternalQuerySort &owner):sort(owner),run(&owner.memory_),names(&owner.memory_){block.reserve(storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES);start();}
 		void start(){block.clear();put(block,BLOCK_MAGIC,8);put(block,0,4);put(block,0,4);count=0;}
 		void flush(){if(!count)return;for(size_t i=0;i<4;++i)block[8+i]=static_cast<std::byte>((count>>(8*i))&255U);
 			// Reserve route capacity before publishing private bytes.
 			if(run.handles.size()==run.handles.capacity())run.handles.reserve(std::max<size_t>(1,run.handles.size()*2));
 			sort.publication_checkpoint_();run.handles.push_back(sort.scratch_->write(block));start();}
-		void append(const Record &record){sort.checkpoint_();auto bytes=QuerySpillRowCodec::encode(record,MAX_RECORD_BYTES,&sort.memory_);
-			if(block.size()+4U+bytes.size()>sort.scratch_->maximumFragmentBytes())flush();put(block,bytes.size(),4);block.insert(block.end(),bytes.begin(),bytes.end());++count;++run.rows;}
+		void append(const Record &record){sort.checkpoint_();QuerySpillRowCodec::encodeInto(record,MAX_RECORD_BYTES,encoded,names);
+            // One <=MAX_RECORD_BYTES encoded buffer remains within the existing
+            // fixed spill workspace; names has its own budgeted PMR authority.
+			if(block.size()+4U+encoded.size()>sort.scratch_->maximumFragmentBytes())flush();put(block,encoded.size(),4);block.insert(block.end(),encoded.begin(),encoded.end());++count;++run.rows;}
 		Run finish(){flush();return std::move(run);}
 	};
 	struct Cursor {
 		ExternalQuerySort &sort;Run &run;size_t handle=0,offset=0;uint32_t remaining=0;std::vector<std::byte> block;std::optional<Record> current;std::optional<Record> prior;uint64_t seen=0U;
-		Cursor(ExternalQuerySort &owner,Run &input):sort(owner),run(input){advance();}
-		void advance(){sort.checkpoint_();current.reset();
+        std::pmr::vector<std::string_view> bindings;
+		Cursor(ExternalQuerySort &owner,Run &input):sort(owner),run(input),bindings(&owner.memory_){advance();}
+		void advance(){sort.checkpoint_();
 			if(remaining==0){if(!block.empty() && offset!=block.size())throw std::invalid_argument("external Sort block has trailing bytes");
-				if(handle==run.handles.size()){if(seen!=run.rows)throw std::invalid_argument("external Sort run cardinality changed");block.clear();return;}
+				if(handle==run.handles.size()){if(seen!=run.rows)throw std::invalid_argument("external Sort run cardinality changed");current.reset();block.clear();return;}
 				block=sort.scratch_->read(run.handles[handle++]);offset=0;
 				if(get(block,offset,8)!=BLOCK_MAGIC)throw std::invalid_argument("external Sort block magic/version is invalid");
 				remaining=static_cast<uint32_t>(get(block,offset,4));if(get(block,offset,4)!=0U || remaining==0 || remaining>(block.size()-offset)/(4U+QuerySpillRowCodec::HEADER_BYTES))throw std::invalid_argument("external Sort block count is invalid");
 			}
 			const auto bytes=get(block,offset,4);if(bytes>MAX_RECORD_BYTES || bytes>block.size()-offset)throw std::invalid_argument("external Sort record is oversized or truncated");
-			current=QuerySpillRowCodec::decode(std::span(block).subspan(offset,static_cast<size_t>(bytes)),MAX_RECORD_BYTES);offset+=bytes;--remaining;
+			if (!current) current.emplace();
+            QuerySpillRowCodec::decodeInto(std::span(block).subspan(offset,static_cast<size_t>(bytes)),MAX_RECORD_BYTES,*current,bindings);offset+=bytes;--remaining;
 			if(current->keys.size()!=sort.ascending_.size() || current->ordinal>=sort.total_ || !qualified(*current) || sort.size_(*current)>MAX_RECORD_BYTES*64U)
 				throw std::invalid_argument("external Sort decoded record failed its layout/ownership bound");
 			if(prior && (sort.precedes(*current,*prior) || prior->ordinal==current->ordinal))throw std::invalid_argument("external Sort run is unordered or has duplicate adjacent ordinals");
-			prior.reset();prior.emplace();prior->keys=current->keys;prior->ordinal=current->ordinal;++seen;
+			if (!prior) prior.emplace();
+            prior->keys=current->keys;prior->ordinal=current->ordinal;++seen;
 		}
 	};
 	static bool hasNaN(const PropertyValue &value){const auto &variant=value.getVariant();if(const auto *number=std::get_if<double>(&variant))return std::isnan(*number);if(const auto *list=std::get_if<std::vector<PropertyValue>>(&variant))return std::ranges::any_of(*list,hasNaN);if(const auto *map=std::get_if<PropertyValue::MapType>(&variant))return std::ranges::any_of(*map,[](const auto &entry){return hasNaN(entry.second);});return false;}

@@ -4,11 +4,20 @@
  **/
 
 #include "graph/query/QueryGuard.hpp"
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+#include "graph/debug/SanitizerAllocationSnapshot.hpp"
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #elif defined(__linux__)
-#include <fstream>
+#include <charconv>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <limits>
 #include <unistd.h>
 #elif defined(_WIN32)
 #include <windows.h>
@@ -39,6 +48,14 @@ void QueryGuard::checkSlow() {
 	if (memoryEnabled_) {
 		const size_t currentBytes = currentResidentBytes();
 		if (currentBytes > baselineResidentBytes_ && currentBytes - baselineResidentBytes_ > memoryLimitBytes_) {
+#if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS)
+            if (std::getenv("ZYX_CI_RSS_TRACE")) {
+                const auto allocator = debug::captureSanitizerAllocations();
+                std::fprintf(stderr, "CI_RSS_REJECT limit=%zu baseline=%zu current=%zu asan_available=%d live=%zu heap=%zu\n",
+                    memoryLimitBytes_, baselineResidentBytes_, currentBytes, allocator.available,
+                    allocator.live_bytes, allocator.heap_bytes);
+            }
+#endif
 			throw QueryMemoryExceededException(memoryLimitMb_, baselineResidentBytes_, currentBytes);
 		}
 	}
@@ -61,13 +78,34 @@ size_t QueryGuard::getCurrentRSSBytes() {
 	}
 	return 0;
 #elif defined(__linux__)
-	std::ifstream statm("/proc/self/statm");
-	if (statm.is_open()) {
-		size_t size = 0, resident = 0;
-		statm >> size >> resident;
-		return resident * static_cast<size_t>(sysconf(_SC_PAGESIZE));
-	}
-	return 0;
+    // Sampling must not itself grow the heap (or ASan's quarantine).
+    // /proc exposes only counters; fixed local storage is sufficient for both
+    // page counts, even at their size_t maxima.
+    char data[128];
+    int fd;
+    do { fd = ::open("/proc/self/statm", O_RDONLY | O_CLOEXEC); } while (fd < 0 && errno == EINTR);
+    if (fd < 0) return 0;
+    size_t length = 0U;
+    while (length < sizeof(data)) {
+        ssize_t readBytes;
+        do { readBytes = ::read(fd, data + length, sizeof(data) - length); } while (readBytes < 0 && errno == EINTR);
+        if (readBytes <= 0) break;
+        const bool complete = std::memchr(data + length, '\n', static_cast<size_t>(readBytes)) != nullptr;
+        length += static_cast<size_t>(readBytes);
+        if (complete) break;
+    }
+    ::close(fd); // Linux closes the descriptor even if close reports EINTR.
+    if (length == 0U) return 0;
+    size_t total = 0U, resident = 0U;
+    const auto first = std::from_chars(data, data + length, total);
+    if (first.ec != std::errc{}) return 0;
+    auto start = first.ptr;
+    while (start < data + length && *start == ' ') ++start;
+    const auto second = std::from_chars(start, data + length, resident);
+    const long pageBytes = ::sysconf(_SC_PAGESIZE);
+    if (second.ec != std::errc{} || pageBytes <= 0 ||
+        resident > (std::numeric_limits<size_t>::max)() / static_cast<size_t>(pageBytes)) return 0;
+    return resident * static_cast<size_t>(pageBytes);
 #elif defined(_WIN32)
 	PROCESS_MEMORY_COUNTERS pmc{};
 	pmc.cb = sizeof(pmc);

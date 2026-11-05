@@ -157,7 +157,22 @@ jobs:
               --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
         shell: bash
 
+      - name: Diagnose RSS-guarded spill with default ASan+UBSan checks
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+        run: |
+          ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+            --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection' \
+            | grep -F 'NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_test_process.py --timeout 600 -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+        shell: bash
+
       - name: Run native storage ASan+UBSan gates
+        env:
+          ZYX_CI_RSS_TRACE: '1'
         run: |
           ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
             ./build-asan-ubsan/zyx_test_suite \

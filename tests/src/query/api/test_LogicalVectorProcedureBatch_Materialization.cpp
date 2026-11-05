@@ -4,7 +4,16 @@
  */
 #include "query/api/LogicalVectorProcedureBatchFixture.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "query/execution/ProcedureByteBoundExceeded.hpp"
 namespace graph::query {
+    namespace {
+        void expectProcedureQuotaFailure(const std::runtime_error &error) {
+            EXPECT_TRUE(dynamic_cast<const execution::detail::ProcedureByteBoundExceeded *>(&error) ||
+                dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
+                dynamic_cast<const execution::detail::ResourceAdmissionDenied *>(&error)) << error.what();
+        }
+    }
+
 	TEST_F(LogicalVectorPropertyBatchTest, ProjectExpressionsShareRetainedProcedureOutputBudget) {
 		backend->state->search_result.hits = {{1U, 0.0F}};
 		const auto list = [] {
@@ -22,7 +31,7 @@ namespace graph::query {
 			static_cast<void>(execute(pair));
 			FAIL() << "the second procedure projection ignored the retained first List";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		options.bounds.maximum_materialized_bytes = 20000U;
 		const QueryResult result = execute(pair);
@@ -112,7 +121,7 @@ namespace graph::query {
 			static_cast<void>(execute(call()));
 			FAIL() << "direct shortestPath output ignored concurrently retained result rows";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 
 		options.bounds.maximum_materialized_bytes = 64U * 1024U;
@@ -158,7 +167,7 @@ namespace graph::query {
 			static_cast<void>(executeGds(16U * 1024U));
 			FAIL() << "the buffered Node rows and retained Dijkstra QueryResult exceeded their shared budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		const QueryResult result = executeGds(24U * 1024U);
 		ASSERT_EQ(result.rowCount(), 3U);
@@ -575,18 +584,41 @@ namespace graph::query {
 		logical::LogicalProject project(call(),
 				{{std::make_shared<expressions::VariableReferenceExpression>("score"), "score"}});
 
-		options.bounds.maximum_materialized_bytes = 4096U;
-		try {
-			static_cast<void>(execute(project));
+        // Exercise the authoritative shared owner, not an error-message
+        // accident in the historical logical-size estimate.
+        auto process = std::make_shared<execution::detail::ProcessResourceBudget>(execution::detail::ResourceLimits::uniform(1024U * 1024U));
+        auto database = std::make_shared<execution::detail::DatabaseResourceBudget>(process, execution::detail::ResourceLimits::uniform(1024U * 1024U));
+        std::shared_ptr<execution::detail::ResourceAccount> account;
+        const auto executeOwned = [&] {
+            account = std::make_shared<execution::detail::ResourceAccount>(database, execution::detail::ResourceClass::RCK_QUERY,
+                options.bounds.maximum_materialized_bytes);
+            QueryContext context; context.resource_account = account;
+            execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
+            return runtime.execute(project, options.bounds, options.maximum_vector_mapping_entries,
+                options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
+                options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
+                options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
+                options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
+        };
+        options.bounds.maximum_materialized_bytes = 4096U;
+        try {
+			static_cast<void>(executeOwned());
 			FAIL() << "the live converted Vector query and retained result should share the byte bound";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+            EXPECT_TRUE(dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
+                dynamic_cast<const execution::detail::ResourceAdmissionDenied *>(&error)) << error.what();
 		}
 
-		options.bounds.maximum_materialized_bytes = 64U * 1024U;
-		const QueryResult result = execute(project);
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows().front().at("score").asPrimitive(), PropertyValue(0.5));
+        ASSERT_NE(account, nullptr);
+        EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
+        options.bounds.maximum_materialized_bytes = 64U * 1024U;
+        {
+            const QueryResult result = executeOwned();
+            ASSERT_EQ(result.rowCount(), 1U);
+            EXPECT_EQ(result.getRows().front().at("score").asPrimitive(), PropertyValue(0.5));
+            EXPECT_GT(account->used(), 0U); // escaped output retains its owner
+        }
+        EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
 	}
 
 
@@ -690,7 +722,7 @@ namespace graph::query {
 			static_cast<void>(executeList(8U * 1024U));
 			FAIL() << "gds.graph.list ignored the accumulated catalog result during publication";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		const QueryResult result = executeList(64U * 1024U);
 		ASSERT_EQ(result.rowCount(), 3U);
@@ -754,16 +786,52 @@ namespace graph::query {
 			std::vector<logical::LogicalSortItem>{{score, true}}), {{labels, "labels"}});
 		options.bounds.maximum_materialized_bytes = 6000U;
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
-		options.bounds.maximum_materialized_bytes = 7500U;
+        // This owning result alone exceeds 7500 bytes on Linux; that old
+        // success boundary ignored list element storage and is not portable.
+        options.bounds.maximum_materialized_bytes = 7500U;
+        EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        constexpr size_t SUCCESS_BUDGET = 32U * 1024U;
+        constexpr size_t RETAINED_RESULT_CEILING = 16U * 1024U;
+        options.bounds.maximum_materialized_bytes = SUCCESS_BUDGET;
 		for (int retry = 0; retry < 2; ++retry) {
 			const size_t before = backend->state->node_batch_reads;
 			const auto result = execute(project);
-			ASSERT_EQ(result.rowCount(), 3U);
+            ASSERT_EQ(result.rowCount(), 3U);
+            // Fixed efficiency gates are reviewed independently of the budget:
+            // no observation is multiplied into a larger permitted allowance.
+            EXPECT_LE(result.getRows().capacity(), 4U);
+            EXPECT_LE(result.getColumns().capacity(), 1U);
+            size_t retained = execution::detail::standardVectorHeapBufferBytes(result.getRows());
+            retained += detail::resultStringsHeapBytes(result.getColumns());
+            for (const auto &row : result.getRows()) retained += detail::resultRowHeapBytes(row);
+            EXPECT_LE(retained, RETAINED_RESULT_CEILING);
+            size_t independentLower = result.getRows().capacity() * sizeof(QueryResult::Row) +
+                result.getColumns().capacity() * sizeof(std::string);
+            for (const auto &row : result.getRows()) {
+                independentLower += row.size() * sizeof(QueryResult::Row::value_type);
+                for (const auto &[key, value] : row) {
+                    const auto &list = value.asPrimitive().getList();
+                    independentLower += list.capacity() * sizeof(PropertyValue);
+                    for (const auto &entry : list) {
+                        const auto &text = std::get<std::string>(entry.getVariant());
+                        const auto data = reinterpret_cast<uintptr_t>(text.data());
+                        const auto object = reinterpret_cast<uintptr_t>(&text);
+                        if (data < object || data - object >= sizeof(text)) independentLower += text.capacity() + 1U;
+                    }
+                }
+            }
+            EXPECT_GE(retained, independentLower); // no production-estimator self-proof
+            RecordProperty("retained_result_bytes", static_cast<int>(retained));
+            RecordProperty("independent_result_lower", static_cast<int>(independentLower));
 			const std::array<uint64_t, 3U> order{3U, 1U, 2U};
 			for (size_t row = 0U; row < order.size(); ++row) {
 				std::vector<PropertyValue> expected;
 				for (const auto &label : backend->state->nodes.at(order[row]).labels) expected.emplace_back(label);
-				EXPECT_EQ(result.getRows()[row].at("labels").asPrimitive(), PropertyValue(expected));
+                const auto &actual = result.getRows()[row].at("labels").asPrimitive();
+                EXPECT_EQ(actual, PropertyValue(expected));
+                EXPECT_LE(actual.getList().capacity(), 20U);
+                for (const auto &label : actual.getList())
+                    EXPECT_LE(std::get<std::string>(label.getVariant()).capacity(), 63U);
 			}
 			EXPECT_GE(backend->state->node_batch_reads - before, 1U);
             EXPECT_LE(backend->state->node_batch_reads - before, 3U);
@@ -1066,7 +1134,7 @@ namespace graph::query {
 			static_cast<void>(execute(empty));
 			FAIL() << "empty procedure output omitted its retained column name from the byte budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		auto zeroTopKProjection = std::make_unique<logical::LogicalProject>(search(0),
 				std::vector<logical::LogicalProjectItem>{{
@@ -1075,7 +1143,7 @@ namespace graph::query {
 			static_cast<void>(execute(*zeroTopKProjection));
 			FAIL() << "zero-topK procedure output omitted its retained column name from the byte budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 
 		options.bounds.maximum_materialized_bytes = 16U * 1024U;
@@ -1109,14 +1177,29 @@ namespace graph::query {
 
 
 	TEST_F(LogicalVectorPropertyBatchTest, RejectsOversizedSearchHitBufferBeforeReadingNodes) {
-		options.bounds.maximum_materialized_bytes =
-				2U * sizeof(storage::LogicalGraphVectorSearchHit);
+        // Preserve the original tiny-envelope rejection without assuming the
+        // same STL-dependent owner is necessarily first to refuse.
+        options.bounds.maximum_materialized_bytes = 2U * sizeof(storage::LogicalGraphVectorSearchHit);
+        try {
+            static_cast<void>(execute(*search()));
+            FAIL() << "tiny search envelope was not enforced";
+        } catch (const std::runtime_error &error) { expectProcedureQuotaFailure(error); }
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
+        EXPECT_EQ(backend->state->node_batch_reads, 0U);
+        constexpr size_t BUDGET = 4096U;
+        constexpr size_t HIT_COUNT = BUDGET / sizeof(storage::LogicalGraphVectorSearchHit) + 1U;
+        options.bounds.maximum_materialized_bytes = BUDGET;
+        backend->state->search_result.hits.clear();
+        for (size_t i = 0U; i < HIT_COUNT; ++i)
+            backend->state->search_result.hits.push_back({i + 1U, static_cast<float>(i)});
+        backend->state->cancellation_checks_before_throw = 1U;
 		try {
-			static_cast<void>(execute(*search()));
+			static_cast<void>(execute(*search(static_cast<int64_t>(HIT_COUNT))));
 			FAIL() << "the retained Vector hit source exceeded the shared byte bound";
 		} catch (const std::runtime_error &error) {
 			EXPECT_STREQ(error.what(), "logical Vector procedure hit buffer exceeded its materialized byte bound");
 		}
+        EXPECT_EQ(backend->state->search_cancellation_checks, 1U); // search was reached
 		EXPECT_EQ(backend->state->node_point_reads, 0U);
 		EXPECT_EQ(backend->state->node_batch_reads, 0U);
 	}
@@ -1170,7 +1253,7 @@ namespace graph::query {
 			static_cast<void>(execute(project));
 			FAIL() << "shortestPath result publication ignored its live path-ID vector";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 
 		options.bounds.maximum_materialized_bytes = 8192U;

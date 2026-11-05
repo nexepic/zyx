@@ -246,10 +246,7 @@
 			return bytes;
 		}
 
-		class ProcedureByteBoundExceeded final : public std::runtime_error {
-		public:
-			explicit ProcedureByteBoundExceeded(const std::string &message) : std::runtime_error(message) {}
-		};
+        using detail::ProcedureByteBoundExceeded;
 
 		void admitProcedureBytes(MaterializedByteReservation &reservation, size_t bytes) {
 			if (reservation.wouldExceed(bytes)) throw ProcedureByteBoundExceeded("logical procedure shared materialization exceeded its byte bound");
@@ -279,58 +276,15 @@
 			return bytes;
 		}
 
-		[[nodiscard]] size_t procedureResultPropertyMapBytes(
-				const std::unordered_map<std::string, PropertyValue> &properties) {
-			size_t bytes = checkedProcedureSizeMul(properties.bucket_count(), sizeof(void *));
-			for (const auto &[key, value]: properties) {
-				bytes = checkedProcedureSizeAdd(bytes, sizeof(std::pair<const std::string, PropertyValue>) + 3U * sizeof(void *));
-				bytes = checkedProcedureSizeAdd(bytes, key.capacity());
-				bytes = checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(value));
-			}
-			return bytes;
-		}
-
-		[[nodiscard]] size_t procedureResultValueBytes(const ResultValue &value) {
-			size_t bytes = sizeof(ResultValue);
-			const auto &variant = value.getVariant();
-			if (const auto *property = std::get_if<PropertyValue>(&variant)) {
-				return checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(*property));
-			}
-			if (const auto *node = std::get_if<LogicalNodeResult>(&variant)) {
-				bytes = checkedProcedureSizeAdd(bytes, checkedProcedureSizeMul(node->labels.capacity(), sizeof(std::string)));
-				for (const std::string &label: node->labels) bytes = checkedProcedureSizeAdd(bytes, label.capacity());
-				return checkedProcedureSizeAdd(bytes, procedureResultPropertyMapBytes(node->properties));
-			}
-			if (const auto *edge = std::get_if<LogicalEdgeResult>(&variant)) {
-				bytes = checkedProcedureSizeAdd(bytes, edge->type.capacity());
-				return checkedProcedureSizeAdd(bytes, procedureResultPropertyMapBytes(edge->properties));
-			}
-			if (const auto *node = std::get_if<Node>(&variant)) {
-				return checkedProcedureSizeAdd(bytes, node->getTotalPropertySize());
-			}
-			if (const auto *edge = std::get_if<Edge>(&variant)) {
-				return checkedProcedureSizeAdd(bytes, edge->getTotalPropertySize());
-			}
-			return bytes;
-		}
-
-		[[nodiscard]] size_t procedureQueryResultBytes(const QueryResult &result) {
-			size_t bytes = checkedProcedureSizeMul(result.getRows().capacity(), sizeof(QueryResult::Row));
-			bytes = checkedProcedureSizeAdd(bytes,
-					checkedProcedureSizeMul(result.getColumns().capacity(), sizeof(std::string)));
-			for (const std::string &column: result.getColumns()) {
-				bytes = checkedProcedureSizeAdd(bytes, detail::dynamicStringBufferBytes(column));
-			}
-			for (const QueryResult::Row &row: result.getRows()) {
-				bytes = checkedProcedureSizeAdd(bytes, checkedProcedureSizeMul(row.bucket_count(), sizeof(void *)));
-				for (const auto &[key, value]: row) {
-					bytes = checkedProcedureSizeAdd(bytes, sizeof(std::pair<const std::string, ResultValue>) + 3U * sizeof(void *));
-					bytes = checkedProcedureSizeAdd(bytes, key.capacity());
-					bytes = checkedProcedureSizeAdd(bytes, procedureResultValueBytes(value));
-				}
-			}
-			return bytes;
-		}
+        // ResultValue is embedded in each hash node. Charge the structural
+        // node once and only its separately owned heap through the shared model.
+        [[nodiscard]] size_t procedureQueryResultBytes(const QueryResult &result) {
+            size_t bytes = detail::standardVectorHeapBufferBytes(result.getRows());
+            bytes = checkedProcedureSizeAdd(bytes, graph::query::detail::resultStringsHeapBytes(result.getColumns()));
+            for (const auto &row : result.getRows())
+                bytes = checkedProcedureSizeAdd(bytes, graph::query::detail::resultRowHeapBytes(row));
+            return bytes;
+        }
 
 		void validateProcedureResultBudget(const QueryResult &result, const size_t retainedSourceBytes,
 				const size_t maximumBytes) {
@@ -340,20 +294,25 @@
 			}
 		}
 
-		[[nodiscard]] size_t procedureQueryResultRowBytes(const QueryResult::Row &row) {
-			size_t bytes = checkedProcedureSizeMul(row.bucket_count(), sizeof(void *));
-			for (const auto &[key, value]: row) {
-				bytes = checkedProcedureSizeAdd(bytes, sizeof(std::pair<const std::string, ResultValue>) + 3U * sizeof(void *));
-				bytes = checkedProcedureSizeAdd(bytes, key.capacity());
-				bytes = checkedProcedureSizeAdd(bytes, procedureResultValueBytes(value));
-			}
-			return bytes;
-		}
+        [[nodiscard]] size_t procedureQueryResultRowBytes(const QueryResult::Row &row) {
+            return graph::query::detail::resultRowHeapBytes(row);
+        }
+        // Consumed row slots and moved-from STL buckets remain alive until the
+        // complete vector is released. Never refund their capacity by advancing
+        // firstIndex. The logical floor still covers non-heap materialized data.
+        [[nodiscard]] size_t publicationSourceBytes(const ProcedureRows &rows, size_t firstIndex) {
+            size_t retained = checkedProcedureSizeMul(rows.capacity(), sizeof(BufferedProcedureRow));
+            for (const auto &row : rows) {
+                retained = checkedProcedureSizeAdd(retained, detail::procedurePayloadHeapUpper<false>(row.row));
+                retained = checkedProcedureSizeAdd(retained, detail::procedurePayloadHeapUpper<false>(row.node_properties));
+            }
+            return std::max(retained, bufferedProcedureRowsBytes(rows, firstIndex));
+        }
 
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {
-			const size_t pendingRowsBytes = bufferedProcedureRowsBytes(rows, rowIndex);
+			const size_t pendingRowsBytes = publicationSourceBytes(rows, rowIndex);
 			const size_t pendingResultBytes = checkedProcedureSizeAdd(procedureQueryResultBytes(result),
 					procedureQueryResultRowBytes(output));
 			size_t pendingBytes = checkedProcedureSizeAdd(retainedSourceBytes, pendingRowsBytes);
@@ -377,7 +336,7 @@
 				}
 				result.reserveRows(requestedCapacity);
 				const size_t liveBytesAfterReserve = checkedProcedureSizeAdd(retainedSourceBytes,
-						checkedProcedureSizeAdd(bufferedProcedureRowsBytes(rows, rowIndex),
+						checkedProcedureSizeAdd(publicationSourceBytes(rows, rowIndex),
 								checkedProcedureSizeAdd(procedureQueryResultBytes(result), procedureQueryResultRowBytes(output))));
 				if (liveBytesAfterReserve > maximumBytes) {
 					throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
@@ -397,7 +356,7 @@
 			releaseProcedureContainer(buffered.node_properties);
 			const size_t liveBytes = checkedProcedureSizeAdd(retainedSourceBytes,
 					checkedProcedureSizeAdd(procedureQueryResultBytes(result),
-							bufferedProcedureRowsBytes(rows, rowIndex + 1U)));
+							publicationSourceBytes(rows, rowIndex + 1U)));
 			if (liveBytes > maximumBytes) {
 				throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
 			}

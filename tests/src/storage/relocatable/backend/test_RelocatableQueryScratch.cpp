@@ -2,6 +2,9 @@
 #include "graph/storage/LogicalQueryScratch.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "query/execution/ProcessResourceDomains.hpp"
+#include "graph/debug/SanitizerAllocationSnapshot.hpp"
+#include <cstdio>
+#include <cstdlib>
 using namespace relocatable_storage_backend_test;
 TEST_F(RelocatableStorageBackendTest, QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins) {
 	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;RelocatableStorageBackend backend(options);backend.open();
@@ -45,6 +48,11 @@ TEST_F(RelocatableStorageBackendTest, NativeLogicalReadonlySortSpillsAndPreserve
 	const bool wasEnabled=graph::debug::PerfTrace::isEnabled(),wasCollecting=graph::debug::PerfTrace::areValuesEnabled();
 	struct RestoreTrace{bool enabled,collecting;~RestoreTrace(){graph::debug::PerfTrace::setValueCollectionEnabled(collecting);graph::debug::PerfTrace::setEnabled(enabled);}}restore{wasEnabled,wasCollecting};
 	graph::debug::PerfTrace::setEnabled(true);graph::debug::PerfTrace::setValueCollectionEnabled(true);(void)graph::debug::PerfTrace::snapshotAndReset();
+    if (std::getenv("ZYX_CI_RSS_TRACE")) {
+        const auto allocator = graph::debug::captureSanitizerAllocations();
+        std::fprintf(stderr, "CI_RSS_BEGIN rss=%zu asan_available=%d live=%zu heap=%zu\n",
+            graph::query::QueryGuard::getCurrentRSSBytes(), allocator.available, allocator.live_bytes, allocator.heap_bytes);
+    }
 	graph::query::QueryGuard guard(120000,64);graph::query::QueryContext context;context.guard=&guard;
 	const auto result=engine.execute("UNWIND range(1,20000) AS x WITH x ORDER BY x DESC RETURN collect(x) AS values",context);
 	ASSERT_EQ(result.rowCount(),1U);
