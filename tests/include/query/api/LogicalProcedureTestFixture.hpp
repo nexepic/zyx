@@ -58,6 +58,7 @@ namespace graph::query::test {
 			std::function<void()> before_shaped_property_admission;
 			mutable size_t admitted_property_copies = 0U;
 			std::function<void()> before_property_admission;
+            std::function<void(const storage::LogicalGraphVectorSearchRequest &)> during_vector_search;
 			bool malformed_node_batch_cardinality = false;
 			bool reverse_node_batch = false;
 			mutable size_t batched_existence_scans = 0U;
@@ -298,6 +299,7 @@ namespace graph::query::test {
 			}
 			[[nodiscard]] storage::LogicalGraphVectorSearchResult
 			searchLogicalVector(const storage::LogicalGraphVectorSearchRequest &request) const override {
+                if (state_->during_vector_search) state_->during_vector_search(request);
 				if (state_->cancellation_checks_before_throw != 0U) {
 					if (request.cancellation == nullptr) {
 						throw std::logic_error("logical Vector procedure did not receive a cancellation checkpoint");

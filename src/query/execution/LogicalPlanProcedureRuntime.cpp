@@ -921,22 +921,23 @@ namespace graph::query::execution {
 		QueryGuardCancellationCheckpoint cancellation(context);
         // Loans are declared before the public request: its borrowed buffers
         // die before these admission owners. The request is immutable in search.
-        utils::OwnedStdString requestNameLoan = requireIndexName(arguments[0]);
-        utils::OwnedStdVector<float> queryVectorLoan;
+        std::optional<utils::OwnedStdString> requestNameLoan(requireIndexName(arguments[0]));
+        std::optional<utils::OwnedStdVector<float>> queryVectorLoan;
         // Empty public containers and moved-from debug proxies overlap the
         // already-funded loan buffers on MSVC; the reservation dies last.
         utils::OwnedHeapReservation requestProxyLoan(utils::sharedAllocationOwner(),
             4U * utils::detail::standardContainerProxyBytes());
-		storage::LogicalGraphVectorSearchRequest request;
-		request.index_name = std::move(static_cast<std::string &>(requestNameLoan));
+		std::optional<storage::LogicalGraphVectorSearchRequest> requestStorage(std::in_place);
+        auto &request = *requestStorage;
+		request.index_name = std::move(static_cast<std::string &>(*requestNameLoan));
 		request.top_k = requireTopK(arguments[1]);
 		size_t retainedRequestBytes = retainedVectorRequestBytes(request);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");
 		}
-		queryVectorLoan = requireQueryVector(arguments[2],
-				readBounds.maximum_materialized_bytes - retainedRequestBytes, context);
-        request.query_vector = std::move(static_cast<std::vector<float> &>(queryVectorLoan));
+		queryVectorLoan.emplace(requireQueryVector(arguments[2],
+				readBounds.maximum_materialized_bytes - retainedRequestBytes, context));
+        request.query_vector = std::move(static_cast<std::vector<float> &>(*queryVectorLoan));
 		retainedRequestBytes = retainedVectorRequestBytes(request);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");
@@ -984,6 +985,14 @@ namespace graph::query::execution {
 		if (hits.size() > request.top_k) {
 			throw std::runtime_error("logical Vector procedure backend exceeded its requested result bound");
 		}
+        // Search is synchronous and the returned hit vector owns its storage.
+        // Destroy request buffers before refunding their loans; downstream row
+        // materialization must not compete with an already-consumed query vector.
+        requestStorage.reset();
+        queryVectorLoan.reset();
+        requestNameLoan.reset();
+        requestProxyLoan.set(0U);
+        retainedRequestBytes = 0U;
 		const size_t retainedHitBytes = checkedProcedureSizeMul(
 			hits.capacity(), sizeof(storage::LogicalGraphVectorSearchHit));
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {

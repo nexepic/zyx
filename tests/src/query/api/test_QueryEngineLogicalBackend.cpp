@@ -1875,7 +1875,10 @@ namespace graph::query {
 		using namespace execution::detail;
 		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
 		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
-		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U);
+		// A destination row alone cannot fit, independently of the
+        // empty private-container layout.
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY,
+            sizeof(QueryResult::Row) - 1U);
 		const auto execute = [&runtime, &account](const logical::LogicalOperator &root, const LogicalReadExecutionOptions &executionOptions) {
 			QueryContext context;
 			context.resource_account = account;
@@ -1906,9 +1909,17 @@ namespace graph::query {
 			const QueryResult result = execute(project, options);
 			ASSERT_EQ(result.rowCount(), 1U);
 			EXPECT_EQ(result.getRows().front().at("exists").asPrimitive(), PropertyValue(true));
-			EXPECT_GT(account->used(), 0U);
-		}
-		EXPECT_EQ(account->used(), 0U);
+            EXPECT_GT(account->used(), 0U);
+            ResourceLease competing(account);
+            EXPECT_FALSE(competing.trySet(account->maximum()));
+            EXPECT_EQ(competing.bytes(), 0U);
+        }
+        EXPECT_EQ(account->used(), 0U);
+        {
+            ResourceLease afterDestroy(account);
+            EXPECT_TRUE(afterDestroy.trySet(account->maximum()));
+        }
+        EXPECT_EQ(account->used(), 0U);
 		EXPECT_EQ(database->usage().total, 0U);
 		EXPECT_TRUE(catalog.exists("budgeted_catalog"));
 	}

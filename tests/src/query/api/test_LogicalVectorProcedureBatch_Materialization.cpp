@@ -573,7 +573,7 @@ namespace graph::query {
 
 
 
-	TEST_F(LogicalVectorPropertyBatchTest, RetainsConvertedQueryVectorThroughResultPublication) {
+	TEST_F(LogicalVectorPropertyBatchTest, ReleasesConvertedQueryVectorBeforeResultPublication) {
 		backend->state->search_result.hits = {{1U, 0.5F}};
 		std::vector<PropertyValue> coordinates(750U, PropertyValue(1.0));
 		const auto call = [&coordinates] {
@@ -582,7 +582,7 @@ namespace graph::query {
 							PropertyValue(coordinates)});
 		};
 		logical::LogicalProject project(call(),
-				{{std::make_shared<expressions::VariableReferenceExpression>("score"), "score"}});
+				{{std::make_shared<expressions::VariableReferenceExpression>("node", "rank"), "rank"}});
 
         // Exercise the authoritative shared owner, not an error-message
         // accident in the historical logical-size estimate.
@@ -600,23 +600,33 @@ namespace graph::query {
                 options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
                 options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
         };
-        options.bounds.maximum_materialized_bytes = 4096U;
+        options.bounds.maximum_materialized_bytes = 750U * sizeof(float) - 1U;
         try {
 			static_cast<void>(executeOwned());
-			FAIL() << "the live converted Vector query and retained result should share the byte bound";
+			FAIL() << "the converted Vector request must be admitted before search";
 		} catch (const std::runtime_error &error) {
-            EXPECT_TRUE(dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
-                dynamic_cast<const execution::detail::ResourceAdmissionDenied *>(&error)) << error.what();
+            EXPECT_STREQ(error.what(), "db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 		}
 
         ASSERT_NE(account, nullptr);
         EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
         options.bounds.maximum_materialized_bytes = 64U * 1024U;
+        size_t duringSearch = 0U, beforeProperty = 0U;
+        backend->state->during_vector_search = [&](const storage::LogicalGraphVectorSearchRequest &request) {
+            ASSERT_EQ(request.query_vector.size(), 750U);
+            EXPECT_EQ(request.query_vector.front(), 1.0F);
+            duringSearch = account->used();
+        };
+        backend->state->enable_property_admission = true;
+        backend->state->before_property_admission = [&] { beforeProperty = account->used(); };
         {
             const QueryResult result = executeOwned();
             ASSERT_EQ(result.rowCount(), 1U);
-            EXPECT_EQ(result.getRows().front().at("score").asPrimitive(), PropertyValue(0.5));
+            EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(10));
             EXPECT_GT(account->used(), 0U); // escaped output retains its owner
+            ASSERT_GT(duringSearch, 750U * sizeof(float));
+            ASSERT_GT(beforeProperty, 0U);
+            EXPECT_LT(beforeProperty, duringSearch); // consumed request no longer overlaps the row
         }
         EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
 	}
@@ -1286,21 +1296,40 @@ namespace graph::query {
 				std::vector<PropertyValue>{PropertyValue("bounded_rank")});
 		logical::LogicalProject project(std::move(call), {{
 				std::make_shared<expressions::LiteralExpression>(PropertyValue(std::string(6000U, 'r'))), "payload"}});
+        using namespace execution::detail;
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+        std::shared_ptr<ResourceAccount> account;
 		const auto executeGds = [&](const size_t maximumBytes) {
 			auto bounds = options.bounds;
 			bounds.maximum_materialized_bytes = maximumBytes;
-			return runtime.execute(project, bounds, options.maximum_vector_mapping_entries,
+			account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximumBytes);
+            QueryContext context; context.resource_account = account;
+            return runtime.execute(project, bounds, options.maximum_vector_mapping_entries,
 					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
 		};
-		EXPECT_THROW(static_cast<void>(executeGds(20U * 1024U)), std::runtime_error);
+		// Three independent 6000-byte outputs alone cannot fit, regardless
+        // of private row layout or STL container implementation.
+        EXPECT_THROW(static_cast<void>(executeGds(3U * 6000U - 1U)), std::runtime_error);
+        EXPECT_EQ(account->used(), 0U);
+        EXPECT_EQ(database->usage().total, 0U);
+        {
 		const QueryResult result = executeGds(64U * 1024U);
 		ASSERT_EQ(result.rowCount(), 3U);
 		for (const auto &row: result.getRows()) {
 			EXPECT_EQ(row.at("payload").asPrimitive(), PropertyValue(std::string(6000U, 'r')));
 		}
+        // A fixed efficiency envelope, separate from the rejection boundary.
+        EXPECT_GT(account->used(), 3U * 6000U);
+        EXPECT_LT(account->used(), 32U * 1024U);
+        ResourceLease competing(account);
+        EXPECT_FALSE(competing.trySet(account->maximum()));
+        }
+        EXPECT_EQ(account->used(), 0U);
+        EXPECT_EQ(database->usage().total, 0U);
 	}
 
 
