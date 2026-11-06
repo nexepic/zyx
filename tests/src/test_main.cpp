@@ -1,4 +1,5 @@
 #include "query/execution/CiDiagnosticForkSupport.hpp"
+#include "query/execution/CiLayoutDiagnostics.hpp"
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <filesystem>
@@ -173,6 +174,9 @@ int main(int argc, char **argv) {
 	if (argc == 5 && std::string_view(argv[1]) == "--zyx-relocatable-crash-child") {
 		return graph::test::runRelocatableCrashChild(argv[2], argv[3], argv[4]);
 	}
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    if (std::getenv("ZYX_CI_LAYOUT_TRACE")) graph::test::ci_diagnostics::traceLayout();
+#endif
 	graph::test::initializeTestExecutablePath(argc > 0 ? argv[0] : nullptr);
     ::testing::InitGoogleTest(&argc, argv);
 

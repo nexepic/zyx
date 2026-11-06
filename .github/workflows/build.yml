@@ -453,6 +453,7 @@ jobs:
         continue-on-error: true
         env:
           ZYX_CI_BUDGET_TRACE: '1'
+          ZYX_CI_LAYOUT_TRACE: '1'
         run: |
           python scripts/run_ci_evidence.py --name windows-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows
         shell: bash
