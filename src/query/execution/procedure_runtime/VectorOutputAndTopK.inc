@@ -36,7 +36,7 @@
 				referenceCount = checkedProcedureSizeAdd(referenceCount, 1U);
 			});
 			referenceBytes.set(checkedProcedureSizeMul(referenceCount, sizeof(ProcedureNodeOutputReference)));
-			std::vector<ProcedureNodeOutputReference, utils::OwnedPmrAllocator<ProcedureNodeOutputReference>> references;
+			utils::OwnedVector<ProcedureNodeOutputReference> references;
 			references.reserve(referenceCount);
 			referenceBytes.set(checkedProcedureSizeMul(references.capacity(), sizeof(ProcedureNodeOutputReference)));
 			visitOutputReferences([&](const ProcedureNodeOutputReference &reference) {
@@ -173,7 +173,7 @@
 								 const std::vector<const logical::LogicalOperator *> &operations,
 								 const LogicalPlanReadRuntimeBounds &readBounds,
 								 const QueryContext &context, QueryResult &result,
-								 std::vector<ProcedureDistinctRows, utils::OwnedPmrAllocator<ProcedureDistinctRows>> *distinctRowsByOperation = nullptr,
+								 utils::OwnedVector<ProcedureDistinctRows> *distinctRowsByOperation = nullptr,
 								 std::vector<uint64_t> *operatorRowCounts = nullptr,
 								 const size_t retainedSourceBytes = 0U,
 								 const bool accountOutputTransition = false) {
@@ -337,7 +337,7 @@
 						retainedKeys.set(checkedProcedureSizeMul(rows.size(), checkedProcedureSizeAdd(
 							sizeof(DecoratedRow),
 							checkedProcedureSizeMul(items.size(), sizeof(PropertyValue)))));
-						std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> decoratedRows;
+						utils::OwnedVector<DecoratedRow> decoratedRows;
 						decoratedRows.reserve(rows.size());
 						retainedKeys.set(checkedProcedureSizeAdd(retainedKeys.bytes(),
 							checkedProcedureSizeMul(decoratedRows.capacity() - rows.size(), sizeof(DecoratedRow))));
@@ -412,6 +412,8 @@
 			materializeProcedureNodeOutputs(rows, result.getColumns(), snapshot, batchBounds, context);
             for (auto &row : rows) row.reconcilePayloadCredit();
 			validateBufferedProcedureBytes(rows, batchBounds.maximum_materialized_bytes);
+            if (accountOutputTransition)
+                reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 				BufferedProcedureRow &buffered = rows[rowIndex];
@@ -798,7 +800,7 @@
 				size_t storage_bytes = 0U;
 			};
 			std::map<size_t, RetainedDistinctInfo, std::less<>, utils::OwnedPmrAllocator<std::pair<const size_t, RetainedDistinctInfo>>> retainedDistinctRows;
-			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> retained;
+			utils::OwnedVector<DecoratedRow> retained;
 			size_t retainedBytes = 0U;
 			const auto decoratedBytes = [](const DecoratedRow &row) {
 				size_t bytes = checkedProcedureSizeAdd(sizeof(DecoratedRow) - sizeof(BufferedProcedureRow), bufferedProcedureRowBytes(row.row));
@@ -1022,7 +1024,7 @@
 			retainedDistinctKeys.clear();
 			retainedDistinctRows.clear();
 			heapBytes.reset();
-			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>>().swap(retained);
+			utils::OwnedVector<DecoratedRow>().swap(retained);
 			heapSlotSlackBytes.reset();
 			outputRowSlots.reset();
 			const size_t suffixOffset = earlyProjection != nullptr ? projectIndex + 2U

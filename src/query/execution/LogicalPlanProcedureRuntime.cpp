@@ -1,3 +1,4 @@
+#include "graph/utils/OwnedVector.hpp"
 #include "query/execution/OrderByComparison.hpp"
 #include "graph/utils/AdmissionPmrContainers.hpp"
 /**
@@ -1076,7 +1077,7 @@ namespace graph::query::execution {
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
-			std::vector<ProcedureDistinctRows, utils::OwnedPmrAllocator<ProcedureDistinctRows>> distinctRowsByOperation(operations.size());
+			utils::OwnedVector<ProcedureDistinctRows> distinctRowsByOperation(operations.size());
 			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
 			for (size_t offset = 0U; offset < hits.size(); offset += capacity) {
 				context.checkGuard();

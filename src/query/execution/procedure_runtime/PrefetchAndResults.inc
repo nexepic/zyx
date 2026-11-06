@@ -632,6 +632,7 @@
 			validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
 			QueryResult result = makeAdmittedProcedureResult(context);
 			result.setColumns(columns);
+            reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes);
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 				BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);

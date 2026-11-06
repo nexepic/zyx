@@ -101,6 +101,9 @@ namespace graph::query {
 		options.bounds.maximum_materialized_bytes = 512U * 1024U;
 		const auto result = execute();
 		ASSERT_EQ(result.rowCount(), 300U);
+        // Known-cardinality publication must not retain a 512-slot geometric
+        // buffer or repeatedly relocate the public hash-map rows.
+        EXPECT_LE(result.getRows().capacity(), 300U);
 		for (size_t index = 0U; index < result.rowCount(); ++index) {
 			EXPECT_EQ(result.getRows()[index].at("rank").asPrimitive(), PropertyValue(static_cast<int64_t>(index + 1U)));
 			EXPECT_EQ(result.getRows()[index].at("score").asPrimitive(), PropertyValue(static_cast<double>(299U - index)));

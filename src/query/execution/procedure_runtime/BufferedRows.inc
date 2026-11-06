@@ -17,12 +17,11 @@
                     detail::procedurePayloadHeapUpper<true>(source.row),
                     detail::procedurePayloadHeapUpper<true>(source.node_properties))),
                   row(source.row), node_properties(source.node_properties) {}
-#if defined(_MSVC_STL_VERSION)
-            static constexpr bool MOVE_WITHOUT_HEAP = false;
-#else
+            // All private row indexes now have embedded tree headers. Use
+            // their actual move guarantees instead of forcing MSVC vectors
+            // to deep-copy every buffered payload during reallocation.
             static constexpr bool MOVE_WITHOUT_HEAP = std::is_nothrow_move_constructible_v<LogicalPlanReadRow> &&
                 std::is_nothrow_move_constructible_v<NodePropertyMaps>;
-#endif
             BufferedProcedureRow(BufferedProcedureRow &&source) noexcept(MOVE_WITHOUT_HEAP)
                 : allocation_credit(source.allocation_credit.resource(), emptyHeapUpper()),
                   row(std::move(source.row)), node_properties(std::move(source.node_properties)) {
@@ -63,7 +62,7 @@
         };
         // Only the vector backing is admitted here. Nested row/cache payloads
         // retain their separate materialization admission and lifetime rules.
-        using ProcedureRows = std::vector<BufferedProcedureRow, utils::OwnedPmrAllocator<BufferedProcedureRow>>;
+        using ProcedureRows = utils::OwnedVector<BufferedProcedureRow>;
 
 
 		template<typename Container>
@@ -281,6 +280,7 @@
         [[nodiscard]] size_t procedureQueryResultBytes(const QueryResult &result) {
             size_t bytes = detail::standardVectorHeapBufferBytes(result.getRows());
             bytes = checkedProcedureSizeAdd(bytes, graph::query::detail::resultStringsHeapBytes(result.getColumns()));
+            bytes = checkedProcedureSizeAdd(bytes, graph::query::detail::resultStringsHeapBytes(result.getNotifications()));
             for (const auto &row : result.getRows())
                 bytes = checkedProcedureSizeAdd(bytes, graph::query::detail::resultRowHeapBytes(row));
             return bytes;
@@ -301,6 +301,8 @@
         // complete vector is released. Never refund their capacity by advancing
         // firstIndex. The logical floor still covers non-heap materialized data.
         [[nodiscard]] size_t publicationSourceBytes(const ProcedureRows &rows, size_t firstIndex) {
+            // Owning vectors have proxy-free storage, including MSVC debug.
+            // Their allocator observes exactly capacity*sizeof(row).
             size_t retained = checkedProcedureSizeMul(rows.capacity(), sizeof(BufferedProcedureRow));
             for (const auto &row : rows) {
                 retained = checkedProcedureSizeAdd(retained, detail::procedurePayloadHeapUpper<false>(row.row));
@@ -318,7 +320,12 @@
                 const auto owner = utils::OwnedAllocationScope::owner();
                 const auto *budget = dynamic_cast<const MaterializedByteBudget *>(owner.get());
                 size_t payloadCredits = 0U, ownerHeadroom = 0U;
-                bool saturated = false, headroomValid = false;
+                bool saturated = false, headroomValid = false, relocationValid = false;
+                size_t relocationBytes = 0U;
+                try {
+                    relocationBytes = graph::query::detail::resultRowsRelocationHeapUpper(result.getRows());
+                    relocationValid = true;
+                } catch (...) { /* Keep the original error even if a diagnostic bound overflows. */ }
                 for (const auto &row : rows) {
                     const size_t amount = row.allocation_credit.bytes();
                     if (amount > (std::numeric_limits<size_t>::max)() - payloadCredits) {
@@ -329,20 +336,71 @@
                     if (budget) { ownerHeadroom = budget->availableWithParent(); headroomValid = true; }
                 } catch (...) { /* Diagnostics must preserve the original failure. */ }
                 std::fprintf(stderr,
-                    "CI_PROCEDURE_PRESSURE owner=%zu phase=%s source_rows=%zu source_capacity=%zu source_row_width=%zu source_backing=%zu external_source=%zu source_retained=%zu result_rows=%zu result_capacity=%zu result_row_width=%zu result_and_output=%zu requested_backing=%zu maximum=%zu row_payload_credits=%zu credits_saturated=%d result_resource_credit=%zu allocation_owner=%zu owner_used=%zu owner_maximum=%zu parent_headroom=%zu headroom_valid=%d\n",
+                    "CI_PROCEDURE_PRESSURE owner=%zu phase=%s source_rows=%zu source_capacity=%zu source_row_width=%zu source_backing=%zu external_source=%zu source_retained=%zu result_rows=%zu result_capacity=%zu result_row_width=%zu result_and_output=%zu requested_backing=%zu maximum=%zu row_payload_credits=%zu credits_saturated=%d result_resource_credit=%zu allocation_owner=%zu owner_used=%zu owner_maximum=%zu parent_headroom=%zu headroom_valid=%d result_relocation_upper=%zu relocation_valid=%d\n",
                     trace.id(), phase, rows.size(), rows.capacity(), sizeof(BufferedProcedureRow),
                     rows.capacity() * sizeof(BufferedProcedureRow), externalSourceBytes, rowSourceBytes,
                     result.getRows().size(), result.getRows().capacity(), sizeof(QueryResult::Row),
                     resultAndOutputBytes, requestedBackingBytes, maximumBytes, payloadCredits, int(saturated),
                     result.retainedResourceBytes(), budget ? debug::CiBudgetTrace(budget, "materialized").id() : 0U,
                     budget ? budget->used() : 0U, budget ? budget->used() + budget->available() : 0U,
-                    ownerHeadroom, int(headroomValid));
+                    ownerHeadroom, int(headroomValid), relocationBytes, int(relocationValid));
                 std::fflush(stderr);
             }
             // One-shot pressure snapshots retain the process-wide output cap,
             // without leaving result addresses in the diagnostic registry.
             trace.discard();
 #endif
+        }
+
+        // Reserve only when every scalar publication prefix fits, including
+        // the source rows still alive at that prefix. Front-loading backing
+        // slack must not assume that the entire source has already been freed.
+        // Dynamic/entity outputs retain their incremental materialization path.
+        void reserveInitialProcedureResult(QueryResult &result, const ProcedureRows &rows,
+                size_t maximumBytes, size_t externalSourceBytes = 0U) {
+            if (rows.empty() || !result.isEmpty() || result.getRows().capacity() != 0U) return;
+            const size_t fixedSource = checkedProcedureSizeMul(rows.capacity(), sizeof(BufferedProcedureRow));
+            size_t sourceHeap = 0U, sourceLogical = 0U;
+            for (const auto &row : rows) {
+                sourceHeap = checkedProcedureSizeAdd(sourceHeap, checkedProcedureSizeAdd(
+                    detail::procedurePayloadHeapUpper<false>(row.row),
+                    detail::procedurePayloadHeapUpper<false>(row.node_properties)));
+                sourceLogical = checkedProcedureSizeAdd(sourceLogical, bufferedProcedureRowBytes(row));
+            }
+            size_t published = checkedProcedureSizeAdd(externalSourceBytes, procedureQueryResultBytes(result));
+            published = checkedProcedureSizeAdd(published, utils::detail::standardAllocatorRequestBytes(
+                checkedProcedureSizeMul(rows.size(), sizeof(QueryResult::Row)), alignof(QueryResult::Row)));
+            // addRow's by-value parameter can leave two moved-from maps alive.
+            const size_t handoff = checkedProcedureSizeMul(2U,
+                utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(0U));
+            for (const auto &row : rows) {
+                // Both callers reserve no more than the number of bindings.
+                // Include bindings omitted from the projection conservatively.
+                published = checkedProcedureSizeAdd(published,
+                    utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(row.row.values.size()));
+                for (const auto &[name, value] : row.row.values) {
+                    const auto *scalar = std::get_if<PropertyValue>(&value);
+                    if (!scalar) return;
+                    const auto &primitive = scalar->getVariant();
+                    if (!std::holds_alternative<std::monostate>(primitive) &&
+                        !std::holds_alternative<bool>(primitive) &&
+                        !std::holds_alternative<int64_t>(primitive) &&
+                        !std::holds_alternative<double>(primitive)) return;
+                    published = checkedProcedureSizeAdd(published, utils::detail::standardFreshStringHeapUpper(name.size()));
+                }
+                const size_t source = std::max(checkedProcedureSizeAdd(fixedSource, sourceHeap), sourceLogical);
+                if (checkedProcedureSizeAdd(published, checkedProcedureSizeAdd(source, handoff)) > maximumBytes) return;
+                sourceHeap -= checkedProcedureSizeAdd(detail::procedurePayloadHeapUpper<false>(row.row),
+                    detail::procedurePayloadHeapUpper<false>(row.node_properties));
+                sourceHeap = checkedProcedureSizeAdd(sourceHeap, BufferedProcedureRow::emptyHeapUpper());
+                sourceLogical -= bufferedProcedureRowBytes(row);
+            }
+            if (checkedProcedureSizeAdd(published, checkedProcedureSizeAdd(fixedSource, sourceHeap)) > maximumBytes) return;
+            try { result.reserveRows(rows.size()); }
+            catch (const MaterializedByteLimitExceeded &) { return; }
+            catch (const detail::ResourceAdmissionDenied &) { return; }
+            validateProcedureResultBudget(result,
+                checkedProcedureSizeAdd(externalSourceBytes, publicationSourceBytes(rows, 0U)), maximumBytes);
         }
 
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
@@ -359,20 +417,31 @@
 				const size_t preferredCapacity = currentCapacity == 0U
 						? minimumCapacity
 						: std::max(minimumCapacity, checkedProcedureSizeMul(currentCapacity, 2U));
-                // Admit old/new backing overlap without rejecting a smaller
-                // growth that fits the same materialization ceiling.
-                const size_t affordableCapacity = pendingBytes > maximumBytes ? 0U :
-                    (maximumBytes - pendingBytes) / sizeof(QueryResult::Row);
-                if (affordableCapacity < minimumCapacity) {
+                // A throwing row move makes vector::reserve copy its maps.
+                // Both their payloads and both backing arrays coexist. Admit
+                // those copies even when this direct call has no query lease.
+                const size_t relocationBytes = graph::query::detail::resultRowsRelocationHeapUpper(result.getRows());
+                const size_t available = pendingBytes > maximumBytes || relocationBytes > maximumBytes - pendingBytes
+                    ? 0U : maximumBytes - pendingBytes - relocationBytes;
+                const auto backingRequest = [](size_t count) {
+                    return utils::detail::standardAllocatorRequestBytes(
+                        checkedProcedureSizeMul(count, sizeof(QueryResult::Row)), alignof(QueryResult::Row));
+                };
+                const size_t affordableCapacity = std::min(preferredCapacity, available / sizeof(QueryResult::Row));
+                if (affordableCapacity < minimumCapacity || backingRequest(minimumCapacity) > available) {
                     reportProcedurePublicationPressure(result, rows, "minimum_result_growth", retainedSourceBytes,
-                        pendingRowsBytes, pendingResultBytes, minimumCapacity * sizeof(QueryResult::Row), maximumBytes);
+                        pendingRowsBytes, pendingResultBytes, backingRequest(minimumCapacity), maximumBytes);
                     throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
                 }
-                const size_t requestedCapacity = std::min(preferredCapacity, affordableCapacity);
-				const size_t requestedGrowthBytes = checkedProcedureSizeMul(requestedCapacity, sizeof(QueryResult::Row));
-				if (checkedProcedureSizeAdd(pendingBytes, requestedGrowthBytes) > maximumBytes) {
-					throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
-				}
+                // MSVC's aligned-allocation prefix changes at 4 KiB. Search
+                // the monotone actual request rather than rounding it away.
+                size_t requestedCapacity = minimumCapacity, upperCapacity = affordableCapacity;
+                while (requestedCapacity < upperCapacity) {
+                    const auto middle = requestedCapacity + (upperCapacity - requestedCapacity + 1U) / 2U;
+                    if (backingRequest(middle) <= available) requestedCapacity = middle;
+                    else upperCapacity = middle - 1U;
+                }
+                const size_t requestedGrowthBytes = backingRequest(requestedCapacity);
 				try { result.reserveRows(requestedCapacity); }
                 catch (...) {
                     reportProcedurePublicationPressure(result, rows, "result_growth_exception", retainedSourceBytes,
