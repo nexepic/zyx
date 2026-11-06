@@ -1,3 +1,10 @@
+        [[nodiscard]] detail::ScopedScalarReadValue evaluateScalarOperand(
+                const expressions::Expression &expression, LogicalPlanReadRow &row, ExecutionState &state) {
+            if (expression.getExpressionType() == expressions::ExpressionType::PARAMETER)
+                return detail::ScopedScalarReadValue(requireScalarParameter(
+                    dynamic_cast<const expressions::ParameterExpression &>(expression), row, state));
+            return detail::ScopedScalarReadValue([&]() { return evaluateExpression(expression, row, state); });
+        }
 		[[nodiscard]] PropertyValue evaluateScalarExpression(const expressions::Expression &expression,
 															 LogicalPlanReadRow &row, ExecutionState &state,
 															 ShortestPathResultMode shortestMode) {
@@ -12,9 +19,10 @@
 					return scalarValue(evaluateExpression(expression, row, state));
 				case ExpressionType::BINARY_OP: {
 					const auto &binary = dynamic_cast<const expressions::BinaryOpExpression &>(expression);
-					const PropertyValue left = scalarValue(evaluateExpression(*binary.getLeft(), row, state));
-					MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
-					operandBytes.set(retainedExpressionValueBytes(left, state));
+                    MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
+                    const auto leftOwner = evaluateScalarOperand(*binary.getLeft(), row, state);
+                    const PropertyValue &left = leftOwner.get();
+					if (!leftOwner.borrowed()) operandBytes.set(retainedExpressionValueBytes(left, state));
 					const BinaryOperatorType operation = binary.getOperator();
 					if (operation == BinaryOperatorType::BOP_AND || operation == BinaryOperatorType::BOP_OR) {
 						const std::optional<bool> leftBoolean = booleanOrNull(left);
@@ -23,8 +31,9 @@
 							return PropertyValue(*leftBoolean);
 						}
 					}
-					const PropertyValue right = scalarValue(evaluateExpression(*binary.getRight(), row, state));
-					operandBytes.set(checkedSizeAdd(operandBytes.bytes(), retainedExpressionValueBytes(right, state),
+					const auto rightOwner = evaluateScalarOperand(*binary.getRight(), row, state);
+                    const PropertyValue &right = rightOwner.get();
+					if (!rightOwner.borrowed()) operandBytes.set(checkedSizeAdd(operandBytes.bytes(), retainedExpressionValueBytes(right, state),
 													"logical-plan binary operand storage size overflowed"));
 					if (expressions::isArithmeticOperator(operation)) {
 						return arithmetic(operation, left, right);

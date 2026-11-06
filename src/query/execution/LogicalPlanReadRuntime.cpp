@@ -34,6 +34,7 @@
 #include "query/execution/BoundProjectionReferences.hpp"
 #include "query/execution/BoundExecutionProgram.hpp"
 #include "query/execution/BoundExpressionInputs.hpp"
+#include "query/execution/ScopedScalarReadValue.hpp"
 #include "query/execution/BatchEnvelope.hpp"
 #include "query/execution/BoundNodeScanBatch.hpp"
 #include "query/execution/BoundColumnLayout.hpp"

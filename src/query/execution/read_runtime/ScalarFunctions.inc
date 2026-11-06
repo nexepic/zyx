@@ -1,3 +1,23 @@
+        // QueryContext owns immutable parameter storage for this synchronous
+        // execution. Resolve it once; comparison need not clone that payload.
+        [[nodiscard]] const PropertyValue &requireScalarParameter(
+                const expressions::ParameterExpression &parameter, LogicalPlanReadRow &row, ExecutionState &state) {
+            if (!state.shared.context)
+                throw std::runtime_error("logical-plan parameter evaluation requires a QueryContext");
+            const PropertyValue *value = nullptr;
+            if (state.task.bound_inputs && state.task.bound_inputs->usesRow(row)) {
+                const auto *input = state.task.bound_inputs->instruction(parameter);
+                if (input && input->kind == detail::BoundInputKind::BIK_PARAMETER)
+                    value = state.task.bound_inputs->parameter(*input, state.shared.context);
+            }
+            if (!value) {
+                const auto found = state.shared.context->parameters.find(parameter.getParameterName());
+                if (found != state.shared.context->parameters.end()) value = &found->second;
+            }
+            if (!value) throw std::runtime_error("logical-plan read runtime could not resolve a query parameter");
+            return *value;
+        }
+
 		[[nodiscard]] LogicalPlanReadValue evaluateExpression(const expressions::Expression &expression,
 															  LogicalPlanReadRow &row, ExecutionState &state) {
 			using expressions::ExpressionType;
@@ -59,23 +79,8 @@
                     return binding;
 				}
 				case ExpressionType::PARAMETER: {
-					if (state.shared.context == nullptr) {
-						throw std::runtime_error("logical-plan parameter evaluation requires a QueryContext");
-					}
-					const auto &parameter = dynamic_cast<const expressions::ParameterExpression &>(expression);
-					const PropertyValue *value = nullptr;
-					if (state.task.bound_inputs && state.task.bound_inputs->usesRow(row)) {
-						const auto *input = state.task.bound_inputs->instruction(expression);
-						if (input && input->kind == detail::BoundInputKind::BIK_PARAMETER)
-							value = state.task.bound_inputs->parameter(*input, state.shared.context);
-					}
-					if (!value) {
-						const auto found = state.shared.context->parameters.find(parameter.getParameterName());
-						if (found != state.shared.context->parameters.end()) value = &found->second;
-					}
-					if (!value) {
-						throw std::runtime_error("logical-plan read runtime could not resolve a query parameter");
-					}
+                    const auto *value = &requireScalarParameter(
+                        dynamic_cast<const expressions::ParameterExpression &>(expression), row, state);
 					if (value->getType() == PropertyType::STRING || value->getType() == PropertyType::LIST || value->getType() == PropertyType::MAP || value->getType() == PropertyType::BYTES) {
 						MaterializedByteReservation copyBytes(&state.shared.materialized_budget);
 						return copyReservedPropertyValue(*value, state, copyBytes);

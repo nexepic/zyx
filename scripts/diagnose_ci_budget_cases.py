@@ -38,6 +38,7 @@ ASAN = [
     'RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded',
     'RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose',
     'ResultPropertyMapAdmissionTest.*',
+    'ScopedScalarReadValueTest.*',
 ]
 
 
