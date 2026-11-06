@@ -381,11 +381,12 @@
                 for (const auto &[name, value] : row.row.values) {
                     const auto *scalar = std::get_if<PropertyValue>(&value);
                     if (!scalar) return;
-                    const auto &primitive = scalar->getVariant();
-                    if (!std::holds_alternative<std::monostate>(primitive) &&
-                        !std::holds_alternative<bool>(primitive) &&
-                        !std::holds_alternative<int64_t>(primitive) &&
-                        !std::holds_alternative<double>(primitive)) return;
+                    // Scalar output owns its full payload. One caller moves
+                    // it and another copies it: cover both retained capacity
+                    // and fresh-copy upper bounds without constructing a copy.
+                    published = checkedProcedureSizeAdd(published, std::max(
+                        detail::procedurePayloadHeapUpper<false>(*scalar),
+                        detail::procedurePayloadHeapUpper<true>(*scalar)));
                     published = checkedProcedureSizeAdd(published, utils::detail::standardFreshStringHeapUpper(name.size()));
                 }
                 const size_t source = std::max(checkedProcedureSizeAdd(fixedSource, sourceHeap), sourceLogical);
@@ -406,11 +407,42 @@
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {
-			const size_t pendingRowsBytes = publicationSourceBytes(rows, rowIndex);
+			size_t pendingRowsBytes = publicationSourceBytes(rows, rowIndex);
 			const size_t pendingResultBytes = checkedProcedureSizeAdd(procedureQueryResultBytes(result),
 					procedureQueryResultRowBytes(output));
 			size_t pendingBytes = checkedProcedureSizeAdd(retainedSourceBytes, pendingRowsBytes);
 			pendingBytes = checkedProcedureSizeAdd(pendingBytes, pendingResultBytes);
+            // The owning output is complete, but its construction overlapped
+            // the current source. Validate that real peak before releasing it.
+            if (pendingBytes > maximumBytes) {
+                reportProcedurePublicationPressure(result, rows, "source_result_overlap", retainedSourceBytes,
+                    pendingRowsBytes, pendingResultBytes, 0U, maximumBytes);
+                throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
+            }
+			BufferedProcedureRow &buffered = rows[rowIndex];
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
+			releaseProcedureContainer(buffered.row.values);
+			releaseProcedureContainer(buffered.row.property_cache);
+			releaseProcedureContainer(buffered.row.entity_metadata_cache);
+			releaseProcedureContainer(buffered.row.complete_entity_property_cache);
+			releaseProcedureContainer(buffered.row.path_cache);
+			releaseProcedureContainer(buffered.node_properties);
+            // The output owns its payload independently. After destroying the
+            // consumed source, retain the output and moved-from-map handoff
+            // fees until transfer or unwind. Row slots remain charged too.
+            if (buffered.allocation_credit.resource()) {
+                const size_t retained = checkedProcedureSizeAdd(
+                    detail::procedurePayloadHeapUpper<false>(buffered.row),
+                    detail::procedurePayloadHeapUpper<false>(buffered.node_properties));
+                const size_t handoff = checkedProcedureSizeMul(2U,
+                    detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
+                const size_t liveCredit = checkedProcedureSizeAdd(retained,
+                    checkedProcedureSizeAdd(procedureQueryResultRowBytes(output), handoff));
+                buffered.allocation_credit.set(liveCredit);
+            }
+            pendingRowsBytes = publicationSourceBytes(rows, rowIndex + 1U);
+            pendingBytes = checkedProcedureSizeAdd(retainedSourceBytes,
+                checkedProcedureSizeAdd(pendingRowsBytes, pendingResultBytes));
 			if (result.getRows().capacity() == result.getRows().size()) {
 				const size_t currentCapacity = result.getRows().capacity();
 				const size_t minimumCapacity = checkedProcedureSizeAdd(result.getRows().size(), 1U);
@@ -449,7 +481,7 @@
                     throw;
                 }
 				const size_t liveBytesAfterReserve = checkedProcedureSizeAdd(retainedSourceBytes,
-						checkedProcedureSizeAdd(publicationSourceBytes(rows, rowIndex),
+						checkedProcedureSizeAdd(pendingRowsBytes,
 								checkedProcedureSizeAdd(procedureQueryResultBytes(result), procedureQueryResultRowBytes(output))));
 				if (liveBytesAfterReserve > maximumBytes) {
                     reportProcedurePublicationPressure(result, rows, "after_result_growth", retainedSourceBytes,
@@ -465,19 +497,12 @@
 			}
 
 			detail::ProcedureResultHandoff::append(result, std::move(output), rows[rowIndex].allocation_credit);
-			BufferedProcedureRow &buffered = rows[rowIndex];
-            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
-			releaseProcedureContainer(buffered.row.values);
-			releaseProcedureContainer(buffered.row.property_cache);
-			releaseProcedureContainer(buffered.row.entity_metadata_cache);
-			releaseProcedureContainer(buffered.row.complete_entity_property_cache);
-			releaseProcedureContainer(buffered.row.path_cache);
-			releaseProcedureContainer(buffered.node_properties);
+
 			const size_t liveBytes = checkedProcedureSizeAdd(retainedSourceBytes,
 					checkedProcedureSizeAdd(procedureQueryResultBytes(result),
-							publicationSourceBytes(rows, rowIndex + 1U)));
+							pendingRowsBytes));
 			if (liveBytes > maximumBytes) {
-                const size_t remaining = publicationSourceBytes(rows, rowIndex + 1U);
+                const size_t remaining = pendingRowsBytes;
                 reportProcedurePublicationPressure(result, rows, "after_source_release", retainedSourceBytes,
                     remaining, liveBytes - retainedSourceBytes - remaining, 0U, maximumBytes);
 				throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
