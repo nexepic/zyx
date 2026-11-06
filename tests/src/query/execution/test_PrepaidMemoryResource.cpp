@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include "graph/query/api/QueryResult.hpp"
+#include "graph/utils/StandardContainerHeapBytes.hpp"
+#include <unordered_map>
 #include "graph/utils/AdmissionPmrContainers.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
 #include <array>
@@ -32,6 +35,36 @@ std::shared_ptr<ResourceAccount> prepaidAccount(size_t maximum = 1000U) {
 	auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
 	auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
 	return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_CACHE, maximum);
+}
+
+TEST(PrepaidMemoryResourceTest, StandardResultMapStructuralBoundCoversIndependentAllocatorRequests) {
+    // Inert storage with the public mapped value's exact layout isolates
+    // structural requests from key/value heap payloads. PMR reports actual
+    // requests independently of the production capacity/admission formulas.
+    using graph::query::ResultValue;
+    struct alignas(alignof(ResultValue)) Slot { std::byte bytes[sizeof(ResultValue)]; };
+    using ReferenceMap = std::unordered_map<std::string, Slot>;
+    static_assert(sizeof(ReferenceMap::value_type) == sizeof(graph::query::QueryResult::Row::value_type));
+    static_assert(alignof(ReferenceMap::value_type) == alignof(graph::query::QueryResult::Row::value_type));
+    for (const size_t count : {0U, 1U, 2U, 17U, 300U}) {
+        SCOPED_TRACE(count);
+        ActualPmrRequests requests;
+        {
+            ReferenceMap reference;
+            std::pmr::unordered_map<std::string, Slot> observed(&requests);
+            if (count) { reference.reserve(count); observed.reserve(count); }
+            for (size_t index = 0U; index < count; ++index) {
+                const auto key = std::to_string(index);
+                reference.emplace(key, Slot{}); observed.emplace(key, Slot{});
+            }
+            const size_t upper = utils::detail::standardUnorderedMapStructuralHeapBytes(reference);
+            EXPECT_GE(upper, requests.live);
+            // A conservative request bound must stay near actual storage,
+            // rather than silently charging another embedded value per node.
+            EXPECT_LE(upper, requests.live + requests.live / 4U + 256U);
+        }
+        EXPECT_EQ(requests.live, 0U);
+    }
 }
 
 TEST(PrepaidMemoryResourceTest, UnusedGrantStaysChargedAndContainersChargeActualCapacity) {
