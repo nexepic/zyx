@@ -31,6 +31,8 @@ def _gate_path():
 
 
 def _pid_is_active(pid: int) -> bool:
+    if os.name == "nt":
+        return _windows_pid_is_active(pid)
     if sys.platform.startswith("linux"):
         try:
             stat = Path(f"/proc/{pid}/stat").read_text()
@@ -47,6 +49,55 @@ def _pid_is_active(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _windows_pid_is_active(pid: int) -> bool:
+    # os.kill(pid, 0) is not a non-destructive POSIX-style probe on Windows.
+    # Observe the process handle without sending a termination/control event.
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE only
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == 87:  # ERROR_INVALID_PARAMETER: PID no longer exists
+            return False
+        if error == 5:  # Access denied does not establish process death.
+            return True
+        raise ctypes.WinError(error)
+    try:
+        result = kernel.WaitForSingleObject(handle, 0)
+        if result == 0:
+            return False
+        if result == 258:  # WAIT_TIMEOUT: process has not exited
+            return True
+        raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel.CloseHandle(handle)
+
+
+@pytest.mark.parametrize("wait_result,open_error,expected", [(0, None, False), (258, None, True),
+                                                            (None, 87, False), (None, 5, True)])
+def test_windows_pid_probe_observes_handle_without_signalling(monkeypatch, wait_result, open_error, expected):
+    import ctypes
+    calls = []
+    class Function:
+        def __init__(self, name, result): self.name, self.result = name, result
+        def __call__(self, *args): calls.append((self.name, args)); return self.result
+    kernel = SimpleNamespace(OpenProcess=Function("open", None if open_error else 123),
+                             WaitForSingleObject=Function("wait", wait_result),
+                             CloseHandle=Function("close", True))
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **kw: kernel, raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: open_error, raising=False)
+    assert _windows_pid_is_active(456) is expected
+    assert calls[0] == ("open", (0x00100000, False, 456))
+    assert [name for name, _ in calls] == (["open"] if open_error else ["open", "wait", "close"])
 
 
 def test_runner_returns_success_for_a_completed_command():
@@ -123,7 +174,27 @@ def test_runner_returns_timeout_after_terminating_the_test_process():
     started = time.monotonic()
 
     assert runner.run([sys.executable, "-c", "import time; time.sleep(60)"], 0.1) == 124
-    assert time.monotonic() - started < 5.0
+    # Windows first attempts taskkill (bounded by five seconds), then the
+    # documented graceful/forced reap windows. The old <5s assertion expired
+    # before the existing graceful reap window itself could finish.
+    cleanup_bound = 5.0 + 2.0 * runner.PROCESS_REAP_TIMEOUT_SECONDS
+    assert time.monotonic() - started < 0.1 + cleanup_bound + 2.0
+
+
+def test_runner_forces_cleanup_only_after_the_graceful_reap_window(monkeypatch):
+    runner = _load_runner()
+    calls = []
+    process, job = object(), object()
+    monkeypatch.setattr(runner, "_terminate_process_tree", lambda p, **kw: calls.append(("terminate", p, kw)))
+    waits = iter([False, True])
+    def wait(p, timeout, j):
+        calls.append(("wait", p, timeout, j)); return next(waits)
+    monkeypatch.setattr(runner, "_wait_for_exit", wait)
+    assert runner._terminate_and_reap(process, reason="test", windows_job=job)
+    assert calls == [("terminate", process, {"windows_job": job}),
+                     ("wait", process, runner.PROCESS_REAP_TIMEOUT_SECONDS, job),
+                     ("terminate", process, {"force": True, "windows_job": job}),
+                     ("wait", process, runner.PROCESS_REAP_TIMEOUT_SECONDS, job)]
 
 
 def test_runner_reaps_child_that_outlives_successful_test_root(tmp_path):
