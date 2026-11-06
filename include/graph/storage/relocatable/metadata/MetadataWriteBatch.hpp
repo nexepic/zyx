@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -211,7 +212,7 @@ namespace graph::storage {
 		Superblock candidate_;
 		std::vector<PhysicalPageRef> allocated_pages_;
 		std::map<uint64_t, PhysicalPageRef> metadata_page_routes_;
-        std::vector<PhysicalPageRef, utils::OwnedPmrAllocator<PhysicalPageRef>> retired_metadata_frames_;
+        utils::OwnedVector<PhysicalPageRef> retired_metadata_frames_;
         std::set<std::pair<uint64_t, uint8_t>, std::less<std::pair<uint64_t, uint8_t>>,
             utils::OwnedPmrAllocator<std::pair<uint64_t, uint8_t>>> live_bootstrap_frames_;
         bool metadata_retirement_complete_ = false;
@@ -223,8 +224,8 @@ namespace graph::storage {
         // Explicit ownership covers both iteration order and lookup nodes until
         // batch teardown. The optional resource applies to reservation storage;
         // it does not claim to account every metadata mutation allocation.
-        std::vector<PhysicalSlotId, utils::OwnedPmrAllocator<PhysicalSlotId>> reserved_data_slots_;
-        std::vector<PhysicalSlotRange, utils::OwnedPmrAllocator<PhysicalSlotRange>> reserved_data_slot_ranges_;
+        utils::OwnedVector<PhysicalSlotId> reserved_data_slots_;
+        utils::OwnedVector<PhysicalSlotRange> reserved_data_slot_ranges_;
         std::set<uint64_t, std::less<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> reserved_data_slot_index_;
 		std::set<uint64_t> catalog_pool_identity_bindings_;
 		std::set<uint64_t> catalog_pool_ownership_prepared_;

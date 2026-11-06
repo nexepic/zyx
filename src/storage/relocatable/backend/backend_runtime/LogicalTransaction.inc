@@ -203,7 +203,8 @@
 					foldCreatedEntityFinalState(normalizedBatch, nodeOffset, edgeOffset, nextAccumulated);
 					// Complete-map replacement resets all older field operations.
 					for (const auto &replacement : normalizedBatch.property_replacements)
-						std::erase_if(nextPatches, [&](const auto &patch) { return patch.entity == replacement.entity; });
+						nextPatches.erase(std::remove_if(nextPatches.begin(), nextPatches.end(),
+                            [&](const auto &patch) { return patch.entity == replacement.entity; }), nextPatches.end());
 					append(nextAccumulated, normalizedBatch);
 					foldStagedPropertyPatches(nextAccumulated, nextPatches, normalizedPatches,
 						patchEntries, maximumPropertyEntries, control);

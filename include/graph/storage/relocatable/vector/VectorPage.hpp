@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -65,7 +66,7 @@ namespace graph::storage {
 	// resolving a stale Vector Location. The page-local generation changes only
 	// when an erased slot is reused, so overwrites preserve logical identity.
 	class VectorPage final {
-        using PageBytes = std::vector<std::byte, utils::OwnedPmrAllocator<std::byte>>;
+        using PageBytes = utils::OwnedVector<std::byte>;
 	public:
 		[[nodiscard]] static VectorPage create(const PageOwnerHeader &owner, const VectorPageHeader &header);
 		[[nodiscard]] static VectorPage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);

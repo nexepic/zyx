@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/utils/OwnedVector.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 
@@ -1137,7 +1138,7 @@ namespace graph::storage {
 	void MetadataPagePoolAllocator::reclaimUnreachable(const Superblock &current,
 													   std::span<const Superblock> activeSnapshots, bool force) {
 		SuperblockCodec::validate(current);
-		std::vector<Superblock, utils::OwnedPmrAllocator<Superblock>> protectedSuperblocks;
+		utils::OwnedVector<Superblock> protectedSuperblocks;
 		protectedSuperblocks.reserve(activeSnapshots.size() + 1U);
 		protectedSuperblocks.push_back(current);
 		for (const Superblock &snapshot: activeSnapshots) {

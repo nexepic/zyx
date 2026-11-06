@@ -1,3 +1,4 @@
+#include "graph/utils/OwnedVector.hpp"
 #include "NativeGraphWritePlannerContext.hpp"
 
 namespace graph::storage {
@@ -403,7 +404,7 @@ namespace graph::storage {
             if (context_->metadata->findIndexRootOptional(snapshot_, index)) {
                 vectorTransaction.stageVectorIndexDelta(*context_->indexes, rawPages, manifests, *definition, mutations, options);
             } else {
-                std::vector<NativeGraphVectorBootstrapRecord, utils::OwnedPmrAllocator<NativeGraphVectorBootstrapRecord>> records;
+                utils::OwnedVector<NativeGraphVectorBootstrapRecord> records;
                 for (const auto &mutation : mutations) {
                     if (mutation.kind != NativeVectorMutationKind::NVMK_INSERT)
                         fail(FormatError::FERR_INVALID_STATE, "native Vector bootstrap cannot erase absent state");

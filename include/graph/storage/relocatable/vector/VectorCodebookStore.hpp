@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <compare>
 #include <cstddef>
 #include <cstdint>
@@ -46,7 +47,7 @@ namespace graph::storage {
 
 	struct VectorCodebook {
 		VectorCodebookHeader header;
-        std::vector<std::byte, utils::OwnedPmrAllocator<std::byte>> payload;
+        utils::OwnedVector<std::byte> payload;
 
         VectorCodebook() = default;
         VectorCodebook(VectorCodebookHeader value, std::span<const std::byte> bytes,
