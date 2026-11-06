@@ -23,6 +23,10 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#if defined(_MSVC_STL_VERSION)
+#include <boost/container/vector.hpp>
+#include <boost/unordered_map.hpp>
+#endif
 
 namespace graph::query::gds {
 
@@ -62,8 +66,18 @@ namespace graph::query::gds {
         private:
             std::pmr::memory_resource *resource_;
         };
-        template<class T> using WorkVector = std::vector<T, WorkspaceAllocator<T>>;
-        template<class K, class V> using WorkHashMap = std::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
+        template<class T> using WorkVector =
+#if defined(_MSVC_STL_VERSION) && _ITERATOR_DEBUG_LEVEL > 0
+            boost::container::vector<T, WorkspaceAllocator<T>>;
+#else
+            std::vector<T, WorkspaceAllocator<T>>;
+#endif
+        template<class K, class V> using WorkHashMap =
+#if defined(_MSVC_STL_VERSION)
+            boost::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
+#else
+            std::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
+#endif
             WorkspaceAllocator<std::pair<const K, V>>>;
         template<class K, class V> using WorkOrderedMap = std::map<K, V, std::less<K>,
             WorkspaceAllocator<std::pair<const K, V>>>;
