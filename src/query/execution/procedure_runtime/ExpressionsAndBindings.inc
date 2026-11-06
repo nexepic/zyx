@@ -26,7 +26,10 @@
 			PropertyMap values;
 			bool complete = false;
 		};
-		using NodePropertyMaps = std::unordered_map<uint64_t, CachedNodeProperties>;
+		// Like the row's other private caches, keep an empty cache allocation-free.
+		// In particular MSVC hash maps allocate sentinels, buckets and iterator
+		// proxies even for rows that never need a node-property cache.
+		using NodePropertyMaps = detail::ExecutionBindingMap<uint64_t, CachedNodeProperties>;
 		[[nodiscard]] std::optional<uint64_t> procedureNodeIdentity(const LogicalPlanReadValue &value) {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				return node->node_id;
@@ -777,7 +780,7 @@
 			}
 			// Scalar-only output cannot use the identity cache in a later layer.
 			// Populate it once only for entities that remain in the output scope.
-			std::erase_if(nodeProperties, [&](const auto &cached) {
+			detail::eraseExecutionBindingsIf(nodeProperties, [&](const auto &cached) {
 				return !std::ranges::any_of(result.values, [&](const auto &binding) {
 					return procedureNodeIdentity(binding.second) == cached.first;
 				});
