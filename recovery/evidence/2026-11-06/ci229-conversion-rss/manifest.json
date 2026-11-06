@@ -1,0 +1,242 @@
+[
+  {
+    "path": "full.log.gz",
+    "source": "/tmp/zyx-ci229-frontier-final2.log",
+    "bytes": 152829,
+    "uncompressed_sha256": "64f7658520760ba292287b1276ef882de754097d826075d80bfcc3b4a03c5df9"
+  },
+  {
+    "path": "full.exit.gz",
+    "source": "/tmp/zyx-ci229-frontier-final2.exit",
+    "bytes": 2,
+    "uncompressed_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "path": "exact-once.json.gz",
+    "source": "/tmp/zyx-ci229-frontier-exact-once.json",
+    "bytes": 3935,
+    "uncompressed_sha256": "9dab07c1c5826c602b1dff2f6fcb3ceb2099cd329c5ae0723b6112aba71f9058"
+  },
+  {
+    "path": "verify-full.py.gz",
+    "source": "/tmp/zyx-ci229-frontier-verify-full.py",
+    "bytes": 1740,
+    "uncompressed_sha256": "448a7451eb62eab0b58b6e57042e13e66133151a333f98a72c66b61af65c8d5c"
+  },
+  {
+    "path": "source-manifest.json.gz",
+    "source": "/tmp/zyx-ci229-frontier-source-manifest.json",
+    "bytes": 199344,
+    "uncompressed_sha256": "c8270963b35654815b9e8ec67a92d2296e9c78cfcc7fe765ceb8b04b58943642"
+  },
+  {
+    "path": "discovery.txt.gz",
+    "source": "/tmp/zyx-ci229-frontier-discovery.txt",
+    "bytes": 578657,
+    "uncompressed_sha256": "5335a9a3fc4d050094fd70f40f77ff7a6d53e97374c68880ffc6b9da5c054438"
+  },
+  {
+    "path": "interrupted.log.gz",
+    "source": "/tmp/zyx-ci229-frontier-full.log",
+    "bytes": 579,
+    "uncompressed_sha256": "c3c8c0aa029a6018937778a76c9ecdd0239b3a0c5b7495a0410658b6b989142d"
+  },
+  {
+    "path": "interrupted.exit.gz",
+    "source": "/tmp/zyx-ci229-frontier-full.exit",
+    "bytes": 4,
+    "uncompressed_sha256": "f5bde7eb9f6c71611dc5726e8aca3eb4eba3e386da49e0a4ed5c295a90a73a0d"
+  },
+  {
+    "path": "build.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier-build.log",
+    "bytes": 4909,
+    "uncompressed_sha256": "284ed39cb51613c91330c5ad86b351ef32535ae1bfe27601cf24ef1b4093d59d"
+  },
+  {
+    "path": "observer-build.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier-observer-build.log",
+    "bytes": 853,
+    "uncompressed_sha256": "04d61452204a5a1183552832c5654511cf3542b855885108e78792f6d92d89ad"
+  },
+  {
+    "path": "layout.cpp.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier-layout.cpp",
+    "bytes": 369,
+    "uncompressed_sha256": "33d718d180aaed1357f77f8802f5b2fc84ec5149b2cb96c1e93d4cecfb1f1487"
+  },
+  {
+    "path": "layout.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier-layout.log",
+    "bytes": 39,
+    "uncompressed_sha256": "b3f611e141f4e4c0de8ea7eb3745f7f09718635ef80833fb593a07bb468668e0"
+  },
+  {
+    "path": "control-link.py.gz",
+    "source": "/tmp/zyx-ci229-conversion-control-link.py",
+    "bytes": 943,
+    "uncompressed_sha256": "2b8a6bf63a890e12ca0d4901a6ab05f89f530d12d5f4cf73e2f38125c0bf30b2"
+  },
+  {
+    "path": "supervisor-result.json.gz",
+    "source": "/workspace/zyx-ci-config/coverage/test-shards-result.json",
+    "bytes": 291,
+    "uncompressed_sha256": "40ccc233840c5d233ec03437cc0464a896b352ead1ac8b53fecc0cd5f6e97d73"
+  },
+  {
+    "path": "comparison/rss-evidence.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/rss-evidence.json",
+    "bytes": 1201,
+    "uncompressed_sha256": "ed17f40718cbf943980b112c8534b975926da6db3e437ceaef1f928b07d496e7"
+  },
+  {
+    "path": "comparison/comparison.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/comparison.json",
+    "bytes": 3597,
+    "uncompressed_sha256": "86232ed02ebd9d10171b5dda89f68244d926139d627364f3ca1c8decdd93466c"
+  },
+  {
+    "path": "comparison/normal-binary.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/normal-binary.json",
+    "bytes": 168,
+    "uncompressed_sha256": "9edb372b56f8188d74fd0dcd6c7dce5dc63d9ccca7e9a53545f6503b47d42ba2"
+  },
+  {
+    "path": "comparison/measurement-results.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/measurement-results.json",
+    "bytes": 338,
+    "uncompressed_sha256": "02165a5e017497032753c35c549bc5282a517c676fbe9e74df73467e5081f307"
+  },
+  {
+    "path": "comparison/measure.py.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/measure.py",
+    "bytes": 2707,
+    "uncompressed_sha256": "bc077f0c38fc5a1d9e4842eea9b5bb847dac2fd50588e6e09cf721960902f644"
+  },
+  {
+    "path": "comparison/test.cpp.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/test.cpp",
+    "bytes": 23874,
+    "uncompressed_sha256": "3585dfbeb995e7b0c3badc5b8fa3f50ce964fcb7ee475e3901648756d6118e04"
+  },
+  {
+    "path": "comparison/measurement-compile.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/measurement-compile.json",
+    "bytes": 1270,
+    "uncompressed_sha256": "8e9884aaaad23c516a363b697471df5abada032a9ee613b339af7a8b6d14ad8e"
+  },
+  {
+    "path": "comparison/measurement-compile.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/measurement-compile.log",
+    "bytes": 586,
+    "uncompressed_sha256": "ee2508d82e1d0a90d623e233d7bef2278ebdf45af1c4084d7501977c576a32ae"
+  },
+  {
+    "path": "comparison/before-link.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/before-link.json",
+    "bytes": 65383,
+    "uncompressed_sha256": "5a28d08f1844710ffd198307029a69d8373bcf9b1348245f9bc056cc3faaad62"
+  },
+  {
+    "path": "comparison/before-link.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/before-link.log",
+    "bytes": 0,
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "comparison/after-link.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/after-link.json",
+    "bytes": 65343,
+    "uncompressed_sha256": "d03e5afe37c0735fe67c322626cab45dc15132298c576fe33ecf11e3e90c1e70"
+  },
+  {
+    "path": "comparison/after-link.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/after-link.log",
+    "bytes": 0,
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "comparison/before-measure.xml.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/before-measure.xml",
+    "bytes": 636,
+    "uncompressed_sha256": "03ad070f37fe9367bab4a8b8cc488b19e69ccd71f423b405f7b22c044fe2a99e"
+  },
+  {
+    "path": "comparison/before-measure.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/before-measure.log",
+    "bytes": 1797,
+    "uncompressed_sha256": "86afdfa80a64977b7576c966d061fa849189dcfadd7743b6d5700bc8577b84f0"
+  },
+  {
+    "path": "comparison/after-measure.xml.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/after-measure.xml",
+    "bytes": 636,
+    "uncompressed_sha256": "aaadcc6446b24cab7f2d8009d496ad5cf2c6a26624067e40eba0f619a4d7afda"
+  },
+  {
+    "path": "comparison/after-measure.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/after-measure.log",
+    "bytes": 1797,
+    "uncompressed_sha256": "19ae52e84dfb7cdaf04d10e17efabf539c8ea9332da5b9a8284e498355e8dbbf"
+  },
+  {
+    "path": "comparison/first-control.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/first-control.json",
+    "bytes": 274,
+    "uncompressed_sha256": "b25318da9968354e0f61a34764feab61a498d368034f317cf60ba965832e9726"
+  },
+  {
+    "path": "comparison/control-link.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/control-link.json",
+    "bytes": 65446,
+    "uncompressed_sha256": "bbad3402ccbacc155135028fb57405f2857d28c664a6081c61feb6920d8ae451"
+  },
+  {
+    "path": "comparison/control-link.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/control-link.log",
+    "bytes": 0,
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "comparison/control.xml.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/control.xml",
+    "bytes": 687,
+    "uncompressed_sha256": "6e796d5a77bd236165b0810a59041f0a0ad9486576e0bc0f11baf5cce2418936"
+  },
+  {
+    "path": "comparison/control.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/control.log",
+    "bytes": 695,
+    "uncompressed_sha256": "42b22188f31faa9947a018a69fe311bd1f4478400cc27ab0c9e8b54fb320efb0"
+  },
+  {
+    "path": "comparison/control.exit.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/control.exit",
+    "bytes": 2,
+    "uncompressed_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "path": "comparison/nohooks-syntax.json.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/nohooks-syntax.json",
+    "bytes": 1230,
+    "uncompressed_sha256": "5fe51010e4ba996005b68f50d1d6e09fae1adf642dc9fd6e81ad0967450a9c6d"
+  },
+  {
+    "path": "comparison/nohooks-syntax.log.gz",
+    "source": "/tmp/zyx-ci229-conversion-frontier/nohooks-syntax.log",
+    "bytes": 3882,
+    "uncompressed_sha256": "042794173e75ce0dbbe17b5dcb6111d3d63fb84bf6847f43e235d5213b0a3d59"
+  },
+  {
+    "path": "full/shard-1.xml.gz",
+    "source": "/tmp/zyx-ci229-frontier-final2-xml/shard-1.xml",
+    "bytes": 1766143,
+    "uncompressed_sha256": "58fef668cb1796a91eadf2644bda989daa76e795f3aa464ac2907890d4db38e4"
+  },
+  {
+    "path": "full/shard-0.xml.gz",
+    "source": "/tmp/zyx-ci229-frontier-final2-xml/shard-0.xml",
+    "bytes": 1767862,
+    "uncompressed_sha256": "09b687038741cf827aab905d29054cc54b352815c0c41d867ce2694aa7c88a00"
+  }
+]
