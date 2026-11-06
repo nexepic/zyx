@@ -1,0 +1,5 @@
+{
+  "source": "d68459f66cf8eb1e6c9889847b1fefbfda83ef25",
+  "exit": 130,
+  "reason": "Obsolete local full regression safely interrupted after a new production scalar fix was validated and selected. No completion/pass claimed; GitHub CI was not cancelled."
+}

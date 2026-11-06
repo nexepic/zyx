@@ -1,0 +1,26 @@
+{
+  "source_commit": "3644de478513f358eae043bdfaa84425a020ab32",
+  "unfiltered_script_exit": 0,
+  "enabled_passed": 11057,
+  "disabled": 20,
+  "failures": 0,
+  "skip": 0,
+  "missing": 0,
+  "extra": 0,
+  "duplicates": 0,
+  "stress_each_once": 6,
+  "coverage_percent": {
+    "lines": 95.82,
+    "functions": 98.09,
+    "regions": 93.79,
+    "branches": 86.88
+  },
+  "coverage_95_all_metrics_met": false,
+  "source_fingerprint_mismatches": 0,
+  "cache": {
+    "CMAKE_BUILD_TYPE": "Debug",
+    "CMAKE_CXX_COMPILER": "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "CMAKE_CXX_FLAGS_DEBUG": "-O0 -g0",
+    "ZYX_ENABLE_COVERAGE": "ON"
+  }
+}
