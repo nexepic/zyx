@@ -916,8 +916,19 @@ namespace graph::storage {
 		rebound.entry_count = 0;
 		// The immutable source is decoded and authenticated once. Repacking the
 		// complete ordered page avoids repeatedly decoding every growing prefix.
-		const auto validatedEntries = entries();
-		return BTreePage::createWithEntries(owner, rebound, validatedEntries);
+		auto destination = [&] {
+			const auto validatedEntries = entries();
+			auto page = BTreePage::create(owner, rebound);
+			page.writePackedEntries(validatedEntries);
+			rebound.entry_count = static_cast<uint32_t>(validatedEntries.size());
+			page.writeHeader(rebound);
+			return page;
+		}();
+		// Source entries are no longer needed once the independent packed image
+		// exists. Release them before authenticating that image; otherwise both
+		// complete decoded pages compete for the same bounded workspace.
+		destination.validateLayout();
+		return destination;
 	}
 
 	void BTreePage::writeHeader(BTreePageHeader updated) {

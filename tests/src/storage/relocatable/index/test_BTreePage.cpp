@@ -860,6 +860,51 @@ TEST(RelocatableBTreePageCodecTest, RebindingPackedPagesDecodesOnceRegardlessOfE
 	}
 }
 
+TEST(RelocatableBTreePageCodecTest, RebindingReleasesSourceKeysBeforeValidatingTheDestination) {
+ class KeyWorkspace final : public graph::utils::UnmanagedAllocationResource {
+ public:
+  size_t live_keys = 0, peak_keys = 0;
+  void reserveUnmanaged(size_t bytes) override {
+   if (bytes != 257U) return;
+   if (live_keys == 32U) throw std::bad_alloc();
+   peak_keys = std::max(peak_keys, ++live_keys);
+  }
+  void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U) --live_keys; }
+ private:
+  void *do_allocate(size_t bytes, size_t alignment) override {
+   return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+  }
+  void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+   std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+  }
+  bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+ };
+ PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header;
+ header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+ std::vector<BTreePageEntry> expected;
+ for (unsigned i = 0; i < 32; ++i) {
+  BTreePageEntry entry; entry.key.resize(257U, std::byte{1});
+  entry.key.back() = static_cast<std::byte>(i); entry.value_or_child = i + 1U;
+  expected.push_back(std::move(entry));
+ }
+ const auto source = BTreePage::createWithEntries(owner, header, expected);
+ owner.generation = Generation(3); owner.committed_lsn = LogSequenceNumber(10);
+ auto memory = std::make_shared<KeyWorkspace>();
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  const auto destination = source.rebindOwner(owner);
+  EXPECT_EQ(memory->live_keys, 0U);
+  EXPECT_EQ(destination.entries(), expected);
+  EXPECT_EQ(source.entries(), expected);
+  EXPECT_EQ(destination.header().generation, Generation(3));
+  EXPECT_EQ(source.header().generation, Generation(2));
+ }
+ EXPECT_EQ(memory->peak_keys, 32U);
+ EXPECT_EQ(memory->live_keys, 0U);
+}
+
 TEST(RelocatableBTreePageCodecTest, MutationsReuseTheFullyAuthenticatedSourceDecode) {
  PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
   RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
