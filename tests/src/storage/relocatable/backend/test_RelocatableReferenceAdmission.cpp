@@ -645,6 +645,16 @@ TEST_F(RelocatableStorageBackendTest, NativeTwoHopCountPreservesParallelPathsAft
 	std::vector<LogicalGraphEdgeCreateRequest> edges(100U, {nodes[0], nodes[1], "BUDGET_HOP", {}});
 	edges.push_back({nodes[1], nodes[2], "BUDGET_HOP", {}});
 	ASSERT_EQ(backend.createLogicalEdges(edges).size(), 101U);
+	// Parallel first hops intentionally collapse to one multiplicity entry.
+	// A fixed 512-byte limit need not reject that optimized representation on
+	// every STL. Add distinct dead ends to force a real bounded frontier: its
+	// 33 ID/count pairs alone exceed 512 bytes, while the final count stays 100.
+	std::vector<LogicalGraphNodeCreateRequest> deadEndRequests(32U, {{"BudgetMid"}, {}});
+	const auto deadEnds = backend.createLogicalNodes(deadEndRequests);
+	ASSERT_EQ(deadEnds.size(), 32U);
+	std::vector<LogicalGraphEdgeCreateRequest> deadEndEdges;
+	for (const auto id : deadEnds) deadEndEdges.push_back({nodes[0], id, "BUDGET_HOP", {}});
+	ASSERT_EQ(backend.createLogicalEdges(deadEndEdges).size(), 32U);
 	auto inner = std::make_unique<logical::LogicalTraversal>(
 		std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"BudgetSeed"}),
 		"a", "r", "b", "BUDGET_HOP", "out", std::vector<std::string>{"BudgetMid"});
@@ -652,9 +662,9 @@ TEST_F(RelocatableStorageBackendTest, NativeTwoHopCountPreservesParallelPathsAft
 		std::vector<std::string>{"BudgetEnd"});
 	logical::LogicalAggregate aggregate(std::move(outer), {},
 		{{"count", std::make_shared<expressions::VariableReferenceExpression>("c"), "count", false}});
-	LogicalPlanReadRuntimeBounds bounds{.maximum_node_records = 16U,
+	LogicalPlanReadRuntimeBounds bounds{.maximum_node_records = 64U,
 		.maximum_node_page_records = 2U, .maximum_metadata_pages_per_node_page = 8U,
-		.maximum_edges_per_node = 128U, .maximum_edge_records = 128U,
+		.maximum_edges_per_node = 160U, .maximum_edge_records = 160U,
 		.maximum_adjacency_page_records = 128U, .maximum_property_entries = 8U,
 		.maximum_rows = 128U, .maximum_distinct_rows = 128U,
 		.maximum_materialized_bytes = 512U};
