@@ -1,0 +1,188 @@
+{
+  "run": 42173675282,
+  "source_commit": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+  "observed_failed_names": 45,
+  "selected_isolated_cases": 68,
+  "tests": [
+    {
+      "test": "LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.BatchesMetadataAndSelectedPropertiesInTheSameExpression",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "status": "source publication candidate present; this individual native failure is not proved resolved"
+    },
+    {
+      "test": "CsvReaderTest.SharesByteAllowanceBetweenRawRecordsAndDecodedFieldSlots",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "CsvReaderTest.BufferedAllowanceChangesOnlyAfterConsumingThePeekedRow",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "CsvReaderTest.SharedStringAccountingIncludesSmallExternalAndRetainedBuffers",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "CsvReaderTest.RetainedPropertyAccountingObservesCopiedContainerCapacity",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFinalEdgesAggregateWithinBudget",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.RejectsRemoteUrisAndFilesOutsideTheConfiguredRoot",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanUnwindRuntimeTest.RangeAdmitsListGrowthBeforeAllocation",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanUnwindRuntimeTest.ProjectRetainsEarlierListWhileEvaluatingLaterRange",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanUnwindRuntimeTest.FunctionRetainsEarlierArgumentDuringLaterRange",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanUnwindRuntimeTest.BinaryExpressionRetainsLeftValueDuringRightEvaluation",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanUnwindRuntimeTest.InExpressionRetainsActualValueDuringCandidateEvaluation",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanUnwindRuntimeTest.SimpleCaseRetainsComparisonValueDuringWhenEvaluation",
+      "status": "candidate: public-ABI-aware boundary with retained rejection/efficiency checks; native verification pending"
+    },
+    {
+      "test": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "status": "individual native accounting cause remains unconfirmed; isolated diagnostic selected"
+    },
+    {
+      "test": "PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    },
+    {
+      "test": "PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction",
+      "status": "candidate: actual proxy ownership or valid URI fixture correction; native verification pending"
+    }
+  ]
+}

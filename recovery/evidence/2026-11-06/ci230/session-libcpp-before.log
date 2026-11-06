@@ -1,0 +1,12 @@
+constructed 0
+alloc 32 live 32
+alloc 16 live 48
+alloc 8 live 56
+alloc 4096 live 4152
+one existence 4152
+alloc 56 live 4208
+alloc 16 live 4224
+alloc 8 live 4232
+alloc 4096 live 8328
+one token 8328
+peak 8328 maxrequest 4096

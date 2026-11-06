@@ -1,0 +1,3 @@
+CI_LAYOUT pointer=8 string=24 property_value=48 property_map=40 read_value=88 read_row=160 result_value=320 result_row=40 result_pair=344 result_pair_alignment=8 owning_byte_vector=48
+CI_MAP_LAYOUT entries=2 pair=344 alignment=8 buckets=2 actual_pmr_structural=736 model_upper=750 allocation_requests=3 largest_request=360 value_heap_excluded=1
+CI_MAP_LAYOUT_FINAL live=0

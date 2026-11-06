@@ -1,0 +1,18 @@
+{
+  "source_commit": "493de9d2c3bb9f64a88b8cd750a5b3810a51a5f1",
+  "command": "./scripts/run_tests.sh --quick",
+  "command_exit": 0,
+  "configuration": "Linux x86_64 Clang19 Debug -O0 -g0, coverage and storage test hooks ON; two POSIX shards; 3600 seconds per shard",
+  "products": [
+    {
+      "path": "/workspace/zyx-ci-config/zyx_test_suite",
+      "bytes": 302945752,
+      "sha256": "0db66a96d7a61f518ffeed4ee17e87badfbab64890d8d376850f375a214f50c7"
+    },
+    {
+      "path": "/workspace/zyx-ci-config/libzyx_core.a",
+      "bytes": 336759576,
+      "sha256": "426a40306a91c74035a7168c9bd260f9a0f01dcffd7a410bd44a4f09748f50dd"
+    }
+  ]
+}

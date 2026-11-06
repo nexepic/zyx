@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="9" failures="0" disabled="0" errors="0" time="0.018" timestamp="2026-11-06T09:56:16.541" name="AllTests">
+  <testsuite name="LogicalPlanUnwindRuntimeTest" tests="9" failures="0" disabled="0" skipped="0" errors="0" time="0.018" timestamp="2026-11-06T09:56:16.542">
+    <testcase name="HoldsEvaluatedListBudgetAcrossLimitOutput" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="54" status="run" result="completed" time="0.004" timestamp="2026-11-06T09:56:16.542" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="HoldsUnchargedInputBindingsDuringExpansion" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="78" status="run" result="completed" time="0." timestamp="2026-11-06T09:56:16.546" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="RangeAdmitsListGrowthBeforeAllocation" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="102" status="run" result="completed" time="0.004" timestamp="2026-11-06T09:56:16.547" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="ProjectRetainsEarlierListWhileEvaluatingLaterRange" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="152" status="run" result="completed" time="0." timestamp="2026-11-06T09:56:16.551" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="RangeChecksGuardDuringListConstruction" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="183" status="run" result="completed" time="0." timestamp="2026-11-06T09:56:16.552" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="FunctionRetainsEarlierArgumentDuringLaterRange" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="203" status="run" result="completed" time="0.001" timestamp="2026-11-06T09:56:16.552" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="BinaryExpressionRetainsLeftValueDuringRightEvaluation" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="233" status="run" result="completed" time="0." timestamp="2026-11-06T09:56:16.554" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="InExpressionRetainsActualValueDuringCandidateEvaluation" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="263" status="run" result="completed" time="0." timestamp="2026-11-06T09:56:16.554" classname="LogicalPlanUnwindRuntimeTest" />
+    <testcase name="SimpleCaseRetainsComparisonValueDuringWhenEvaluation" file="/tmp/zyx-ci230-range-boundary/test.cpp" line="293" status="run" result="completed" time="0.004" timestamp="2026-11-06T09:56:16.555" classname="LogicalPlanUnwindRuntimeTest" />
+  </testsuite>
+</testsuites>

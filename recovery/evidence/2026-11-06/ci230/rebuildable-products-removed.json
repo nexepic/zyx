@@ -1,0 +1,15 @@
+{
+  "reason": "Make room for current coherent-source verification; previous compile manifests, objects, source, Git history and results remain. No active process uses these products.",
+  "files": [
+    {
+      "path": "/workspace/zyx-ci228-full-asan-core/final-native-tests",
+      "bytes": 285802656,
+      "sha256": "c0e8eadd50f2685f15812854b6cd575233e9cb17e2953fdbda413df05c302f0a"
+    },
+    {
+      "path": "/workspace/zyx-ci228-full-asan-core/libzyx_core_asan.a",
+      "bytes": 649350060,
+      "sha256": "16ee40c1164e265b884b776993ac0171941d2ee0193a822ae9481888fc305fbc"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="11" failures="0" disabled="0" errors="0" time="0.016" timestamp="2026-11-06T08:21:21.101" name="AllTests">
+  <testsuite name="LogicalGdsResourceOwnershipTest" tests="11" failures="0" disabled="0" skipped="0" errors="0" time="0.016" timestamp="2026-11-06T08:21:21.101">
+    <testcase name="ProjectionRejectsBeforeScanningAndRefundsItsPartialConstruction" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="36" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.101" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="EscapedLazyCsrUsesTheOriginatingAuthorityAndOutlivesTheProjection" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="53" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="DeniedLazyCsrPublishesNothingAndRefundsBeforeTheSameProjectionRetries" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="80" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="DeniedProjectionCopyPreservesTheSourceAndItsCompleteAdjacency" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="101" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="LegacyProjectionDoesNotBorrowAnUnrelatedDefaultPmrResource" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="118" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="CatalogCommitAndLazyCsrKeepTheirCacheOwnerUnderAForeignCaller" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="136" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="AbandonedCatalogPreparationRefundsCandidateMetadataAndRevisionState" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="165" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="EveryPreparationAdmissionFailureRestoresTheEmptyCatalogAndRefundsBeforeRetry" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="177" status="run" result="completed" time="0.002" timestamp="2026-11-06T08:21:21.102" classname="LogicalGdsResourceOwnershipTest">
+      <properties>
+        <property name="catalog_preparation_admission_points" value="40"/>
+      </properties>
+    </testcase>
+    <testcase name="EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="227" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.105" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="OwnedAlgorithmResultsRetainOnlyTheirEscapedQueryArrays" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="249" status="run" result="completed" time="0." timestamp="2026-11-06T08:21:21.105" classname="LogicalGdsResourceOwnershipTest" />
+    <testcase name="AllAlgorithmAdmissionPointsRefundBeforeRetryAndLeaveTheCsrReusable" file="/workspace/zyx-ci-fix/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp" line="280" status="run" result="completed" time="0.012" timestamp="2026-11-06T08:21:21.106" classname="LogicalGdsResourceOwnershipTest">
+      <properties>
+        <property name="algorithm_admission_points" value="213"/>
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>
