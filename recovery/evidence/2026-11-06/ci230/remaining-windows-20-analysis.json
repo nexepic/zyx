@@ -1,0 +1,186 @@
+{
+  "run": 42173675282,
+  "count": 20,
+  "tests": [
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "single-owner source admission",
+      "failure_excerpt": "NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation FAILED\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:80\n              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.\n                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:81\n              Expected equality of these values:\n                ids\n                  Which is: {}\n                stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})\n                  Which is: { 3, 1, 2 }\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:83\n              Expected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:80\n              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.\n                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:81\n              Expected equality of these values:\n                ids\n                  Which is: {}\n                stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})\n                  Which is: { 3 }\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:80\n              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.\n                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:81\n              Expected equality of these values:\n                ids\n                  Which is: {}\n                stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})\n                  Which is: { 3, 1, 2 }\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:83\n              Expected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1\n              <unknown>:-1\n              C++ exception with description \"logical-plan Node Property batch exceeded its byte bound\" thrown in the test body.",
+      "assessment": "At 2000 bytes no row is delivered; error specifically says Node Property batch byte bound. Need per-owner wire/decode/row state and first-denial stack. This is not a public QueryResult sink test.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "NestedSortPrefetchesOuterPropertyAndTransfersRows FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "FilterBetweenSortsTransfersSelectedRowReservations FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "ProjectBetweenSortsTransfersProjectedRowReservations FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "SortPreservesProjectedFilteredRowsWithoutOuterPrefetch FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFinalEdgesAggregateWithinBudget",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "count workspace lifetime",
+      "failure_excerpt": "TwoHopParallelFinalEdgesAggregateWithinBudget FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "Confirmed independent source defect: redundant second-hop membership set and completed workspace retained during scalar publication. Local 50336835 removes redundancy/releases seed storage and ends workspace scope before visitor. This Windows failure is not proved resolved.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Aggregate.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "count workspace lifetime",
+      "failure_excerpt": "TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "Confirmed independent source defect: redundant second-hop membership set and completed workspace retained during scalar publication. Local 50336835 removes redundancy/releases seed storage and ends workspace scope before visitor. This Windows failure is not proved resolved.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_Batching.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "streaming retained work state",
+      "failure_excerpt": "CollectedTwoHopTopologyPreservesStreamingOrderAndBag FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "Visitor path still fails a generic shared materialization admission. Public QueryResult hash overhead cannot explain this path. Need first-denial owner plus live bindings/source/selection state; retain current budget, ordering/cancellation and payload assertions.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "streaming retained work state",
+      "failure_excerpt": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "Visitor path still fails a generic shared materialization admission. Public QueryResult hash overhead cannot explain this path. Need first-denial owner plus live bindings/source/selection state; retain current budget, ordering/cancellation and payload assertions.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "source_file": "tests/src/query/execution/test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "PatternNamedColumnsPreserveUnknownTokensAndMissingValues FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+      "source_file": "tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "CSV first-denial stage",
+      "failure_excerpt": "ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery FAILED\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp:414\n              Expected: (std::string(error.what()).find(\"CsvReader:\")) != (std::string::npos), actual: 18446744073709551615 vs 18446744073709551615\n              Google Test trace:\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp(397): false\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp:414\n              Expected: (std::string(error.what()).find(\"CsvReader:\")) != (std::string::npos), actual: 18446744073709551615 vs 18446744073709551615\n              Google Test trace:\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp(397): true",
+      "assessment": "At 1024 bytes the case catches runtime_error but the text lacks CsvReader:. The log does not record the actual message here. Possible earlier URI/header/output admission must be identified; two modes fail. Existing rejection must remain.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "source_file": "tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "PreflightsListAndMapSlotsBeforeConstructingWideCsvRows FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "source_file": "tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "OutputBatchSharesCsvSourceBudgetWhileReadingAhead FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "source_file": "tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "NestedSortTransfersRowsWithoutDuplicatingSharedCharges FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "source_file": "tests/src/query/execution/test_LogicalPlanLoadCsvRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "aggregate work state",
+      "failure_excerpt": "AggregateAndCsvRetainedHeadersShareTheExecutionBudget FAILED\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp:771\n              Expected: static_cast<void>(runtime.execute(*independent.root, constrained, [&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())) doesn't throw an exception.\n                Actual: it throws class std::runtime_error with description \"logical-plan Aggregate group vector growth exceeded its materialized byte bound\".\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp:772\n              Expected equality of these values:\n                delivered\n                  Which is: 0\n                10U\n                  Which is: 10\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "Independent aggregate (without CSV) already fails its group-vector-growth bound at 5000 bytes, before the intended CSV overlap assertion; therefore CSV retained headers alone cannot explain the failure. Actual group state/growth ownership on MSVC remains to be measured.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "source_file": "tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "streaming retained work state",
+      "failure_excerpt": "SortTransfersLargeRowsToDirectLimitAndSkipBuffers FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "Visitor path still fails a generic shared materialization admission. Public QueryResult hash overhead cannot explain this path. Need first-denial owner plus live bindings/source/selection state; retain current budget, ordering/cancellation and payload assertions.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "source_file": "tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "source_file": "tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "public result plus operator overlap",
+      "failure_excerpt": "SortPaginationAndSortTransferRowsWithinTheSharedBudget FAILED\n              <unknown>:-1\n              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "assessment": "The success path materializes public QueryResult rows, so the cap includes platform-specific hash nodes/buckets, string/container proxies and overlapping source/output storage. Native log gives only generic rejection for this case; exact failing owner/call stack remains unknown. Do not attribute it solely to ABI cost or raise the cap from the observed failure.",
+      "native_resolution": "unverified"
+    },
+    {
+      "test": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "source_file": "tests/src/query/execution/test_LogicalPlanVarLengthRuntime.cpp",
+      "ci_source": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+      "category": "error-stage expectation",
+      "failure_excerpt": "ChargesInitialCountFrontierCapacityToMaterializedByteBound FAILED\n              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp:561\n              Expected equality of these values:\n                error.what()\n                  Which is: \"shared materialization exceeded its byte bound\"\n                \"logical-plan variable-length count exceeded its materialized byte bound\"",
+      "assessment": "Rejection is preserved, but native error is shared materialization rather than the expected initial-frontier-specific error. Need native first-denial allocation/call stack to distinguish earlier legitimate bookkeeping from erroneous ownership; do not weaken the frontier coverage.",
+      "native_resolution": "unverified"
+    }
+  ]
+}

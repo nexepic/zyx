@@ -1,0 +1,41 @@
+{
+  "process_rss_guard_baseline": 458784768,
+  "process_rss_at_rejection": 525959168,
+  "guard_limit": 67108864,
+  "before_query": {
+    "live": 5705203,
+    "heap": 40878080,
+    "resident": 458752000,
+    "internal": 117768192,
+    "external": 340983808,
+    "footprint": 121797888
+  },
+  "at_rejection": {
+    "live": 10455597,
+    "heap": 90259456,
+    "resident": 525959168,
+    "internal": 173604864,
+    "external": 352354304,
+    "footprint": 178407616
+  },
+  "deltas": {
+    "live": 4750394,
+    "heap": 49381376,
+    "resident": 67207168,
+    "internal": 55836672,
+    "external": 11370496,
+    "footprint": 56609728
+  },
+  "guard_observed_growth": 67174400,
+  "guard_excess": 65536,
+  "run": 42173675282,
+  "source_commit": "24dc9c29cfecc52779a9960113b9822dda7da5a6",
+  "scope": "isolated cold-start RSS diagnostic only; do not mix with later repeated in-process observations",
+  "limitations": [
+    "ASan live bytes are not resident bytes.",
+    "ASan heap size includes mapped allocator storage, not a disjoint OS resident attribution.",
+    "Mach internal/external overlap the process RSS observation; do not sum with sanitizer heap.",
+    "Adjacent samples have different times.",
+    "No native macOS allocation-stack/phase attribution is available locally; no safe cause-specific RSS fix is proved."
+  ]
+}
