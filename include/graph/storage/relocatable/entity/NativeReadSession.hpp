@@ -13,7 +13,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
+#include <boost/container/deque.hpp>
+#include <boost/container/options.hpp>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -31,6 +32,7 @@
 #include "graph/query/execution/PrepaidMemoryResource.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include "graph/storage/relocatable/metadata/Catalog.hpp"
 #include "graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
@@ -43,6 +45,9 @@ namespace graph::storage {
 	// or PageIds across the logical boundary. Entries use a bounded FIFO rather
 	// than an ID modulo table so sequential scans do not collide.
 	class NativeReadSession final : public utils::OwnedPmrObject {
+        template<class T> requires std::is_trivially_copyable_v<T>
+        using CacheOrder = boost::container::deque<T, std::pmr::polymorphic_allocator<T>,
+            typename boost::container::deque_options<boost::container::block_size<16U>>::type>;
 	public:
 		explicit NativeReadSession(std::shared_ptr<std::pmr::memory_resource> memory = {},
                 std::shared_ptr<std::pmr::memory_resource> privateStructure = {})
@@ -165,7 +170,7 @@ namespace graph::storage {
 				if (const auto found = node_label_cache_.find(id); found != node_label_cache_.end()) {
 					node_label_cache_bytes_ -= found->second.capacity() * sizeof(uint64_t);
 					node_label_cache_.erase(found);
-					std::erase(node_label_order_, id);
+					node_label_order_.erase(std::remove(node_label_order_.begin(), node_label_order_.end(), id), node_label_order_.end());
 				}
 			};
 			if (id == 0U || labels.size() > MAXIMUM_CACHED_NODE_LABEL_BYTES / sizeof(uint64_t)) {
@@ -376,7 +381,7 @@ namespace graph::storage {
 				if (found != token_name_cache_.end()) {
 					token_name_bytes_ -= oldBytes;
 					token_name_cache_.erase(found);
-					std::erase(token_name_order_, key);
+					token_name_order_.erase(std::remove(token_name_order_.begin(), token_name_order_.end(), key), token_name_order_.end());
 				}
 				return;
 			}
@@ -456,7 +461,8 @@ namespace graph::storage {
 		void putEntityPagePools(const std::vector<CatalogEntry> &pools) const try {
 			if (pools.size() <= MAXIMUM_CACHED_ENTITY_PAGE_POOLS) {
 				std::pmr::vector<CatalogEntry> replacement(pools.begin(), pools.end(), memoryResource());
-				entity_page_pools_ = std::move(replacement);
+				if (!entity_page_pools_) entity_page_pools_.emplace(size_t{0U}, memoryResource());
+                entity_page_pools_->swap(replacement);
 			}
 		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
             // Optional retention must not invalidate an authenticated read.
@@ -485,7 +491,7 @@ namespace graph::storage {
 			return memory_ ? memory_.get() : std::pmr::get_default_resource();
 		}
 		template <typename Cache>
-		static void putNamedToken(Cache &cache, std::pmr::deque<std::pmr::string> &order, size_t &bytes,
+		static void putNamedToken(Cache &cache, CacheOrder<std::string_view> &order, size_t &bytes,
 				std::string_view name, typename Cache::mapped_type token) try {
 			if (const auto found = cache.find(name); found != cache.end()) {
 				found->second = token;
@@ -494,16 +500,24 @@ namespace graph::storage {
 			// Check before constructing either retained name copy. Cache bypass
 			// still permits the caller to use the resolved token for this read.
 			if (name.size() > MAXIMUM_CACHED_TOKEN_NAME_BYTES / 2U) return;
+            // Preserve the existing conservative name-admission policy while
+            // the PMR owner accounts the one actual key and FIFO blocks.
 			const size_t nameBytes = name.size() * 2U;
 			while (!order.empty() && (cache.size() >= MAXIMUM_CACHED_TOKEN_NAMES ||
 					bytes > MAXIMUM_CACHED_TOKEN_NAME_BYTES - nameBytes)) {
 				bytes -= order.front().size() * 2U;
-				cache.erase(order.front());
+                const auto evicted = cache.find(order.front());
+                if (evicted == cache.end())
+                    throw std::logic_error("native read session token FIFO lost its key owner");
+				cache.erase(evicted);
 				order.pop_front();
 			}
 			const auto inserted = cache.emplace(name, token).first;
 			try {
-				order.push_back(inserted->first);
+                // Node-based hash tables preserve key addresses across rehash.
+                // Borrow the immutable key: a second owned name is unnecessary,
+                // and a FIFO copy must not allocate after reserving its block.
+				order.push_back(std::string_view(inserted->first));
 			} catch (...) {
 				cache.erase(inserted);
 				throw;
@@ -530,15 +544,15 @@ namespace graph::storage {
             // encoding allocation. Coordinated retention uses canonical bytes,
             // so nested std::string/list/map heaps cannot escape the arena.
             if (value && propertyValueBytes(*value) > MAXIMUM_CACHED_PROPERTY_BYTES) {
-                eraseEntry(key); std::erase(property_order_, key); return;
+                eraseEntry(key); property_order_.erase(std::remove(property_order_.begin(), property_order_.end(), key), property_order_.end()); return;
             }
             const size_t encoded = value ? CanonicalPropertyValueCodec::encodedSize(*value) : 0U;
             if (encoded > MAXIMUM_CACHED_PROPERTY_BYTES) {
-                eraseEntry(key); std::erase(property_order_, key); return;
+                eraseEntry(key); property_order_.erase(std::remove(property_order_.begin(), property_order_.end(), key), property_order_.end()); return;
             }
             std::optional<std::pmr::vector<std::byte>> replacement;
             if (value) {
-                replacement.emplace(memoryResource());
+                replacement.emplace(size_t{0U}, memoryResource());
                 replacement->reserve(encoded);
                 CanonicalPropertyValueCodec::append(*replacement, *value);
             }
@@ -548,12 +562,25 @@ namespace graph::storage {
             // rvalue is consumed on a denied allocation.
             if (auto found = owned_property_cache_.find(key); found != owned_property_cache_.end()) {
                 const size_t old = found->second ? found->second->capacity() : 0U;
-                found->second = std::move(replacement);
+                if (replacement) {
+                    if (!found->second) found->second.emplace(size_t{0U}, memoryResource());
+                    found->second->swap(*replacement);
+                } else found->second.reset();
                 property_cache_bytes_ = property_cache_bytes_ - old + bytes;
             } else {
                 property_order_.push_back(key);
-                try { owned_property_cache_.emplace(key, std::move(replacement)); }
-                catch (...) { property_order_.pop_back(); throw; }
+                try {
+                    const auto inserted = owned_property_cache_.try_emplace(key).first;
+                    try {
+                        if (replacement) {
+                            // A bare PMR-vector move allocates a proxy inside
+                            // noexcept on MSVC debug. Construct fallibly, then
+                            // transfer the buffer with equal-resource swap.
+                            inserted->second.emplace(size_t{0U}, memoryResource());
+                            inserted->second->swap(*replacement);
+                        }
+                    } catch (...) { owned_property_cache_.erase(inserted); throw; }
+                } catch (...) { property_order_.pop_back(); throw; }
                 property_cache_bytes_ += bytes;
             }
             while (owned_property_cache_.size() > MAXIMUM_CACHED_PROPERTIES ||
@@ -580,7 +607,7 @@ namespace graph::storage {
 			if (const auto found = property_cache_.find(key); found != property_cache_.end()) {
 				property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
 				property_cache_.erase(found);
-				std::erase(property_order_, key);
+				property_order_.erase(std::remove(property_order_.begin(), property_order_.end(), key), property_order_.end());
 			}
 			if (valueBytes > MAXIMUM_CACHED_PROPERTY_BYTES) return;
 			while (!property_order_.empty() &&
@@ -705,7 +732,7 @@ namespace graph::storage {
 		}
 
 		template <typename T>
-		static void put(std::pmr::unordered_map<uint64_t, T> &cache, std::pmr::deque<uint64_t> &order, uint64_t id,
+		static void put(utils::AdmissionPmrUnorderedMap<uint64_t, T> &cache, CacheOrder<uint64_t> &order, uint64_t id,
 							const T &value) {
 			const auto found = cache.find(id);
 			if (found != cache.end()) {
@@ -775,34 +802,37 @@ namespace graph::storage {
 		mutable uint64_t generation_ = 0U;
 		mutable uint64_t database_id_ = 0U;
 		mutable bool bound_ = false;
-		mutable std::pmr::unordered_map<uint64_t, NodeEntityRecord> node_cache_;
-		mutable std::pmr::unordered_map<uint64_t, EdgeEntityRecord> edge_cache_;
-		mutable std::pmr::unordered_map<uint64_t, bool> node_existence_cache_;
-		mutable std::pmr::unordered_map<uint64_t, std::pmr::vector<uint64_t>> node_label_cache_;
+		mutable utils::AdmissionPmrUnorderedMap<uint64_t, NodeEntityRecord> node_cache_;
+		mutable utils::AdmissionPmrUnorderedMap<uint64_t, EdgeEntityRecord> edge_cache_;
+		mutable utils::AdmissionPmrUnorderedMap<uint64_t, bool> node_existence_cache_;
+		mutable utils::AdmissionPmrUnorderedMap<uint64_t, std::pmr::vector<uint64_t>> node_label_cache_;
 		mutable size_t node_label_cache_bytes_ = 0U;
-		mutable std::pmr::deque<uint64_t> node_order_;
-		mutable std::pmr::deque<uint64_t> edge_order_;
-		mutable std::pmr::deque<uint64_t> node_existence_order_;
-		mutable std::pmr::deque<uint64_t> node_label_order_;
-		mutable std::pmr::unordered_map<PropertyCacheKey, std::optional<PropertyValue>, PropertyCacheKeyHash>
+		// Every block remains accounted: std::deque may allocate a 4 KiB
+		// first block for every tiny cache on libc++. Fixed small blocks retain
+		// amortized FIFO allocation without a per-entry linked-list node.
+		mutable CacheOrder<uint64_t> node_order_;
+		mutable CacheOrder<uint64_t> edge_order_;
+		mutable CacheOrder<uint64_t> node_existence_order_;
+		mutable CacheOrder<uint64_t> node_label_order_;
+		mutable utils::AdmissionPmrUnorderedMap<PropertyCacheKey, std::optional<PropertyValue>, PropertyCacheKeyHash>
 				property_cache_;
-		mutable std::pmr::unordered_map<PropertyCacheKey, std::optional<std::pmr::vector<std::byte>>, PropertyCacheKeyHash> owned_property_cache_;
-		mutable std::pmr::unordered_map<PropertyCacheKey, bool, PropertyCacheKeyHash> property_presence_cache_;
-		mutable std::pmr::deque<PropertyCacheKey> property_order_;
-		mutable std::pmr::deque<PropertyCacheKey> property_presence_order_;
+		mutable utils::AdmissionPmrUnorderedMap<PropertyCacheKey, std::optional<std::pmr::vector<std::byte>>, PropertyCacheKeyHash> owned_property_cache_;
+		mutable utils::AdmissionPmrUnorderedMap<PropertyCacheKey, bool, PropertyCacheKeyHash> property_presence_cache_;
+		mutable CacheOrder<PropertyCacheKey> property_order_;
+		mutable CacheOrder<PropertyCacheKey> property_presence_order_;
 		mutable size_t property_cache_bytes_ = 0U;
-		mutable std::pmr::unordered_map<TokenNameKey, std::pmr::string, TokenNameKeyHash> token_name_cache_;
-		mutable std::pmr::deque<TokenNameKey> token_name_order_;
+		mutable utils::AdmissionPmrUnorderedMap<TokenNameKey, std::pmr::string, TokenNameKeyHash> token_name_cache_;
+		mutable CacheOrder<TokenNameKey> token_name_order_;
 		mutable size_t token_name_bytes_ = 0U;
-		mutable std::pmr::unordered_map<std::pmr::string, uint32_t, TransparentStringHash, std::equal_to<>> property_token_cache_;
-		mutable std::pmr::deque<std::pmr::string> property_token_order_;
+		mutable utils::AdmissionPmrUnorderedMap<std::pmr::string, uint32_t, TransparentStringHash, std::equal_to<>> property_token_cache_;
+		mutable CacheOrder<std::string_view> property_token_order_;
 		mutable size_t property_token_bytes_ = 0U;
-		mutable std::pmr::unordered_map<std::pmr::string, uint64_t, TransparentStringHash, std::equal_to<>> node_label_token_cache_;
-		mutable std::pmr::deque<std::pmr::string> node_label_token_order_;
+		mutable utils::AdmissionPmrUnorderedMap<std::pmr::string, uint64_t, TransparentStringHash, std::equal_to<>> node_label_token_cache_;
+		mutable CacheOrder<std::string_view> node_label_token_order_;
 		mutable size_t node_label_token_bytes_ = 0U;
-		mutable std::pmr::unordered_map<std::pmr::string, uint64_t, TransparentStringHash, std::equal_to<>>
+		mutable utils::AdmissionPmrUnorderedMap<std::pmr::string, uint64_t, TransparentStringHash, std::equal_to<>>
 				relationship_type_token_cache_;
-		mutable std::pmr::deque<std::pmr::string> relationship_type_token_order_;
+		mutable CacheOrder<std::string_view> relationship_type_token_order_;
 		mutable size_t relationship_type_token_bytes_ = 0U;
 		mutable std::optional<utils::OwnedStdVector<IndexDefinition>> index_definitions_;
 		mutable std::optional<utils::OwnedStdVector<ConstraintDefinition>> constraint_definitions_;

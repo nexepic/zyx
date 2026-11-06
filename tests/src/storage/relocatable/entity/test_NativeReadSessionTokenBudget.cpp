@@ -246,6 +246,8 @@ class SessionCountingResource final : public std::pmr::memory_resource {
 public:
  size_t live = 0U;
  size_t allocations = 0U;
+ size_t largest_request = 0U;
+ size_t large_allocations = 0U;
  size_t fail_after = (std::numeric_limits<size_t>::max)();
  bool deny_admission = false;
  size_t denied_allocations = 0U;
@@ -257,7 +259,8 @@ private:
    throw std::bad_alloc();
   }
   void *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
-  ++allocations; live += bytes; return result;
+  ++allocations; live += bytes; largest_request = (std::max)(largest_request, bytes);
+  if (bytes >= 4096U) ++large_allocations; return result;
  }
  void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
   std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment); live -= bytes;
@@ -266,14 +269,38 @@ private:
 };
 }
 
+TEST(NativeReadSessionTokenBudgetTest, TinyFifosDoNotReserveWholePagesForTheirFirstEntry) {
+ auto memory = std::make_shared<SessionCountingResource>();
+ {
+  NativeReadSession session(memory);
+  const auto empty = memory->live;
+  memory->largest_request = 0U;
+  session.putNodeExists(1U, true);
+  session.putPropertyToken("payload", 7U);
+  EXPECT_EQ(session.nodeExists(1U), std::optional<bool>(true));
+  ASSERT_TRUE(session.propertyToken("payload").has_value());
+  EXPECT_EQ(*session.propertyToken("payload"), std::optional<uint32_t>(7U));
+  // Independent efficiency bounds on actual PMR requests, including every
+  // node, bucket and allocator proxy; not the logical payload estimator.
+  EXPECT_LE(memory->live - empty, 2048U);
+  EXPECT_LE(memory->largest_request, 1024U);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}
+
 TEST(NativeReadSessionTokenBudgetTest, OwnedLabelsAndTokenNamesChargePayloadAndReleaseTogether) {
  auto memory = std::make_shared<SessionCountingResource>();
  {
   NativeReadSession session(memory);
   const size_t baseline = memory->live;
   const std::string name(4096U, 'n');
+  const auto largeBefore = memory->large_allocations;
   session.putPropertyToken(name, 9U);
-  EXPECT_GE(memory->live, baseline + 2U * (name.size() + 1U));
+  // A node and a tiny FIFO block are smaller than the payload. Observe
+  // actual PMR requests: one string buffer, not a duplicate FIFO name.
+  EXPECT_EQ(memory->large_allocations - largeBefore, 1U);
+  // The FIFO borrows the stable map key; there is one owned name copy.
+  EXPECT_GE(memory->live, baseline + name.size() + 1U);
   const size_t beforeName = memory->live;
   session.putTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY, 9U, name);
   EXPECT_GE(memory->live, beforeName + name.size() + 1U);
@@ -297,20 +324,79 @@ TEST(NativeReadSessionTokenBudgetTest, FailedConstructionRefundsEveryPartialCont
  }
 }
 
+TEST(NativeReadSessionTokenBudgetTest, EveryOwnedPropertyInsertionFailurePreservesItsOldEntryAndRefunds) {
+ const graph::PropertyValue old(std::string(64U, 'o')), next(std::string(300U, 'n'));
+ for (const bool edge : {false, true}) for (const int initial : {0, 1, 2}) {
+  const auto prepare = [&](NativeReadSession &session) {
+   session.putProperty(edge, 2U, 7U, old);
+   if (initial == 1) session.putProperty(edge, 1U, 7U, old);
+   if (initial == 2) session.putProperty(edge, 1U, 7U, std::optional<graph::PropertyValue>{});
+  };
+  size_t allocations = 0U;
+  auto baseline = std::make_shared<SessionCountingResource>();
+  {
+   NativeReadSession session(baseline); prepare(session);
+   const auto before = baseline->allocations;
+   session.putProperty(edge, 1U, 7U, next);
+   allocations = baseline->allocations - before;
+  }
+  ASSERT_GT(allocations, 0U);
+  EXPECT_EQ(baseline->live, 0U);
+  for (const bool denied : {false, true}) for (size_t failure = 0U; failure <= allocations; ++failure) {
+   SCOPED_TRACE(::testing::Message() << edge << '/' << initial << '/' << denied << '/' << failure);
+   auto memory = std::make_shared<SessionCountingResource>();
+   {
+    NativeReadSession session(memory); prepare(session);
+    memory->deny_admission = denied;
+    memory->fail_after = memory->allocations + failure;
+    try { session.putProperty(edge, 1U, 7U, next); }
+    catch (const std::bad_alloc &) { EXPECT_FALSE(denied); }
+    memory->fail_after = (std::numeric_limits<size_t>::max)();
+    EXPECT_EQ(memory->denied_allocations, failure < allocations ? 1U : 0U);
+    const auto cached = session.property(edge, 1U, 7U);
+    if (failure == allocations) {
+     ASSERT_TRUE(cached && *cached); EXPECT_EQ(**cached, next);
+    } else if (initial == 0) EXPECT_FALSE(cached.has_value());
+    else if (initial == 1) {
+     ASSERT_TRUE(cached && *cached); EXPECT_EQ(**cached, old);
+    } else { ASSERT_TRUE(cached.has_value()); EXPECT_FALSE(cached->has_value()); }
+    session.putProperty(edge, 1U, 7U, next);
+    const auto retried = session.property(edge, 1U, 7U);
+    ASSERT_TRUE(retried && *retried); EXPECT_EQ(**retried, next);
+    EXPECT_EQ(session.property(edge, 2U, 7U), std::optional<std::optional<graph::PropertyValue>>(old));
+   }
+   EXPECT_EQ(memory->live, 0U);
+  }
+ }
+}
+
 TEST(NativeReadSessionTokenBudgetTest, FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry) {
- auto memory = std::make_shared<SessionCountingResource>();
- NativeReadSession session(memory);
- session.putPropertyToken("retained", 1U);
  const std::string name(4096U, 'x');
- memory->fail_after = memory->allocations + 2U;
- EXPECT_THROW(session.putPropertyToken(name, 2U), std::bad_alloc);
- EXPECT_FALSE(session.propertyToken(name).has_value());
- ASSERT_TRUE(session.propertyToken("retained").has_value());
- EXPECT_EQ(**session.propertyToken("retained"), 1U);
- memory->fail_after = (std::numeric_limits<size_t>::max)();
- session.putPropertyToken(name, 2U);
- ASSERT_TRUE(session.propertyToken(name).has_value());
- EXPECT_EQ(**session.propertyToken(name), 2U);
+ auto observed = std::make_shared<SessionCountingResource>();
+ size_t allocations = 0U;
+ {
+  NativeReadSession session(observed); session.putPropertyToken("retained", 1U);
+  const auto before = observed->allocations;
+  session.putPropertyToken(name, 2U); allocations = observed->allocations - before;
+ }
+ EXPECT_EQ(observed->live, 0U); ASSERT_GT(allocations, 0U);
+ for (size_t failure = 0U; failure < allocations; ++failure) {
+  SCOPED_TRACE(failure);
+  auto memory = std::make_shared<SessionCountingResource>();
+  {
+   NativeReadSession session(memory); session.putPropertyToken("retained", 1U);
+   memory->fail_after = memory->allocations + failure;
+   EXPECT_THROW(session.putPropertyToken(name, 2U), std::bad_alloc);
+   EXPECT_FALSE(session.propertyToken(name).has_value());
+   ASSERT_TRUE(session.propertyToken("retained").has_value());
+   EXPECT_EQ(**session.propertyToken("retained"), 1U);
+   memory->fail_after = (std::numeric_limits<size_t>::max)();
+   session.putPropertyToken(name, 2U);
+   ASSERT_TRUE(session.propertyToken(name).has_value());
+   EXPECT_EQ(**session.propertyToken(name), 2U);
+  }
+  EXPECT_EQ(memory->live, 0U);
+ }
 }
 
 namespace {
