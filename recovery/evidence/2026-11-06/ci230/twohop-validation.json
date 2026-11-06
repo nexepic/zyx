@@ -1,6 +1,6 @@
 {
   "source_commit": "50336835a282b3aaf3be090cfa0c139ec3db4e60",
-  "full_regression": "running; not yet a pass",
+  "full_regression": "11063/11063 enabled tests exactly once, including all six stress; 20 disabled, no failure/skip/missing/extra/duplicates",
   "focused_tests": 8,
   "focused_failed": 0,
   "red_current_account_bytes": 760,
@@ -8,5 +8,6 @@
   "green": "account equality and all eight two-hop cases passed",
   "scope": "coherent existing CMake build; Linux GNU libstdc++; native Windows/macOS not available",
   "red_log_sha256": "440c1dbce2c2cabda25665f319a538ddca2efc0759ccc8a75c1f2e731195ca5d",
-  "green_log_sha256": "f427a4106c64110c8551c38486afe5ae911216c5e7a528aac7cc1bb8f090fe57"
+  "green_log_sha256": "f427a4106c64110c8551c38486afe5ae911216c5e7a528aac7cc1bb8f090fe57",
+  "full_regression_evidence": "twohop-full/final-full-exact-once.json"
 }

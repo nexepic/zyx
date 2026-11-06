@@ -1,0 +1,46 @@
+{
+  "command": [
+    "./buildDir/zyx_test_suite",
+    "--gtest_filter=RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection"
+  ],
+  "checkout_sha": "0d75cc177399b31432faa7fc4d87bf267028f232",
+  "event_sha": null,
+  "started_at": 1793964367.8727345,
+  "state": "completed",
+  "timeout_seconds": 600.0,
+  "exit_code": 0,
+  "diagnostic_options": {
+    "ASAN_OPTIONS": "halt_on_error=1:fast_unwind_on_fatal=0",
+    "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+  },
+  "effective_timeout_seconds": 600.0,
+  "completed_at": 1793964370.94618,
+  "output_bytes": 686,
+  "retained_prefix_bytes": 686,
+  "retained_tail_bytes": 0,
+  "output_truncated": false,
+  "console_truncated": false,
+  "xml_present": true,
+  "xml_documents": [
+    {
+      "path": "tests.xml",
+      "bytes": 681,
+      "parse_state": "complete",
+      "summary": {
+        "tests": "1",
+        "failures": "0",
+        "disabled": "0",
+        "errors": "0",
+        "time": "2.927",
+        "timestamp": "2026-11-06T11:26:07.979",
+        "name": "AllTests"
+      }
+    }
+  ],
+  "process": {
+    "raw_exit_code": 0,
+    "started_at": 1793964367.9292603,
+    "completed_at": 1793964370.9380107,
+    "posix_signal": null
+  }
+}

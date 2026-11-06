@@ -1,0 +1,10 @@
+{
+  "platform": "Linux x86_64 GNU libstdc++",
+  "binary": "coherent source 50336835, coverage Debug -O0 -g0",
+  "asan_instrumented": false,
+  "result": "1/1 passed; evidence supervisor path only, not Apple sanitizer validation",
+  "workflow_timeout_seconds": 180,
+  "rationale": "new diagnostic only; bounded above the unchanged query guard 120-second timeout to retain time for existing gates",
+  "local_probe_timeout_seconds": 600,
+  "all_original_workflow_steps_preserved": true
+}

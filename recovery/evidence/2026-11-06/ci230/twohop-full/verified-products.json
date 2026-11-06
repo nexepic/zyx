@@ -1,0 +1,14 @@
+{
+  "source_commit": "50336835a282b3aaf3be090cfa0c139ec3db4e60",
+  "kind": "coherent incremental CMake, Debug -O0 -g0, coverage, Clang19 GNU libstdc++, Linux only",
+  "files": {
+    "/workspace/zyx-ci-fix/buildDir/zyx_test_suite": {
+      "bytes": 302981912,
+      "sha256": "874d92e232f41f021d88ee6f7c5713b7aabe520b94878d840b0e6925a220dc91"
+    },
+    "/workspace/zyx-ci-fix/buildDir/libzyx_core.a": {
+      "bytes": 336758984,
+      "sha256": "19d67c4e2fd1b666b1ef790dbf6c0bf3529df1ce15361eecaadda5dc4985e403"
+    }
+  }
+}
