@@ -245,8 +245,18 @@ TEST_F(RelocatableStorageBackendTest, NativeReadFallbackInheritsTheSnapshotGrant
         const size_t createdBytes = memory->used();
         EXPECT_EQ(&selectNativeReadSession(pin, nullptr, fallback), &created);
         EXPECT_EQ(memory->used(), createdBytes);
-        created.putPropertyToken(std::string(4096U, 'p'), 1U);
-        EXPECT_GT(memory->used(), createdBytes + 8192U);
+        std::string key(4096U, 'p');
+        created.putPropertyToken(key, 1U);
+        // One owned key is required; the FIFO borrows that immutable key.
+        // Reject a return to duplicated 4 KiB name buffers while preserving
+        // the real ownership lower bound and complete refund below.
+        EXPECT_GT(memory->used(), createdBytes + key.size());
+        EXPECT_LT(memory->used(), createdBytes + 2U * key.size());
+        const size_t retainedBytes = memory->used();
+        key.assign(key.size(), 'q');
+        EXPECT_FALSE(created.propertyToken(key).has_value());
+        EXPECT_EQ(created.propertyToken(std::string(key.size(), 'p')), 1U);
+        EXPECT_EQ(memory->used(), retainedBytes);
     }
     EXPECT_EQ(memory->used(), baseline);
     snapshot.release();
