@@ -786,13 +786,37 @@ namespace graph::query::execution {
 
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget) {
 		using namespace direct_edge_test;
+		using namespace detail;
+		class ProbedSnapshot final : public DirectEdgeSnapshot {
+		public:
+			ProbedSnapshot(DirectEdgeGraph &graph, const std::function<void()> &probe)
+				: DirectEdgeSnapshot(graph), probe_(probe) {}
+			std::vector<std::vector<PropertyValue>> readNodePropertyColumnsSortedWithAdmission(
+				std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+				const std::function<void(size_t)> &admission) const override {
+				return DirectEdgeSnapshot::readNodePropertyColumnsSortedWithAdmission(ids, keys,
+					[&](size_t bytes) { if (probe_) probe_(); admission(bytes); });
+			}
+		private:
+			const std::function<void()> &probe_;
+		};
+		class ProbedBackend final : public storage::LogicalGraphReadBackend {
+		public:
+			explicit ProbedBackend(DirectEdgeGraph &graph) : graph_(graph) {}
+			std::unique_ptr<storage::LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
+				return std::make_unique<ProbedSnapshot>(graph_, before_admission);
+			}
+			std::function<void()> before_admission;
+		private:
+			DirectEdgeGraph &graph_;
+		};
 		DirectEdgeGraph graph = directGraph();
 		graph.enable_property_tokens = true;
 		graph.nodes.erase(2U);
 		graph.nodes.erase(3U);
 		const PropertyValue payload(std::string(6000U, 'p'));
 		graph.nodes.at(1U).properties.emplace_back("payload", payload);
-		DirectEdgeBackend backend(graph);
+		ProbedBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		const std::string key(2000U, 'h');
 		const fs::path csv = writeFile("prefetch-shared.csv", key + "\nx\n");
@@ -808,27 +832,64 @@ namespace graph::query::execution {
 		auto constrained = bounds();
 		// Flush within the CSV callback, while its input/header owners are live.
 		constrained.maximum_rows = 1U;
-		// The execution retains one output row slot while CSV headers and selected
-		// Property values coexist, so include that storage in the same allowance.
-		constrained.maximum_materialized_bytes = 10000U + sizeof(LogicalPlanReadRow);
+		// Keep the original 24 KiB successful efficiency bound. Force denial via
+		// independent parent pressure, rather than an ABI-dependent row estimate.
+		constrained.maximum_materialized_bytes = 24000U;
+		constexpr size_t domainLimit = 1024U * 1024U;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(domainLimit));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(domainLimit));
+		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 24000U);
+		auto queryContext = context();
+		queryContext.resource_account = account;
+		size_t independentSourceUsage = 0U;
+		backend.before_admission = [&] { independentSourceUsage = account->used(); };
 		size_t delivered = 0U;
 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*independent, constrained,
-				[&](const LogicalPlanReadRow &) { ++delivered; return true; })));
+				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, queryContext)));
 		EXPECT_EQ(delivered, 1U);
+		EXPECT_GT(independentSourceUsage, 0U);
+		EXPECT_EQ(account->used(), 0U);
 		QueryPlan csvOnly = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(csv) + "' AS row RETURN row." + key + " AS value");
-		EXPECT_EQ(runtime.executeToQueryResult(*csvOnly.root, constrained, context()).rowCount(), 1U);
+		EXPECT_EQ(runtime.executeToQueryResult(*csvOnly.root, constrained, queryContext).rowCount(), 1U);
+		EXPECT_EQ(account->used(), 0U);
+
+		auto competing = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, domainLimit);
+		ResourceLease competingRows(competing);
+		size_t pressurePoints = 0U;
+		backend.before_admission = [&] {
+			if (pressurePoints++ == 0U) {
+				// The live CSV header alone owns at least key.size() bytes.
+				EXPECT_GE(account->used(), independentSourceUsage + key.size());
+			}
+			const size_t withoutCompetition = database->usage().total - competingRows.bytes();
+			ASSERT_LE(withoutCompetition + 5999U, domainLimit);
+			competingRows.set(domainLimit - withoutCompetition - 5999U);
+			EXPECT_LT(account->available(), 6000U);
+		};
 		delivered = 0U;
 		const size_t readsBeforeCombined = graph.node_property_column_batch_reads;
 		const size_t admissionsBeforeCombined = graph.node_property_column_admission_reads;
 		EXPECT_THROW(static_cast<void>(runtime.execute(*combined, constrained,
-				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())), std::runtime_error);
+				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, queryContext)), std::runtime_error);
 		EXPECT_EQ(delivered, 0U);
+		EXPECT_GT(pressurePoints, 0U);
 		EXPECT_GT(graph.node_property_column_admission_reads, admissionsBeforeCombined);
 		EXPECT_EQ(graph.node_property_column_batch_reads, readsBeforeCombined);
-		constrained.maximum_materialized_bytes = 24000U;
-		const auto result = runtime.executeToQueryResult(*combined, constrained, context());
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows()[0].at("payload").asPrimitive(), payload);
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, competingRows.bytes());
+		backend.before_admission = {};
+		competingRows.reset();
+		EXPECT_EQ(database->usage().total, 0U);
+		{
+			const auto result = runtime.executeToQueryResult(*combined, constrained, queryContext);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows()[0].at("payload").asPrimitive(), payload);
+			EXPECT_GE(account->used(), 6000U);
+			EXPECT_LE(account->used(), 24000U);
+		}
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, readsBeforeCombined + 1U);
 		EXPECT_EQ(graph.node_property_point_reads, 0U);
 		EXPECT_TRUE(graph.node_read_ids.empty());
 	}

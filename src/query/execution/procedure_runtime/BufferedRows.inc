@@ -315,12 +315,28 @@
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
             debug::CiBudgetTrace trace(&result, "procedure_publication");
             if (trace.allow()) {
+                const auto owner = utils::OwnedAllocationScope::owner();
+                const auto *budget = dynamic_cast<const MaterializedByteBudget *>(owner.get());
+                size_t payloadCredits = 0U, ownerHeadroom = 0U;
+                bool saturated = false, headroomValid = false;
+                for (const auto &row : rows) {
+                    const size_t amount = row.allocation_credit.bytes();
+                    if (amount > (std::numeric_limits<size_t>::max)() - payloadCredits) {
+                        saturated = true; payloadCredits = (std::numeric_limits<size_t>::max)();
+                    } else payloadCredits += amount;
+                }
+                try {
+                    if (budget) { ownerHeadroom = budget->availableWithParent(); headroomValid = true; }
+                } catch (...) { /* Diagnostics must preserve the original failure. */ }
                 std::fprintf(stderr,
-                    "CI_PROCEDURE_PRESSURE owner=%zu phase=%s source_rows=%zu source_capacity=%zu source_row_width=%zu source_backing=%zu external_source=%zu source_retained=%zu result_rows=%zu result_capacity=%zu result_row_width=%zu result_and_output=%zu requested_backing=%zu maximum=%zu\n",
+                    "CI_PROCEDURE_PRESSURE owner=%zu phase=%s source_rows=%zu source_capacity=%zu source_row_width=%zu source_backing=%zu external_source=%zu source_retained=%zu result_rows=%zu result_capacity=%zu result_row_width=%zu result_and_output=%zu requested_backing=%zu maximum=%zu row_payload_credits=%zu credits_saturated=%d result_resource_credit=%zu allocation_owner=%zu owner_used=%zu owner_maximum=%zu parent_headroom=%zu headroom_valid=%d\n",
                     trace.id(), phase, rows.size(), rows.capacity(), sizeof(BufferedProcedureRow),
                     rows.capacity() * sizeof(BufferedProcedureRow), externalSourceBytes, rowSourceBytes,
                     result.getRows().size(), result.getRows().capacity(), sizeof(QueryResult::Row),
-                    resultAndOutputBytes, requestedBackingBytes, maximumBytes);
+                    resultAndOutputBytes, requestedBackingBytes, maximumBytes, payloadCredits, int(saturated),
+                    result.retainedResourceBytes(), budget ? debug::CiBudgetTrace(budget, "materialized").id() : 0U,
+                    budget ? budget->used() : 0U, budget ? budget->used() + budget->available() : 0U,
+                    ownerHeadroom, int(headroomValid));
                 std::fflush(stderr);
             }
             // One-shot pressure snapshots retain the process-wide output cap,
