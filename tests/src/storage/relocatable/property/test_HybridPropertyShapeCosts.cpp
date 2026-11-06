@@ -143,21 +143,23 @@ TEST_F(HybridPropertyMatureShapeCostsTest, EightBoundedGroupsKeepWholeDatabaseCo
     auto old = metadata_->openSnapshot(); auto memory = std::make_shared<MaterializedByteBudget>(1024 * 1024);
     NativeStorageAllocationCensus census(io_, *metadata_, memory); const auto row = census.inspect(old);
     ASSERT_TRUE(row); ASSERT_TRUE(row->fullyAttributed());
+    size_t observedWorkspacePeak = 0U;
     for (size_t group = 1; group <= groups; ++group) {
         SCOPED_TRACE(group);
         struct WorkspaceEvidence {
             MaterializedByteBudget &memory;
             const StorageIO &io;
-            size_t group, peak = 0U;
+            size_t group;
+            size_t &peak; // The budget's high-water counter spans all groups.
             StorageIOStats before;
             ~WorkspaceEvidence() {
                 const auto after = io.stats();
-                std::cout << "NATIVE_MATURE_WORKSPACE group=" << group << " peak=" << peak
+                std::cout << "NATIVE_MATURE_WORKSPACE group=" << group << " cumulative_peak=" << peak
                     << " limit=" << 1024U * 1024U << " used_after=" << memory.used()
                     << " storage_read_bytes=" << after.read_bytes - before.read_bytes
                     << " storage_write_bytes=" << after.write_bytes - before.write_bytes << '\n';
             }
-        } evidence{*memory, *io_, group, 0U, io_->stats()};
+        } evidence{*memory, *io_, group, observedWorkspacePeak, io_->stats()};
         graph::debug::PerfTrace::ScopedObserver workspaceObserver(&evidence,
             [](void *state, std::string_view key, int64_t, bool) noexcept {
                 if (key == "logical_plan.materialized_budget_peak_bytes") {
