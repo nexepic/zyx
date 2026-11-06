@@ -254,7 +254,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::optional<BTreePageEntry> decodeOne(std::span<const std::byte> stream, size_t &offset,
-															  utils::OwnedStdVector<std::byte> &previous, bool restart,
+															  std::span<const std::byte> previous, bool restart,
 															  bool includesValue) {
 			if (offset == stream.size()) {
 				return std::nullopt;
@@ -279,7 +279,6 @@ namespace graph::storage {
                 key.begin() + static_cast<std::ptrdiff_t>(shared));
 			offset += static_cast<size_t>(suffixBytes);
 			const uint64_t value = includesValue ? readVarint(stream, offset) : 0U;
-			previous = key;
 			return BTreePageEntry{std::move(key), value};
 		}
 
@@ -498,7 +497,7 @@ namespace graph::storage {
 		ByteVector stream;
 		utils::OwnedStdVector<uint32_t> offsets;
 		offsets.reserve(restartCount);
-		utils::OwnedStdVector<std::byte> previous;
+		std::span<const std::byte> previous;
 		for (size_t index = 0U; index < entries.size(); ++index) {
 			const BTreePageEntry &entry = entries[index];
 			if (index != 0U && !lessKey(entries[index - 1U].key, entry.key)) {
@@ -571,7 +570,7 @@ namespace graph::storage {
 		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
 		utils::OwnedStdVector<BTreePageEntry> entries;
 		entries.reserve(header.entry_count);
-		utils::OwnedStdVector<std::byte> previous;
+		std::span<const std::byte> previous;
 		const std::span<const std::byte> stream = bytes.subspan(header.stream_offset, header.stream_bytes);
 		size_t offset = 0U;
 		for (uint32_t index = 0U; index < header.entry_count; ++index) {
@@ -594,6 +593,8 @@ namespace graph::storage {
 									"relocatable packed internal B+Tree entry has an invalid child Page ID");
 			}
 			entries.push_back(std::move(*entry));
+			// The reserved output owns this prefix until the next entry is decoded.
+			previous = entries.back().key;
 		}
 		if (offset != stream.size()) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
@@ -672,11 +673,10 @@ namespace graph::storage {
 		// Binary-search restart keys, then decode only the selected restart group.
 		const auto restartKeyAt = [&stream, &offsets, includesValue](size_t candidate) {
 			size_t offset = offsets[candidate];
-			utils::OwnedStdVector<std::byte> previous;
-			const auto entry = decodeOne(stream, offset, previous, true, includesValue);
+			auto entry = decodeOne(stream, offset, {}, true, includesValue);
 			// restartOffsets() proved this offset lies inside the stream; decodeOne()
 			// consequently either returns the restart entry or throws a codec error.
-			return entry->key;
+			return std::move(entry->key);
 		};
 		size_t firstGreater = 0U;
 		size_t upper = offsets.size();
@@ -694,7 +694,7 @@ namespace graph::storage {
 		const size_t first = group * header.restart_interval;
 		for (size_t index = first; index < std::min<size_t>(header.entry_count, first + header.restart_interval);
 			 ++index) {
-			const auto entry = decodeOne(stream, offset, previous, index == first, includesValue);
+			auto entry = decodeOne(stream, offset, previous, index == first, includesValue);
 			if (!entry.has_value()) {
 				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"relocatable packed B+Tree entry stream ended during lookup");
@@ -709,6 +709,7 @@ namespace graph::storage {
 			if (lessKey(key, entry->key)) {
 				break;
 			}
+			previous = std::move(entry->key);
 		}
 		return std::nullopt;
 	}

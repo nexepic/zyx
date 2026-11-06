@@ -46,6 +46,43 @@ namespace {
 
 } // namespace
 
+TEST(RelocatableBTreePageCodecTest, DecodingBorrowsTheRetainedPredecessorInsteadOfCopyingItsKey) {
+    class KeyAllocations final : public graph::utils::UnmanagedAllocationResource {
+    public:
+        size_t key_allocations = 0U;
+        size_t live = 0U;
+        void reserveUnmanaged(size_t bytes) override {
+            if (bytes == 257U) ++key_allocations;
+            live += bytes;
+        }
+        void releaseUnmanaged(size_t bytes) noexcept override { live -= bytes; }
+    private:
+        void *do_allocate(size_t bytes, size_t alignment) override {
+            return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+        }
+        void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+            std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    };
+    BTreePageEntry input;
+    input.key.resize(257U, std::byte{'k'});
+    input.value_or_child = 19U;
+    auto encoded = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, std::span(&input, 1U));
+    auto memory = std::make_shared<KeyAllocations>();
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto decoded = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, encoded);
+        ASSERT_EQ(decoded.size(), 1U);
+        EXPECT_EQ(decoded.front(), input);
+        EXPECT_EQ(memory->key_allocations, 1U);
+        std::fill(encoded.begin(), encoded.end(), std::byte{});
+        EXPECT_EQ(decoded.front(), input);
+        EXPECT_GT(memory->live, 0U);
+    }
+    EXPECT_EQ(memory->live, 0U);
+}
+
 TEST(RelocatableBTreePageCodecTest, ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata) {
 	auto header = leafHeader();
 	header.entry_count = 0;
