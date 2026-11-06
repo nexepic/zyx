@@ -217,6 +217,7 @@ namespace graph::query {
 			[[nodiscard]] std::unique_ptr<storage::LogicalGraphReadSnapshot>
 			openLogicalGraphReadSnapshot() const override {
 				++snapshot_opens;
+				if (before_snapshot_open) before_snapshot_open();
 				if (snapshot_open_delay.count() > 0) {
 					std::this_thread::sleep_for(snapshot_open_delay);
 				}
@@ -255,6 +256,7 @@ namespace graph::query {
 			std::unordered_map<std::string, PropertyValue> configurations;
 			std::vector<storage::LogicalGraphRuntimeStatistic> runtime_statistics;
 			std::chrono::milliseconds snapshot_open_delay{0};
+			std::function<void()> before_snapshot_open;
 			mutable size_t snapshot_opens = 0U;
 			size_t configuration_writes = 0U;
 			size_t statistics_resets = 0U;
@@ -750,18 +752,31 @@ namespace graph::query {
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest,
-			 AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget) {
+			 AdministrationPipelineRespectsParentQuotaBeforeMutation) {
 		auto backend = std::make_shared<RecordingAdministrationLogicalGraphBackend>();
 		LogicalReadExecutionOptions options;
-		options.bounds.maximum_materialized_bytes = 1024U;
+		options.bounds.maximum_materialized_bytes = 4096U;
 		QueryEngine constrained(backend, options);
 		using namespace execution::detail;
 		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
 		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
-		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U);
+		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
 		QueryContext context;
 		context.resource_account = account;
 		auto plan = constrained.buildPlan("CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
+		auto competing = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U * 1024U);
+		ResourceLease competingRows(competing);
+		size_t pressurePoints = 0U;
+		backend->before_snapshot_open = [&] {
+			++pressurePoints;
+			// This snapshot is opened after the administrative source row exists.
+			// Leave less than one result-vector row slot in the parent domain:
+			// unlike the former "1024 bytes must fail", this is an independent
+			// allocation lower bound on every supported STL/container layout.
+			const size_t resultSlotHeadroom = sizeof(QueryResult::Row) - 1U;
+			competingRows.set(1024U * 1024U - database->usage().total - resultSlotHeadroom);
+			EXPECT_LT(account->available(), sizeof(QueryResult::Row));
+		};
 		try {
 			static_cast<void>(constrained.executePlan(std::move(plan), context));
 			FAIL() << "administration must not publish after shared-account result denial";
@@ -773,14 +788,14 @@ namespace graph::query {
 		EXPECT_EQ(backend->configuration_writes, 0U);
 		EXPECT_FALSE(backend->configurations.contains("query.timeout_ms"));
 		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(pressurePoints, 1U);
+		EXPECT_EQ(database->usage().total, competingRows.bytes());
+		backend->before_snapshot_open = {};
+		competingRows.reset();
 		EXPECT_EQ(database->usage().total, 0U);
-		options.bounds.maximum_materialized_bytes = 4096U;
-		account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
-		context.resource_account = account;
-		QueryEngine sufficient(backend, options);
 		{
-			auto sufficientPlan = sufficient.buildPlan("CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
-			const QueryResult result = sufficient.executePlan(std::move(sufficientPlan), context);
+			auto sufficientPlan = constrained.buildPlan("CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
+			const QueryResult result = constrained.executePlan(std::move(sufficientPlan), context);
 			ASSERT_EQ(result.rowCount(), 1U);
 			EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(int64_t{41}));
 			EXPECT_EQ(backend->configuration_writes, 1U);

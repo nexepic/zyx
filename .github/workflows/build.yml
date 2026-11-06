@@ -93,7 +93,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -177,7 +177,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -319,7 +319,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Diagnose fresh string allocations (macOS)
@@ -428,6 +428,24 @@ jobs:
           python scripts/run_ci_evidence.py --name windows-plan-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
         shell: bash
 
+      - name: Diagnose Windows projection binding allocation failures
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-projection-binding-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/execution/test_BoundProjectionReferences.cpp --suite BoundProjectionReferencesTest
+        shell: bash
+
+      - name: Diagnose Windows slot allocation failures
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-slot-binding-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/execution/test_BoundSlotRegistry.cpp --suite BoundSlotRegistryTest
+        shell: bash
+
       # These additional, bounded diagnostics cannot replace the unit gate.
       # Each process has its own capped rejection trace; no data values are logged.
       - name: Diagnose Windows materialization budgets
@@ -446,6 +464,15 @@ jobs:
           ZYX_CI_BUDGET_TRACE: '1'
         run: |
           python scripts/run_ci_evidence.py --name macos-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite --platform macos
+        shell: bash
+
+      - name: Locate the macOS conversion quota rejection
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name macos-conversion-quota-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite
         shell: bash
 
       - name: Run Unit Tests

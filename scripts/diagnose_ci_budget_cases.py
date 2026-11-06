@@ -21,6 +21,10 @@ WINDOWS = [
         'FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound',
         'CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
         'ExpandsDistinctTopKForFilterAfterSkip',
+        'ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads',
+        'BatchesMetadataAndSelectedPropertiesInTheSameExpression',
+        'BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder',
+        'CompleteSemanticErrorsPrecedeJointPressureRetry',
     )),
 ]
 MACOS = [
@@ -30,6 +34,11 @@ MACOS = [
     'LogicalPlanDirectEdgeRuntimeTest.TightAndAmplePropertyPrefetchReadEachNodeOnce',
     'LogicalPlanLoadCsvRuntimeTest.ChargesHeaderMapLinksAndBucketsBeforeConstructingRows',
     '*HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/shared_large',
+    'QueryEngineLogicalBackendBoundaryTest.AdministrationPipelineRespectsParentQuotaBeforeMutation',
+    'LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder',
+    'LogicalVectorPropertyBatchTest.GdsDijkstraPipelineAccountsOwnedResultsAfterPathRelease',
+    'LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow',
+    'LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget',
 ]
 
 

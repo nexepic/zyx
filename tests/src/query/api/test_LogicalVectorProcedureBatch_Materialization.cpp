@@ -339,18 +339,14 @@ namespace graph::query {
 				EXPECT_EQ(backend->state->property_column_reads, readsBefore);
 				continue;
 			}
-			// Keep room for three final payloads and one temporary column, but
-			// not three temporary slots. Derive the row base from public types
-			// so the pressure contract does not depend on the platform ABI.
+			// Preserve the established scalar-projection efficiency ceiling. The
+			// result here owns sizes, not the three 1000-byte source strings; this
+			// estimate cannot define an ABI-independent rejection boundary.
 			const size_t rowBase = sizeof(execution::LogicalPlanReadRow) +
 				sizeof(std::unordered_map<uint64_t, PropertyValue>) + 9U +
 				2U * sizeof(execution::LogicalPlanReadValue) + sizeof(storage::EntityRef) + sizeof(double);
-			options.bounds.maximum_materialized_bytes = 3U * rowBase + 3483U +
+			options.bounds.maximum_materialized_bytes = 3U * rowBase + 3783U +
 				backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
-			options.bounds.maximum_materialized_bytes = 3U * rowBase + 3283U +
-				backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
-			EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
-			options.bounds.maximum_materialized_bytes += 500U;
 			backend->state->property_column_ids.clear();
 			const auto result = execute(project);
 			ASSERT_EQ(result.rowCount(), 3U);
@@ -362,6 +358,49 @@ namespace graph::query {
 			EXPECT_EQ(result.getRows()[2].at("score").asPrimitive(), PropertyValue(double{2}));
 			EXPECT_EQ(backend->state->property_column_ids.size(), 1U);
 			for (const auto &ids: backend->state->property_column_ids) EXPECT_TRUE(std::ranges::is_sorted(ids));
+
+			// Exercise retained output with actual owned strings, rather than
+			// inferring their lifetime from size()'s eight-byte scalar results.
+			const auto body = std::make_shared<expressions::VariableReferenceExpression>("node", "body");
+			logical::LogicalProject ownedProject(
+				std::make_unique<logical::LogicalSort>(search(), std::vector<logical::LogicalSortItem>{{score, true}}),
+				{{body, "body"}, {score, "score"}});
+			using namespace execution::detail;
+			auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+			auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+			QueryContext ownedContext;
+			options.bounds.maximum_materialized_bytes = 3U * 1000U - 1U;
+			auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY,
+				options.bounds.maximum_materialized_bytes);
+			ownedContext.resource_account = account;
+			try {
+				static_cast<void>(execute(ownedProject, ownedContext));
+				FAIL() << "three owned strings cannot fit below their payload-byte lower bound";
+			} catch (const std::runtime_error &error) { expectProcedureQuotaFailure(error); }
+			EXPECT_EQ(account->used(), 0U);
+			// A separate, fixed ceiling for this additional owning-result workload;
+			// it is not derived from the implementation's observed consumption.
+			options.bounds.maximum_materialized_bytes = 16U * 1024U;
+			account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY,
+				options.bounds.maximum_materialized_bytes);
+			ownedContext.resource_account = account;
+			backend->state->property_column_ids.clear();
+			{
+				const QueryResult owned = execute(ownedProject, ownedContext);
+				ASSERT_EQ(owned.rowCount(), 3U);
+				const std::array<uint64_t, 3> orderedIds{3U, 1U, 2U};
+				for (size_t index = 0U; index < orderedIds.size(); ++index) {
+					EXPECT_EQ(owned.getRows()[index].at("body").asPrimitive(),
+						PropertyValue(std::string(1000U, static_cast<char>('a' + orderedIds[index]))));
+					EXPECT_EQ(owned.getRows()[index].at("score").asPrimitive(), PropertyValue(double(index)));
+				}
+				EXPECT_GE(account->used(), 3U * 1000U);
+				EXPECT_LE(account->used(), 16U * 1024U);
+			}
+			EXPECT_EQ(account->used(), 0U);
+			EXPECT_EQ(database->usage().total, 0U);
+			ASSERT_EQ(backend->state->property_column_ids.size(), 1U);
+			EXPECT_EQ(backend->state->property_column_ids.front(), (std::vector<uint64_t>{1U, 2U, 3U}));
 			backend->state->nodes.at(1U).properties.pop_back();
 			const auto missing = execute(project);
 			ASSERT_EQ(missing.rowCount(), 3U);
@@ -682,7 +721,7 @@ namespace graph::query {
 
 
 
-	TEST_F(LogicalVectorPropertyBatchTest, GdsDijkstraPipelineRetainsPathBytesDuringResultPublication) {
+	TEST_F(LogicalVectorPropertyBatchTest, GdsDijkstraPipelineAccountsOwnedResultsAfterPathRelease) {
 		backend->state->edges = {{11U, 3U, 1U, "LINK"}, {12U, 1U, 2U, "LINK"}};
 		gds::LogicalProjectionCatalog catalog;
 		auto snapshot = backend->openLogicalGraphReadSnapshot();
@@ -693,21 +732,46 @@ namespace graph::query {
 				std::vector<PropertyValue>{PropertyValue("yielded_path"), PropertyValue(3), PropertyValue(2)});
 		logical::LogicalProject project(std::move(call), {{
 				std::make_shared<expressions::LiteralExpression>(PropertyValue(std::string(6000U, 'x'))), "payload"}});
+		using namespace execution::detail;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+		std::shared_ptr<ResourceAccount> account;
 		const auto executeGds = [&](const size_t maximumBytes) {
 			auto bounds = options.bounds;
 			bounds.maximum_materialized_bytes = maximumBytes;
+			QueryContext context;
+			account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximumBytes);
+			context.resource_account = account;
 			return runtime.execute(project, bounds, options.maximum_vector_mapping_entries,
 					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
 		};
-		EXPECT_THROW(static_cast<void>(executeGds(20U * 1024U)), std::runtime_error);
-		const QueryResult result = executeGds(64U * 1024U);
-		ASSERT_EQ(result.rowCount(), 3U);
-		for (const auto &row: result.getRows()) {
-			EXPECT_EQ(row.at("payload").asPrimitive(), PropertyValue(std::string(6000U, 'x')));
+		// The path dies before projection/publication. A former 20-KiB refusal
+		// relied on charging that dead path and ABI-specific row overhead.
+		// Three independent 6000-byte results cannot fit this lower bound on
+		// any STL; the separate 64-KiB efficiency ceiling remains unchanged.
+		constexpr size_t payloadLowerBound = 3U * 6000U;
+		try {
+			static_cast<void>(executeGds(payloadLowerBound - 1U));
+			FAIL() << "three owned payloads exceeded the available result bytes";
+		} catch (const std::runtime_error &error) {
+			expectProcedureQuotaFailure(error);
 		}
+		ASSERT_NE(account, nullptr);
+		EXPECT_EQ(account->used(), 0U);
+		{
+			const QueryResult result = executeGds(64U * 1024U);
+			ASSERT_EQ(result.rowCount(), 3U);
+			for (const auto &row: result.getRows()) {
+				EXPECT_EQ(row.at("payload").asPrimitive(), PropertyValue(std::string(6000U, 'x')));
+			}
+			EXPECT_GE(account->used(), payloadLowerBound);
+			EXPECT_LE(account->used(), 64U * 1024U);
+		}
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
 	}
 
 

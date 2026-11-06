@@ -366,7 +366,6 @@ namespace graph::query::execution {
 
 			ProcedureRows rows;
 			utils::OwnedStringVector defaultColumns;
-			size_t retainedProcedureSourceBytes = 0U;
 			std::unique_ptr<gds::PreparedLogicalProjectionCatalogMutation> deferredCatalogMutation;
 			switch (procedure->kind) {
 				case NativeProcedureKind::NPK_GDS_GRAPH_PROJECT: {
@@ -735,7 +734,6 @@ namespace graph::query::execution {
 							offset += count;
 						}
 					} // Authentication buffers unwind before output row allocation.
-					retainedProcedureSourceBytes = retainedPathBytes;
 					const size_t outputByteAllowance = reserveBoundedProcedureRows(
 							rows, path.node_ids.size(), readBounds, retainedPathBytes);
 					size_t retainedBytes = 0U;
@@ -776,7 +774,9 @@ namespace graph::query::execution {
 				result = makeProcedureResult(std::move(rows), defaultColumns, readBounds, context);
 			} else {
 				result = executeBufferedProcedure(std::move(rows), *snapshot, operations, root, readBounds, context,
-						retainedProcedureSourceBytes, operations.empty() && procedure->kind == NativeProcedureKind::NPK_GDS_DIJKSTRA
+						// The algorithm's path belongs to the completed switch scope.
+						// Buffered rows own their IDs/costs; no source path survives here.
+						0U, operations.empty() && procedure->kind == NativeProcedureKind::NPK_GDS_DIJKSTRA
 								? &defaultColumns
 								: nullptr,
 					true);

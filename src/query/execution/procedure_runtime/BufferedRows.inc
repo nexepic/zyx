@@ -309,6 +309,26 @@
             return std::max(retained, bufferedProcedureRowsBytes(rows, firstIndex));
         }
 
+        void reportProcedurePublicationPressure(const QueryResult &result, const ProcedureRows &rows,
+                const char *phase, size_t externalSourceBytes, size_t rowSourceBytes,
+                size_t resultAndOutputBytes, size_t requestedBackingBytes, size_t maximumBytes) noexcept {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            debug::CiBudgetTrace trace(&result, "procedure_publication");
+            if (trace.allow()) {
+                std::fprintf(stderr,
+                    "CI_PROCEDURE_PRESSURE owner=%zu phase=%s source_rows=%zu source_capacity=%zu source_row_width=%zu source_backing=%zu external_source=%zu source_retained=%zu result_rows=%zu result_capacity=%zu result_row_width=%zu result_and_output=%zu requested_backing=%zu maximum=%zu\n",
+                    trace.id(), phase, rows.size(), rows.capacity(), sizeof(BufferedProcedureRow),
+                    rows.capacity() * sizeof(BufferedProcedureRow), externalSourceBytes, rowSourceBytes,
+                    result.getRows().size(), result.getRows().capacity(), sizeof(QueryResult::Row),
+                    resultAndOutputBytes, requestedBackingBytes, maximumBytes);
+                std::fflush(stderr);
+            }
+            // One-shot pressure snapshots retain the process-wide output cap,
+            // without leaving result addresses in the diagnostic registry.
+            trace.discard();
+#endif
+        }
+
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {
@@ -327,22 +347,35 @@
                 // growth that fits the same materialization ceiling.
                 const size_t affordableCapacity = pendingBytes > maximumBytes ? 0U :
                     (maximumBytes - pendingBytes) / sizeof(QueryResult::Row);
-                if (affordableCapacity < minimumCapacity)
+                if (affordableCapacity < minimumCapacity) {
+                    reportProcedurePublicationPressure(result, rows, "minimum_result_growth", retainedSourceBytes,
+                        pendingRowsBytes, pendingResultBytes, minimumCapacity * sizeof(QueryResult::Row), maximumBytes);
                     throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
+                }
                 const size_t requestedCapacity = std::min(preferredCapacity, affordableCapacity);
 				const size_t requestedGrowthBytes = checkedProcedureSizeMul(requestedCapacity, sizeof(QueryResult::Row));
 				if (checkedProcedureSizeAdd(pendingBytes, requestedGrowthBytes) > maximumBytes) {
 					throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
 				}
-				result.reserveRows(requestedCapacity);
+				try { result.reserveRows(requestedCapacity); }
+                catch (...) {
+                    reportProcedurePublicationPressure(result, rows, "result_growth_exception", retainedSourceBytes,
+                        pendingRowsBytes, pendingResultBytes, requestedGrowthBytes, maximumBytes);
+                    throw;
+                }
 				const size_t liveBytesAfterReserve = checkedProcedureSizeAdd(retainedSourceBytes,
 						checkedProcedureSizeAdd(publicationSourceBytes(rows, rowIndex),
 								checkedProcedureSizeAdd(procedureQueryResultBytes(result), procedureQueryResultRowBytes(output))));
 				if (liveBytesAfterReserve > maximumBytes) {
+                    reportProcedurePublicationPressure(result, rows, "after_result_growth", retainedSourceBytes,
+                        pendingRowsBytes, liveBytesAfterReserve - retainedSourceBytes - pendingRowsBytes,
+                        requestedGrowthBytes, maximumBytes);
 					throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
 				}
 			}
 			if (pendingBytes > maximumBytes) {
+                reportProcedurePublicationPressure(result, rows, "source_result_overlap", retainedSourceBytes,
+                    pendingRowsBytes, pendingResultBytes, 0U, maximumBytes);
 				throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
 			}
 
@@ -359,6 +392,9 @@
 					checkedProcedureSizeAdd(procedureQueryResultBytes(result),
 							publicationSourceBytes(rows, rowIndex + 1U)));
 			if (liveBytes > maximumBytes) {
+                const size_t remaining = publicationSourceBytes(rows, rowIndex + 1U);
+                reportProcedurePublicationPressure(result, rows, "after_source_release", retainedSourceBytes,
+                    remaining, liveBytes - retainedSourceBytes - remaining, 0U, maximumBytes);
 				throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
 			}
 		}

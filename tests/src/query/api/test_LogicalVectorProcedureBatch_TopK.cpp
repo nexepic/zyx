@@ -744,15 +744,17 @@ namespace graph::query {
 	TEST_F(LogicalVectorPropertyBatchTest, UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow) {
 		backend->state->nodes.clear();
 		backend->state->search_result.hits.clear();
-		for (uint64_t id = 1U; id <= 10U; ++id) {
+		constexpr size_t inputRows = 1000U;
+		for (uint64_t id = 1U; id <= inputRows; ++id) {
 			storage::LogicalGraphNode node;
 			node.node_id = id;
 			node.properties = {{"rank", PropertyValue(static_cast<int64_t>(id))}};
 			backend->state->nodes.emplace(id, std::move(node));
 			backend->state->search_result.hits.push_back({id, static_cast<float>(id)});
 		}
-		options.bounds.maximum_rows = 10U;
-		options.bounds.maximum_materialized_bytes = 2200U;
+		options.bounds.maximum_rows = inputRows;
+		const size_t inputBytes = inputRows * sizeof(storage::LogicalGraphVectorSearchHit);
+		options.bounds.maximum_materialized_bytes = inputBytes + sizeof(execution::LogicalPlanReadRow);
 		options.bounds.maximum_property_entries = 1U;
 		const auto rank = std::make_shared<expressions::VariableReferenceExpression>("node", "rank");
 		const auto predicate = std::make_shared<expressions::BinaryOpExpression>(
@@ -763,13 +765,16 @@ namespace graph::query {
 			std::make_unique<logical::LogicalSkip>(
 				std::make_unique<logical::LogicalFilter>(
 					std::make_unique<logical::LogicalProject>(
-						std::make_unique<logical::LogicalSort>(search(10),
+						std::make_unique<logical::LogicalSort>(search(inputRows),
 							std::vector<logical::LogicalSortItem>{{rank, true}}),
 						std::vector<logical::LogicalProjectItem>{{rank, "r"}}), predicate), 1), 2);
-		// The old and new heap buffers coexist during growth. The narrow
-		// bound must reject that peak even when retained payload alone fits.
+		// One row frame cannot hold the three skip+limit candidates on any ABI.
+		// The former 2200-byte refusal depended on incidental container layout.
 		EXPECT_THROW(static_cast<void>(execute(limit)), std::runtime_error);
-		options.bounds.maximum_materialized_bytes = 4096U;
+		// Preserve the old ten-hit fixture's non-input workspace allowance.
+		// Increasing input cardinality must not increase this working allowance.
+		constexpr size_t workingBytes = 4096U - 10U * sizeof(storage::LogicalGraphVectorSearchHit);
+		options.bounds.maximum_materialized_bytes = inputBytes + workingBytes;
 		backend->state->property_column_reads = 0U;
 		const QueryResult result = execute(limit);
 		ASSERT_EQ(result.rowCount(), 2U);
@@ -778,6 +783,8 @@ namespace graph::query {
 		EXPECT_GT(backend->state->property_column_reads, 1U);
 		EXPECT_EQ(backend->state->node_batch_reads, 0U);
 		EXPECT_EQ(backend->state->node_point_reads, 0U);
+		logical::LogicalSort fullSort(search(inputRows), {{rank, true}});
+		EXPECT_THROW(static_cast<void>(execute(fullSort)), std::runtime_error);
 	}
 
 
