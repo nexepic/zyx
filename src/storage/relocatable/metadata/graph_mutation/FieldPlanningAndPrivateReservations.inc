@@ -181,7 +181,10 @@
                     debug::PerfTrace::addValue("native_graph.hybrid.allocation_admission_resource_refusal", 1); return current;
                 }
             }
-            struct SourceOwner { EntityPropertyKey key; size_t fields; };
+            // Every source belongs to conversion.owner_kind; do not retain that
+            // identical discriminant/padding in every admitted frontier entry.
+            // Reconstruct its authenticated key only at the synchronous lookup.
+            struct SourceOwner { uint64_t entity_id; size_t fields; };
             auto owners = utils::OwnedVector<SourceOwner>(utils::OwnedPmrAllocator<SourceOwner>(conversion.memory));
             owners.reserve(size_t(conversion.group_count) * 64U);
             size_t memberships = 0;
@@ -204,7 +207,7 @@
                 if (count > HybridPropertyGroupConversion::MAX_MEMBERSHIPS - memberships)
                     throw std::length_error("native hybrid conversion exceeds its membership bound");
                 memberships += count;
-                owners.push_back({key, count});
+                owners.push_back({id, count});
             }
             if (owners.empty())
                 throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid conversion group has no live owners");
@@ -242,10 +245,11 @@
                 roots.reserve(64U);
                 auto cursor = conversionRoots->openScanCursor(source, conversion.cancellation);
                 for (const auto &owner : owners) {
-                    if ((owner.key.entity_id - 1U) / 64U + 1U != groupId) continue;
+                    if ((owner.entity_id - 1U) / 64U + 1U != groupId) continue;
+                    const EntityPropertyKey ownerKey{conversion.owner_kind, owner.entity_id};
                     checkpoint();
-                    auto root = cursor.readEntityOptional(source, owner.key, nullptr, &admitSourceSlots).value_or(PropertyCollectionRoot{
-                        owner.key.entity_id, conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId, {}});
+                    auto root = cursor.readEntityOptional(source, ownerKey, nullptr, &admitSourceSlots).value_or(PropertyCollectionRoot{
+                        owner.entity_id, conversion.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId, {}});
                     if (root.entries.size() != owner.fields)
                         throw FormatException(FormatError::FERR_INVALID_STATE, "native hybrid source count disagrees with its ROW payload");
                     retainedSlotBytes += utils::detail::standardContainerProxyBytes() +
@@ -579,7 +583,7 @@
             utils::OwnedVector<SlottedSlotReference> rowSlots{utils::OwnedPmrAllocator<SlottedSlotReference>(conversion.memory)};
             rowSlots.reserve(owners.size());
             for (const auto &owner : owners) {
-                checkpoint(); const auto location = locations_.findEntityPropertyOptional(current, owner.key);
+                checkpoint(); const auto location = locations_.findEntityPropertyOptional(current, {conversion.owner_kind, owner.entity_id});
                 if (location) rowSlots.push_back({location->page_id, location->slot_id, location->slot_generation});
             }
             std::sort(rowSlots.begin(), rowSlots.end(), [](const auto &left, const auto &right) {
@@ -738,12 +742,13 @@
             utils::OwnedVector<EntityPropertyLocation> retainedOwnerVersions{utils::OwnedPmrAllocator<EntityPropertyLocation>(conversion.memory)};
             erasedRows.reserve(owners.size());
             for (const auto &owner : owners) {
-                const auto previous = locations_.findEntityPropertyRevision(current, owner.key);
+                const EntityPropertyKey ownerKey{conversion.owner_kind, owner.entity_id};
+                const auto previous = locations_.findEntityPropertyRevision(current, ownerKey);
                 if (!previous || !previous->page_id.isValid()) continue;
                 if (previous->owner_revision != 0U)
-                    retainedOwnerVersions.push_back({owner.key, PageId{}, 0U, 0U, previous->owner_revision});
+                    retainedOwnerVersions.push_back({ownerKey, PageId{}, 0U, 0U, previous->owner_revision});
                 else
-                    erasedRows.push_back(owner.key);
+                    erasedRows.push_back(ownerKey);
             }
             if (!erasedRows.empty() || !retainedOwnerVersions.empty())
                 locations_.prepareReplaceEntityProperties(batch, retainedOwnerVersions, erasedRows);

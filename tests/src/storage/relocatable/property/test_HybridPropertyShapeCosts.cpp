@@ -145,9 +145,31 @@ TEST_F(HybridPropertyMatureShapeCostsTest, EightBoundedGroupsKeepWholeDatabaseCo
     ASSERT_TRUE(row); ASSERT_TRUE(row->fullyAttributed());
     for (size_t group = 1; group <= groups; ++group) {
         SCOPED_TRACE(group);
+        struct WorkspaceEvidence {
+            MaterializedByteBudget &memory;
+            const StorageIO &io;
+            size_t group, peak = 0U;
+            StorageIOStats before;
+            ~WorkspaceEvidence() {
+                const auto after = io.stats();
+                std::cout << "NATIVE_MATURE_WORKSPACE group=" << group << " peak=" << peak
+                    << " limit=" << 1024U * 1024U << " used_after=" << memory.used()
+                    << " storage_read_bytes=" << after.read_bytes - before.read_bytes
+                    << " storage_write_bytes=" << after.write_bytes - before.write_bytes << '\n';
+            }
+        } evidence{*memory, *io_, group, 0U, io_->stats()};
+        graph::debug::PerfTrace::ScopedObserver workspaceObserver(&evidence,
+            [](void *state, std::string_view key, int64_t, bool) noexcept {
+                if (key == "logical_plan.materialized_budget_peak_bytes") {
+                    auto &probe = *static_cast<WorkspaceEvidence *>(state);
+                    probe.peak = std::max(probe.peak, probe.memory.used());
+                }
+            });
         auto conversion = request(NODE, memory); conversion.conversion->group_id = group;
         conversion.conversion->publish_candidate = true;
         ASSERT_NO_THROW(run(conversion));
+        EXPECT_GT(evidence.peak, 0U);
+        EXPECT_LE(evidence.peak, 1024U * 1024U);
         EXPECT_EQ(memory->used(), 0U);
     }
     auto current = metadata_->openSnapshot(); const auto candidate = census.inspect(current);
