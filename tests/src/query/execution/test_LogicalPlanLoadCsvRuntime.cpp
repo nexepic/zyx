@@ -250,7 +250,10 @@ namespace graph::query::execution {
 		ASSERT_NE(escaped.root, nullptr);
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*escaped.root, bounds(), context())),
 				 std::runtime_error);
-		const std::string encodedEscape = "file://" + root_.generic_string() + "/%2e%2e/" + outside.filename().string();
+		// Preserve the local-file URI's third slash for Windows drive paths;
+		// otherwise the syntax check rejects C: as an authority before the
+		// encoded parent traversal can reach the import-root security check.
+		const std::string encodedEscape = fileUri(root_) + "/%2e%2e/" + outside.filename().string();
 		QueryPlan encoded = parse("LOAD CSV FROM '" + encodedEscape + "' AS row RETURN row");
 		ASSERT_NE(encoded.root, nullptr);
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*encoded.root, bounds(), context())),
