@@ -33,10 +33,22 @@ namespace logical = graph::query::logical;
 namespace expressions = graph::query::expressions;
 
 namespace {
-	// range(1, 100) grows to 128 slots. Allow its integer payload and scalar
-	// bindings, while leaving less than another 100-element List's storage.
-	constexpr size_t singleHundredElementRangeAllowance =
-			128U * sizeof(PropertyValue) + 100U * sizeof(int64_t) + 1024U;
+    // Two range values must coexist while the second grows. These are
+    // public PropertyValue slots, whose ABI differs across supported STLs.
+    // Bound scalar frames independently instead of assuming a 20,000-byte
+    // success budget even when two arrays alone exceed that budget.
+    constexpr size_t rangeScalarFrameAllowance = 4U * sizeof(LogicalPlanReadRow) +
+        8U * sizeof(PropertyValue) + 16U * graph::utils::detail::standardContainerProxyBytes() + 512U;
+    static_assert(rangeScalarFrameAllowance <= 4096U, "scalar range frame efficiency regressed");
+    constexpr size_t singleHundredElementRangeAllowance =
+        128U * sizeof(PropertyValue) + 100U * sizeof(int64_t) + rangeScalarFrameAllowance;
+    // The tight allowance still cannot retain two complete values.
+    static_assert(singleHundredElementRangeAllowance < 200U * sizeof(PropertyValue));
+    constexpr size_t twoHundredElementRangesAllowance =
+        3U * 128U * sizeof(PropertyValue) + 200U * sizeof(int64_t) + rangeScalarFrameAllowance;
+    constexpr size_t onePublishedHundredElementRangeAllowance =
+        2U * 128U * sizeof(PropertyValue) + 100U * sizeof(int64_t) + rangeScalarFrameAllowance;
+
 }
 
 TEST(LogicalPlanUnwindRuntimeTest, HoldsEvaluatedListBudgetAcrossLimitOutput) {
@@ -114,17 +126,18 @@ TEST(LogicalPlanUnwindRuntimeTest, RangeAdmitsListGrowthBeforeAllocation) {
 	}
 	EXPECT_TRUE(rangeGrowthRejected) << "could not reach range() growth admission after output reservations";
 	auto ample = limited;
-	ample.maximum_materialized_bytes = 20000U;
+	ample.maximum_materialized_bytes = onePublishedHundredElementRangeAllowance;
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, ample);
 	ASSERT_EQ(result.rowCount(), 1U);
 	const auto &values = result.getRows().front().at("values").asPrimitive().getList();
 	ASSERT_EQ(values.size(), 100U);
+    EXPECT_LE(values.capacity(), 128U);
 	EXPECT_EQ(values.front(), PropertyValue(1));
 	EXPECT_EQ(values.back(), PropertyValue(100));
 	QueryPlan singleton = parser.parseToLogical("RETURN range(1, 1) AS values");
 	ASSERT_NE(singleton.root, nullptr);
 	auto small = limited;
-	small.maximum_materialized_bytes = 1500U;
+	small.maximum_materialized_bytes = rangeScalarFrameAllowance + 2U * sizeof(PropertyValue);
 	const QueryResult single = runtime.executeToQueryResult(*singleton.root, small);
 	ASSERT_EQ(single.rowCount(), 1U);
 	EXPECT_EQ(single.getRows().front().at("values").asPrimitive().getList(),
@@ -156,7 +169,7 @@ TEST(LogicalPlanUnwindRuntimeTest, ProjectRetainsEarlierListWhileEvaluatingLater
 		EXPECT_STREQ(error.what(), "logical-plan range() exceeded its shared byte bound");
 	}
 	auto ample = limited;
-	ample.maximum_materialized_bytes = 20000U;
+	ample.maximum_materialized_bytes = twoHundredElementRangesAllowance;
 	size_t delivered = 0U;
 	static_cast<void>(runtime.execute(*plan.root, ample, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -207,7 +220,7 @@ TEST(LogicalPlanUnwindRuntimeTest, FunctionRetainsEarlierArgumentDuringLaterRang
 		EXPECT_STREQ(error.what(), "logical-plan range() exceeded its shared byte bound");
 	}
 	auto ample = limited;
-	ample.maximum_materialized_bytes = 20000U;
+	ample.maximum_materialized_bytes = twoHundredElementRangesAllowance;
 	size_t delivered = 0U;
 	static_cast<void>(runtime.execute(*plan.root, ample, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -237,7 +250,7 @@ TEST(LogicalPlanUnwindRuntimeTest, BinaryExpressionRetainsLeftValueDuringRightEv
 		EXPECT_STREQ(error.what(), "logical-plan range() exceeded its shared byte bound");
 	}
 	auto ample = limited;
-	ample.maximum_materialized_bytes = 20000U;
+	ample.maximum_materialized_bytes = twoHundredElementRangesAllowance;
 	size_t delivered = 0U;
 	static_cast<void>(runtime.execute(*plan.root, ample, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -267,7 +280,7 @@ TEST(LogicalPlanUnwindRuntimeTest, InExpressionRetainsActualValueDuringCandidate
 		EXPECT_STREQ(error.what(), "logical-plan range() exceeded its shared byte bound");
 	}
 	auto ample = limited;
-	ample.maximum_materialized_bytes = 20000U;
+	ample.maximum_materialized_bytes = twoHundredElementRangesAllowance;
 	size_t delivered = 0U;
 	static_cast<void>(runtime.execute(*plan.root, ample, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -298,7 +311,7 @@ TEST(LogicalPlanUnwindRuntimeTest, SimpleCaseRetainsComparisonValueDuringWhenEva
 		EXPECT_STREQ(error.what(), "logical-plan range() exceeded its shared byte bound");
 	}
 	auto ample = limited;
-	ample.maximum_materialized_bytes = 20000U;
+	ample.maximum_materialized_bytes = twoHundredElementRangesAllowance;
 	size_t delivered = 0U;
 	static_cast<void>(runtime.execute(*plan.root, ample, [&](const LogicalPlanReadRow &row) {
 		++delivered;
