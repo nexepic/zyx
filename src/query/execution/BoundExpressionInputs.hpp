@@ -182,6 +182,10 @@ private:
 		std::pmr::string name;
 		const PropertyValue *value;
 		Parameter(std::string_view key, const PropertyValue *source, std::pmr::memory_resource *memory) : name(key, memory), value(source) {}
+		Parameter(const Parameter &other) : name(other.name, other.name.get_allocator()), value(other.value) {}
+#if !defined(_MSVC_STL_VERSION) || _ITERATOR_DEBUG_LEVEL == 0
+		Parameter(Parameter &&) = default;
+#endif
 	};
 	BudgetMemoryResource memory_;
 	utils::AdmissionPmrUnorderedMap<const expressions::Expression *, BoundExpressionInput> instructions_;

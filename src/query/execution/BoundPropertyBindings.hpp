@@ -52,6 +52,11 @@ class BoundPropertyBindings final {
 		std::optional<uint32_t> token;
 		Binding(BoundSlotId slot, std::string_view name, std::optional<uint32_t> resolved,
 			std::pmr::memory_resource *memory) : source(slot), key(name, memory), token(resolved) {}
+		Binding(const Binding &other)
+			: source(other.source), key(other.key, other.key.get_allocator()), token(other.token) {}
+#if !defined(_MSVC_STL_VERSION) || _ITERATOR_DEBUG_LEVEL == 0
+		Binding(Binding &&) = default;
+#endif
 	};
 public:
 	BoundPropertyBindings(const BoundSlotRegistry &slots, storage::LogicalGraphReadSnapshot &snapshot,
