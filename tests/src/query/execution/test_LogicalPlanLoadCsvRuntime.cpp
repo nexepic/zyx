@@ -26,6 +26,7 @@
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/query/logical/operators/LogicalLoadCsv.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
@@ -413,9 +414,13 @@ namespace graph::query::execution {
 					return true;
 				}, context()));
 				FAIL() << "CSV source should exceed its execution byte allowance";
-			} catch (const std::runtime_error &error) {
-				EXPECT_NE(std::string(error.what()).find("CsvReader:"), std::string::npos);
-			}
+            } catch (const MaterializedByteLimitExceeded &) {
+                // The execution account also owns source setup and allocator
+                // growth. It may refuse before CsvReader's local byte check;
+                // that typed quota failure must retain its category.
+            } catch (const std::runtime_error &error) {
+                EXPECT_NE(std::string(error.what()).find("CsvReader:"), std::string::npos);
+            }
 			EXPECT_EQ(delivered, 0U);
 			constrained.maximum_materialized_bytes = 8192U;
 			EXPECT_EQ(runtime.executeToQueryResult(*plan.root, constrained, context()).rowCount(), 1U);
