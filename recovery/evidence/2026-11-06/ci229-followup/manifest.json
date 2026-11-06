@@ -1,0 +1,218 @@
+[
+  {
+    "path": "full.log.gz",
+    "source": "/tmp/zyx-ci229-followup-full.log",
+    "bytes": 152827,
+    "uncompressed_sha256": "06dd6d9c0985bf3dc23d0f638c08cfc685d14b8300a80f93a8061c857d0d80a4"
+  },
+  {
+    "path": "discovery.txt.gz",
+    "source": "/tmp/zyx-ci229-followup-discovery.txt",
+    "bytes": 578657,
+    "uncompressed_sha256": "1e9b38a9cfa81d55da8865c6f1de914cebb85e62f1d00440f161e9dc1413328b"
+  },
+  {
+    "path": "source-manifest.json.gz",
+    "source": "/tmp/zyx-ci229-followup-source-manifest.json",
+    "bytes": 199344,
+    "uncompressed_sha256": "87ef86e549f51d153a8f8d6a6d1b781dd1eaf1ece71be9b6db1bd50f4db73378"
+  },
+  {
+    "path": "binary.json.gz",
+    "source": "/tmp/zyx-ci229-followup-binary.json",
+    "bytes": 221,
+    "uncompressed_sha256": "324d7676f4954e7587b0da9f08037b0b6e8d15adf576aebcbfc5b53bf93df087"
+  },
+  {
+    "path": "exact-once.json.gz",
+    "source": "/tmp/zyx-ci229-followup-exact-once.json",
+    "bytes": 3946,
+    "uncompressed_sha256": "ed27e0843a3ba1628ef74a7cae5ea072d6ce14d9a264b58bbfa7ed9c59cfe7ca"
+  },
+  {
+    "path": "verify-full.py.gz",
+    "source": "/tmp/zyx-ci229-followup-verify-full.py",
+    "bytes": 1742,
+    "uncompressed_sha256": "09e049b131491374733405db3220aa240348afc8ef512e92a6786778b66dcb07"
+  },
+  {
+    "path": "selectors.json.gz",
+    "source": "/tmp/zyx-ci229-followup-selectors.json",
+    "bytes": 5251,
+    "uncompressed_sha256": "bf1656df7f10662f2f2b1d80cf179686dadf32dedb116220970e1b4c8b63062a"
+  },
+  {
+    "path": "python.xml.gz",
+    "source": "/tmp/zyx-ci229-followup-python-final-valid.xml",
+    "bytes": 6151,
+    "uncompressed_sha256": "d4d56b195ee6c982aa0b4b78f3c6bd5e43d5d47af0bdd1f32810953ed520ff84"
+  },
+  {
+    "path": "python.log.gz",
+    "source": "/tmp/zyx-ci229-followup-python-final-valid.log",
+    "bytes": 798,
+    "uncompressed_sha256": "45062d13da98176318c59af323f2e2efcd2dd44e3cfb61431f31d7fa09d0c2d4"
+  },
+  {
+    "path": "initial-python-command-error.log.gz",
+    "source": "/tmp/zyx-ci229-followup-python-final.log",
+    "bytes": 775,
+    "uncompressed_sha256": "f5e34bfd55c51145a2c65dc2660e09495642aafe118681767f9e48f41e7b2576"
+  },
+  {
+    "path": "csv-parent.xml.gz",
+    "source": "/tmp/zyx-ci229-csv-parent.xml",
+    "bytes": 657,
+    "uncompressed_sha256": "06aa57e7b876ba2a98e172d289ee07a1319ff8c9508dcf469ff344b31732fd77"
+  },
+  {
+    "path": "csv-parent.log.gz",
+    "source": "/tmp/zyx-ci229-csv-parent.log",
+    "bytes": 680,
+    "uncompressed_sha256": "504fe1fab664708b82a1042391f9a4b398a1fad742607ebef5f0a2effe1ab455"
+  },
+  {
+    "path": "nohooks.json.gz",
+    "source": "/tmp/zyx-ci229-followup-nohooks.json",
+    "bytes": 1395,
+    "uncompressed_sha256": "73839911f9fd92eb2df577851138b7a3dd63b9d394f1d231da16894878e15c5f"
+  },
+  {
+    "path": "nohooks.log.gz",
+    "source": "/tmp/zyx-ci229-followup-nohooks.log",
+    "bytes": 4088,
+    "uncompressed_sha256": "bc62cdd0df1cc72e6eee76fabfbfbff4b6ed7ae15be91d50a2d0b04c448ff43d"
+  },
+  {
+    "path": "profile-compression.json.gz",
+    "source": "/tmp/zyx-ci229-followup-profile-compression.json",
+    "bytes": 4163,
+    "uncompressed_sha256": "c84ddf3c1b65bae7808533194b9a7e2d2b98a19230f0a775e744aae70c9c7d5a"
+  },
+  {
+    "path": "supervisor-result.json.gz",
+    "source": "/workspace/zyx-ci-config/coverage/test-shards-result.json",
+    "bytes": 290,
+    "uncompressed_sha256": "0a2b028f2c6fdb02e06d9a920925855c241eb9de36895286a140ba317682a02e"
+  },
+  {
+    "path": "control-build.py.gz",
+    "source": "/tmp/zyx-ci229-cache-control-build.py",
+    "bytes": 1965,
+    "uncompressed_sha256": "b091c61b27840167ce20bb0f84cdb9cb3dd1dcd44ba2ad5c96ba0b96fd0a4488"
+  },
+  {
+    "path": "control/compile-command.json.gz",
+    "source": "/tmp/zyx-ci229-cache-control/compile-command.json",
+    "bytes": 1125,
+    "uncompressed_sha256": "0d053aa652f2bd47879997556e36db2591874b465be55444cc0d5ceeda9d68a3"
+  },
+  {
+    "path": "control/link-command.json.gz",
+    "source": "/tmp/zyx-ci229-cache-control/link-command.json",
+    "bytes": 65447,
+    "uncompressed_sha256": "08b0319ebf092df134a71fc3a80292e6b80edc0b30e9618a015bb9af7abc1812"
+  },
+  {
+    "path": "control/compile.log.gz",
+    "source": "/tmp/zyx-ci229-cache-control/compile.log",
+    "bytes": 4010,
+    "uncompressed_sha256": "475abd69da5ed33798cd7003c87093ff37694c5127e1fddfe1af96b8a9563294"
+  },
+  {
+    "path": "control/link.log.gz",
+    "source": "/tmp/zyx-ci229-cache-control/link.log",
+    "bytes": 0,
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "procedure-asan/compile-command.json.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/compile-command.json",
+    "bytes": 1208,
+    "uncompressed_sha256": "9ed30766ba250da84cc49a71576df571bd463de12804ad6cbd2ef230ecf1acd0"
+  },
+  {
+    "path": "procedure-asan/link-command.json.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/link-command.json",
+    "bytes": 65495,
+    "uncompressed_sha256": "3b63a69555f62a545c30dcb5fcace0c8b87994695d0cacf850660e04b3c17d9b"
+  },
+  {
+    "path": "procedure-asan/compile.log.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/compile.log",
+    "bytes": 4088,
+    "uncompressed_sha256": "bc62cdd0df1cc72e6eee76fabfbfbff4b6ed7ae15be91d50a2d0b04c448ff43d"
+  },
+  {
+    "path": "procedure-asan/link.log.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/link.log",
+    "bytes": 0,
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "control/hash-tests.xml.gz",
+    "source": "/tmp/zyx-ci229-cache-control/hash-tests.xml",
+    "bytes": 57273,
+    "uncompressed_sha256": "998c4afb14c032b30bb3feb9d16e18f19444629e4e2f4645e7065cd8b8cff7f0"
+  },
+  {
+    "path": "control/hash-tests.log.gz",
+    "source": "/tmp/zyx-ci229-cache-control/hash-tests.log",
+    "bytes": 103592,
+    "uncompressed_sha256": "6e1e2cbdabb3ba90ed34ee75d5ecb425674a1b29670d9719be851097defaafad"
+  },
+  {
+    "path": "control/tree-tests.xml.gz",
+    "source": "/tmp/zyx-ci229-cache-control/tree-tests.xml",
+    "bytes": 57254,
+    "uncompressed_sha256": "3b7edac303b672f0c8f4e82280d4cb8dcc7da07aaaa3543f92ca0cd586d989df"
+  },
+  {
+    "path": "control/tree-tests.log.gz",
+    "source": "/tmp/zyx-ci229-cache-control/tree-tests.log",
+    "bytes": 104068,
+    "uncompressed_sha256": "ee73a8c1a7feb87a28612b94c2bafee3e0826f5d3b03a34c09a3392728531435"
+  },
+  {
+    "path": "control/test-results.json.gz",
+    "source": "/tmp/zyx-ci229-cache-control/test-results.json",
+    "bytes": 35761,
+    "uncompressed_sha256": "391ce9999862d66c07e204f00dba3780122ca3dbe02dac36383c4961a6597134"
+  },
+  {
+    "path": "control/binary.json.gz",
+    "source": "/tmp/zyx-ci229-cache-control/binary.json",
+    "bytes": 399,
+    "uncompressed_sha256": "a5d617279a4eec7e11619100890d4cbb78fb0b2331e9f3bd18e652e4ecbd795c"
+  },
+  {
+    "path": "procedure-asan/tests.xml.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/tests.xml",
+    "bytes": 57455,
+    "uncompressed_sha256": "08a0e019c2f5e530c5d0f25e4909620017b9c14aadf00fcbafb8bb44c6303f68"
+  },
+  {
+    "path": "procedure-asan/tests.log.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/tests.log",
+    "bytes": 1578,
+    "uncompressed_sha256": "bcdd3c1c6b51cd1443f23431dcc10fa602f28636b4e21f273bb0e5e4049205f8"
+  },
+  {
+    "path": "procedure-asan/manifest.json.gz",
+    "source": "/tmp/zyx-ci229-procedure-asan-final/manifest.json",
+    "bytes": 17867,
+    "uncompressed_sha256": "7ba24e4ffe3f3bc025a6c0df0b10804ef5050d081bdfe9d425c423d7c28d69ed"
+  },
+  {
+    "path": "full/shard-last.xml.gz",
+    "source": "/tmp/zyx-ci229-followup-verified-xml/shard-last.xml",
+    "bytes": 1766367,
+    "uncompressed_sha256": "264a80e4e504f3d8e2b36d0ec198b4ed76d8237c5fd30a556cc2c5250d08910c"
+  },
+  {
+    "path": "full/shard-first.xml.gz",
+    "source": "/tmp/zyx-ci229-followup-verified-xml/shard-first.xml",
+    "bytes": 1767926,
+    "uncompressed_sha256": "15bece139e9008c1dbb6fafdd0faaed002f98bf85d0709948147e1407ea54f3e"
+  }
+]
