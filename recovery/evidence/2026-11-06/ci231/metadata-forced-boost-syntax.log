@@ -1,0 +1,109 @@
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:175:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  175 |         EXPECT_THROW(pages.readMetadataRadixUnresolved(ref), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:239:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  239 |         EXPECT_THROW(pages.readMetadataRadixUnresolved(published, static_cast<BufferPoolReadHint>(255U)), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:759:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  759 |     EXPECT_THROW(pages.readMetadataRadixUnresolvedView(ref), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:761:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  761 |     EXPECT_THROW(pages.readMetadataRadixUnresolvedView(ref, static_cast<BufferPoolReadHint>(255U)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:790:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  790 |     EXPECT_THROW(pages.readMetadataRadixUnresolvedView(wrong), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:825:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  825 |  EXPECT_THROW(directory.findPageOptional(wrong,PageId(1)),FormatException);
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:855:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  855 |     EXPECT_THROW(pages.readPageDirectoryBootstrapView(ref), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:856:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  856 |     EXPECT_THROW(pages.readPageDirectoryBootstrapView(ref, static_cast<BufferPoolReadHint>(255U)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx-ci-fix/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp:879:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  879 |     EXPECT_THROW(pages.readAllocatorLeafView(ref), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+9 warnings generated.

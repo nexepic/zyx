@@ -1,0 +1,1 @@
+{"command": ["/workspace/zyx-ci-fix/buildDir/zyx_test_suite"], "completed_at_unix_seconds": 1793977537.482954, "exit_code": 0, "jobs": 2, "launcher_pid": 222201, "run_id": "ci231-full", "started_at_unix_seconds": 1793976026.1386387, "working_directory": "/workspace/zyx-ci-fix"}

@@ -1,0 +1,293 @@
+[
+  {
+    "test": "LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=37177236914179 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=0 source_retained=11854 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=7407 requested_backing=80 maximum=16384 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1",
+      "CI_PROCEDURE_PRESSURE owner=37177236914182 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=0 source_retained=6623 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=14622 requested_backing=160 maximum=24576 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=7135 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=6184752906259 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=1360 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=3114 requested_backing=160 maximum=5346 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=1437 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=42640435314691 account_id=0 operation=wouldExceed requested=10104 previous=90 embedded=0 used=651 peak=651 maximum=4824 available=4173 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_PROCEDURE_PRESSURE owner=42640435314698 phase=minimum_result_growth source_rows=1 source_capacity=1 source_row_width=208 source_backing=208 external_source=16 source_retained=640 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=4967 requested_backing=80 maximum=5000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=41850161332483 phase=minimum_result_growth source_rows=256 source_capacity=256 source_row_width=208 source_backing=53248 external_source=4800 source_retained=111512 result_rows=64 result_capacity=64 result_row_width=80 result_and_output=78461 requested_backing=5247 maximum=262144 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=72064 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=33552284516355 account_id=0 operation=wouldExceed requested=4836 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=33552284516355 account_id=0 operation=wouldExceed requested=3224 previous=0 embedded=0 used=2981 peak=3085 maximum=5848 available=2867 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=33552284516355 account_id=0 operation=wouldExceed requested=1612 previous=0 embedded=0 used=4495 peak=4607 maximum=5848 available=1353 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_PROCEDURE_PRESSURE owner=33552284516361 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=2632 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=5444 requested_backing=160 maximum=8000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2630 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=15908558864389 account_id=0 operation=wouldExceed requested=3338 previous=2324 embedded=0 used=3807 peak=3807 maximum=4740 available=933 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=15908558864394 account_id=0 operation=wouldExceed requested=296 previous=0 embedded=0 used=4531 peak=4531 maximum=4740 available=209 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=15908558864394 account_id=0 operation=wouldExceed requested=208 previous=0 embedded=0 used=4535 peak=4653 maximum=4740 available=205 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_PROCEDURE_PRESSURE owner=15908558864400 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=808 result_rows=2 result_capacity=2 result_row_width=80 result_and_output=3282 requested_backing=240 maximum=4892 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2012 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=17300128268293 account_id=0 operation=wouldExceed requested=4194 previous=0 embedded=0 used=1467 peak=1467 maximum=4792 available=3325 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=17300128268293 account_id=0 operation=wouldExceed requested=2796 previous=0 embedded=0 used=2515 peak=2875 maximum=4792 available=2277 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=17300128268293 account_id=0 operation=wouldExceed requested=1398 previous=0 embedded=0 used=3563 peak=3931 maximum=4792 available=1229 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_PROCEDURE_PRESSURE owner=17300128268307 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=5633 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=3386 requested_backing=80 maximum=9000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=39651138076673 account_id=0 operation=wouldExceed requested=648 previous=0 embedded=0 used=3439 peak=3439 maximum=3880 available=441 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=39651138076673 account_id=0 operation=wouldExceed requested=420 previous=402 embedded=0 used=3865 peak=3865 maximum=3880 available=15 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=39651138076702 account_id=0 operation=wouldExceed requested=648 previous=0 embedded=0 used=3439 peak=3439 maximum=3880 available=441 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=39651138076702 account_id=0 operation=wouldExceed requested=420 previous=402 embedded=0 used=3865 peak=3865 maximum=3880 available=15 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_PROCEDURE_PRESSURE owner=39651138076734 phase=minimum_result_growth source_rows=2 source_capacity=4 source_row_width=208 source_backing=832 external_source=0 source_retained=1016 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=2196 requested_backing=160 maximum=3880 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=1006 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=8160437862408 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=104 source_retained=992 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=2196 requested_backing=160 maximum=4096 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=1006 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.BatchesMetadataAndSelectedPropertiesInTheSameExpression",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=15960098471944 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=992 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=2196 requested_backing=160 maximum=4096 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=1006 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=31387620999180 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=4448 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=3282 requested_backing=80 maximum=6619 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1",
+      "CI_PROCEDURE_PRESSURE owner=31387620999192 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=2736 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=6484 requested_backing=160 maximum=10619 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=3122 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+    "exit": 1,
+    "evidence": [
+      "CI_PROCEDURE_PRESSURE owner=32246614458376 phase=minimum_result_growth source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=2972 result_rows=1 result_capacity=1 result_row_width=80 result_and_output=5534 requested_backing=160 maximum=8192 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2675 relocation_valid=1",
+      "C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=28570122452993 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452993 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452994 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452994 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452995 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452995 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452996 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=28570122452996 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.",
+      "Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "Which is: {}",
+      "Which is: { 3, 1, 2 }",
+      "Expected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1",
+      "Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.",
+      "Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "Which is: {}",
+      "Which is: { 3 }",
+      "Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.",
+      "Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "Which is: {}",
+      "Which is: { 3, 1, 2 }",
+      "Expected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1",
+      "C++ exception with description \"logical-plan Node Property batch exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "exit": 1,
+    "evidence": [
+      "CI_RESULT_REJECTION requested=1254 source_row=624 result_rows=1 used=3558 available=786 maximum=4504",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "exit": 1,
+    "evidence": [
+      "CI_RESULT_REJECTION requested=1254 source_row=624 result_rows=0 used=1776 available=1120 maximum=3056",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "exit": 1,
+    "evidence": [
+      "CI_RESULT_REJECTION requested=1254 source_row=624 result_rows=1 used=3558 available=786 maximum=4504",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+    "exit": 1,
+    "evidence": [
+      "CI_RESULT_REJECTION requested=1254 source_row=624 result_rows=1 used=2838 available=1018 maximum=4016",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=38276748541954 account_id=0 operation=replace requested=8807 previous=4513 embedded=0 used=7785 peak=8769 maximum=9600 available=1815 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=39238821216259 account_id=0 operation=replace requested=7204 previous=2540 embedded=0 used=3836 peak=5600 maximum=7608 available=3772 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=22299470200833 account_id=0 operation=replace requested=513 previous=0 embedded=0 used=3734 peak=3902 maximum=3936 available=202 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=24343874633730 account_id=0 operation=replace requested=7505 previous=4189 embedded=0 used=5456 peak=6409 maximum=7337 available=1881 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=6854767804417 account_id=0 operation=replace requested=1056 previous=530 embedded=0 used=530 peak=530 maximum=864 available=334 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=6854767804420 account_id=0 operation=replace requested=1065 previous=539 embedded=0 used=539 peak=539 maximum=864 available=325 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "Expected: (std::string(error.what()).find(\"CsvReader:\")) != (std::string::npos), actual: 18446744073709551615 vs 18446744073709551615",
+      "Expected: (std::string(error.what()).find(\"CsvReader:\")) != (std::string::npos), actual: 18446744073709551615 vs 18446744073709551615"
+    ]
+  },
+  {
+    "test": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=23175643529254 account_id=0 operation=wouldExceed requested=12168 previous=5040 embedded=0 used=5200 peak=5200 maximum=7776 available=2576 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=23175643529310 account_id=0 operation=wouldExceed requested=11758 previous=3320 embedded=0 used=6800 peak=6800 maximum=8624 available=1824 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_RESULT_REJECTION requested=10792 source_row=10701 result_rows=0 used=10541 available=8235 maximum=19896",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=20100446945283 account_id=0 operation=replace requested=4957 previous=2177 embedded=0 used=2776 peak=3411 maximum=3736 available=960 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=20100446945285 account_id=0 operation=replace requested=17827 previous=6659 embedded=0 used=7523 peak=11142 maximum=11256 available=3733 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=5944234737666 account_id=0 operation=replace requested=533 previous=453 embedded=0 used=2021 peak=2021 maximum=2040 available=19 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=26800595927044 account_id=0 operation=replace requested=20906 previous=8002 embedded=0 used=8770 peak=14222 maximum=14880 available=6110 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "Expected: static_cast<void>(runtime.execute(*independent.root, constrained, [&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())) doesn't throw an exception.",
+      "Actual: it throws class std::runtime_error with description \"logical-plan Aggregate group vector growth exceeded its materialized byte bound\".",
+      "Which is: 0",
+      "Which is: 10",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+    "exit": 1,
+    "evidence": [
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=16028817948674 account_id=0 operation=replace requested=269 previous=0 embedded=0 used=525 peak=709 maximum=736 available=211 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "CI_BUDGET owner=16028817948676 account_id=0 operation=replace requested=2136 previous=970 embedded=0 used=1154 peak=1154 maximum=1236 available=82 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=17798344474626 account_id=0 operation=replace requested=2168 previous=986 embedded=0 used=1186 peak=1856 maximum=1856 available=670 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body."
+    ]
+  },
+  {
+    "test": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+    "exit": 1,
+    "evidence": [
+      "CI_BUDGET owner=11115375362050 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=56 available=56 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+      "Which is: \"shared materialization exceeded its byte bound\""
+    ]
+  },
+  {
+    "test": "LogicalGdsResourceOwnershipTest.EveryPreparationAdmissionFailureRestoresTheEmptyCatalogAndRefundsBeforeRetry",
+    "exit": 3,
+    "evidence": []
+  }
+]

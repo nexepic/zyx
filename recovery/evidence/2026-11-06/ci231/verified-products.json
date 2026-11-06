@@ -1,0 +1,17 @@
+{
+  "source_commit": "c5295ddfb7afdd9a4c5d76e1aa75c3cb47850797",
+  "platform": "Linux x86_64 Debian 13.6",
+  "products": [
+    {
+      "path": "/workspace/zyx-ci-config/zyx_test_suite",
+      "bytes": 303163040,
+      "sha256": "5559c81c2b5ae8b87373d4f0ba73ec498fa4f46e7ec59bd97ecbf27335697bb3"
+    },
+    {
+      "path": "/workspace/zyx-ci-config/libzyx_core.a",
+      "bytes": 336794888,
+      "sha256": "aafe6014872e01b9f9220e5d4a783301649a6417dd3844495c22992a0e1301fb"
+    }
+  ],
+  "configuration": "Debug -O0 -g0; Clang 19; coverage ON"
+}

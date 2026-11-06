@@ -1,0 +1,93 @@
+{
+  "source_commit": "c5295ddfb7afdd9a4c5d76e1aa75c3cb47850797",
+  "discovered": 11087,
+  "enabled": 11067,
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "PreadHelperTest.DISABLED_PerformanceComparison",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe"
+  ],
+  "executions": 11067,
+  "distinct_executed": 11067,
+  "passed": 11067,
+  "failures": [],
+  "skipped": [],
+  "missing": [],
+  "extra": [],
+  "duplicates": {},
+  "stress_counts": {
+    "RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace": 1,
+    "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce": 1,
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection": 1,
+    "RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories": 1,
+    "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages": 1,
+    "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication": 1
+  },
+  "shards": [
+    {
+      "file": "final-shard-0.xml.gz",
+      "attributes": {
+        "tests": "2778",
+        "failures": "0",
+        "disabled": "11",
+        "errors": "0",
+        "time": "664.677",
+        "timestamp": "2026-11-06T15:36:08.472",
+        "name": "AllTests"
+      }
+    },
+    {
+      "file": "final-shard-1.xml.gz",
+      "attributes": {
+        "tests": "2770",
+        "failures": "0",
+        "disabled": "3",
+        "errors": "0",
+        "time": "877.81",
+        "timestamp": "2026-11-06T15:36:08.475",
+        "name": "AllTests"
+      }
+    },
+    {
+      "file": "final-shard-2.xml.gz",
+      "attributes": {
+        "tests": "2768",
+        "failures": "0",
+        "disabled": "1",
+        "errors": "0",
+        "time": "873.35",
+        "timestamp": "2026-11-06T15:36:08.469",
+        "name": "AllTests"
+      }
+    },
+    {
+      "file": "final-shard-3.xml.gz",
+      "attributes": {
+        "tests": "2771",
+        "failures": "0",
+        "disabled": "5",
+        "errors": "0",
+        "time": "701.867",
+        "timestamp": "2026-11-06T15:36:08.479",
+        "name": "AllTests"
+      }
+    }
+  ]
+}

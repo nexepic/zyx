@@ -1,0 +1,74 @@
+2026-11-06T13:12:41.8658620Z CI_RSS_PHASE phase=before-query asan_available=1 live=5708059 heap=40878080
+2026-11-06T13:12:41.8659630Z CI_RSS_MACH phase=before-query resident=459767808 internal=118063104 external=341704704 reusable=0 compressed=0 footprint=122059904
+2026-11-06T13:12:41.8660370Z CI_RSS_ASAN phase=before-query free=18591144
+2026-11-06T13:12:41.8660780Z CI_RSS_BEGIN rss=459767808 asan_available=1 live=5708059 heap=40878080
+2026-11-06T13:12:48.4671250Z CI_RSS_REJECT limit=67108864 baseline=459800576 current=527269888 asan_available=1 live=10458853 heap=90587136
+2026-11-06T13:12:48.4672460Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10458853 heap=90587136
+2026-11-06T13:12:48.4673600Z CI_RSS_MACH phase=rejection-before-unwind resident=527269888 internal=174407680 external=352862208 reusable=0 compressed=0 footprint=179177536
+2026-11-06T13:12:48.4674420Z CI_RSS_ASAN phase=rejection-before-unwind free=26951736
+2026-11-06T13:12:49.1430610Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=6331732 heap=95305728
+2026-11-06T13:12:49.1540450Z CI_RSS_MACH phase=after-backend-destruction resident=534642688 internal=181108736 external=353533952 reusable=0 compressed=0 footprint=185878592
+2026-11-06T13:12:49.1681580Z CI_RSS_ASAN phase=after-backend-destruction free=27497608
+2026-11-06T13:13:27.5886970Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=8809955 heap=382074880
+2026-11-06T13:13:27.5887710Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=8809955 heap=382074880
+2026-11-06T13:13:27.5888540Z CI_RSS_MACH phase=rejection-before-unwind resident=869482496 internal=484179968 external=385302528 reusable=0 compressed=0 footprint=489344576
+2026-11-06T13:13:27.5889450Z CI_RSS_ASAN phase=rejection-before-unwind free=113708135
+2026-11-06T13:16:23.1302100Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=10539855 heap=940687360
+2026-11-06T13:16:23.1307900Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10539855 heap=940687360
+2026-11-06T13:16:23.1309650Z CI_RSS_MACH phase=rejection-before-unwind resident=1884798976 internal=1484357632 external=400441344 reusable=0 compressed=0 footprint=1489933440
+2026-11-06T13:16:23.1310840Z CI_RSS_ASAN phase=rejection-before-unwind free=431250309
+2026-11-06T13:23:28.1165190Z CI_RSS_PHASE phase=before-query asan_available=1 live=10615643 heap=1349959680
+2026-11-06T13:23:28.1166340Z CI_RSS_MACH phase=before-query resident=2435563520 internal=2026422272 external=409141248 reusable=0 compressed=110772224 footprint=2143049920
+2026-11-06T13:23:28.1167170Z CI_RSS_ASAN phase=before-query free=309288214
+2026-11-06T13:23:28.1167600Z CI_RSS_BEGIN rss=2435563520 asan_available=1 live=10615643 heap=1349959680
+2026-11-06T13:23:35.9857710Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=10435163 heap=1400848384
+2026-11-06T13:23:35.9862080Z CI_RSS_MACH phase=after-backend-destruction resident=2471673856 internal=2062286848 external=409387008 reusable=0 compressed=110493696 footprint=2178635968
+2026-11-06T13:23:35.9863390Z CI_RSS_ASAN phase=after-backend-destruction free=374829565
+2026-11-06T13:24:34.3891190Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=10994407 heap=1416183808
+2026-11-06T13:24:34.3893190Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10994407 heap=1416183808
+2026-11-06T13:24:34.3894200Z CI_RSS_MACH phase=rejection-before-unwind resident=2591506432 internal=2179825664 external=411680768 reusable=0 compressed=165265408 footprint=2351045184
+2026-11-06T13:24:34.3894900Z CI_RSS_ASAN phase=rejection-before-unwind free=293462132
+2026-11-06T13:24:34.4262790Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=10994407 heap=1416183808
+2026-11-06T13:24:34.4263550Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10994407 heap=1416183808
+2026-11-06T13:24:34.4264520Z CI_RSS_MACH phase=rejection-before-unwind resident=2591571968 internal=2179891200 external=411680768 reusable=0 compressed=165249024 footprint=2351094336
+2026-11-06T13:24:34.4265330Z CI_RSS_ASAN phase=rejection-before-unwind free=292788980
+2026-11-06T13:24:34.6151670Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11012203 heap=1416183808
+2026-11-06T13:24:34.6153510Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11012203 heap=1416183808
+2026-11-06T13:24:34.6155450Z CI_RSS_MACH phase=rejection-before-unwind resident=2586624000 internal=2174926848 external=411697152 reusable=0 compressed=166412288 footprint=2347293248
+2026-11-06T13:24:34.6157600Z CI_RSS_ASAN phase=rejection-before-unwind free=291660140
+2026-11-06T13:24:34.6837350Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11012203 heap=1416183808
+2026-11-06T13:24:34.6838510Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11012203 heap=1416183808
+2026-11-06T13:24:34.6839420Z CI_RSS_MACH phase=rejection-before-unwind resident=2586673152 internal=2174976000 external=411697152 reusable=0 compressed=166412288 footprint=2347342400
+2026-11-06T13:24:34.6840240Z CI_RSS_ASAN phase=rejection-before-unwind free=290411476
+2026-11-06T13:24:34.8156400Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11005913 heap=1416183808
+2026-11-06T13:24:34.8158230Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11005913 heap=1416183808
+2026-11-06T13:24:34.8160180Z CI_RSS_MACH phase=rejection-before-unwind resident=2586984448 internal=2175287296 external=411697152 reusable=0 compressed=166412288 footprint=2347653696
+2026-11-06T13:24:34.8161920Z CI_RSS_ASAN phase=rejection-before-unwind free=289308316
+2026-11-06T13:24:34.8748630Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11005913 heap=1416183808
+2026-11-06T13:24:34.8750090Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11005913 heap=1416183808
+2026-11-06T13:24:34.8771090Z CI_RSS_MACH phase=rejection-before-unwind resident=2587099136 internal=2175401984 external=411697152 reusable=0 compressed=166412288 footprint=2347768384
+2026-11-06T13:24:34.8773080Z CI_RSS_ASAN phase=rejection-before-unwind free=288231092
+2026-11-06T13:24:34.9653930Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=10994383 heap=1416183808
+2026-11-06T13:24:34.9654520Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10994383 heap=1416183808
+2026-11-06T13:24:34.9655170Z CI_RSS_MACH phase=rejection-before-unwind resident=2587197440 internal=2175500288 external=411697152 reusable=0 compressed=166412288 footprint=2347866688
+2026-11-06T13:24:34.9655860Z CI_RSS_ASAN phase=rejection-before-unwind free=286492084
+2026-11-06T13:24:35.0029110Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=10994383 heap=1416183808
+2026-11-06T13:24:35.0029690Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10994383 heap=1416183808
+2026-11-06T13:24:35.0030340Z CI_RSS_MACH phase=rejection-before-unwind resident=2587246592 internal=2175549440 external=411697152 reusable=0 compressed=166412288 footprint=2347915840
+2026-11-06T13:24:35.0031530Z CI_RSS_ASAN phase=rejection-before-unwind free=285818900
+2026-11-06T13:24:35.0784230Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11012179 heap=1416183808
+2026-11-06T13:24:35.0785650Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11012179 heap=1416183808
+2026-11-06T13:24:35.0787370Z CI_RSS_MACH phase=rejection-before-unwind resident=2587541504 internal=2175844352 external=411697152 reusable=0 compressed=166412288 footprint=2348210752
+2026-11-06T13:24:35.0788840Z CI_RSS_ASAN phase=rejection-before-unwind free=284690108
+2026-11-06T13:24:35.1455080Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11012179 heap=1416183808
+2026-11-06T13:24:35.1456180Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11012179 heap=1416183808
+2026-11-06T13:24:35.1458390Z CI_RSS_MACH phase=rejection-before-unwind resident=2587656192 internal=2175959040 external=411697152 reusable=0 compressed=166412288 footprint=2348325440
+2026-11-06T13:24:35.1459730Z CI_RSS_ASAN phase=rejection-before-unwind free=283441668
+2026-11-06T13:24:35.1989460Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11005889 heap=1416183808
+2026-11-06T13:24:35.1990540Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11005889 heap=1416183808
+2026-11-06T13:24:35.1991320Z CI_RSS_MACH phase=rejection-before-unwind resident=2587836416 internal=2176139264 external=411697152 reusable=0 compressed=166412288 footprint=2348505664
+2026-11-06T13:24:35.1992070Z CI_RSS_ASAN phase=rejection-before-unwind free=282338948
+2026-11-06T13:24:35.2483270Z CI_RSS_REJECT limit=1048576 baseline=0 current=2097152 asan_available=1 live=11005889 heap=1416183808
+2026-11-06T13:24:35.2483910Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=11005889 heap=1416183808
+2026-11-06T13:24:35.2484630Z CI_RSS_MACH phase=rejection-before-unwind resident=2587885568 internal=2176188416 external=411697152 reusable=0 compressed=166412288 footprint=2348554816
+2026-11-06T13:24:35.2485200Z CI_RSS_ASAN phase=rejection-before-unwind free=281262244

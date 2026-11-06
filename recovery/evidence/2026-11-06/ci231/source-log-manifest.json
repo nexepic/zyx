@@ -1,0 +1,21 @@
+{
+  "run": 42218204682,
+  "tested_sha": "94596329cd9fcf09fa892a92fa3a8e0f1267d657",
+  "logs": {
+    "windows": {
+      "local_path": "/workspace/zyx-ci231-windows.log",
+      "bytes": 3157908,
+      "sha256": "4a3d47acc067f250bc48de005f32da87f2e40f964b751f24212d6ea7e8c40771"
+    },
+    "mac": {
+      "local_path": "/workspace/zyx-ci231-mac.log",
+      "bytes": 2603711,
+      "sha256": "dff6f6f5f19abb836bef9de60cd364423f6c6b279815daa8b35f837c6da7a9fb"
+    },
+    "asan": {
+      "local_path": "/workspace/zyx-ci231-asan.log",
+      "bytes": 2690072,
+      "sha256": "2f53556d63cd98c83ae1b8aa3904f21ad30045cb0db5f7aaddf4ef1012d6a72c"
+    }
+  }
+}

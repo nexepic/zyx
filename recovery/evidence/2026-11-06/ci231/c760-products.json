@@ -1,0 +1,23 @@
+{
+  "source_commit": "c760e0680a399388db0c964481d343c4a4215913",
+  "platform": "Linux x86_64 Debian 13.6",
+  "products": [
+    {
+      "path": "/workspace/zyx-ci-config/zyx_test_suite",
+      "bytes": 303137728,
+      "sha256": "4352d3f5f0efe19c6a133d1aa15977d5b4c08a14ea558ba4efa0177ba2074913"
+    },
+    {
+      "path": "/workspace/zyx-ci-config/libzyx_core.a",
+      "bytes": 336760600,
+      "sha256": "2f27d4155fad6b79240ddda69f58280e3aa3fe8c5062953d4f3511268d45f0a2"
+    }
+  ],
+  "cmake_settings": [
+    "CMAKE_BUILD_TYPE:STRING=Debug",
+    "CMAKE_CXX_COMPILER:STRING=/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "CMAKE_CXX_FLAGS:STRING=",
+    "CMAKE_CXX_FLAGS_DEBUG:STRING=-O0 -g0",
+    "ZYX_ENABLE_COVERAGE:BOOL=ON"
+  ]
+}

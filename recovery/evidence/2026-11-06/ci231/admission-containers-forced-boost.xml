@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="6" failures="0" disabled="0" errors="0" time="0.001" timestamp="2026-11-06T15:02:28.876" name="AllTests">
+  <testsuite name="AdmissionPmrContainersTest" tests="6" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-06T15:02:28.876">
+    <testcase name="AllEmptyMetadataContainersAcceptADenyingResourceWithoutHiddenRequests" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_AdmissionPmrContainers.cpp" line="24" status="run" result="completed" time="0." timestamp="2026-11-06T15:02:28.876" classname="AdmissionPmrContainersTest" />
+    <testcase name="VectorRejectionPreservesValuesAndReleaseNeedsNoRemainingCredit" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_AdmissionPmrContainers.cpp" line="40" status="run" result="completed" time="0." timestamp="2026-11-06T15:02:28.876" classname="AdmissionPmrContainersTest" />
+    <testcase name="NestedOwningKeysAndMatchVectorsKeepTheSameResourceAndRefundAllStorage" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_AdmissionPmrContainers.cpp" line="52" status="run" result="completed" time="0." timestamp="2026-11-06T15:02:28.876" classname="AdmissionPmrContainersTest" />
+    <testcase name="EveryUpstreamFailurePropagatesAndRefundsPreviouslyConstructedMetadata" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_AdmissionPmrContainers.cpp" line="69" status="run" result="completed" time="0." timestamp="2026-11-06T15:02:28.877" classname="AdmissionPmrContainersTest" />
+    <testcase name="EmptyStringProxyRejectionEscapesAndDoesNotLeakItsAdmission" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_AdmissionPmrContainers.cpp" line="88" status="run" result="completed" time="0." timestamp="2026-11-06T15:02:28.877" classname="AdmissionPmrContainersTest" />
+    <testcase name="StandardPmrInteropRetainsItsRealProxyAndRefundsRejectedGrowth" file="/workspace/zyx-ci-fix/tests/src/query/execution/test_AdmissionPmrContainers.cpp" line="97" status="run" result="completed" time="0." timestamp="2026-11-06T15:02:28.877" classname="AdmissionPmrContainersTest" />
+  </testsuite>
+</testsuites>

@@ -1,0 +1,18 @@
+[
+  {
+    "source": "BufferPool.cpp",
+    "exit": 0
+  },
+  {
+    "source": "EntityLabelSetStore.cpp",
+    "exit": 0
+  },
+  {
+    "source": "PageBackedLogicalGraphReadAdapter.cpp",
+    "exit": 0
+  },
+  {
+    "source": "RelocatableVectorSearch.cpp",
+    "exit": 0
+  }
+]
