@@ -547,7 +547,7 @@ TEST(LogicalPlanUnionRuntimeTest, ComparisonAndInTemporariesChargeNestedListSlot
 	for (const bool membership : {false, true}) {
 		SCOPED_TRACE(membership);
 		const auto plan = parser.parseToLogical(membership ?
-			"RETURN 7 IN $values AS result" : "RETURN $values = $values AS result");
+			"RETURN 7 IN $values AS result" : "RETURN tail($values) = tail($values) AS result");
 		auto limited = bounds();
 		limited.maximum_rows = 256U;
 		limited.maximum_materialized_bytes = 1024U;
@@ -565,6 +565,27 @@ TEST(LogicalPlanUnionRuntimeTest, ComparisonAndInTemporariesChargeNestedListSlot
 			}, context)));
 		EXPECT_EQ(delivered, 1U);
 	}
+}
+
+TEST(LogicalPlanUnionRuntimeTest, ComparisonBorrowsContextListsWithoutMaterializingCopies) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	QueryContext context;
+	const PropertyValue values(std::vector<PropertyValue>(128U));
+	context.parameters.emplace("values", values);
+	const auto plan = parser.parseToLogical("RETURN $values = $values AS result");
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 1024U;
+	size_t delivered = 0U;
+	EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, limited,
+		[&](const LogicalPlanReadRow &row) {
+			EXPECT_EQ(std::get<PropertyValue>(row.values.at("result")), PropertyValue(true));
+			++delivered;
+			return true;
+		}, context)));
+	EXPECT_EQ(delivered, 1U);
+	EXPECT_EQ(context.parameters.at("values"), values);
 }
 
 TEST(LogicalPlanUnionRuntimeTest, FunctionAndCaseTemporariesChargeCapacityWithoutAccumulatingDeadBranches) {
