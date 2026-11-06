@@ -13,6 +13,7 @@
 #include "query/execution/ProcessResourceDomains.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include "graph/utils/OwnedVector.hpp"
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 #include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"

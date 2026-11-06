@@ -944,7 +944,7 @@
 			std::vector<LogicalGraphNode> result;
 			std::vector<uint64_t> resultNodeIds;
 			CandidateDedupMemoryResource dedupMemory(maximumCandidateBytes);
-			std::pmr::unordered_set<uint64_t> seenNodeIds(&dedupMemory);
+			utils::AdmissionPmrUnorderedSet<uint64_t> seenNodeIds(&dedupMemory);
 			// The cursor retains one verified root-to-leaf route. Stream callers use
 			// bounded batches; complete callers keep the historical whole-result path
 			// so their result-bound semantics remain unchanged.
@@ -1487,7 +1487,7 @@
 				}
 			std::vector<PropertyValue>().swap(prefixValues);
 			CandidateDedupMemoryResource dedupMemory(maximumCandidateBytes);
-			std::pmr::unordered_set<uint64_t> seen(&dedupMemory);
+			utils::AdmissionPmrUnorderedSet<uint64_t> seen(&dedupMemory);
 			std::vector<LogicalGraphNode> result;
 			std::vector<uint64_t> resultNodeIds;
 			utils::OwnedStdVector<BTreePageEntry> pending;

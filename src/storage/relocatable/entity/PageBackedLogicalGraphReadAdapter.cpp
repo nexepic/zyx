@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <array>
@@ -291,7 +292,7 @@ namespace graph::storage {
         const auto nameMemory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
             session.memoryOwner();
         auto *const nameResource = nameMemory ? nameMemory.get() : std::pmr::new_delete_resource();
-        std::pmr::unordered_set<std::string_view> labelNames(nameResource);
+        utils::AdmissionPmrUnorderedSet<std::string_view> labelNames(nameResource);
         labelNames.reserve(node.label_token_ids.size());
 		for (const uint64_t tokenId: node.label_token_ids) {
 			// NodeEntityRecordCodec rejects zero inline label tokens.
@@ -309,7 +310,7 @@ namespace graph::storage {
         }
         detail::admitScopedPropertyVectorGrowth(result.properties, node.properties.size());
         result.properties.reserve(node.properties.size());
-        std::pmr::unordered_set<std::string_view> propertyNames(nameResource);
+        utils::AdmissionPmrUnorderedSet<std::string_view> propertyNames(nameResource);
         propertyNames.reserve(node.properties.size());
 		size_t propertyOrdinal = 0U;
 		for (auto &property: node.properties) {
@@ -390,7 +391,7 @@ namespace graph::storage {
 		admitPropertySlots(result.properties.capacity());
 		// reserve keeps output keys stable while the duplicate set borrows them.
 		AdmittedTemporaryResource propertyNameMemory(temporaryAdmission, session.memoryOwner());
-		std::pmr::unordered_set<std::string_view> propertyNames(&propertyNameMemory);
+		utils::AdmissionPmrUnorderedSet<std::string_view> propertyNames(&propertyNameMemory);
 		propertyNames.reserve(edge.properties.size());
 		size_t propertyOrdinal = 0U;
 		for (auto &property: edge.properties) {

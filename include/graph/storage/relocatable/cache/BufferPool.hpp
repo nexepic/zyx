@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -165,14 +166,14 @@ namespace graph::storage {
 		std::shared_ptr<std::pmr::memory_resource> memory_owner_;
 		std::pmr::memory_resource *memory_;
 		mutable std::mutex mutex_;
-		std::pmr::unordered_map<BufferPoolPageKey, std::shared_ptr<Entry>, KeyHash> entries_;
+		utils::AdmissionPmrUnorderedMap<BufferPoolPageKey, std::shared_ptr<Entry>, KeyHash> entries_;
 		struct OffsetOrder {
 			bool operator()(BufferPoolPageKey left, BufferPoolPageKey right) const noexcept {
 				return left.page_offset != right.page_offset ? left.page_offset < right.page_offset : left.generation < right.generation;
 			}
 		};
 		// Non-owning references share the primary map's lock and CACHE allocator.
-		std::pmr::map<BufferPoolPageKey, Entry *, OffsetOrder> offsets_;
+		utils::AdmissionPmrMap<BufferPoolPageKey, Entry *, OffsetOrder> offsets_;
 		PageQueue recent_;
 		PageQueue frequent_;
 		Entry *dirty_head_ = nullptr;

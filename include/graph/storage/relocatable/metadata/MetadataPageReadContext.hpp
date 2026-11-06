@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include <algorithm>
 #include <list>
 #include <iterator>
@@ -269,7 +270,7 @@ namespace graph::storage {
         std::shared_ptr<std::pmr::memory_resource> memory_owner_;
         struct PayloadCache {
             explicit PayloadCache(std::pmr::memory_resource *resource) : entries(resource), order(resource) {}
-            std::pmr::unordered_map<Key, Entry, KeyHash> entries;
+            utils::AdmissionPmrUnorderedMap<Key, Entry, KeyHash> entries;
             std::pmr::list<Key> order;
             size_t route_entries = 0U;
         };
