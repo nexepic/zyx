@@ -25,6 +25,8 @@ TEST(AdmissionPmrContainersTest, AllEmptyMetadataContainersAcceptADenyingResourc
     AdmissionRequests memory; memory.deny=true;
     {
         utils::AdmissionPmrVector<uint64_t> vector(&memory);
+        utils::AdmissionPmrList<uint64_t> list(&memory);
+        EXPECT_TRUE(list.empty());
         utils::AdmissionPmrMap<uint64_t,uint64_t> ordered(&memory);
         utils::AdmissionPmrSet<uint64_t> orderedSet(&memory);
         utils::AdmissionPmrUnorderedMap<uint64_t,uint64_t> hashed(&memory);
@@ -69,6 +71,7 @@ TEST(AdmissionPmrContainersTest, NestedOwningKeysAndMatchVectorsKeepTheSameResou
 TEST(AdmissionPmrContainersTest, EveryUpstreamFailurePropagatesAndRefundsPreviouslyConstructedMetadata) {
     const auto populate=[](std::pmr::memory_resource *memory) {
         utils::AdmissionPmrVector<uint64_t> vector(memory); vector.reserve(8U); vector.push_back(1U);
+        utils::AdmissionPmrList<uint64_t> list(memory); list.push_back(9U);
         utils::AdmissionPmrMap<uint64_t,uint64_t> ordered(memory); ordered.emplace(1U,2U);
         utils::AdmissionPmrSet<uint64_t> orderedSet(memory); orderedSet.emplace(3U);
         utils::AdmissionPmrUnorderedMap<uint64_t,uint64_t> hashed(memory); hashed.reserve(8U); hashed.emplace(4U,5U);

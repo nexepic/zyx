@@ -122,7 +122,7 @@ namespace graph::storage {
 			BQK_FREQUENT = 1,
 		};
 
-		using PageQueue = std::pmr::list<BufferPoolPageKey>;
+		using PageQueue = utils::AdmissionPmrList<BufferPoolPageKey>;
 		struct Entry {
 			BufferPoolPageKey key{};
 			Entry *dirty_previous = nullptr;

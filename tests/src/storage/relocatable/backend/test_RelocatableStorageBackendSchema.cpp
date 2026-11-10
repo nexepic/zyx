@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_RelocatableStorageBackendSchema.cpp
  * @brief End-to-end online scalar-index and Vector DDL tests.
@@ -366,7 +367,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 	{
 		StorageIO::ScopedNativeReadHookForTesting observePayloadReads(
 				[&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
-					const auto count = portable_pread(fd, buffer, size, offset);
+					const auto count = graph::storage::testing::readWithNativeLease(fd, buffer, size, offset);
 					if (count > 0 && offset >= 0)
 						nativeReadRanges.emplace_back(static_cast<uint64_t>(offset), static_cast<uint64_t>(count));
 					if (count >= static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
@@ -1241,7 +1242,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, NativeRecoveryLateCorruptOwnerFailsB
     {
         StorageIO::ScopedNativeReadHookForTesting corruptLateOwner(
             [&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
-                const auto result = portable_pread(fd, buffer, size, offset);
+                const auto result = graph::storage::testing::readWithNativeLease(fd, buffer, size, offset);
                 if (result == static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
                     try {
                         const auto owner = PageOwnerHeaderCodec::decode(std::span(static_cast<const std::byte *>(buffer), RSS_PAGE_OWNER_HEADER_BYTES));

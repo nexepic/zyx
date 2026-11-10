@@ -449,7 +449,9 @@ TEST(RelocatableEntityPageTest, EnumeratesLiveSlotsWithPageLocalIdsAndRejectsDup
 	const uint16_t reused = nodePage.insert(1005U, node());
 	ASSERT_EQ(reused, first);
 
-	const EntityPageReadView nodeView = EntityPageReadView::open(owner(), nodePage.serialize());
+	// The read view borrows its wire bytes throughout every visit.
+	const auto nodeBytes = nodePage.serialize();
+	const EntityPageReadView nodeView = EntityPageReadView::open(owner(), nodeBytes);
 	std::vector<uint64_t> nodeIds;
 	EXPECT_TRUE(nodeView.visitNodesUntil(
 			4U, [&](const uint64_t entityId, const uint16_t slot, const uint32_t generation,

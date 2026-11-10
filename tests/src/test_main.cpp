@@ -2,6 +2,12 @@
 #include "query/execution/CiLayoutDiagnostics.hpp"
 #include <gtest/gtest.h>
 #include <cstdlib>
+#include <cstdio>
+#include <cstdint>
+#include <exception>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <filesystem>
 #include <iostream>
 #include <sstream>
@@ -79,7 +85,11 @@ public:
         suite_failed_tests_ = 0;
     }
 
-    void OnTestStart(const ::testing::TestInfo&) override {
+    void OnTestStart(const ::testing::TestInfo& info) override {
+        if (std::getenv("ZYX_CI_CASE_TRACE")) {
+            std::fprintf(stderr, "CI_CASE_BEGIN %s.%s\n", info.test_suite_name(), info.name());
+            std::fflush(stderr);
+        }
         captured_stdout_.str(""); captured_stdout_.clear();
         captured_stderr_.str(""); captured_stderr_.clear();
         current_test_failures_.clear();
@@ -100,6 +110,10 @@ public:
     }
 
     void OnTestEnd(const ::testing::TestInfo& test_info) override {
+        if (std::getenv("ZYX_CI_CASE_TRACE")) {
+            std::fprintf(stderr, "CI_CASE_END %s.%s failed=%d\n", test_info.test_suite_name(), test_info.name(), int(test_info.result()->Failed()));
+            std::fflush(stderr);
+        }
         std::cout.rdbuf(old_stdout_buf_);
         std::cerr.rdbuf(old_stderr_buf_);
 
@@ -176,6 +190,25 @@ int main(int argc, char **argv) {
 	}
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
     if (std::getenv("ZYX_CI_LAYOUT_TRACE")) graph::test::ci_diagnostics::traceLayout();
+#endif
+#ifdef _WIN32
+    if (std::getenv("ZYX_CI_CASE_TRACE")) {
+        std::set_terminate([]() noexcept {
+            std::fputs("CI_PROCESS_TERMINATE\n", stderr);
+            if (const auto error = std::current_exception()) {
+                try { std::rethrow_exception(error); }
+                catch (const std::exception &e) { std::fprintf(stderr, "CI_PROCESS_EXCEPTION %s\n", e.what()); }
+                catch (...) { std::fputs("CI_PROCESS_EXCEPTION non-std\n", stderr); }
+            }
+            void *frames[48]{};
+            const auto count = CaptureStackBackTrace(0, 48, frames, nullptr);
+            const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+            for (unsigned i = 0; i < count; ++i)
+                std::fprintf(stderr, "CI_PROCESS_FRAME index=%u address=%p executable_base=%p\n", i, frames[i], reinterpret_cast<void *>(base));
+            std::fflush(stderr);
+            std::abort();
+        });
+    }
 #endif
 	graph::test::initializeTestExecutablePath(argc > 0 ? argv[0] : nullptr);
     ::testing::InitGoogleTest(&argc, argv);

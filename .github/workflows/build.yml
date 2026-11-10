@@ -443,6 +443,16 @@ jobs:
           python scripts/run_ci_evidence.py --name windows-plan-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
         shell: bash
 
+      - name: Diagnose Windows read session termination
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_CASE_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-read-session-cases --timeout 2400 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp --suite NativeReadSessionTokenBudgetTest
+        shell: bash
+
       - name: Diagnose Windows projection binding allocation failures
         if: runner.os == 'Windows'
         continue-on-error: true
@@ -495,7 +505,7 @@ jobs:
         id: unit_tests
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
-          python scripts/run_ci_evidence.py --name unit --timeout 3660 -- python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/unit/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/unit/shards"
+          ZYX_CI_CASE_TRACE=1 python scripts/run_ci_evidence.py --name unit --timeout 3660 -- python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/unit/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/unit/shards"
         shell: bash
 
       # Preserve the original large-scale correctness and recovery contracts as

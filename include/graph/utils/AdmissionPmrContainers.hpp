@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <map>
+#include <list>
 #include <memory_resource>
 #include <set>
 #include <stdexcept>
@@ -11,6 +12,7 @@
 #include <vector>
 #if defined(_MSVC_STL_VERSION)
 #include <boost/container/map.hpp>
+#include <boost/container/list.hpp>
 #include <boost/container/set.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
@@ -101,6 +103,15 @@ public:
 #else
 template<class Key, class Value, class Compare = std::less<Key>>
 using AdmissionPmrMap = std::pmr::map<Key,Value,Compare>;
+#endif
+
+// Keep empty optional cache queues allocation-free while charging every node.
+template<class T>
+using AdmissionPmrList =
+#if defined(_MSVC_STL_VERSION)
+    boost::container::list<T, std::pmr::polymorphic_allocator<T>>;
+#else
+    std::pmr::list<T>;
 #endif
 
 template<class Key, class Compare = std::less<Key>>

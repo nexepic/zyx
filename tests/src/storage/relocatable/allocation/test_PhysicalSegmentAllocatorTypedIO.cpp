@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_PhysicalSegmentAllocatorTypedIO.cpp
  * @brief Complete-page I/O tests for relocatable whole-segment extents.
@@ -158,9 +159,9 @@ namespace {
 						[&](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
 							if (static_cast<uint64_t>(offset) == segmentOffset && byteCount == RSS_SEGMENT_SIZE) {
 								shortReads.fetch_add(1U, std::memory_order_relaxed);
-								return portable_pread(fd, bytes, byteCount - RSS_PAGE_SIZE, offset);
+								return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount - RSS_PAGE_SIZE, offset);
 							}
-							return portable_pread(fd, bytes, byteCount, offset);
+							return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 						});
 				expectFormatError([&] { static_cast<void>(allocator.read(snapshot, testSegmentId())); },
 								  FormatError::FERR_BUFFER_TOO_SMALL);
@@ -197,7 +198,7 @@ namespace {
 						}
 						extentPageReads.fetch_add(1U, std::memory_order_relaxed);
 					}
-					return portable_pread(fd, bytes, byteCount, offset);
+					return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 				});
 				EXPECT_EQ(allocator.read(snapshot, testSegmentId()).payload,
 						  (std::vector<std::byte>(payload.begin(), payload.end())));

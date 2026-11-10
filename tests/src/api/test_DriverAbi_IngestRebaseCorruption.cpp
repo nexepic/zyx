@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_DriverAbi_IngestRebaseCorruption.cpp
  * @brief Public Driver ABI coverage for rebased streamed-ingest source corruption.
@@ -280,7 +281,7 @@ TEST_F(DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting corruptRebasedManifestCount(
 				[&injected](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 						return read;
 					}
@@ -363,7 +364,7 @@ TEST_F(DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderRebasedRun(
 				[&injected](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 						return read;
 					}
@@ -445,7 +446,7 @@ TEST_F(DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderRebasedManifestRuns(
 				[&injected, &rootManifestReads](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 						return read;
 					}

@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_RelocatableMetadataStore.cpp
  * @brief End-to-end serialized-operation tests for the relocatable metadata facade.
@@ -126,7 +127,7 @@ TEST_F(RelocatableMetadataStoreTest, ReopenFollowsPublishedRootsInsteadOfScannin
 						(readOffset >= unreachableTailOffset || byteCount > unreachableTailOffset - readOffset)) {
 						readUnreachableTail = true;
 					}
-					return portable_pread(fd, bytes, byteCount, static_cast<int64_t>(offset));
+					return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, static_cast<int64_t>(offset));
 				});
 		auto reopened = RelocatableMetadataStore::open(nativeIo);
 		const MetadataSnapshotPin snapshot = reopened->openSnapshot();
