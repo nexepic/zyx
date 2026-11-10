@@ -131,7 +131,9 @@ TEST_F(RelocatableStorageBackendTest, BoundCsvUriAndFieldsUseOwningResultsAndThe
 	graph::query::LogicalReadExecutionOptions options; options.csv_import_root = csvPath.parent_path();
 	auto backend = std::dynamic_pointer_cast<graph::storage::LogicalGraphReadBackend>(database.getStorageBackend());
 	graph::query::QueryEngine engine(backend, options); graph::query::QueryContext context;
-	context.parameters.emplace("uri", PropertyValue("file://" + csvPath.string()));
+    const std::string genericPath = csvPath.generic_string();
+    const std::string uri = (genericPath.starts_with('/') ? "file://" : "file:///") + genericPath;
+	context.parameters.emplace("uri", PropertyValue(uri));
 	const auto result = engine.execute("LOAD CSV WITH HEADERS FROM $uri AS row RETURN sum(toInteger(row.rank)) AS total", context);
 	ASSERT_EQ(result.rowCount(), 1U); EXPECT_EQ(result.getRows().front().at("total").toString(), "13");
 	database.close(); EXPECT_EQ(result.getRows().front().at("total").toString(), "13");

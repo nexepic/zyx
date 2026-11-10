@@ -425,7 +425,7 @@ namespace graph::storage {
         std::span<const BorrowedPropertyCollectionRootEntry> entries, std::pmr::memory_resource &memory,
         const std::function<void()> &checkpoint) {
         const auto total = encodedSizeBorrowed(owner, ownerType, entries, checkpoint);
-        std::pmr::vector<std::byte> result(&memory); result.reserve(total);
+        std::pmr::vector<std::byte> result(size_t{0U}, &memory); result.reserve(total);
         result.resize(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES + entries.size() * sizeof(uint32_t));
         LittleEndianCodec::writeU32(result, 0, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC);
         LittleEndianCodec::writeU16(result, 4, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION);
@@ -838,7 +838,7 @@ namespace graph::storage {
         if (payloadBytes > (std::numeric_limits<size_t>::max)() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES)
             throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue Property output size overflowed");
         const auto total = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + payloadBytes;
-        std::pmr::vector<std::byte> result(&memory); result.reserve(total);
+        std::pmr::vector<std::byte> result(size_t{0U}, &memory); result.reserve(total);
         result.resize(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes);
         LittleEndianCodec::writeU32(result, 0, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC);
         LittleEndianCodec::writeU16(result, 4, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION);
@@ -882,7 +882,7 @@ namespace graph::storage {
         if (payloadBytes > (std::numeric_limits<size_t>::max)() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES)
             throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "single-field LargeValue output size overflowed");
         const size_t total = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + payloadBytes;
-        std::pmr::vector<std::byte> result(&memory);
+        std::pmr::vector<std::byte> result(size_t{0U}, &memory);
         result.reserve(total);
         result.resize(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes + tokenBytes);
         LittleEndianCodec::writeU32(result, 0, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC);

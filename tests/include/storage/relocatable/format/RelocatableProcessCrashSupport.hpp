@@ -18,6 +18,7 @@
 #include <system_error>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -27,12 +28,11 @@
 #include <windows.h>
 #else
 #include <csignal>
+#include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#if defined(__LLVM_INSTR_PROFILE_GENERATE)
-#include <profile/instr_prof_interface.h>
-#endif
+extern char **environ;
 #endif
 
 namespace graph::test {
@@ -180,17 +180,28 @@ namespace graph::test {
 			void startWindows(std::string_view mode);
 #else
 			void startPosix(std::string_view mode) {
-				pid_ = fork();
-				if (pid_ < 0) throw std::runtime_error("crash-test parent cannot fork child process");
-				if (pid_ == 0) {
-#if defined(__LLVM_INSTR_PROFILE_GENERATE)
-					// The crash child intentionally dies through SIGKILL. After fork it
-					// shares the parent's LLVM profile runtime and filename, so it must
-					// never truncate the parent's coverage profile on termination.
-					__llvm_profile_set_filename("/dev/null");
-#endif
-					_Exit(runRelocatableCrashChild(mode, databasePath_, markerPath_));
-				}
+                // Like CreateProcess on Windows, start a fresh runtime. Running
+                // arbitrary C++ after fork inherits sanitizer heap state and
+                // locks from a potentially multithreaded parent.
+                const std::string executable = testExecutablePath().string();
+                const std::string childMode(mode), database = databasePath_.string(), marker = markerPath_.string();
+                const char *arguments[] = {executable.c_str(), "--zyx-relocatable-crash-child",
+                    childMode.c_str(), database.c_str(), marker.c_str(), nullptr};
+                std::vector<char *> environment;
+                for (char **entry = ::environ; entry && *entry; ++entry) {
+                    if (!std::string_view(*entry).starts_with("LLVM_PROFILE_FILE=")) environment.push_back(*entry);
+                }
+                // Intentional SIGKILL children must not touch the parent's
+                // coverage file, including successful child modes at exit.
+                char profile[] = "LLVM_PROFILE_FILE=/dev/null";
+                environment.push_back(profile);
+                environment.push_back(nullptr);
+                const int error = posix_spawn(&pid_, executable.c_str(), nullptr, nullptr,
+                    const_cast<char *const *>(arguments), environment.data());
+                if (error != 0) {
+                    pid_ = -1;
+                    throw std::system_error(error, std::generic_category(), "crash-test parent cannot spawn child process");
+                }
 				running_ = true;
 			}
 #endif

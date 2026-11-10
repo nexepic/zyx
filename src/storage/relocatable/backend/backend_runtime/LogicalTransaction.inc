@@ -1247,7 +1247,7 @@
 							? snapshot_->readNodeShaped(replacement.entity.value, shape).properties
 							: snapshot_->readEdgeShaped(replacement.entity.value, shape).properties;
 					std::ranges::sort(source, {}, &LogicalGraphPropertyEntry::key);
-					std::pmr::vector<const LogicalGraphWriteProperty *> final(retained_->issued_node_ids.get_allocator().resource());
+					std::pmr::vector<const LogicalGraphWriteProperty *> final(size_t{0U}, retained_->issued_node_ids.get_allocator().resource());
 					final.reserve(replacement.properties.size());
 					for (const auto &field : replacement.properties) final.push_back(&field);
 					std::ranges::sort(final, [](const auto *left, const auto *right) { return left->key < right->key; });

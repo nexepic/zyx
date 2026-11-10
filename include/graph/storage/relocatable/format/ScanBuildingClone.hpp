@@ -77,7 +77,7 @@ namespace graph::storage::scan_candidate_detail {
         // buffers. Reserve their conservative simultaneous high-water allowance.
         query::execution::MaterializedByteReservation stackBytes(&workspace);
         stackBytes.set(16U * 1024U);
-        std::pmr::vector<SuperblockPair::Slots> frames(&workspace);
+        std::pmr::vector<SuperblockPair::Slots> frames(size_t{0U}, &workspace);
         frames.resize(3);
         auto &before = frames[0]; auto &converted = frames[1]; auto &after = frames[2];
         const auto readHeaders = [&](SuperblockPair::Slots &slots) {
@@ -108,7 +108,7 @@ namespace graph::storage::scan_candidate_detail {
         const auto selected = pair->recover(); // existing A/B conflict and identity rules
         if (selected.data_region_offset > sourceBytes || (sourceBytes - selected.data_region_offset) % RSS_SEGMENT_SIZE)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "scan clone source is not a complete segment image");
-        std::pmr::vector<std::byte> buffer(&workspace);
+        std::pmr::vector<std::byte> buffer(size_t{0U}, &workspace);
         buffer.resize(RSS_SEGMENT_SIZE); // admit every image allocation before the first destination write
         checkpoint();
         for (size_t i = 0; i < converted.size(); ++i)

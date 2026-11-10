@@ -1063,7 +1063,7 @@ namespace graph::storage {
 
 	struct LocationDirectoryRangeCursor::Impl final : utils::OwnedPmrObject {
 		struct RouteFrame final {
-            explicit RouteFrame(std::pmr::memory_resource *memory) : children(memory) {}
+            explicit RouteFrame(std::pmr::memory_resource *memory) : children(size_t{0U}, memory) {}
 			uint16_t level = 0U;
 			// Only the cursor's bounded ordinal range is resolved. Keep this view
 			// separate from the codec page, whose full-resolution flag stays false.
@@ -1074,7 +1074,7 @@ namespace graph::storage {
 		};
 
         explicit Impl(const std::shared_ptr<std::pmr::memory_resource> &memory)
-            : route(memory ? memory.get() : std::pmr::new_delete_resource()) {}
+            : route(size_t{0U}, memory ? memory.get() : std::pmr::new_delete_resource()) {}
         // The lazy cursor outlives its creation scope; every advance rebinds
         // this context before decoding routes or allocating retained leaves.
         std::shared_ptr<MetadataPageReadContext> read_context;

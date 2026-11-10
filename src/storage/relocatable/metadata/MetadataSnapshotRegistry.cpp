@@ -64,7 +64,7 @@ namespace graph::storage {
 
 		[[nodiscard]] std::pmr::vector<Superblock> activeSuperblocks(const MetadataSnapshotRegistryState &state) {
 			std::lock_guard lock(state.coordination->snapshots_mutex);
-			std::pmr::vector<Superblock> activeSnapshots(state.control_owner ? state.control_owner.get() : std::pmr::get_default_resource());
+			std::pmr::vector<Superblock> activeSnapshots(size_t{0U}, state.control_owner ? state.control_owner.get() : std::pmr::get_default_resource());
 			activeSnapshots.reserve(state.coordination->snapshots.size());
 			for (const auto &[generation, snapshot]: state.coordination->snapshots) {
 				static_cast<void>(generation);

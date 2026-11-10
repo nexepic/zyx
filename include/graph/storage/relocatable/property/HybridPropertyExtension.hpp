@@ -197,7 +197,7 @@ public:
         Generation generation, const PropertyValue &value, size_t nativeRecordLimit, std::pmr::memory_resource &memory) {
         const auto size = CanonicalPropertyValueCodec::encodedSize(value);
         validateOutput(owner, token, generation, size, nativeRecordLimit);
-        std::pmr::vector<std::byte> result(&memory);
+        std::pmr::vector<std::byte> result(size_t{0U}, &memory);
         result.reserve(RSS_HYBRID_EXTENSION_HEADER_BYTES + size);
         result.resize(RSS_HYBRID_EXTENSION_HEADER_BYTES);
         writeHeader(result, owner, token, generation, HybridPropertyExtensionMode::HPEM_INLINE, size);
@@ -211,7 +211,7 @@ public:
         Generation generation, std::span<const std::byte> encodedReference, size_t nativeRecordLimit,
         std::pmr::memory_resource &memory, const ReferenceAdmission &referenceAdmission) {
         validateOutput(owner, token, generation, encodedReference.size(), nativeRecordLimit);
-        std::pmr::vector<std::byte> result(&memory);
+        std::pmr::vector<std::byte> result(size_t{0U}, &memory);
         result.resize(RSS_HYBRID_EXTENSION_HEADER_BYTES + encodedReference.size());
         writeHeader(result, owner, token, generation, HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE, encodedReference.size());
         std::copy(encodedReference.begin(), encodedReference.end(), result.begin() + RSS_HYBRID_EXTENSION_HEADER_BYTES);

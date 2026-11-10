@@ -722,7 +722,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
             if (deletedOwners & ownerBit) { entries.clear(); changed = true; }
             if (!changed || (entries.empty() && !(matrix.cold_rows.owners & ownerBit))) continue;
             require(entries.size() <= UINT32_MAX, "cold field count overflows its original envelope");
-            std::pmr::vector<std::byte> encoded(request.memory.get()); bool large = false;
+            std::pmr::vector<std::byte> encoded(size_t{0U}, request.memory.get()); bool large = false;
             if (!entries.empty()) {
                 const auto bytes = EntityPropertyCollectionRootCodec::encodedSizeBorrowed(owner.entity_id, ownerType, entries, checkpoint);
                 large = bytes > HybridPropertyColdRowBlock::MAX_UNCOMPRESSED_BYTES - HybridPropertyColdRowBlock::DIRECTORY_ENTRY_BYTES;
@@ -1265,7 +1265,7 @@ bool RelocatableMetadataStore::prepareHybridPropertyColumns(MetadataWriteBatch &
                     [&](size_t bytes) { labelCredit.set(bytes); });
                 if (std::ranges::find(labels, definition.schema_token_id) == labels.end()) return std::nullopt;
             } else if (sourceEntities.readEdge(source, id).type_id != definition.schema_token_id) return std::nullopt;
-            CanonicalKey key(request.memory.get());
+            CanonicalKey key(size_t{0U}, request.memory.get());
             std::array<std::optional<PropertyCollectionRootEntry>, RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES> old;
             std::array<PropertyValue, RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES> scratch;
             for (size_t i = 0; i < definition.property_names.size(); ++i) {

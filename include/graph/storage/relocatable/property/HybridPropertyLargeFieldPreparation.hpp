@@ -30,7 +30,7 @@ class HybridPropertyLargeFieldPreparation final {
         size_t candidates = 0, data_pages = 0, manifest_pages = 0;
         explicit State(const std::shared_ptr<std::pmr::memory_resource> &memory)
             : reference_credit(memory, 2U * utils::detail::standardFreshStringHeapUpper(RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES)),
-              payload(memory.get()) {}
+              payload(size_t{0U}, memory.get()) {}
     };
     std::shared_ptr<const State> state_;
     DatabaseId database_id_{};

@@ -157,7 +157,7 @@ class HybridPropertyConversionPreparation final {
                 const auto entries = std::span(selected).first(count);
                 const auto size = EntityPropertyCollectionRootCodec::encodedSizeBorrowed(ownerId, kindType, entries, checkpoint);
                 bool large = size > HybridPropertyColdRowBlock::MAX_UNCOMPRESSED_BYTES - HybridPropertyColdRowBlock::DIRECTORY_ENTRY_BYTES;
-                std::pmr::vector<std::byte> bytes(plan.memoryOwner().get());
+                std::pmr::vector<std::byte> bytes(size_t{0U}, plan.memoryOwner().get());
                 if (!large) {
                     bytes = EntityPropertyCollectionRootCodec::encodeBorrowed(ownerId, kindType, entries, *plan.memoryOwner(), checkpoint);
                     if (size > HybridPropertyColdRowBlock::MAX_STORED_BYTES - HybridPropertyColdRowBlock::DIRECTORY_ENTRY_BYTES) {

@@ -287,7 +287,7 @@ namespace graph::storage {
                     // The parent admission owns this complete synchronous source;
                     // its child only subdivides that prepaid finite reservation.
                     auto workspace = std::make_shared<query::execution::MaterializedByteBudget>(sourceBytes - 4096U);
-                    std::pmr::vector<uint64_t> tokens(workspace.get());
+                    std::pmr::vector<uint64_t> tokens(size_t{0U}, workspace.get());
                     read_session_.bind(snapshot_.metadataSnapshot());
                     for (const auto &label : labels) {
                         std::optional<uint64_t> token;

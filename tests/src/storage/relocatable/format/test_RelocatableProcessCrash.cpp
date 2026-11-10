@@ -88,6 +88,8 @@ namespace graph::test {
 
 namespace {
 
+    bool crashParentHasMutableState = false;
+
 	constexpr std::string_view CRASH_CHILD_BEFORE_PUBLICATION = "before-publication";
 	constexpr std::string_view CRASH_CHILD_AFTER_PUBLICATION = "after-publication";
 	constexpr std::string_view CRASH_CHILD_METADATA_POOL_CONTROL_SHORT_WRITE = "metadata-pool-control-short-write";
@@ -241,6 +243,11 @@ namespace graph::test {
 	int runRelocatableCrashChild(std::string_view mode, const std::filesystem::path &databasePath,
 								 const std::filesystem::path &markerPath) {
 		try {
+            if (mode == "fresh-process-probe") {
+                if (crashParentHasMutableState) return 97;
+                writeMarker(markerPath);
+                return 0;
+            }
 			if (const int vectorResult = runRelocatableVectorCrashChild(mode, databasePath, markerPath);
 				vectorResult != -1) {
 				return vectorResult;
@@ -1452,6 +1459,16 @@ protected:
 		return SuperblockFile(std::move(io)).recover();
 	}
 };
+
+TEST_F(RelocatableProcessCrashTest, ChildStartsWithFreshRuntimeState) {
+    struct ParentState {
+        ParentState() { crashParentHasMutableState = true; }
+        ~ParentState() { crashParentHasMutableState = false; }
+    } state;
+    CrashChild child(databasePath, markerPath, "fresh-process-probe");
+    ASSERT_TRUE(child.waitForSuccessfulExit()) << child.failureReason();
+    EXPECT_TRUE(std::filesystem::exists(markerPath));
+}
 
 TEST_F(RelocatableProcessCrashTest, KillBeforePublicationRetainsTheLastDurableGeneration) {
 	CrashChild child(databasePath, markerPath, CRASH_CHILD_BEFORE_PUBLICATION);

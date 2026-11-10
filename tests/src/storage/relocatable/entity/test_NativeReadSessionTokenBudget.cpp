@@ -460,6 +460,57 @@ TEST(NativeReadSessionTokenBudgetTest, OwnedCanonicalPropertyCodecMatchesExistin
  EXPECT_EQ(memory->live, 0U);
 }
 
+TEST(NativeReadSessionTokenBudgetTest, EveryCanonicalMapScratchFailureRefundsAndAllowsRetry) {
+ using graph::PropertyValue;
+ using graph::storage::CanonicalPropertyValueCodec;
+ const PropertyValue nested(PropertyValue::MapType{
+  {"outer", PropertyValue(PropertyValue::MapType{
+   {"inner", PropertyValue(PropertyValue::MapType{{"value", PropertyValue(int64_t{17})}})}})}});
+ std::vector<std::byte> expected;
+ CanonicalPropertyValueCodec::append(expected, nested);
+ for (const bool denyAdmission : {false, true}) {
+ size_t failures = 0U;
+ bool reachedSuccess = false;
+ for (size_t allowed = 0U; allowed < 32U && !reachedSuccess; ++allowed) {
+  auto memory = std::make_shared<SessionCountingResource>();
+  {
+   std::pmr::vector<std::byte> output(size_t{0U}, memory.get());
+   output.reserve(expected.size() + 1U);
+   output.push_back(std::byte{0x42});
+   const size_t baseline = memory->live;
+   memory->fail_after = memory->allocations + allowed;
+   memory->deny_admission = denyAdmission;
+   bool rejected = false;
+   try {
+    CanonicalPropertyValueCodec::append(output, nested);
+    reachedSuccess = true;
+   } catch (const std::bad_alloc &) {
+    EXPECT_FALSE(denyAdmission);
+    rejected = true;
+   } catch (const graph::query::execution::detail::ResourceAdmissionDenied &) {
+    EXPECT_TRUE(denyAdmission);
+    rejected = true;
+   }
+   if (rejected) {
+    ++failures;
+    EXPECT_EQ(memory->denied_allocations, 1U);
+    ASSERT_EQ(output.size(), 1U);
+    EXPECT_EQ(output.front(), std::byte{0x42});
+    EXPECT_EQ(memory->live, baseline);
+    memory->fail_after = (std::numeric_limits<size_t>::max)();
+    CanonicalPropertyValueCodec::append(output, nested);
+   }
+   ASSERT_EQ(output.size(), expected.size() + 1U);
+   EXPECT_TRUE(std::equal(expected.begin(), expected.end(), output.begin() + 1));
+   EXPECT_EQ(memory->live, baseline);
+  }
+  EXPECT_EQ(memory->live, 0U);
+ }
+ EXPECT_TRUE(reachedSuccess);
+ EXPECT_GE(failures, 3U); // Every nested map has its own ordering scratch.
+ }
+}
+
 TEST(NativeReadSessionTokenBudgetTest, OwnedPropertyCachePreservesNestedNullAndAbsentValues) {
  using graph::PropertyValue;
  auto memory = std::make_shared<SessionCountingResource>();

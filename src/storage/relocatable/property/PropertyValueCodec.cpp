@@ -260,7 +260,10 @@ namespace graph::storage {
                         if constexpr (requires { payload.get_allocator().resource(); }) return payload.get_allocator().resource();
                         else return std::pmr::get_default_resource();
                     }();
-                    std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> entries(resource);
+                    // MSVC's allocator-only constructor is noexcept but may
+                    // allocate an iterator proxy. The count constructor lets
+                    // a denied scratch allocation propagate to our rollback.
+                    std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> entries(size_t{0U}, resource);
 					entries.reserve(argument.size());
 					for (const auto &[key, entry]: argument) entries.emplace_back(key, &entry);
 					std::ranges::sort(entries, [](const auto &left, const auto &right) {

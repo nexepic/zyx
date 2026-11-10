@@ -137,8 +137,14 @@ TEST_F(RelocatableStorageBackendTest, RepeatedNativeReopenReturnsCacheAndOutputC
         if (iteration != 0U) EXPECT_EQ(domain, weak.lock());
         weak = domain;
         query::QueryEngine engine(backend);
-        auto result = engine.execute("RETURN 42 AS value");
-        retained = std::move(result);
+        {
+            auto result = engine.execute("RETURN 42 AS value");
+            retained = std::move(result);
+            // A moved-from MSVC vector still owns its iterator proxy. Both
+            // live results must remain charged until the source is destroyed.
+            EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_QUERY)],
+                retained.retainedResourceBytes() + result.retainedResourceBytes());
+        }
         EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_QUERY)], retained.retainedResourceBytes());
         backend->close();
         EXPECT_GT(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_CACHE)], 0U);
