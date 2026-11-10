@@ -634,10 +634,10 @@
 			result.setColumns(columns);
             reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes);
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+				context.checkGuard();
 				compactConsumedProcedureRows(result, rows, rowIndex, readBounds.maximum_materialized_bytes);
 				BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
-				context.checkGuard();
 				const ProcedurePayloadReconcileGuard reconcile{buffered};
                 detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
                 QueryResult::Row row;

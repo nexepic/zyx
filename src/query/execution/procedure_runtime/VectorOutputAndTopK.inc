@@ -416,12 +416,12 @@
                 reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+				context.checkGuard();
                 if (accountOutputTransition)
                     compactConsumedProcedureRows(result, rows, rowIndex,
                         readBounds.maximum_materialized_bytes, retainedSourceBytes);
 				BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
-				context.checkGuard();
 				const ProcedurePayloadReconcileGuard reconcile{buffered};
                 detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
                 QueryResult::Row output;
