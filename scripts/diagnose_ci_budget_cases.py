@@ -8,6 +8,17 @@ import sys
 from pathlib import Path
 
 WINDOWS = [
+    *('ConsumedPrefixCompactionTest.' + name for name in (
+        'ChargesOverlappingBuffersAndPreservesPayloadIdentity',
+        'AllocatorRejectionLeavesSourceAndRetryIntact',
+        'GeometricCompactionBoundsTotalMoves',
+        'PotentiallyThrowingMovesKeepOriginalStorage',
+        'AllocationFailureFallsBackWithoutMovingAndAllowsRetry',
+    )),
+    'BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack',
+    'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',
+    'CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge',
+    'CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues',
     # Build 233 reached these native paths before the codec abort. Isolate
     # them too so tight source/parent quotas have their own bounded trace.
     'RelocatableStorageBackendTest.BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot',

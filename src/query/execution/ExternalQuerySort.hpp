@@ -83,9 +83,13 @@ public:
         tracePhase("sort-before-merge");
 		for(size_t level=0;runs_.size()>1U;++level){
 			if(level==12U)throw std::runtime_error("external Sort exceeded its merge-depth bound");
+            traceMergeProgress("begin", level);
+			try {
 			utils::AdmissionPmrVector<Run> next(&memory_);next.reserve((runs_.size()+1U)/2U);
 			for(size_t i=0;i<runs_.size();i+=2U){checkpoint_();if(i+1U==runs_.size())next.push_back(std::move(runs_[i]));else next.push_back(merge(runs_[i],runs_[i+1U]));}
 			runs_=std::move(next);
+			} catch (...) { traceMergeProgress("failure", level); throw; }
+            traceMergeProgress("end", level);
 		}
         tracePhase("sort-before-output");
 		Cursor cursor(*this,runs_.front());
@@ -99,6 +103,48 @@ public:
 	}
 	[[nodiscard]] bool spilled() const {return scratch_!=nullptr;}
 private:
+    void traceMergeProgress(const char *phase, size_t level) noexcept {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        if (!std::getenv("ZYX_CI_RSS_TRACE")) return;
+        static std::atomic<unsigned> reports{0U};
+        const auto index = reports.fetch_add(1U, std::memory_order_relaxed);
+        if (index >= 24U) {
+            if (index == 24U) std::fputs("CI_SORT_MERGE_TRUNCATED process_limit=24\n", stderr);
+            return;
+        }
+        // Logical scratch traffic, not physical IO or allocator attribution.
+        // Pair these cumulative counters with nonallocating RSS/ASan snapshots.
+        std::fprintf(stderr, "CI_SORT_MERGE phase=%s level=%zu runs=%zu input_rows=%zu decoded=%zu read_fragments=%zu read_payload_bytes=%zu written_fragments=%zu written_payload_bytes=%zu materialized_used=%zu\n",
+            phase, level, runs_.size(), total_, decoded_records_, read_fragments_, read_payload_bytes_,
+            written_fragments_, written_payload_bytes_, budget_.used());
+        std::fflush(stderr);
+        tracePhase(phase[0] == 'b' ? "sort-merge-level-begin" :
+            phase[0] == 'f' ? "sort-merge-level-failure" : "sort-merge-level-end");
+#else
+        static_cast<void>(phase); static_cast<void>(level);
+#endif
+    }
+    void traceScratchRead(size_t bytes) noexcept {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        ++read_fragments_; addTraceBytes(read_payload_bytes_, bytes);
+#else
+        static_cast<void>(bytes);
+#endif
+    }
+    void traceScratchWrite(size_t bytes) noexcept {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        ++written_fragments_; addTraceBytes(written_payload_bytes_, bytes);
+#else
+        static_cast<void>(bytes);
+#endif
+    }
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    static void addTraceBytes(size_t &total, size_t bytes) noexcept {
+        total = bytes > SIZE_MAX - total ? SIZE_MAX : total + bytes;
+    }
+    size_t decoded_records_ = 0U, read_fragments_ = 0U, read_payload_bytes_ = 0U;
+    size_t written_fragments_ = 0U, written_payload_bytes_ = 0U;
+#endif
     static void tracePhase(const char *phase) noexcept {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
         // Fixed phase boundaries only. Do not invoke the allocating ASan
@@ -123,7 +169,7 @@ private:
 		void flush(){if(!count)return;for(size_t i=0;i<4;++i)block[8+i]=static_cast<std::byte>((count>>(8*i))&255U);
 			// Reserve route capacity before publishing private bytes.
 			if(run.handles.size()==run.handles.capacity())run.handles.reserve(std::max<size_t>(1,run.handles.size()*2));
-			sort.publication_checkpoint_();run.handles.push_back(sort.scratch_->write(block));start();}
+			sort.publication_checkpoint_();run.handles.push_back(sort.scratch_->write(block));sort.traceScratchWrite(block.size());start();}
         void append(const Record &record){sort.checkpoint_();QuerySpillRowCodec::encodeInto(record,MAX_RECORD_BYTES,encoded);
             // One <=MAX_RECORD_BYTES encoded buffer remains within the existing
             // fixed spill workspace; binding order needs no separate scratch.
@@ -137,6 +183,7 @@ private:
 			if(remaining==0){if(!block.empty() && offset!=block.size())throw std::invalid_argument("external Sort block has trailing bytes");
 				if(handle==run.handles.size()){if(seen!=run.rows)throw std::invalid_argument("external Sort run cardinality changed");current.reset();block.clear();return;}
 				block=sort.scratch_->read(run.handles[handle++]);offset=0;
+                sort.traceScratchRead(block.size());
 				if(get(block,offset,8)!=BLOCK_MAGIC)throw std::invalid_argument("external Sort block magic/version is invalid");
 				remaining=static_cast<uint32_t>(get(block,offset,4));if(get(block,offset,4)!=0U || remaining==0 || remaining>(block.size()-offset)/(4U+QuerySpillRowCodec::HEADER_BYTES))throw std::invalid_argument("external Sort block count is invalid");
 			}
@@ -148,6 +195,9 @@ private:
 			if(prior && (sort.precedes(*current,*prior) || prior->ordinal==current->ordinal))throw std::invalid_argument("external Sort run is unordered or has duplicate adjacent ordinals");
 			if (!prior) prior.emplace();
             prior->keys=current->keys;prior->ordinal=current->ordinal;++seen;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            ++sort.decoded_records_;
+#endif
 		}
 	};
 	static bool hasNaN(const PropertyValue &value){const auto &variant=value.getVariant();if(const auto *number=std::get_if<double>(&variant))return std::isnan(*number);if(const auto *list=std::get_if<std::vector<PropertyValue>>(&variant))return std::ranges::any_of(*list,hasNaN);if(const auto *map=std::get_if<PropertyValue::MapType>(&variant))return std::ranges::any_of(*map,[](const auto &entry){return hasNaN(entry.second);});return false;}

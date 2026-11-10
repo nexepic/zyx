@@ -41,6 +41,46 @@ def test_timeout_preserves_partial_output_and_status(tmp_path):
     assert 'before-timeout' in (tmp_path / 'case/output.log').read_text()
 
 
+def test_timeout_journals_case_identity_without_complete_xml(tmp_path):
+    program = ("import time;print('CI_CASE_BEGIN Suite.Failed',flush=True);"
+               "print('CI_CASE_END Suite.Failed failed=1',flush=True);"
+               "print('CI_CASE_BEGIN Suite.Unfinished',flush=True);time.sleep(60)")
+    p, r = invoke(tmp_path, program, '3' if os.name == 'nt' else '.5')
+    assert p.returncode == 124
+    journal = r['case_journal']
+    assert journal['started'] == 2 and journal['completed'] == journal['failed'] == 1
+    assert journal['last_started'] == 'Suite.Unfinished'
+    assert journal['last_completed'] == 'Suite.Failed'
+    assert journal['failed_names'] == ['Suite.Failed']
+    assert json.loads((tmp_path / 'case/case-journal.json').read_text()) == journal
+    assert b'CI_CASE_JOURNAL ' in p.stdout
+
+
+def test_journal_survives_console_cap_and_bounds_failure_names(tmp_path):
+    program = ("import sys;sys.stdout.write('x'*(2*1024*1024)+'\\n');"
+               "[print(f'CI_CASE_BEGIN Suite.C{i}\\nCI_CASE_END Suite.C{i} failed=1') for i in range(260)];"
+               "print('private-assertion-payload');sys.exit(1)")
+    p, r = invoke(tmp_path, program)
+    journal = r['case_journal']
+    assert p.returncode == 1 and r['console_truncated']
+    assert journal['started'] == journal['completed'] == journal['failed'] == 260
+    assert len(journal['failed_names']) == 256 and journal['failed_names_truncated']
+    assert journal['oversized_lines'] == 1
+    assert 'private-assertion-payload' not in json.dumps(journal)
+    assert b'CI_CASE_JOURNAL ' in p.stdout
+
+
+def test_journal_handles_split_trace_lines_without_interpreting_payloads():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('ci_evidence', WRAPPER)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    journal = module.CaseJournal()
+    for chunk in (b'CI_CA', b'SE_BEGIN Suite.Case\r\nCI_CASE_END Suite.', b'Case failed=0\r\n'):
+        journal.feed(chunk)
+    assert journal.snapshot()['started'] == journal.snapshot()['completed'] == 1
+    assert not journal.snapshot()['failed_names']
+
+
 def test_shared_deadline_fails_without_starting_command(tmp_path):
     p, r = invoke(tmp_path, "raise AssertionError('must not execute')", extra_env={'ZYX_CI_DEADLINE_UNIX': '1'})
     assert p.returncode == r['exit_code'] == 124

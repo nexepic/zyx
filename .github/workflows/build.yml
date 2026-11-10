@@ -485,6 +485,13 @@ jobs:
           python scripts/run_ci_evidence.py --name windows-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows
         shell: bash
 
+      - name: Diagnose Windows final shape duration
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          ZYX_CI_CASE_TRACE=1 python scripts/run_ci_evidence.py --name windows-final-shape --timeout 600 --gtest -- ./buildDir/zyx_test_suite.exe --gtest_filter='FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096'
+        shell: bash
+
       - name: Diagnose macOS materialization budgets
         if: runner.os == 'macOS'
         continue-on-error: true
@@ -507,7 +514,12 @@ jobs:
         id: unit_tests
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
-          ZYX_CI_CASE_TRACE=1 python scripts/run_ci_evidence.py --name unit --timeout 3660 -- python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/unit/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/unit/shards"
+          unit_timeout=3600
+          # MSVC iterator-debug ownership tests reached the final shape group
+          # at the previous one-hour deadline. Preserve all cases and a finite
+          # deadline, with identity/timing journals exposing an actual stall.
+          if [[ "$RUNNER_OS" == Windows ]]; then unit_timeout=5400; fi
+          ZYX_CI_CASE_TRACE=1 python scripts/run_ci_evidence.py --name unit --timeout "$((unit_timeout + 60))" -- python scripts/run_test_tier.py unit --timeout "$unit_timeout" --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/unit/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/unit/shards"
         shell: bash
 
       # Preserve the original large-scale correctness and recovery contracts as

@@ -22,6 +22,52 @@ TAIL_LIMIT = 1024 * 1024
 CONSOLE_LIMIT = 1024 * 1024
 
 
+class CaseJournal:
+    """Bounded identity-only progress, usable even when GoogleTest never closes XML."""
+    def __init__(self):
+        self.pending = b''
+        self.discard_line = False
+        self.started = self.completed = self.failed = self.oversized_lines = 0
+        self.last_started = self.last_completed = None
+        self.epoch = time.monotonic()
+        self.last_started_seconds = self.last_completed_seconds = None
+        self.failed_names = []
+
+    def feed(self, chunk):
+        lines = (self.pending + chunk).split(b'\n')
+        self.pending = lines.pop()
+        for line in lines:
+            if not self.discard_line and len(line) <= 4096:
+                match = re.search(rb'CI_CASE_(BEGIN|END) ([A-Za-z0-9_./-]{1,512})(?: failed=([0-9]+))?(?:\r|$)', line)
+                if match:
+                    kind, name, failed = match.groups()
+                    name = name.decode('ascii')
+                    if kind == b'BEGIN':
+                        self.started += 1; self.last_started = name
+                        self.last_started_seconds = time.monotonic() - self.epoch
+                    elif failed is not None:
+                        self.completed += 1; self.last_completed = name
+                        self.last_completed_seconds = time.monotonic() - self.epoch
+                        if int(failed):
+                            self.failed += 1
+                            if len(self.failed_names) < 256: self.failed_names.append(name)
+            elif not self.discard_line:
+                self.oversized_lines += 1
+            self.discard_line = False
+        if len(self.pending) > 4096:
+            if not self.discard_line: self.oversized_lines += 1
+            self.pending = b''
+            self.discard_line = True
+
+    def snapshot(self):
+        return dict(started=self.started, completed=self.completed, failed=self.failed,
+                    last_started=self.last_started, last_completed=self.last_completed,
+                    last_started_observed_seconds=self.last_started_seconds,
+                    last_completed_observed_seconds=self.last_completed_seconds,
+                    failed_names=self.failed_names, failed_names_truncated=self.failed > len(self.failed_names),
+                    oversized_lines=self.oversized_lines, counts_are_observed_not_discovery=True)
+
+
 def write_json(path, record):
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
@@ -74,6 +120,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
     tail = bytearray()
     console_tail = bytearray()
     last_tail = 0.0
+    journal = CaseJournal()
+    last_journal = 0.0
     try:
         with (directory / 'output.log').open('wb') as log:
             while True:
@@ -81,6 +129,10 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                 if not chunk:
                     break
                 total += len(chunk)
+                journal.feed(chunk)
+                if time.monotonic() - last_journal >= 5.0:
+                    write_json(directory / 'case-journal.json', journal.snapshot())
+                    last_journal = time.monotonic()
                 console_tail.extend(chunk)
                 if len(console_tail)>65536: del console_tail[:-65536]
                 first = chunk[:max(0, LOG_LIMIT - kept)]
@@ -110,6 +162,9 @@ def run_evidence(command, directory, timeout, *, gtest=False):
             sys.stdout.buffer.write(b'\nCI_EVIDENCE retained console tail:\n'+console_tail)
             sys.stdout.buffer.flush()
         code = process.returncode
+        journal.feed(b'\n')
+        record['case_journal'] = journal.snapshot()
+        write_json(directory / 'case-journal.json', record['case_journal'])
         if interrupted and code == 0: code = 130
         record.update(state='interrupted' if interrupted else 'completed', completed_at=time.time(),
                       exit_code=code, output_bytes=total, retained_prefix_bytes=kept,
@@ -168,6 +223,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
         if failed_case_count:
             print(f'CI_FAILED_CASE_SUMMARY total={failed_case_count} emitted={len(failed_cases)} '
                   f'truncated={failed_case_count > len(failed_cases)}', flush=True)
+        if journal.started or journal.completed:
+            print('CI_CASE_JOURNAL ' + json.dumps(record['case_journal']), flush=True)
         print(f'CI_EVIDENCE directory={directory.name} exit={code} output_bytes={total} truncated={total > LOG_LIMIT}', flush=True)
     return code if code >= 0 else 128 - code
 
