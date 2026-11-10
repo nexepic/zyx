@@ -352,56 +352,24 @@
 #endif
         }
 
-        // Reserve only when every scalar publication prefix fits, including
-        // the source rows still alive at that prefix. Front-loading backing
-        // slack must not assume that the entire source has already been freed.
-        // Dynamic/entity outputs retain their incremental materialization path.
+        // The batch cardinality is already known. Reserve its final backing
+        // before publishing the first row, including for entity outputs whose
+        // MSVC map moves can throw. This avoids copying prior output payloads
+        // during vector growth. Only storage actually allocated here is admitted:
+        // every later source/output overlap remains checked by append below.
         void reserveInitialProcedureResult(QueryResult &result, const ProcedureRows &rows,
                 size_t maximumBytes, size_t externalSourceBytes = 0U) {
             if (rows.empty() || !result.isEmpty() || result.getRows().capacity() != 0U) return;
-            const size_t fixedSource = checkedProcedureSizeMul(rows.capacity(), sizeof(BufferedProcedureRow));
-            size_t sourceHeap = 0U, sourceLogical = 0U;
-            for (const auto &row : rows) {
-                sourceHeap = checkedProcedureSizeAdd(sourceHeap, checkedProcedureSizeAdd(
-                    detail::procedurePayloadHeapUpper<false>(row.row),
-                    detail::procedurePayloadHeapUpper<false>(row.node_properties)));
-                sourceLogical = checkedProcedureSizeAdd(sourceLogical, bufferedProcedureRowBytes(row));
-            }
-            size_t published = checkedProcedureSizeAdd(externalSourceBytes, procedureQueryResultBytes(result));
-            published = checkedProcedureSizeAdd(published, utils::detail::standardAllocatorRequestBytes(
-                checkedProcedureSizeMul(rows.size(), sizeof(QueryResult::Row)), alignof(QueryResult::Row)));
-            // addRow's by-value parameter can leave two moved-from maps alive.
-            const size_t handoff = checkedProcedureSizeMul(2U,
-                utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(0U));
-            for (const auto &row : rows) {
-                // Both callers reserve no more than the number of bindings.
-                // Include bindings omitted from the projection conservatively.
-                published = checkedProcedureSizeAdd(published,
-                    utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(row.row.values.size()));
-                for (const auto &[name, value] : row.row.values) {
-                    const auto *scalar = std::get_if<PropertyValue>(&value);
-                    if (!scalar) return;
-                    // Scalar output owns its full payload. One caller moves
-                    // it and another copies it: cover both retained capacity
-                    // and fresh-copy upper bounds without constructing a copy.
-                    published = checkedProcedureSizeAdd(published, std::max(
-                        detail::procedurePayloadHeapUpper<false>(*scalar),
-                        detail::procedurePayloadHeapUpper<true>(*scalar)));
-                    published = checkedProcedureSizeAdd(published, utils::detail::standardFreshStringHeapUpper(name.size()));
-                }
-                const size_t source = std::max(checkedProcedureSizeAdd(fixedSource, sourceHeap), sourceLogical);
-                if (checkedProcedureSizeAdd(published, checkedProcedureSizeAdd(source, handoff)) > maximumBytes) return;
-                sourceHeap -= checkedProcedureSizeAdd(detail::procedurePayloadHeapUpper<false>(row.row),
-                    detail::procedurePayloadHeapUpper<false>(row.node_properties));
-                sourceHeap = checkedProcedureSizeAdd(sourceHeap, BufferedProcedureRow::emptyHeapUpper());
-                sourceLogical -= bufferedProcedureRowBytes(row);
-            }
-            if (checkedProcedureSizeAdd(published, checkedProcedureSizeAdd(fixedSource, sourceHeap)) > maximumBytes) return;
+            const size_t source = checkedProcedureSizeAdd(externalSourceBytes,
+                publicationSourceBytes(rows, 0U));
+            const size_t current = checkedProcedureSizeAdd(source, procedureQueryResultBytes(result));
+            const size_t backing = utils::detail::standardAllocatorRequestBytes(
+                checkedProcedureSizeMul(rows.size(), sizeof(QueryResult::Row)), alignof(QueryResult::Row));
+            if (current > maximumBytes || backing > maximumBytes - current) return;
             try { result.reserveRows(rows.size()); }
             catch (const MaterializedByteLimitExceeded &) { return; }
             catch (const detail::ResourceAdmissionDenied &) { return; }
-            validateProcedureResultBudget(result,
-                checkedProcedureSizeAdd(externalSourceBytes, publicationSourceBytes(rows, 0U)), maximumBytes);
+            validateProcedureResultBudget(result, source, maximumBytes);
         }
 
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
