@@ -8,6 +8,15 @@ import sys
 from pathlib import Path
 
 WINDOWS = [
+    # Build 233 reached these native paths before the codec abort. Isolate
+    # them too so tight source/parent quotas have their own bounded trace.
+    'RelocatableStorageBackendTest.BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot',
+    'RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties',
+    'RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns',
+    'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
+    'RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded',
+    'RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix',
+    'RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners',
     'LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads',
     *('LogicalVectorPropertyBatchTest.' + name for name in (
         'ProjectExpressionsShareRetainedProcedureOutputBudget',

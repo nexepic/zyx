@@ -1,0 +1,21 @@
+Running tests...
+
+================================================================================
+ ZYX Graph Database - Unit Test Suite
+================================================================================
+ Target: 53 tests across 4 suites
+
+[ 25% |   1/  4] PASS ExternalQuerySortTest (3069 ms)
+[ 50% |   2/  4] PASS QuerySpillRowCodecTest (7 ms)
+[ 75% |   3/  4] PASS RelocatableStorageBackendTest (4437 ms)
+[100% |   4/  4] PASS NativeReadSessionTokenBudgetTest (191 ms)
+
+================================================================================
+  ALL TESTS PASSED!
+
+  Passed: 53
+  Failed: 0
+  Time  : 7716 ms
+================================================================================
+
+{"command": ["/workspace/zyx-ci-reconstructed/buildDir/zyx_test_suite", "--gtest_filter=QuerySpillRowCodecTest.*:ExternalQuerySortTest.*:RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection:RelocatableStorageBackendTest.BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot:RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners:NativeReadSessionTokenBudgetTest.*"], "completed_at_unix_seconds": 1794297142.5106194, "exit_code": 0, "jobs": 1, "launcher_pid": 22412, "run_id": "native-20261110T074913-22256", "started_at_unix_seconds": 1794297134.6729562, "working_directory": "/workspace/zyx-ci-reconstructed"}

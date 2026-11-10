@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="18" failures="0" disabled="0" errors="0" time="29.029" timestamp="2026-11-10T07:57:21.074" name="AllTests">
+  <testsuite name="ExternalQuerySortTest" tests="9" failures="0" disabled="0" skipped="0" errors="0" time="28.951" timestamp="2026-11-10T07:57:21.074">
+    <testcase name="MemoryPathPreservesStableNullOrderWithoutOpeningScratch" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="26" status="run" result="completed" time="0.007" timestamp="2026-11-10T07:57:21.074" classname="ExternalQuerySortTest" />
+    <testcase name="MultipleRunsMergeCompleteValuesStableTiesAndRefundOwnership" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="33" status="run" result="completed" time="6.111" timestamp="2026-11-10T07:57:21.082" classname="ExternalQuerySortTest" />
+    <testcase name="CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="40" status="run" result="completed" time="0.833" timestamp="2026-11-10T07:57:27.193" classname="ExternalQuerySortTest" />
+    <testcase name="CancellationAfterSealingRunsAndOutputEarlyStopReleaseEveryOwner" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="47" status="run" result="completed" time="14.11" timestamp="2026-11-10T07:57:28.027" classname="ExternalQuerySortTest" />
+    <testcase name="WriteReadAndReleaseFailuresPreserveOriginalErrorAndRefundMemory" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="60" status="run" result="completed" time="2.991" timestamp="2026-11-10T07:57:42.138" classname="ExternalQuerySortTest" />
+    <testcase name="PublicationCancellationDoesNotAcquireScratchPermission" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="73" status="run" result="completed" time="0.082" timestamp="2026-11-10T07:57:45.130" classname="ExternalQuerySortTest" />
+    <testcase name="UnavailableWorkspaceFailsBeforeAcquiringFilePermission" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="79" status="run" result="completed" time="0.001" timestamp="2026-11-10T07:57:45.212" classname="ExternalQuerySortTest" />
+    <testcase name="UnsupportedOrderingAfterSealedRunsFailsWithoutReplayingInput" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="85" status="run" result="completed" time="1.423" timestamp="2026-11-10T07:57:45.214" classname="ExternalQuerySortTest" />
+    <testcase name="ProtectedWorkspaceRunSizingBoundsMemoryAndWriteAmplification" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ExternalQuerySort.cpp" line="98" status="run" result="completed" time="3.389" timestamp="2026-11-10T07:57:46.637" classname="ExternalQuerySortTest">
+      <properties>
+        <property name="fragment_writes" value="29"/>
+        <property name="logical_peak_bytes" value="4030921"/>
+      </properties>
+    </testcase>
+  </testsuite>
+  <testsuite name="QuerySpillRowCodecTest" tests="9" failures="0" disabled="0" skipped="0" errors="0" time="0.077" timestamp="2026-11-10T07:57:50.026">
+    <testcase name="PreservesCanonicalTypesNestedValuesReferencesKeysAndOwningLifetime" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="9" status="run" result="completed" time="0.001" timestamp="2026-11-10T07:57:50.026" classname="QuerySpillRowCodecTest" />
+    <testcase name="PreservesNaNBitsWithoutUsingEqualityAsAnOracle" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="16" status="run" result="completed" time="0." timestamp="2026-11-10T07:57:50.028" classname="QuerySpillRowCodecTest" />
+    <testcase name="OrderedBindingsPreserveTheVerifiedCanonicalWireBytes" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="19" status="run" result="completed" time="0.001" timestamp="2026-11-10T07:57:50.028" classname="QuerySpillRowCodecTest" />
+    <testcase name="RejectsShortFramesOversizedCountsTrailingBytesAndUnsupportedOwners" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="32" status="run" result="completed" time="0.005" timestamp="2026-11-10T07:57:50.029" classname="QuerySpillRowCodecTest" />
+    <testcase name="ReusableEncodingPreservesCanonicalBytesAndReleasesBorrowedNames" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="41" status="run" result="completed" time="0.047" timestamp="2026-11-10T07:57:50.035" classname="QuerySpillRowCodecTest" />
+    <testcase name="ReusableDecodeOwnsChangingRowsAndDropsStaleBindingsOnSuccess" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="64" status="run" result="completed" time="0.01" timestamp="2026-11-10T07:57:50.083" classname="QuerySpillRowCodecTest" />
+    <testcase name="OutputHandoffRetainsOneKeyBufferAndIndependentRows" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="93" status="run" result="completed" time="0.008" timestamp="2026-11-10T07:57:50.094" classname="QuerySpillRowCodecTest" />
+    <testcase name="OrderedDecodePrunesBothSidesWithoutReplacingMatchedOwnerNodes" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="122" status="run" result="completed" time="0." timestamp="2026-11-10T07:57:50.102" classname="QuerySpillRowCodecTest" />
+    <testcase name="DuplicateOrDescendingNamesRejectBeforeTheNextValueAndAllowValidRetry" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_QuerySpillRowCodec.cpp" line="134" status="run" result="completed" time="0." timestamp="2026-11-10T07:57:50.103" classname="QuerySpillRowCodecTest" />
+  </testsuite>
+</testsuites>

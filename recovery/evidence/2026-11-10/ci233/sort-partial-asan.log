@@ -1,0 +1,49 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = ExternalQuerySortTest.*:QuerySpillRowCodecTest.*
+[==========] Running 18 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from ExternalQuerySortTest
+[ RUN      ] ExternalQuerySortTest.MemoryPathPreservesStableNullOrderWithoutOpeningScratch
+[       OK ] ExternalQuerySortTest.MemoryPathPreservesStableNullOrderWithoutOpeningScratch (7 ms)
+[ RUN      ] ExternalQuerySortTest.MultipleRunsMergeCompleteValuesStableTiesAndRefundOwnership
+[       OK ] ExternalQuerySortTest.MultipleRunsMergeCompleteValuesStableTiesAndRefundOwnership (6111 ms)
+[ RUN      ] ExternalQuerySortTest.CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults
+[       OK ] ExternalQuerySortTest.CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults (833 ms)
+[ RUN      ] ExternalQuerySortTest.CancellationAfterSealingRunsAndOutputEarlyStopReleaseEveryOwner
+[       OK ] ExternalQuerySortTest.CancellationAfterSealingRunsAndOutputEarlyStopReleaseEveryOwner (14110 ms)
+[ RUN      ] ExternalQuerySortTest.WriteReadAndReleaseFailuresPreserveOriginalErrorAndRefundMemory
+[       OK ] ExternalQuerySortTest.WriteReadAndReleaseFailuresPreserveOriginalErrorAndRefundMemory (2991 ms)
+[ RUN      ] ExternalQuerySortTest.PublicationCancellationDoesNotAcquireScratchPermission
+[       OK ] ExternalQuerySortTest.PublicationCancellationDoesNotAcquireScratchPermission (82 ms)
+[ RUN      ] ExternalQuerySortTest.UnavailableWorkspaceFailsBeforeAcquiringFilePermission
+[       OK ] ExternalQuerySortTest.UnavailableWorkspaceFailsBeforeAcquiringFilePermission (1 ms)
+[ RUN      ] ExternalQuerySortTest.UnsupportedOrderingAfterSealedRunsFailsWithoutReplayingInput
+[       OK ] ExternalQuerySortTest.UnsupportedOrderingAfterSealedRunsFailsWithoutReplayingInput (1423 ms)
+[ RUN      ] ExternalQuerySortTest.ProtectedWorkspaceRunSizingBoundsMemoryAndWriteAmplification
+[       OK ] ExternalQuerySortTest.ProtectedWorkspaceRunSizingBoundsMemoryAndWriteAmplification (3389 ms)
+[----------] 9 tests from ExternalQuerySortTest (28951 ms total)
+
+[----------] 9 tests from QuerySpillRowCodecTest
+[ RUN      ] QuerySpillRowCodecTest.PreservesCanonicalTypesNestedValuesReferencesKeysAndOwningLifetime
+[       OK ] QuerySpillRowCodecTest.PreservesCanonicalTypesNestedValuesReferencesKeysAndOwningLifetime (1 ms)
+[ RUN      ] QuerySpillRowCodecTest.PreservesNaNBitsWithoutUsingEqualityAsAnOracle
+[       OK ] QuerySpillRowCodecTest.PreservesNaNBitsWithoutUsingEqualityAsAnOracle (0 ms)
+[ RUN      ] QuerySpillRowCodecTest.OrderedBindingsPreserveTheVerifiedCanonicalWireBytes
+[       OK ] QuerySpillRowCodecTest.OrderedBindingsPreserveTheVerifiedCanonicalWireBytes (1 ms)
+[ RUN      ] QuerySpillRowCodecTest.RejectsShortFramesOversizedCountsTrailingBytesAndUnsupportedOwners
+[       OK ] QuerySpillRowCodecTest.RejectsShortFramesOversizedCountsTrailingBytesAndUnsupportedOwners (5 ms)
+[ RUN      ] QuerySpillRowCodecTest.ReusableEncodingPreservesCanonicalBytesAndReleasesBorrowedNames
+[       OK ] QuerySpillRowCodecTest.ReusableEncodingPreservesCanonicalBytesAndReleasesBorrowedNames (47 ms)
+[ RUN      ] QuerySpillRowCodecTest.ReusableDecodeOwnsChangingRowsAndDropsStaleBindingsOnSuccess
+[       OK ] QuerySpillRowCodecTest.ReusableDecodeOwnsChangingRowsAndDropsStaleBindingsOnSuccess (10 ms)
+[ RUN      ] QuerySpillRowCodecTest.OutputHandoffRetainsOneKeyBufferAndIndependentRows
+[       OK ] QuerySpillRowCodecTest.OutputHandoffRetainsOneKeyBufferAndIndependentRows (8 ms)
+[ RUN      ] QuerySpillRowCodecTest.OrderedDecodePrunesBothSidesWithoutReplacingMatchedOwnerNodes
+[       OK ] QuerySpillRowCodecTest.OrderedDecodePrunesBothSidesWithoutReplacingMatchedOwnerNodes (0 ms)
+[ RUN      ] QuerySpillRowCodecTest.DuplicateOrDescendingNamesRejectBeforeTheNextValueAndAllowValidRetry
+[       OK ] QuerySpillRowCodecTest.DuplicateOrDescendingNamesRejectBeforeTheNextValueAndAllowValidRetry (0 ms)
+[----------] 9 tests from QuerySpillRowCodecTest (77 ms total)
+
+[----------] Global test environment tear-down
+[==========] 18 tests from 2 test suites ran. (29029 ms total)
+[  PASSED  ] 18 tests.

@@ -1,0 +1,836 @@
+{
+  "run_id": 42767771008,
+  "sha": "ea51ff2d6adfbf7f47d5f61881223638bd18e371",
+  "jobs": [
+    {
+      "id": 129668221874,
+      "name": "Build on macos-latest",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose fresh string allocations (macOS)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install System Deps (Linux)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install LLVM (Windows)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Windows)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Unix)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Configure and Build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows fresh string allocations",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Prepare Stage 10 evidence directory",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record Stage 10 endurance configuration",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record enabled test discovery",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows ingest failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows plan cache failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows read session termination",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows projection binding allocation failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows slot allocation failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose macOS materialization budgets",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Locate the macOS conversion quota rejection",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run Unit Tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run storage stress gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native format lifecycle gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat Stage 10 recovery and maintenance gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run requested Stage 10 endurance gate",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native storage calibration smoke pipeline",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run reviewed P0 bulk-Edge calibration candidate",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Collect native storage evidence manifest",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload Stage 10 evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Generate Coverage Report",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Upload to Codecov",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 129668222226,
+      "name": "Native storage TSan (macOS)",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Project Dependencies",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Configure and build native storage TSan tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native storage TSan concurrency gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 129668222254,
+      "name": "Native storage ASan+UBSan (macOS)",
+      "status": "completed",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Project Dependencies",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Configure and build native storage ASan+UBSan tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record sanitizer test discovery",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose concurrent publication with ASan+UBSan",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose cold RSS without budget or RSS observers",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose RSS-guarded spill with default ASan+UBSan checks",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose sanitizer admission cases",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native storage ASan+UBSan gates",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 129668222258,
+      "name": "Build on ubuntu-latest",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose fresh string allocations (macOS)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install System Deps (Linux)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install LLVM (Windows)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Windows)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Unix)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Configure and Build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows fresh string allocations",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Prepare Stage 10 evidence directory",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record Stage 10 endurance configuration",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record enabled test discovery",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows ingest failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows plan cache failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows read session termination",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows projection binding allocation failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows slot allocation failures",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose Windows materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Diagnose macOS materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Locate the macOS conversion quota rejection",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run Unit Tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run storage stress gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native format lifecycle gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat Stage 10 recovery and maintenance gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run requested Stage 10 endurance gate",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native storage calibration smoke pipeline",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run reviewed P0 bulk-Edge calibration candidate",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Collect native storage evidence manifest",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload Stage 10 evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Generate Coverage Report",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload to Codecov",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 129668222564,
+      "name": "Build on windows-latest",
+      "status": "completed",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose fresh string allocations (macOS)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install System Deps (Linux)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Install LLVM (Windows)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Windows)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Unix)",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Configure and Build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows fresh string allocations",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare Stage 10 evidence directory",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record Stage 10 endurance configuration",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record enabled test discovery",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows ingest failures",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows plan cache failures",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows read session termination",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows projection binding allocation failures",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows slot allocation failures",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose Windows materialization budgets",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose macOS materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Locate the macOS conversion quota rejection",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run Unit Tests",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Run storage stress gates",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run native format lifecycle gates",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Repeat Stage 10 recovery and maintenance gates",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run requested Stage 10 endurance gate",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run native storage calibration smoke pipeline",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run reviewed P0 bulk-Edge calibration candidate",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Collect native storage evidence manifest",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Upload Stage 10 evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Generate Coverage Report",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Upload to Codecov",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}
