@@ -12,6 +12,16 @@
 
 using namespace relocatable_storage_backend_test;
 
+namespace {
+size_t emptyNodeCreateSlotBytes() {
+    const LogicalGraphNodeCreateRequest request;
+    // sizeof covers the vector objects, not their live MSVC debug proxies.
+    // Keep those real nested allocations charged until the request is freed.
+    return sizeof(request) + utils::detail::standardVectorHeapBufferBytes(request.labels) +
+        utils::detail::standardVectorHeapBufferBytes(request.properties);
+}
+}
+
 TEST_F(RelocatableStorageBackendTest, NativeQueryOutputRetainsItsMemoryDomainAfterClose) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -330,7 +340,7 @@ TEST_F(RelocatableStorageBackendTest, IssuedIdBuffersUseWriteQuotaAndDeniedStage
     LogicalGraphMutationBatch first; first.node_creates.resize(1U);
     const auto firstResult = transaction->stageMutationBatch(std::move(first));
     ASSERT_EQ(firstResult.created_node_ids.size(), 1U);
-    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + sizeof(LogicalGraphNodeCreateRequest));
+    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + emptyNodeCreateSlotBytes());
     const size_t retained = domain->usage().classes[kind];
     const size_t maximum = ProcessResourceDomains::databaseDefaults().classes[kind];
     auto pressureAccount = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, maximum);
@@ -346,7 +356,7 @@ TEST_F(RelocatableStorageBackendTest, IssuedIdBuffersUseWriteQuotaAndDeniedStage
     const auto nextResult = transaction->stageMutationBatch(std::move(retry));
     ASSERT_EQ(nextResult.created_node_ids.size(), 1U);
     EXPECT_EQ(nextResult.created_node_ids.front(), firstResult.created_node_ids.front() + 1U);
-    EXPECT_EQ(domain->usage().classes[kind], objectBytes + 2U * (sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + sizeof(LogicalGraphNodeCreateRequest)));
+    EXPECT_EQ(domain->usage().classes[kind], objectBytes + 2U * (sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + emptyNodeCreateSlotBytes()));
     const auto committed = transaction->commit();
     EXPECT_EQ(committed.created_node_ids, (std::vector<uint64_t>{firstResult.created_node_ids.front(), nextResult.created_node_ids.front()}));
     EXPECT_EQ(domain->usage().classes[kind], objectBytes);
@@ -395,7 +405,7 @@ TEST_F(RelocatableStorageBackendTest, PreviewRangeQuotaFailureDoesNotPublishAnIn
     pressure.reset();
     const auto staged = transaction->stageMutationBatch(batch);
     EXPECT_EQ(staged, preview);
-    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + sizeof(LogicalGraphNodeCreateRequest));
+    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + emptyNodeCreateSlotBytes());
     transaction->rollback();
     EXPECT_EQ(domain->usage().classes[kind], objectBytes);
     transaction.reset(); backend->close();
