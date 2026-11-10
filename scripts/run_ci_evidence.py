@@ -117,6 +117,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                       console_truncated=total > CONSOLE_LIMIT,
                       xml_present=(directory / 'tests.xml').is_file())
         documents = []
+        failed_cases = []
+        failed_case_count = 0
         for xml in list(directory.rglob('*.xml'))[:128]:
             item = {'path': str(xml.relative_to(directory)), 'bytes': xml.stat().st_size}
             if item['bytes'] > 16*1024*1024:
@@ -125,13 +127,47 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                 try:
                     tree = ET.parse(xml).getroot()
                     item.update(parse_state='complete', summary=dict(tree.attrib))
+                    for case in tree.iter('testcase'):
+                        failures = list(case.findall('failure')) + list(case.findall('error'))
+                        if not failures:
+                            continue
+                        failed_case_count += 1
+                        if len(failed_cases) < 256:
+                            locations = []
+                            for failure in failures[:4]:
+                                message = failure.get('message') or failure.text or ''
+                                first = message.splitlines()[0] if message else ''
+                                location = re.search(r'(?:^|[/\\])([A-Za-z0-9_.-]+\.(?:cpp|hpp|inc)):(\d+):?$', first)
+                                if location:
+                                    locations.append({'file': location[1][:256], 'line': location[2][:32]})
+                            # Test identities and source locations only: do not
+                            # echo arbitrary assertion values or payloads here.
+                            failed_cases.append({'xml': item['path'],
+                                'class': case.get('classname', '')[:256],
+                                'name': case.get('name', '')[:256],
+                                'file': case.get('file', '')[:256],
+                                'line': case.get('line', '')[:32],
+                                'identity_truncated': any(len(case.get(key, '')) > 256
+                                    for key in ('classname', 'name', 'file')),
+                                'assertion_locations': locations,
+                                'failures': len(failures)})
                 except (ET.ParseError, OSError): item['parse_state'] = 'incomplete_or_unreadable'
             documents.append(item)
         record['xml_documents'] = documents
+        record['failed_case_count'] = failed_case_count
+        record['failed_cases'] = failed_cases
+        record['failed_cases_truncated'] = failed_case_count > len(failed_cases)
         record['xml_present'] = bool(documents)
         if (directory / 'process.json').is_file():
             record['process'] = json.loads((directory / 'process.json').read_text())
         write_json(directory / 'result.json', record)
+        # Print after the bounded console tail so long successful case tracing
+        # cannot hide the identities of failures in the middle of a full run.
+        for case in failed_cases:
+            print('CI_FAILED_CASE ' + json.dumps(case, ensure_ascii=True), flush=True)
+        if failed_case_count:
+            print(f'CI_FAILED_CASE_SUMMARY total={failed_case_count} emitted={len(failed_cases)} '
+                  f'truncated={failed_case_count > len(failed_cases)}', flush=True)
         print(f'CI_EVIDENCE directory={directory.name} exit={code} output_bytes={total} truncated={total > LOG_LIMIT}', flush=True)
     return code if code >= 0 else 128 - code
 

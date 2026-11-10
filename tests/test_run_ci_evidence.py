@@ -56,6 +56,30 @@ def test_output_is_bounded_and_keeps_tail(tmp_path):
     assert (tmp_path / 'case/output-tail.log').read_text().endswith('last-marker')
 
 
+def test_failed_xml_identities_survive_console_cap_without_assertion_payload(tmp_path):
+    xml = '<testsuites><testsuite><testcase classname="Suite" name="Case" file="test.cpp" line="42"><failure message="D:\\work\\test.cpp:99&#10;private-assertion-payload"/></testcase></testsuite></testsuites>'
+    program = ("import os,sys;from pathlib import Path;sys.stdout.write('a'*(2*1024*1024));"
+               f"Path(os.environ['GTEST_OUTPUT'][4:]).write_text({xml!r});sys.exit(1)")
+    p, r = invoke(tmp_path, program)
+    assert p.returncode == 1 and r['console_truncated']
+    assert r['failed_case_count'] == 1 and not r['failed_cases_truncated']
+    assert r['failed_cases'][0]['name'] == 'Case'
+    assert r['failed_cases'][0]['assertion_locations'] == [{'file': 'test.cpp', 'line': '99'}]
+    assert b'CI_FAILED_CASE ' in p.stdout and b'"line": "42"' in p.stdout
+    assert b'private-assertion-payload' not in p.stdout
+
+
+def test_failed_xml_summary_is_bounded_and_explicit(tmp_path):
+    xml = '<testsuites><testsuite>' + ''.join(
+        f'<testcase classname="Suite" name="Case{i}"><failure/></testcase>' for i in range(260)) + '</testsuite></testsuites>'
+    p, r = invoke(tmp_path, "import os;from pathlib import Path;"
+                  f"Path(os.environ['GTEST_OUTPUT'][4:]).write_text({xml!r})")
+    assert p.returncode == 0  # Reporting never changes the command's exit status.
+    assert r['failed_case_count'] == 260 and len(r['failed_cases']) == 256
+    assert r['failed_cases_truncated']
+    assert b'CI_FAILED_CASE_SUMMARY total=260 emitted=256 truncated=True' in p.stdout
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='POSIX signal identity')
 def test_crash_keeps_raw_signal(tmp_path):
     p, r = invoke(tmp_path, "import os,signal;os.kill(os.getpid(),signal.SIGTERM)")
