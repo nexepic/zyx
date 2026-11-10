@@ -1,0 +1,18 @@
+{
+  "baseline": "9f06720f BufferedRows.inc in otherwise current source",
+  "candidate": "0fe25fbd",
+  "fixture": "FilterRetainsOneRowCache-style 3-row pipeline, body=1000 bytes",
+  "limits": {
+    "first": 2500,
+    "last": 8500,
+    "step": 4,
+    "count": 1501
+  },
+  "accepted_baseline": 966,
+  "accepted_candidate": 966,
+  "minimum_success_baseline": 4632,
+  "minimum_success_candidate": 4632,
+  "lost_successes": [],
+  "gained_successes": [],
+  "limitations": "Controlled one-TU comparison, Linux STL; no native Windows or throughput claim"
+}

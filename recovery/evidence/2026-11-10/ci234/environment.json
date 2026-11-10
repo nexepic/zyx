@@ -1,0 +1,24 @@
+{
+  "code_commit": "0fe25fbd081f48f2b1fb7f7cd94f054a507d1996",
+  "os": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "compiler": "Debian clang version 19.1.7 (3+b1)",
+  "cmake": {
+    "CMAKE_BUILD_TYPE": "Debug",
+    "CMAKE_CXX_COMPILER": "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "CMAKE_CXX_FLAGS_DEBUG": "-g0",
+    "ZYX_BUILD_APPS": "ON",
+    "ZYX_BUILD_TESTS": "ON",
+    "ZYX_ENABLE_COVERAGE": "ON"
+  },
+  "native_platform_validation": "Windows/macOS not available; no CI triggered",
+  "source_size": {
+    "checked": 2799,
+    "over_3000": 0
+  },
+  "network_blocker": {
+    "action": "materialize ci-diagnostics-windows-latest-1 artifact 13761442504",
+    "reason": "Tunnel connection failed: 403 Forbidden",
+    "state": "denied; stopped without bypass"
+  },
+  "coverage_target_limitation": "Region and branch totals remain below 95%; see full-summary.json"
+}
