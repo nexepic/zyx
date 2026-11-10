@@ -16,6 +16,8 @@ TEST(CellScratchVectorTest, SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutH
     EXPECT_EQ(ordinal.heapBytes(), 0U); EXPECT_EQ(key.heapBytes(), 0U);
     EXPECT_EQ(CellScratchVector<size_t>::allocationUpper(1U), 0U);
     EXPECT_EQ(CellScratchVector<std::string_view>::allocationUpper(1U), 0U);
+    EXPECT_EQ(CellScratchVector<size_t>::workingSetUpper(1U), sizeof(size_t));
+    EXPECT_EQ(CellScratchVector<std::string_view>::workingSetUpper(1U), sizeof(std::string_view));
     EXPECT_EQ(ordinal[0], 42U); EXPECT_EQ(key[0], "payload");
 }
 
@@ -23,6 +25,7 @@ TEST(CellScratchVectorTest, MultipleColumnsReserveOnceAndClearWithoutDroppingThe
     for (const size_t count : {2U, 16U, 1024U}) {
         CellScratchVector<size_t> columns; columns.reserve(count);
         EXPECT_EQ(columns.heapBytes(), CellScratchVector<size_t>::allocationUpper(count));
+        EXPECT_EQ(columns.heapBytes(), CellScratchVector<size_t>::workingSetUpper(count));
         auto *storage = columns.data();
         for (size_t cycle = 0U; cycle < 3U; ++cycle) {
             for (size_t index = 0U; index < count; ++index) columns.push_back(index);

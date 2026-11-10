@@ -9,8 +9,9 @@
 
 namespace graph::query::execution::detail {
 // Task-local ordinal/key-view scratch. A single entry stays on the stack like
-// the existing vector object itself; only external heap requests need a grant.
-// Callers admit allocationUpper(count) before reserve(), then never grow beyond
+// the existing vector object itself. The materialized working set still counts
+// that inline entry; only iterator proxies and heap backing are avoided.
+// Callers admit workingSetUpper(count) before reserve(), then never grow beyond
 // that reservation. Payloads/owners are deliberately excluded from this type.
 template<class T> class CellScratchVector final {
     static_assert(std::is_trivially_copyable_v<T> && std::is_nothrow_default_constructible_v<T>);
@@ -25,6 +26,9 @@ public:
         if (count > SIZE_MAX / sizeof(T)) throw std::overflow_error("Property cell scratch overflowed");
         return utils::detail::addStandardHeapBytes(utils::detail::standardContainerProxyBytes(),
             utils::detail::standardAllocatorRequestBytes(count * sizeof(T), alignof(T)));
+    }
+    static size_t workingSetUpper(size_t count) {
+        return count <= 1U ? count * sizeof(T) : allocationUpper(count);
     }
     void reserve(size_t count) {
         if (capacity_ != 0U || external_) throw std::logic_error("Property cell scratch is already reserved");

@@ -1362,10 +1362,10 @@
                             cellIds.size() == rows.size() && !cellIds.empty() &&
                             (edgeCells ? state.shared.snapshot.supportsResumableEdgePropertyCells()
                                        : state.shared.snapshot.supportsResumableNodePropertyCells())) {
-                            const size_t ordinalBytes = detail::CellScratchVector<size_t>::allocationUpper(cellIds.size());
+                            const size_t ordinalBytes = detail::CellScratchVector<size_t>::workingSetUpper(cellIds.size());
                             const size_t selectionBytes = checkedSizeAdd(
-                                detail::CellScratchVector<size_t>::allocationUpper(keys.size()),
-                                detail::CellScratchVector<std::string_view>::allocationUpper(keys.size()),
+                                detail::CellScratchVector<size_t>::workingSetUpper(keys.size()),
+                                detail::CellScratchVector<std::string_view>::workingSetUpper(keys.size()),
                                 "Property cell key selection overflowed");
                             const size_t cellStructures = checkedSizeAdd(
                                 checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
