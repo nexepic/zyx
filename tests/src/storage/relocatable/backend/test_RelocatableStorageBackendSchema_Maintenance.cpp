@@ -11,6 +11,8 @@
 #include <atomic>
 #include <chrono>
 #include <limits>
+#include <optional>
+#include <thread>
 
 #ifndef _WIN32
 #include <cerrno>
@@ -242,9 +244,8 @@ TEST_F(RelocatableStorageBackendSchemaTest,
 	   LargeValueMaintenanceJournalResumesAcrossReopenAtEveryDurablePhase) {
 	RelocatableStorageBackendOptions initialOptions = options();
 	RelocatableMaintenanceOptions maintenance;
-	// Leave a wide interval after each deferred phase so the test can close the
-	// process before the queued continuation begins its next durable phase.
-	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(100);
+	// Stop the worker through an I/O handshake, not an observer scheduling window.
+	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
 	initialOptions.maintenance = maintenance;
 	{
 		RelocatableStorageBackend backend(initialOptions);
@@ -257,18 +258,59 @@ TEST_F(RelocatableStorageBackendSchemaTest,
 	}
 
 	for (size_t phase = 0U; phase < 3U; ++phase) {
-		RelocatableStorageBackendOptions resumedOptions = options();
-		resumedOptions.maintenance = maintenance;
-		RelocatableStorageBackend backend(resumedOptions);
-		backend.open();
-		backend.pauseMaintenance();
-		ASSERT_GT(backend.enqueueLargeValueReachabilityReclamation(largeValueReclaimOptions()), 0U);
-		backend.resumeMaintenance();
-		ASSERT_TRUE(waitUntil([&] { return backend.maintenanceMetrics().loop.deferred_attempts >= 1U; }));
-		backend.pauseMaintenance();
-		EXPECT_EQ(backend.maintenanceMetrics().loop.completed_tasks, 0U);
-		backend.close();
-	}
+        SCOPED_TRACE(phase);
+        RelocatableStorageBackendOptions resumedOptions = options();
+        resumedOptions.maintenance = maintenance;
+        RelocatableStorageBackend backend(resumedOptions);
+        backend.open();
+        // Startup also queues an adjacency sweep. With this edge-free fixture
+        // it completes once; its global counter is not journal completion.
+        ASSERT_TRUE(waitUntil([&] { return backend.maintenanceMetrics().loop.completed_tasks >= 1U; }));
+        backend.pauseMaintenance();
+        const auto beforeJournal = backend.maintenanceMetrics().loop;
+        ASSERT_EQ(beforeJournal.completed_tasks, 1U);
+        ASSERT_GT(backend.enqueueLargeValueReachabilityReclamation(largeValueReclaimOptions()), 0U);
+        {
+            std::atomic<bool> enteredSync{false}, releaseSync{false};
+            std::exception_ptr pauseFailure;
+            std::optional<StorageIO::ScopedAllThreadNativeSyncHookForTesting> hook;
+            std::optional<std::jthread> pauser;
+            // Release before joining the pauser or removing the hook, even if
+            // an assertion/exception unwinds while the worker is blocked.
+            struct Release final {
+                std::atomic<bool> &flag;
+                void unblock() const noexcept { flag.store(true, std::memory_order_release); flag.notify_all(); }
+                ~Release() { unblock(); }
+            } release{releaseSync};
+            hook.emplace([&](file_handle_t fd) {
+                if (!enteredSync.exchange(true, std::memory_order_acq_rel))
+                    releaseSync.wait(false, std::memory_order_acquire);
+                return portable_fsync(fd);
+            });
+            backend.resumeMaintenance();
+            const bool reachedSync = waitUntil([&] { return enteredSync.load(std::memory_order_acquire); });
+            EXPECT_TRUE(reachedSync);
+            if (reachedSync) {
+                pauser.emplace([&] {
+                    try { backend.pauseMaintenance(); }
+                    catch (...) { pauseFailure = std::current_exception(); }
+                });
+                // pause() marks PAUSED before waiting for the in-flight task.
+                // Permit its durable phase to finish only after this is true;
+                // another cycle can no longer race the observing test thread.
+                EXPECT_TRUE(waitUntil([&] {
+                    return backend.maintenanceMetrics().loop.state == RelocatableMaintenanceLoopState::VMLS_PAUSED;
+                }));
+            }
+            release.unblock();
+            if (pauser) pauser->join();
+            ASSERT_TRUE(reachedSync);
+            ASSERT_FALSE(pauseFailure);
+            EXPECT_GT(backend.maintenanceMetrics().loop.deferred_attempts, beforeJournal.deferred_attempts);
+            EXPECT_EQ(backend.maintenanceMetrics().loop.completed_tasks, beforeJournal.completed_tasks);
+        }
+        backend.close();
+    }
 
 	RelocatableStorageBackendOptions finalOptions = options();
 	finalOptions.maintenance = maintenance;

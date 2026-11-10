@@ -1,0 +1,13 @@
+# Deterministic journal phase recovery test
+
+The reconstructed tree's complete run failed at the unchanged journal test: global completed_tasks was1 rather than0. Ten isolated repeats passed, which did not invalidate the failure. Original reconstruction167ccf59 and bundle are retained.
+
+Root cause has two source-backed parts. Backend startup enqueues persistent Vector recovery and a global adjacency sweep (RelocatableStorageBackend.cpp around1551). The no-candidate adjacency sweep returns the default COMPLETED result (RelocatableMaintenanceService.cpp around352), whereas Vector scanning returns DEFERRED. Loop metrics count every task. Thus neither deferred_attempts>=1 nor completed_tasks==0 identifies the journal task. In addition, observing a deferral does not pause the worker atomically; it can run later cycles before the observer's pause request.
+
+A separate old-test object, with only a deliberate2-second delay after observing deferral, failed0/1: completed_tasks became2, and final reclaim had already happened. The first synchronization candidate still failed with completed_tasks1 at all three phases, demonstrating that stopping the journal before another phase does not remove the unrelated startup completion. Neither experiment is a production change; raw logs/source are retained separately.
+
+The final test first waits for and asserts the one no-candidate startup completion in this edge-free fixture. It then enqueues the journal and blocks the first native sync of that worker task. A separate pauser marks PAUSED while waiting for the in-flight phase. The observer releases sync only after PAUSED; joining the pauser proves the durable task finished before close. Completion count must remain equal to the pre-journal baseline; a new deferral must be recorded. This preserves no-journal-completion coverage rather than allowing an arbitrary completion. Reopens, final reclaimed-byte evidence, no further reachable-value retirement and integrity assertions remain.
+
+An RAII release runs before joining/removing the hook on unwind, preventing a blocked-worker cleanup deadlock. Captured atomics/exception state outlive both threads/hook. Hooks are process-local and fixture paths are UUID-isolated; the pressure test uses four distinct temporary roots. The test interval is shortened to1ms, not enlarged; correctness no longer depends on winning its scheduling window. Production maintenance code and budget policies are unchanged.
+
+Validation so far: related same-tree targeted33/33, four processes*25 repeats=100/100 with paired markers. Full regression pending. Windows/macOS native execution remains unverified. No push or CI action.
