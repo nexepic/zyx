@@ -66,7 +66,7 @@ jobs:
   native-storage-tsan:
     name: Native storage TSan (macOS)
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - name: Checkout Code
@@ -76,7 +76,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/ci-evidence"
           printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
-          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 2100 ))" >> "$GITHUB_ENV"
+          # Include cold Conan/build time and the complete TSan gate; reserve
+          # the final five minutes for evidence upload before the job deadline.
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 3300 ))" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Set up Python
