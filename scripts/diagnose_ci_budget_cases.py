@@ -15,6 +15,7 @@ WINDOWS = [
         'ReclaimsBackingBeforeRetainedOutputsConsumeTheTemporaryHeadroom',
         'PotentiallyThrowingMovesKeepOriginalStorage',
         'AllocationFailureFallsBackWithoutMovingAndAllowsRetry',
+        'HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases',
     )),
     'BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack',
     'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',

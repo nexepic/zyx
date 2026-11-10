@@ -9,6 +9,8 @@ namespace {
 class TrackingBudget final : public std::pmr::memory_resource {
 public:
     explicit TrackingBudget(size_t maximum) : budget_(maximum) {}
+    TrackingBudget(size_t maximum, std::shared_ptr<graph::query::execution::detail::ResourceAccount> account)
+        : budget_(maximum, std::move(account)) {}
     size_t used() const { return budget_.used(); }
     size_t peak() const { return peak_; }
     bool fail_next = false;
@@ -115,6 +117,32 @@ TEST(ConsumedPrefixCompactionTest, AllocationFailureFallsBackWithoutMovingAndAll
         EXPECT_EQ(first, 0U); EXPECT_EQ(rows[0], 2); EXPECT_EQ(rows[1], 3);
     }
     EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases) {
+    using namespace graph::query::execution::detail;
+    constexpr size_t limit = 6U * sizeof(int);
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(limit));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(limit));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, limit);
+    auto competingAccount = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, limit);
+    ResourceLease competing(competingAccount); competing.set(1U);
+    auto budget = std::make_shared<TrackingBudget>(limit, account);
+    {
+        utils::OwnedVector<int> rows{utils::OwnedPmrAllocator<int>(budget)};
+        rows.reserve(4U); for (int id = 0; id < 4; ++id) rows.push_back(id);
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows[2], 2); EXPECT_EQ(rows[3], 3);
+        EXPECT_EQ(account->used(), 4U * sizeof(int)); EXPECT_EQ(competingAccount->used(), 1U);
+        competing.reset();
+        EXPECT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_EQ(first, 0U); EXPECT_EQ(rows[0], 2); EXPECT_EQ(rows[1], 3);
+        EXPECT_EQ(account->used(), 2U * sizeof(int));
+        EXPECT_EQ(budget->peak(), limit);
+    }
+    EXPECT_EQ(budget->used(), 0U); EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(competingAccount->used(), 0U);
 }
 
 TEST(ConsumedPrefixCompactionTest, PotentiallyThrowingMovesKeepOriginalStorage) {
