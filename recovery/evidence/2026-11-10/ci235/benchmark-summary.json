@@ -1,0 +1,113 @@
+{
+  "scope": "Linux Debug -O0 -g0 with coverage; fake-backend query regression microcomparison",
+  "not_production_or_native_platform_benchmark": true,
+  "selected": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder:LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads:LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+  "records": [
+    {
+      "binary": "before",
+      "round": 0,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 50.06307294800354,
+      "exit": 0
+    },
+    {
+      "binary": "after",
+      "round": 0,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 35.771556934996624,
+      "exit": 0
+    },
+    {
+      "binary": "after",
+      "round": 1,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 98.5394116660027,
+      "exit": 0
+    },
+    {
+      "binary": "before",
+      "round": 1,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 45.377785441000015,
+      "exit": 0
+    },
+    {
+      "binary": "before",
+      "round": 2,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 40.06447417099844,
+      "exit": 0
+    },
+    {
+      "binary": "after",
+      "round": 2,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 35.48052887499216,
+      "exit": 0
+    },
+    {
+      "binary": "after",
+      "round": 3,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 37.94080062600551,
+      "exit": 0
+    },
+    {
+      "binary": "before",
+      "round": 3,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 39.14794252700813,
+      "exit": 0
+    },
+    {
+      "binary": "before",
+      "round": 4,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 38.621988433995284,
+      "exit": 0
+    },
+    {
+      "binary": "after",
+      "round": 4,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 35.38685364898993,
+      "exit": 0
+    },
+    {
+      "binary": "after",
+      "round": 5,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 39.12504182900011,
+      "exit": 0
+    },
+    {
+      "binary": "before",
+      "round": 5,
+      "repeats": 100,
+      "passed": 300,
+      "seconds": 39.87948710699857,
+      "exit": 0
+    }
+  ],
+  "paired_after_minus_before_mean_seconds": 4.848240491997179,
+  "paired_95pct_t_interval_seconds": [
+    -20.525015721125662,
+    30.221496705120018
+  ],
+  "source_before_validated": "0fe25fbd081f48f2b1fb7f7cd94f054a507d1996",
+  "source_after_validated": "b0444c8e3a830f66e0f5d0a865059bb1f0f60bfc",
+  "before_binary_sha256": "350add963ea0392b363cf1ab9b1a8e8660c07667055c8a2487a0228a673fe278",
+  "after_binary_sha256": "3cc70eb16f8335d733ef25bb5aa5437f143253e640bba12b2efb84ed418e0871",
+  "inference": "Paired interval crosses zero; no established latency improvement, regression, or equivalence. Debug instrumented fake-backend microcomparison only."
+}

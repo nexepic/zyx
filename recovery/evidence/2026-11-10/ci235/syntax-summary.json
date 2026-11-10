@@ -1,0 +1,22 @@
+[
+  {
+    "mode": "no-hooks",
+    "source": "LogicalPlanProcedureRuntime.cpp",
+    "exit": 0
+  },
+  {
+    "mode": "no-hooks",
+    "source": "LogicalPlanReadRuntime.cpp",
+    "exit": 0
+  },
+  {
+    "mode": "asan-ubsan-hooks",
+    "source": "LogicalPlanProcedureRuntime.cpp",
+    "exit": 0
+  },
+  {
+    "mode": "asan-ubsan-hooks",
+    "source": "LogicalPlanReadRuntime.cpp",
+    "exit": 0
+  }
+]

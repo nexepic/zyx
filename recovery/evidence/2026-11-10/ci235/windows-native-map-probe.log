@@ -1,0 +1,15 @@
+2026-11-10T14:09:20.2319681Z MAP_ALLOC value_width=88 alignment=8 entries=0 buckets=8 live=304 peak=304 retained_upper=311 fresh_upper=311 calls=4 overflow=0
+2026-11-10T14:09:20.2320350Z MAP_ALLOC value_width=88 alignment=8 entries=1 buckets=8 live=464 peak=464 retained_upper=478 fresh_upper=478 calls=6 overflow=0
+2026-11-10T14:09:20.2321036Z MAP_ALLOC value_width=88 alignment=8 entries=3 buckets=8 live=784 peak=784 retained_upper=812 fresh_upper=812 calls=10 overflow=0
+2026-11-10T14:09:20.2321721Z MAP_ALLOC value_width=88 alignment=8 entries=16 buckets=16 live=2992 peak=2992 retained_upper=3111 fresh_upper=3383 calls=37 overflow=0
+2026-11-10T14:09:20.2322675Z MAP_ALLOC value_width=88 alignment=8 entries=256 buckets=256 live=45279 peak=45279 retained_upper=47078 fresh_upper=51190 calls=517 overflow=0
+2026-11-10T14:09:20.2323380Z MAP_ALLOC value_width=104 alignment=8 entries=0 buckets=8 live=320 peak=320 retained_upper=327 fresh_upper=327 calls=4 overflow=0
+2026-11-10T14:09:20.2324322Z MAP_ALLOC value_width=104 alignment=8 entries=1 buckets=8 live=496 peak=496 retained_upper=510 fresh_upper=510 calls=6 overflow=0
+2026-11-10T14:09:20.2325003Z MAP_ALLOC value_width=104 alignment=8 entries=3 buckets=8 live=848 peak=848 retained_upper=876 fresh_upper=876 calls=10 overflow=0
+2026-11-10T14:09:20.2325691Z MAP_ALLOC value_width=104 alignment=8 entries=16 buckets=16 live=3264 peak=3264 retained_upper=3383 fresh_upper=3655 calls=37 overflow=0
+2026-11-10T14:09:20.2326400Z MAP_ALLOC value_width=104 alignment=8 entries=256 buckets=256 live=49391 peak=49391 retained_upper=51190 fresh_upper=55302 calls=517 overflow=0
+2026-11-10T14:09:20.2327107Z MAP_ALLOC value_width=352 alignment=8 entries=0 buckets=8 live=568 peak=568 retained_upper=575 fresh_upper=575 calls=4 overflow=0
+2026-11-10T14:09:20.2329490Z MAP_ALLOC value_width=352 alignment=8 entries=1 buckets=8 live=992 peak=992 retained_upper=1006 fresh_upper=1006 calls=6 overflow=0
+2026-11-10T14:09:20.2330302Z MAP_ALLOC value_width=352 alignment=8 entries=3 buckets=8 live=1840 peak=1840 retained_upper=1868 fresh_upper=1868 calls=10 overflow=0
+2026-11-10T14:09:20.2331008Z MAP_ALLOC value_width=352 alignment=8 entries=16 buckets=16 live=7480 peak=7480 retained_upper=7599 fresh_upper=7871 calls=37 overflow=0
+2026-11-10T14:09:20.2331737Z MAP_ALLOC value_width=352 alignment=8 entries=256 buckets=256 live=113127 peak=113127 retained_upper=114926 fresh_upper=119038 calls=517 overflow=0

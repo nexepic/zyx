@@ -1,0 +1,101 @@
+{
+  "validated_source_sha": "b0444c8e3a830f66e0f5d0a865059bb1f0f60bfc",
+  "baseline_ci": "56d8e4b8c9268ad752e4e0c8615d7ee53492e051",
+  "fixes": [
+    "Compact consumed procedure backing before output construction; old/new overlap is admitted; same allocator/query owner, no payload copy; optional quota/allocation refusal preserves original storage; quarter-consumption geometric policy has <3*N moves.",
+    "Use aligned MSVC list-node layout for default hash-table nodes; retain sentinel/buckets/proxies/large-allocation prefixes. Native old-model probe shows 7 excess bytes per alignment-8 node; actual-STL layout regression added.",
+    "Inline single ordinal/key-view scratch, but retain materialized charges for inline values. Multi-element heap/proxy capacity remains admitted; failed reserve restores empty state.",
+    "Preserve bounded identity-only case journals across missing XML/timeouts/console caps; optional journal write errors do not change test status. Windows unit remains mandatory, now 90-minute bounded window; isolated final-shape diagnostic added.",
+    "Add bounded merge-level RSS/ASan/logical-scratch counters, preserving RSS limit and sanitizer gates. No claimed RSS root-cause fix."
+  ],
+  "msvc_layout_reference": "https://github.com/microsoft/STL/blob/main/stl/inc/list",
+  "local_validation": {
+    "full": {
+      "executed": 11081,
+      "failures": 0,
+      "skip": 0,
+      "disabled": 20,
+      "exact_once": true,
+      "stress_all_once": true
+    },
+    "targeted_passed": 345,
+    "python_passed": 19,
+    "standalone_linux_asan_ubsan": {
+      "iterations": 100,
+      "tests_per_iteration": 10,
+      "total_executions": 1000,
+      "instrumented_scope": "new private compaction/cell-scratch headers plus tests; not full database"
+    },
+    "syntax_checks_passed": 4,
+    "cold_linux_sort_passed": 1
+  },
+  "io_comparison": {
+    "native_selected_values_decoded_per_budget": 6,
+    "budgets": [
+      4096,
+      6000,
+      100000
+    ],
+    "data_read_bytes_before_and_after": [
+      204800,
+      229376,
+      229376
+    ],
+    "logical_peaks_before_and_after": [
+      3762,
+      4370,
+      24660
+    ],
+    "scope": "Same native regression properties in full baseline/current XML; not a universal physical-IO guarantee"
+  },
+  "budget_test_change": {
+    "test": "TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+    "old_rejection_bound": 4000,
+    "new_rejection_bound": 2599,
+    "rationale": "Compaction can release old backing; two independently owned 1300-byte payloads cannot fit below 2600. Existing 10KiB success and payload correctness preserved; actual query-account denial/refund/escaped-result ownership added."
+  },
+  "limits": [
+    "No new Windows/macOS native execution; do not claim all 32 observed Windows failures are fixed. Remaining result/sort/CSV/error-priority budget failures need native validation.",
+    "macOS ASan cold RSS still unresolved: #235 rejection occurred during merge before output; RSS delta 64.15625MiB, live allocation delta 4.53071MiB, ASan heap delta 47.40625MiB; attribution not established.",
+    "Global full coverage remains below 95% in regions and branches, as in baseline.",
+    "Microbenchmark interval crosses zero and is not a production/native-platform performance result."
+  ],
+  "access_limits": [
+    {
+      "action": "Materialize artifact 13776892507 reusable file bytes",
+      "result": "denied",
+      "reason": "URLError: Tunnel connection failed: 403 Forbidden",
+      "retried_or_bypassed": false
+    },
+    {
+      "action": "Read /proc/51852/io for optional test progress metrics",
+      "result": "denied",
+      "reason": "PermissionError errno 13",
+      "retried_or_bypassed": false
+    }
+  ],
+  "initial_benchmark_attempt": {
+    "status": 127,
+    "cause": "Missing libboost_atomic.so.1.83.0 before project runtime environment was loaded",
+    "included_in_statistics": false
+  },
+  "remote_actions": {
+    "push": false,
+    "ci_dispatch": false,
+    "ci_cancel": false,
+    "main_modified": false
+  },
+  "source_size": {
+    "script_covered_files": 2805,
+    "over_3000": 0,
+    "historical_archives_unchanged": true
+  },
+  "initial_compaction_candidate": {
+    "targeted_passed": 81,
+    "targeted_failed": 1,
+    "failed_test": "TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+    "source_unpinned_uncommitted_candidate": true,
+    "not_final_acceptance": true,
+    "resolution": "Replace obsolete retained-backing rejection assumption with strict independent payload floor; preserve success/result checks and add real query-account lifecycle coverage."
+  }
+}
