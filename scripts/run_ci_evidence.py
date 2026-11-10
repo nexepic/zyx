@@ -122,6 +122,14 @@ def run_evidence(command, directory, timeout, *, gtest=False):
     last_tail = 0.0
     journal = CaseJournal()
     last_journal = 0.0
+    journal_write_errors = 0
+    def persist_journal(snapshot):
+        nonlocal journal_write_errors
+        try: write_json(directory / 'case-journal.json', snapshot)
+        except OSError:
+            # Optional progress evidence must not kill a real test because an
+            # antivirus/file lock temporarily denies replacing this file.
+            journal_write_errors += 1
     try:
         with (directory / 'output.log').open('wb') as log:
             while True:
@@ -131,7 +139,7 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                 total += len(chunk)
                 journal.feed(chunk)
                 if time.monotonic() - last_journal >= 5.0:
-                    write_json(directory / 'case-journal.json', journal.snapshot())
+                    persist_journal(journal.snapshot())
                     last_journal = time.monotonic()
                 console_tail.extend(chunk)
                 if len(console_tail)>65536: del console_tail[:-65536]
@@ -164,7 +172,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
         code = process.returncode
         journal.feed(b'\n')
         record['case_journal'] = journal.snapshot()
-        write_json(directory / 'case-journal.json', record['case_journal'])
+        persist_journal(record['case_journal'])
+        record['case_journal_write_errors'] = journal_write_errors
         if interrupted and code == 0: code = 130
         record.update(state='interrupted' if interrupted else 'completed', completed_at=time.time(),
                       exit_code=code, output_bytes=total, retained_prefix_bytes=kept,
@@ -225,6 +234,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                   f'truncated={failed_case_count > len(failed_cases)}', flush=True)
         if journal.started or journal.completed:
             print('CI_CASE_JOURNAL ' + json.dumps(record['case_journal']), flush=True)
+        if journal_write_errors:
+            print(f'CI_CASE_JOURNAL_WRITE_ERROR count={journal_write_errors}', flush=True)
         print(f'CI_EVIDENCE directory={directory.name} exit={code} output_bytes={total} truncated={total > LOG_LIMIT}', flush=True)
     return code if code >= 0 else 128 - code
 

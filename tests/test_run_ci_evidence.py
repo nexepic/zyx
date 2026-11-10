@@ -81,6 +81,27 @@ def test_journal_handles_split_trace_lines_without_interpreting_payloads():
     assert not journal.snapshot()['failed_names']
 
 
+def test_optional_journal_write_failure_preserves_test_exit_and_console_evidence(tmp_path):
+    program = f'''import importlib.util,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("evidence", {str(WRAPPER)!r})
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+original=m.write_json
+def write(path,record):
+    if path.name=="case-journal.json":raise PermissionError("private-error-detail")
+    original(path,record)
+m.write_json=write
+sys.exit(m.run_evidence([sys.executable,"-c","print('CI_CASE_BEGIN Suite.Case');print('CI_CASE_END Suite.Case failed=1');raise SystemExit(7)"],Path({str(tmp_path / 'case')!r}),10))
+'''
+    env=os.environ.copy();env.pop('ZYX_CI_DEADLINE_UNIX',None)
+    p=subprocess.run([sys.executable,'-c',program],capture_output=True,env=env,cwd=ROOT,timeout=20)
+    r=json.loads((tmp_path/'case/result.json').read_text())
+    assert p.returncode==r['exit_code']==7
+    assert r['case_journal_write_errors']>0 and r['case_journal']['failed']==1
+    assert b'CI_CASE_JOURNAL ' in p.stdout and b'CI_CASE_JOURNAL_WRITE_ERROR' in p.stdout
+    assert b'private-error-detail' not in p.stdout+p.stderr
+
+
 def test_shared_deadline_fails_without_starting_command(tmp_path):
     p, r = invoke(tmp_path, "raise AssertionError('must not execute')", extra_env={'ZYX_CI_DEADLINE_UNIX': '1'})
     assert p.returncode == r['exit_code'] == 124
