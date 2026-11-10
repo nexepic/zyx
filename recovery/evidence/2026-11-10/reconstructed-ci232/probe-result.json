@@ -1,0 +1,12 @@
+{
+  "probe": "list_probe.cpp with shadow header selecting actual Boost list alias",
+  "platform": "Linux, not MSVC",
+  "exit_code": 0,
+  "checks": [
+    "cold construction no allocation",
+    "rejected insertion refunds",
+    "retry",
+    "same-resource splice order",
+    "clear/destruct while allocations denied"
+  ]
+}

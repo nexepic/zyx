@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" disabled="0" errors="0" time="1.129" timestamp="2026-11-10T03:33:25.223" name="AllTests">
+  <testsuite name="RelocatableStorageBackendSchemaTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="1.129" timestamp="2026-11-10T03:33:35.052">
+    <testcase name="LargeValueMaintenanceJournalResumesAcrossReopenAtEveryDurablePhase" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_Maintenance.cpp" line="242" status="run" result="completed" time="1.129" timestamp="2026-11-10T03:33:35.052" classname="RelocatableStorageBackendSchemaTest" />
+  </testsuite>
+</testsuites>

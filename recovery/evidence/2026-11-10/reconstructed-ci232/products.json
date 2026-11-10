@@ -1,0 +1,16 @@
+{
+  "source": "bd745e2dc0b44cf75e55ce925f257b78c8abb1bd",
+  "configuration": "Debian13 x86_64 Clang19.1.7 Debug -g0 coverage ON; Boost1.83",
+  "products": [
+    {
+      "path": "/workspace/zyx-ci-reconstructed/buildDir/zyx_test_suite",
+      "bytes": 303184952,
+      "sha256": "8d9ffeebca5fdf639ebb11cca050dc6645a45eeedfca75f91cf2300253f758ba"
+    },
+    {
+      "path": "/workspace/zyx-ci-reconstructed/buildDir/libzyx_core.a",
+      "bytes": 336796240,
+      "sha256": "243e6f537adb9a08ab248440f556d0d4343c623fee5a460d12c50c70c3a32d9d"
+    }
+  ]
+}

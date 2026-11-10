@@ -1,0 +1,4 @@
+#include "graph/utils/AdmissionPmrContainers.hpp"
+#include <cassert>
+struct R:std::pmr::memory_resource{bool deny=true;size_t live=0,calls=0;void*do_allocate(size_t n,size_t a)override{++calls;if(deny)throw std::bad_alloc();auto*p=std::pmr::new_delete_resource()->allocate(n,a);live+=n;return p;}void do_deallocate(void*p,size_t n,size_t a)override{live-=n;std::pmr::new_delete_resource()->deallocate(p,n,a);}bool do_is_equal(const std::pmr::memory_resource&o)const noexcept override{return this==&o;}};
+int main(){R r;{graph::utils::AdmissionPmrList<int>a(&r),b(&r);assert(!r.calls);try{a.push_back(1);assert(false);}catch(const std::bad_alloc&){}assert(a.empty()&&!r.live);r.deny=false;a.push_back(1);a.push_back(2);b.splice(b.end(),a,a.begin());assert(a.front()==2&&b.front()==1);r.deny=true;a.clear();b.clear();assert(!r.live);}assert(!r.live);}
