@@ -32,6 +32,24 @@ private:
 };
 }
 
+TEST(BudgetMemoryResourceTest, HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack) {
+#if defined(_MSVC_STL_VERSION)
+    using Entry = std::pair<const uint64_t, uint64_t>;
+    // Compile against the actual STL node; a vendor layout change must not
+    // silently invalidate the ownership model.
+    EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<Entry>(),
+        sizeof(std::_List_node<Entry, void *>));
+    struct alignas(64) Wide { char bytes[64]; };
+    using AlignedEntry = std::pair<const uint64_t, Wide>;
+    EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<AlignedEntry>(),
+        sizeof(std::_List_node<AlignedEntry, void *>));
+#else
+    using Entry = std::pair<const uint64_t, uint64_t>;
+    EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<Entry>(),
+        sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U);
+#endif
+}
+
 TEST(BudgetMemoryResourceTest, ChargesLiveAllocationsAndRejectsBeforeUpstream) {
 	MaterializedByteBudget budget(128U);
 	CountingResource upstream;

@@ -103,6 +103,21 @@ template<class T>
         standardAllocatorRequestBytes(values.capacity() * sizeof(T), alignof(T)));
 }
 
+template<class Entry>
+[[nodiscard]] constexpr size_t standardHashNodeBytes() noexcept {
+#if defined(_MSVC_STL_VERSION)
+    // MSVC xhash owns std::list nodes: _Next, _Prev, then _Myval.
+    // Let the compiler include actual leading/tail padding instead of adding
+    // alignment-1 to every already-aligned node (including the sentinel).
+    // Default std::allocator uses raw node pointers. Iterator proxies are
+    // separate allocations and remain charged by the table model below.
+    struct Layout { void *next; void *previous; Entry value; };
+    return sizeof(Layout);
+#else
+    return sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+#endif
+}
+
 // Fresh default map followed by reserve(count), before any insertion. Supported
 // STLs use prime/power-of-two buckets below 2*count+1 (MSVC minimum eight).
 // This is a bound for the visible fresh table, not an opaque adopted capacity.
@@ -111,7 +126,7 @@ template<class Key, class Value>
     // Keep default-load-factor arithmetic exact even in float-based STLs.
     if (count > (size_t{1U} << 24U)) throw std::length_error("fresh map admission exceeds its element bound");
     using Entry = std::pair<const Key, Value>;
-    constexpr size_t nodeBytes = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+    constexpr size_t nodeBytes = standardHashNodeBytes<Entry>();
     const auto bucketCount = (std::max)(size_t{8U}, addStandardHeapBytes(addStandardHeapBytes(count, count), 1U));
 #if defined(_MSVC_STL_VERSION)
     const auto nodes = addStandardHeapBytes(count, 1U);
@@ -142,7 +157,7 @@ template<class Key, class Value, class Hash, class Equal>
 [[nodiscard]] inline size_t standardUnorderedMapStructuralHeapBytes(
         const std::unordered_map<Key, Value, Hash, Equal> &map) {
     using Entry = typename std::unordered_map<Key, Value, Hash, Equal>::value_type;
-    constexpr size_t nodeBytes = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+    constexpr size_t nodeBytes = standardHashNodeBytes<Entry>();
 #if defined(_MSVC_STL_VERSION)
     const size_t nodes = addStandardHeapBytes(map.size(), 1U);
     constexpr size_t bucketWidth = 2U * sizeof(void *);
