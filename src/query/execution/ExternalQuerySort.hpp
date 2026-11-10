@@ -11,6 +11,9 @@
 #include "query/execution/BudgetMemoryResource.hpp"
 #include "query/execution/OrderByComparison.hpp"
 #include "query/execution/QuerySpillRowCodec.hpp"
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include "graph/debug/ResidentMemoryDiagnostics.hpp"
+#endif
 namespace graph::query::execution::detail {
 // Bounded two-way external merge. Unsupported rows/NaN ordering keep the
 // in-memory path; if that exceeds memory, fail explicitly instead of replaying
@@ -77,12 +80,14 @@ public:
 			return true;
 		}
 		if(!rows_.empty())flush();
+        tracePhase("sort-before-merge");
 		for(size_t level=0;runs_.size()>1U;++level){
 			if(level==12U)throw std::runtime_error("external Sort exceeded its merge-depth bound");
 			utils::AdmissionPmrVector<Run> next(&memory_);next.reserve((runs_.size()+1U)/2U);
 			for(size_t i=0;i<runs_.size();i+=2U){checkpoint_();if(i+1U==runs_.size())next.push_back(std::move(runs_[i]));else next.push_back(merge(runs_[i],runs_[i+1U]));}
 			runs_=std::move(next);
 		}
+        tracePhase("sort-before-output");
 		Cursor cursor(*this,runs_.front());
 		while(cursor.current){checkpoint_();auto record=QuerySpillRowCodec::takeOutputRow(*cursor.current);
 			const auto bytes=size_(record);if(bytes>workspace_.bytes())throw std::runtime_error("external Sort decoded output exceeded workspace");
@@ -90,10 +95,19 @@ public:
 			if(!visitor(std::move(record),std::move(charge))){scratch_->finish();return false;}
 			workspace_.set(WORKSPACE_BYTES);cursor.advance();
 		}
-		scratch_->finish();return true;
+		scratch_->finish();tracePhase("sort-finished");return true;
 	}
 	[[nodiscard]] bool spilled() const {return scratch_!=nullptr;}
 private:
+    static void tracePhase(const char *phase) noexcept {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        // Fixed phase boundaries only. Do not invoke the allocating ASan
+        // statistics printer before a guard's observed rejection.
+        debug::traceResidentMemory(phase, false);
+#else
+        static_cast<void>(phase);
+#endif
+    }
 	struct Run {
 		explicit Run(std::pmr::memory_resource *resource):handles(resource){}
 		utils::AdmissionPmrVector<uint64_t> handles;uint64_t rows=0U;
@@ -152,9 +166,9 @@ private:
 		if(spillable_)std::sort(rows_.values().begin(),rows_.values().end(),[&](const auto &a,const auto &b){return precedes(a,b);});
 		else {MaterializedByteReservation temporary(&budget_);temporary.set(rows_.size()*sizeof(Record));std::stable_sort(rows_.values().begin(),rows_.values().end(),[&](const auto &a,const auto &b){checkpoint_();for(size_t i=0;i<ascending_.size();++i)if(a.keys[i]!=b.keys[i])return orderByPrecedes(a.keys[i],b.keys[i],ascending_[i]!=0);return false;});}
 	}
-	void ensureScratch(){if(scratch_)return;workspace_.set(WORKSPACE_BYTES);publication_checkpoint_();scratch_=provider_.openQueryScratchSession(maximum_disk_,maximum_fragments_,account_);if(!scratch_)throw std::runtime_error("external Sort cannot spill to a physically read-only file");}
+	void ensureScratch(){if(scratch_)return;tracePhase("sort-before-first-spill");workspace_.set(WORKSPACE_BYTES);publication_checkpoint_();scratch_=provider_.openQueryScratchSession(maximum_disk_,maximum_fragments_,account_);if(!scratch_)throw std::runtime_error("external Sort cannot spill to a physically read-only file");}
 	void flush(){if(!spillable_)throw std::runtime_error("external Sort has no qualified spill codec for its input");ensureScratch();sortRows();Writer writer(*this);
-		for(const auto &record:rows_.values())writer.append(record);auto run=writer.finish();if(runs_.size()==4096U)throw std::runtime_error("external Sort exceeded its run bound");runs_.push_back(std::move(run));rows_.clear();}
+		for(const auto &record:rows_.values())writer.append(record);auto run=writer.finish();if(runs_.size()==4096U)throw std::runtime_error("external Sort exceeded its run bound");runs_.push_back(std::move(run));rows_.clear();if(runs_.size()==1U)tracePhase("sort-after-first-spill");}
 	Run merge(Run &left,Run &right){Cursor a(*this,left),b(*this,right);Writer writer(*this);
 		while(a.current || b.current){checkpoint_();if(!b.current || (a.current && precedes(*a.current,*b.current))){writer.append(*a.current);a.advance();}else{writer.append(*b.current);b.advance();}}
 		auto result=writer.finish();

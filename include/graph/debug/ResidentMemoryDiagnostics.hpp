@@ -28,7 +28,7 @@ extern "C" void __asan_print_accumulated_stats() ZYX_RSS_WEAK;
 #endif
 namespace graph::debug {
 inline std::atomic<unsigned> ciResidentMemoryReports{0U};
-static inline void traceResidentMemory(const char *phase) noexcept {
+static inline void traceResidentMemory(const char *phase, [[maybe_unused]] bool printAllocatorStats = true) noexcept {
     if (!std::getenv("ZYX_CI_RSS_TRACE")) return;
     const auto index = ciResidentMemoryReports.fetch_add(1U, std::memory_order_relaxed);
     if (index >= 24U) {
@@ -58,7 +58,7 @@ static inline void traceResidentMemory(const char *phase) noexcept {
     if(__sanitizer_get_free_bytes)std::fprintf(stderr,"CI_RSS_ASAN phase=%s free=%zu\n",phase,__sanitizer_get_free_bytes());
     else std::fputs("CI_RSS_ASAN free_counter_unavailable\n",stderr);
     // Do not warm the large statistics/reporting path before the RSS baseline.
-    if(std::strcmp(phase,"before-query")!=0) {
+    if(printAllocatorStats && std::strcmp(phase,"before-query")!=0) {
         if(__asan_print_accumulated_stats)__asan_print_accumulated_stats();
         else std::fputs("CI_RSS_ASAN statistics_unavailable\n",stderr);
     }
