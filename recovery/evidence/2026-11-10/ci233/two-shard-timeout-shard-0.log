@@ -1,0 +1,12 @@
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 5535 tests across 580 suites
+
+MULTI_CELL limit=4096 peak=3440 data_read_bytes=258048
+MULTI_CELL limit=6000 peak=5386 data_read_bytes=282624
+MULTI_CELL limit=100000 peak=22504 data_read_bytes=307200
+MULTI_CELL limit=4096 peak=3576 data_read_bytes=266240
+MULTI_CELL limit=6000 peak=5466 data_read_bytes=290816
+MULTI_CELL limit=100000 peak=24176 data_read_bytes=315392

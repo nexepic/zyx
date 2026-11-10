@@ -1,0 +1,11 @@
+[1;33m>>> [1/5] Quick Mode: Reusing existing build directory.[0m
+[0;34m>>> [2/5] Configuring and compiling...[0m
+-- Configuring done (2.5s)
+-- Generating done (0.1s)
+-- Build files have been written to: /workspace/zyx-ci-reconstructed/buildDir
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+[0;34m>>> [3/5] Running tests...[0m
+Test shards exceeded 1800s; terminating process trees...
+Running 2 isolated GoogleTest shards (timeout: 1800s per shard)...
+Shard evidence retained at: /workspace/zyx-ci-reconstructed/buildDir/coverage/runs/native-20261110T075326-22578/failed-shards

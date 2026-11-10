@@ -1,0 +1,10 @@
+{
+  "baseline_enabled": 11067,
+  "current_enabled": 11070,
+  "removed": [],
+  "added": [
+    "NativeReadSessionTokenBudgetTest.EveryCanonicalMapScratchFailureRefundsAndAllowsRetry",
+    "QuerySpillRowCodecTest.OutputHandoffRetainsOneKeyBufferAndIndependentRows",
+    "RelocatableProcessCrashTest.ChildStartsWithFreshRuntimeState"
+  ]
+}
