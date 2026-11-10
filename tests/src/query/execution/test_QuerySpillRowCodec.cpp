@@ -90,6 +90,35 @@ TEST(QuerySpillRowCodecTest, ReusableDecodeOwnsChangingRowsAndDropsStaleBindings
     EXPECT_TRUE(scratch.row.values.empty()); EXPECT_TRUE(scratch.keys.empty());
 }
 
+TEST(QuerySpillRowCodecTest, OutputHandoffRetainsOneKeyBufferAndIndependentRows) {
+    QuerySpillRowCodec::Record input, scratch;
+    input.row.values.emplace("value", PropertyValue(std::string(200U, 'a')));
+    input.keys = {PropertyValue(1)};
+    auto encoded = QuerySpillRowCodec::encode(input, 4096U);
+    QuerySpillRowCodec::decodeInto(encoded, 4096U, scratch);
+    const auto *keys = scratch.keys.data();
+    const size_t keyCapacity = scratch.keys.capacity();
+    auto first = QuerySpillRowCodec::takeOutputRow(scratch);
+    EXPECT_TRUE(first.keys.empty());
+    EXPECT_EQ(scratch.keys.data(), keys);
+    for (size_t i = 0U; i < 100U; ++i) {
+        input.row.values.at("value") = PropertyValue(static_cast<int64_t>(i));
+        input.keys.front() = PropertyValue(static_cast<int64_t>(i));
+        input.ordinal = i;
+        encoded = QuerySpillRowCodec::encode(input, 4096U);
+        QuerySpillRowCodec::decodeInto(encoded, 4096U, scratch);
+        auto output = QuerySpillRowCodec::takeOutputRow(scratch);
+        EXPECT_EQ(output.row, input.row);
+        EXPECT_EQ(output.ordinal, i);
+        EXPECT_TRUE(output.keys.empty());
+        EXPECT_EQ(scratch.keys, input.keys);
+        EXPECT_EQ(scratch.keys.data(), keys);
+        EXPECT_EQ(scratch.keys.capacity(), keyCapacity);
+    }
+    encoded.clear();
+    EXPECT_EQ(std::get<PropertyValue>(first.row.values.at("value")), PropertyValue(std::string(200U, 'a')));
+}
+
 TEST(QuerySpillRowCodecTest, OrderedDecodePrunesBothSidesWithoutReplacingMatchedOwnerNodes) {
     QuerySpillRowCodec::Record scratch;
     scratch.row.values={{"a",PropertyValue(1)},{"m",PropertyValue(2)},{"z",PropertyValue(3)}};

@@ -84,9 +84,9 @@ public:
 			runs_=std::move(next);
 		}
 		Cursor cursor(*this,runs_.front());
-		while(cursor.current){checkpoint_();auto record=std::move(*cursor.current);record.keys.clear();record.keys.shrink_to_fit();
+		while(cursor.current){checkpoint_();auto record=QuerySpillRowCodec::takeOutputRow(*cursor.current);
 			const auto bytes=size_(record);if(bytes>workspace_.bytes())throw std::runtime_error("external Sort decoded output exceeded workspace");
-			auto charge=workspace_.splitOff(bytes);cursor.current.reset();
+			auto charge=workspace_.splitOff(bytes);
 			if(!visitor(std::move(record),std::move(charge))){scratch_->finish();return false;}
 			workspace_.set(WORKSPACE_BYTES);cursor.advance();
 		}

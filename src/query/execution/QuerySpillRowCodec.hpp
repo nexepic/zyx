@@ -18,6 +18,12 @@ namespace graph::query::execution::detail {
 class QuerySpillRowCodec final {
 public:
 	struct Record { LogicalPlanReadRow row;std::vector<PropertyValue> keys;uint64_t ordinal=0; };
+    // Final output owns the row, while the cursor keeps its bounded key
+    // workspace for validation of the next record. Moving the whole record
+    // would allocate and free that vector once per emitted row.
+    [[nodiscard]] static Record takeOutputRow(Record &decoded) {
+        return {std::move(decoded.row), {}, decoded.ordinal};
+    }
     using Binding = decltype(LogicalPlanReadRow::values)::value_type;
 	static constexpr uint64_t MAGIC=UINT64_C(0x3157525358595A); // ZYXSRW1
 	static constexpr size_t HEADER_BYTES=24U;
