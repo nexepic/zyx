@@ -397,6 +397,25 @@ namespace graph::query {
 		ASSERT_EQ(result.rowCount(), 2U);
 		EXPECT_EQ(result.getRows()[0].at("body").asPrimitive(), PropertyValue(std::string(1300U, 'x')));
 		EXPECT_EQ(result.getRows()[1].at("body").asPrimitive(), PropertyValue(std::string(1300U, 'x')));
+        // Exercise the same transition under an actual query account, not only
+        // the standalone runtime's logical size checks. Both denial and escaped
+        // result destruction must refund all private/backing ownership.
+        using namespace execution::detail;
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+        for (const size_t bound : {2U * 1300U - 1U, 10U * 1024U}) {
+            options.bounds.maximum_materialized_bytes = bound;
+            auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, bound);
+            QueryContext context; context.resource_account = account;
+            if (bound < 2600U) EXPECT_THROW(static_cast<void>(execute(topTwo, context)), std::runtime_error);
+            else {
+                const auto owned = execute(topTwo, context);
+                ASSERT_EQ(owned.rowCount(), 2U);
+                EXPECT_GT(account->used(), 0U); EXPECT_LE(account->used(), bound);
+                EXPECT_EQ(owned.getRows()[1].at("body").asPrimitive(), PropertyValue(std::string(1300U, 'x')));
+            }
+            EXPECT_EQ(account->used(), 0U);
+        }
 	}
 
 
