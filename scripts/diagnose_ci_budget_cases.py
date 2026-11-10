@@ -12,6 +12,7 @@ WINDOWS = [
         'ChargesOverlappingBuffersAndPreservesPayloadIdentity',
         'AllocatorRejectionLeavesSourceAndRetryIntact',
         'GeometricCompactionBoundsTotalMoves',
+        'ReclaimsBackingBeforeRetainedOutputsConsumeTheTemporaryHeadroom',
         'PotentiallyThrowingMovesKeepOriginalStorage',
         'AllocationFailureFallsBackWithoutMovingAndAllowsRetry',
     )),

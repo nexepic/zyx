@@ -17,8 +17,9 @@ bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t 
     else {
         if (first == 0U || first >= rows.size()) return false;
         const size_t remaining = rows.size() - first;
-        // Geometric compaction bounds total moves by the original cardinality.
-        if (first < remaining || rows.capacity() <= remaining ||
+        // Reclaim after at least a quarter is consumed, while temporary space
+        // can still fit. Geometric compaction moves fewer than 3*N elements.
+        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
                 remaining > headroom / sizeof(Row)) return false;
         utils::OwnedVector<Row> compacted(rows.get_allocator());
         try { compacted.reserve(remaining); }

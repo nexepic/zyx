@@ -80,7 +80,25 @@ TEST(ConsumedPrefixCompactionTest, GeometricCompactionBoundsTotalMoves) {
         compactConsumedPrefix(rows, first, SIZE_MAX);
         ASSERT_EQ(rows[first].id, expected);
     }
-    EXPECT_EQ(moves, 63U);
+    EXPECT_GT(moves, 0U);
+    EXPECT_LT(moves, 3U * 64U);
+}
+
+TEST(ConsumedPrefixCompactionTest, ReclaimsBackingBeforeRetainedOutputsConsumeTheTemporaryHeadroom) {
+    auto budget = std::make_shared<TrackingBudget>(16U * sizeof(int));
+    void *output = budget->allocate(2U * sizeof(int), alignof(int));
+    {
+        utils::OwnedVector<int> rows{utils::OwnedPmrAllocator<int>(budget)};
+        rows.reserve(8U); for (int id = 0; id < 8; ++id) rows.push_back(id);
+        size_t first = 2U;
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 6U * sizeof(int)));
+        EXPECT_EQ(budget->peak(), 16U * sizeof(int));
+        EXPECT_EQ(budget->used(), 8U * sizeof(int));
+        ASSERT_EQ(rows.size(), 6U); EXPECT_EQ(rows.front(), 2); EXPECT_EQ(rows.back(), 7);
+    }
+    EXPECT_EQ(budget->used(), 2U * sizeof(int));
+    budget->deallocate(output, 2U * sizeof(int), alignof(int));
+    EXPECT_EQ(budget->used(), 0U);
 }
 
 TEST(ConsumedPrefixCompactionTest, AllocationFailureFallsBackWithoutMovingAndAllowsRetry) {

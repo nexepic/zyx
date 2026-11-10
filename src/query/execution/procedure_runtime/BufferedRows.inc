@@ -376,8 +376,8 @@
                 size_t &rowIndex, size_t maximumBytes, size_t externalSourceBytes = 0U) {
             if (rowIndex == 0U || rowIndex >= rows.size()) return;
             const size_t remaining = rows.size() - rowIndex;
-            if (rowIndex < remaining || rows.capacity() <= remaining ||
-                    (remaining & (remaining - 1U)) != 0U) return;
+            if (rowIndex < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+                    (rowIndex & (rowIndex - 1U)) != 0U) return;
             // A move must not allocate empty-container payloads under a credit
             // constructor: all payload grants must transfer without new charges.
             if (BufferedProcedureRow::emptyHeapUpper() != 0U) return;
