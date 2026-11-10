@@ -1,0 +1,15 @@
+{
+  "source": "1bf50dc85fde5c8f603ef969ebd066546c30b5a9",
+  "products": [
+    {
+      "path": "/workspace/zyx-ci-reconstructed/buildDir/zyx_test_suite",
+      "bytes": 303222400,
+      "sha256": "aa40f3fe379cdb842f8a77b4e29b70d3f70e2cc098bac513d5f6427d84875191"
+    },
+    {
+      "path": "/workspace/zyx-ci-reconstructed/buildDir/libzyx_core.a",
+      "bytes": 336796240,
+      "sha256": "243e6f537adb9a08ab248440f556d0d4343c623fee5a460d12c50c70c3a32d9d"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "source_commit": "167ccf59eb0672865b54ca65ad3ea9af867a1779",
+  "file": "tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_Maintenance.cpp",
+  "source_sha256": "a8a09e7f0e955e36cbd93c2a75d6d075bf1ed6f0b57d63943e429af6377b5ea4",
+  "change": "only add 2000ms observer delay after old global deferral condition",
+  "result": "exit1, completed_tasks2 versus0, final reclaim already occurred"
+}

@@ -10,4 +10,13 @@ The final test first waits for and asserts the one no-candidate startup completi
 
 An RAII release runs before joining/removing the hook on unwind, preventing a blocked-worker cleanup deadlock. Captured atomics/exception state outlive both threads/hook. Hooks are process-local and fixture paths are UUID-isolated; the pressure test uses four distinct temporary roots. The test interval is shortened to1ms, not enlarged; correctness no longer depends on winning its scheduling window. Production maintenance code and budget policies are unchanged.
 
-Validation so far: related same-tree targeted33/33, four processes*25 repeats=100/100 with paired markers. Full regression pending. Windows/macOS native execution remains unverified. No push or CI action.
+Validation so far: related same-tree targeted33/33, four processes*25 repeats=100/100 with paired markers. Final unfiltered regression passed as recorded below. Windows/macOS native execution remains unverified. No push or CI action.
+
+
+## Final verification
+
+Frozen code1bf50dc85fde5c8f603ef969ebd066546c30b5a9: mandatory unfiltered quick run exit0,11067/11067 unique enabled executions,20 disabled,zero failure/skip/missing/extra/duplicate. All six stress cases ran once. All11067 BEGIN/END pairs match the XML multiset. The prior failing journal case passed in the complete run as well as the100-repeat pressure test; its old full failure and both failed diagnostic candidates remain recorded. Coverage: regions93.76%,functions98.09%,lines95.79%,branches86.88%; region/branch remain below95% goal. This is Linux Clang19 Debug-g0 coverage, not native Windows/macOS validation.
+
+The production core archive is byte-identical to the initially failing reconstruction (SHA256243e6f537adb9a08ab248440f556d0d4343c623fee5a460d12c50c70c3a32d9d), further isolating the remedy to the test protocol. The default task result is explicitly COMPLETED; startup's adjacency completion and Vector deferral can occur even before the old observation loop begins. Counts were synchronized already; event attribution and pause ordering were wrong. There is no evidence of shared-file collision or production data corruption.
+
+Curated raw logs/XML, a one-line controlled-delay patch against167ccf59, repeat scripts/results, complete trace matching, product hashes and core identity are in evidence/2026-11-10/journal-synchronization. build-red.py records the actual experiment and expects the old167 source; use the saved patch/commit when reproducing it. No binaries or raw profiles are committed. Limited common-secret-pattern scan found zero matches, not an absolute guarantee. No push or CI trigger/cancellation. Existing restoration commit/bundle remain preserved. Other Windows budget/exit3 and cold ASan RSS issues remain outside this test fix and unclosed.

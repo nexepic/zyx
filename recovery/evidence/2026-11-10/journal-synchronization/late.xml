@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="11.168" timestamp="2026-11-10T03:40:14.146" name="AllTests">
+  <testsuite name="RelocatableStorageBackendSchemaTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="11.165" timestamp="2026-11-10T03:40:14.147">
+    <testcase name="LargeValueMaintenanceJournalResumesAcrossReopenAtEveryDurablePhase" file="/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp" line="242" status="run" result="completed" time="11.165" timestamp="2026-11-10T03:40:14.147" classname="RelocatableStorageBackendSchemaTest">
+      <failure message="/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:270&#x0A;Expected equality of these values:&#x0A;  backend.maintenanceMetrics().loop.completed_tasks&#x0A;    Which is: 2&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:270
+Expected equality of these values:
+  backend.maintenanceMetrics().loop.completed_tasks
+    Which is: 2
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:270&#x0A;Expected equality of these values:&#x0A;  backend.maintenanceMetrics().loop.completed_tasks&#x0A;    Which is: 2&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:270
+Expected equality of these values:
+  backend.maintenanceMetrics().loop.completed_tasks
+    Which is: 2
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:270&#x0A;Expected equality of these values:&#x0A;  backend.maintenanceMetrics().loop.completed_tasks&#x0A;    Which is: 2&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:270
+Expected equality of these values:
+  backend.maintenanceMetrics().loop.completed_tasks
+    Which is: 2
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:285&#x0A;Value of: waitUntil([&amp;] { const RelocatableMaintenanceMetrics metrics = backend.maintenanceMetrics(); return metrics.loop.reclaimed_physical_bytes &gt;= RSS_PAGE_SIZE || metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED; })&#x0A;  Actual: false&#x0A;Expected: true&#x0A;" type=""><![CDATA[/workspace/zyx-journal-race-evidence/maintenance-late-observer.cpp:285
+Value of: waitUntil([&] { const RelocatableMaintenanceMetrics metrics = backend.maintenanceMetrics(); return metrics.loop.reclaimed_physical_bytes >= RSS_PAGE_SIZE || metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED; })
+  Actual: false
+Expected: true
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>
