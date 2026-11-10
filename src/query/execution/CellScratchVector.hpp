@@ -32,7 +32,11 @@ public:
     }
     void reserve(size_t count) {
         if (capacity_ != 0U || external_) throw std::logic_error("Property cell scratch is already reserved");
-        if (count > 1U) { external_.emplace(); external_->reserve(count); }
+        if (count > 1U) {
+            external_.emplace();
+            try { external_->reserve(count); }
+            catch (...) { external_.reset(); throw; }
+        }
         capacity_ = count;
     }
     void clear() noexcept { if (external_) external_->clear(); else size_ = 0U; }

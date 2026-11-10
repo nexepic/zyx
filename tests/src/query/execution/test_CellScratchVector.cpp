@@ -39,6 +39,11 @@ TEST(CellScratchVectorTest, MultipleColumnsReserveOnceAndClearWithoutDroppingThe
 }
 
 TEST(CellScratchVectorTest, UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues) {
+    CellScratchVector<size_t> failed;
+    EXPECT_THROW(failed.reserve(SIZE_MAX), std::length_error);
+    EXPECT_EQ(failed.heapBytes(), 0U);
+    EXPECT_NO_THROW(failed.reserve(1U)); failed.push_back(9U);
+    EXPECT_EQ(failed[0], 9U);
     CellScratchVector<size_t> values;
     EXPECT_THROW(values.push_back(1U), std::length_error);
     EXPECT_TRUE(values.empty()); EXPECT_EQ(values.heapBytes(), 0U);
