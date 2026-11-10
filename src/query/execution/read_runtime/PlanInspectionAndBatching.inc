@@ -1362,21 +1362,20 @@
                             cellIds.size() == rows.size() && !cellIds.empty() &&
                             (edgeCells ? state.shared.snapshot.supportsResumableEdgePropertyCells()
                                        : state.shared.snapshot.supportsResumableNodePropertyCells())) {
-                            const size_t ordinalBytes = detail::standardAllocatorRequestBytes(
-                                checkedSizeMul(cellIds.size(), sizeof(size_t), "Property owner ordinal size overflowed"), alignof(size_t));
+                            const size_t ordinalBytes = detail::CellScratchVector<size_t>::allocationUpper(cellIds.size());
                             const size_t selectionBytes = checkedSizeAdd(
-                                detail::standardAllocatorRequestBytes(keys.size() * sizeof(size_t), alignof(size_t)),
-                                detail::standardAllocatorRequestBytes(keys.size() * sizeof(std::string_view), alignof(std::string_view)),
+                                detail::CellScratchVector<size_t>::allocationUpper(keys.size()),
+                                detail::CellScratchVector<std::string_view>::allocationUpper(keys.size()),
                                 "Property cell key selection overflowed");
                             const size_t cellStructures = checkedSizeAdd(
                                 checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
-                                checkedSizeAdd(checkedSizeAdd(ordinalBytes, selectionBytes, "Property cell state overflowed"),
-                                    3U * detail::standardContainerProxyBytes(), "Property cell proxies overflowed"),
+                                checkedSizeAdd(ordinalBytes, selectionBytes, "Property cell state overflowed"),
                                 "Property cell workspace overflowed");
                             propertyReadBytes.set(cellStructures);
-                            std::vector<size_t> rowOrdinals(cellIds.size(), rows.size());
-                            std::vector<size_t> selectedColumns; selectedColumns.reserve(keys.size());
-                            std::vector<std::string_view> selectedKeys; selectedKeys.reserve(keys.size());
+                            detail::CellScratchVector<size_t> rowOrdinals; rowOrdinals.reserve(cellIds.size());
+                            for (size_t ordinal = 0U; ordinal < cellIds.size(); ++ordinal) rowOrdinals.push_back(rows.size());
+                            detail::CellScratchVector<size_t> selectedColumns; selectedColumns.reserve(keys.size());
+                            detail::CellScratchVector<std::string_view> selectedKeys; selectedKeys.reserve(keys.size());
                             for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
                                 const auto &reference = std::get<storage::EntityRef>(rows.values()[rowIndex].values.at(group.variable));
                                 const auto position = std::ranges::lower_bound(cellIds, reference.entity_id);
@@ -1452,8 +1451,9 @@
                                 };
                                 const storage::LogicalGraphReadSnapshot::PropertyCellSink receive = std::ref(receiveValue);
                                 const auto owners = std::span<const uint64_t>(cellIds).subspan(first, last - first);
-                                if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(owners, selectedKeys, receive, admitProperty);
-                                else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(owners, selectedKeys, receive, admitProperty);
+                                const std::span<const std::string_view> selection(selectedKeys.data(), selectedKeys.size());
+                                if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(owners, selection, receive, admitProperty);
+                                else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(owners, selection, receive, admitProperty);
                                 verifyPropertySource();
                                 // Omitted cells become NULL only after this whole run
                                 // completed; a failed run leaves unproduced keys pending.

@@ -443,6 +443,8 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedStringSet.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_QuerySpillRowCodec.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ExternalQuerySort.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ConsumedPrefixCompaction.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_CellScratchVector.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ExternalQueryKeySet.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_MaterializedReservationEmbedded.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_DynamicValueArena.cpp"

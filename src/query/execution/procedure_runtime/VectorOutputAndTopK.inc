@@ -416,6 +416,9 @@
                 reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+                if (accountOutputTransition)
+                    compactConsumedProcedureRows(result, rows, rowIndex,
+                        readBounds.maximum_materialized_bytes, retainedSourceBytes);
 				BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 				context.checkGuard();

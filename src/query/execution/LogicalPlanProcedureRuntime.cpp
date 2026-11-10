@@ -11,6 +11,7 @@
 
 #include "graph/query/execution/StringBufferBytes.hpp"
 #include "query/execution/ProcedurePayloadAdmission.hpp"
+#include "query/execution/ConsumedPrefixCompaction.hpp"
 #include "query/execution/ProcedureByteBoundExceeded.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
 

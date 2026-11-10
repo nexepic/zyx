@@ -386,7 +386,10 @@ namespace graph::query {
 								std::vector<logical::LogicalSortItem>{{rank, true}}),
 						std::vector<logical::LogicalProjectItem>{{body, "body"}}),
 				2);
-		options.bounds.maximum_materialized_bytes = 4000U;
+		// Consumed source slots can now be released before the final output.
+        // Use the independent live-payload lower bound for rejection instead
+        // of requiring the previous, redundant backing to stay allocated.
+		options.bounds.maximum_materialized_bytes = 2U * 1300U - 1U;
 		EXPECT_THROW(static_cast<void>(execute(topTwo)), std::runtime_error);
 
 		options.bounds.maximum_materialized_bytes = 10U * 1024U;

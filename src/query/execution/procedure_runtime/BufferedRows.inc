@@ -372,6 +372,22 @@
             validateProcedureResultBudget(result, source, maximumBytes);
         }
 
+        void compactConsumedProcedureRows(const QueryResult &result, ProcedureRows &rows,
+                size_t &rowIndex, size_t maximumBytes, size_t externalSourceBytes = 0U) {
+            if (rowIndex == 0U || rowIndex >= rows.size()) return;
+            const size_t remaining = rows.size() - rowIndex;
+            if (rowIndex < remaining || rows.capacity() <= remaining ||
+                    (remaining & (remaining - 1U)) != 0U) return;
+            // A move must not allocate empty-container payloads under a credit
+            // constructor: all payload grants must transfer without new charges.
+            if (BufferedProcedureRow::emptyHeapUpper() != 0U) return;
+            const size_t retained = checkedProcedureSizeAdd(externalSourceBytes,
+                checkedProcedureSizeAdd(publicationSourceBytes(rows, rowIndex),
+                    procedureQueryResultBytes(result)));
+            if (retained > maximumBytes) return;
+            detail::compactConsumedPrefix(rows, rowIndex, maximumBytes - retained);
+        }
+
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {

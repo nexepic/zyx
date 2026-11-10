@@ -43,6 +43,7 @@
 #include "query/execution/BorrowedGroupKey.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
 #include "query/execution/ExternalQuerySort.hpp"
+#include "query/execution/CellScratchVector.hpp"
 #include "query/execution/ExternalQueryKeySet.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
