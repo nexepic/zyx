@@ -854,6 +854,10 @@
 			size_t validateStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
 				const std::vector<LogicalGraphPropertyPatchRequest> &patches, size_t maximumEntries,
 				const LogicalGraphMutationReadControl &control) const {
+                // An empty target set cannot overlap replacements/deletions.
+                // Avoid MSVC's allocating empty tree header before the actual
+                // input-copy admission (including when WRITE is exhausted).
+                if (patches.empty()) return 0U;
 				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
 				if (!patches.empty() && (maximumEntries == 0U || patches.size() > maximumEntries))
 					throw std::invalid_argument("logical transaction Property patches require a positive work bound");
