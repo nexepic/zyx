@@ -1074,7 +1074,9 @@ namespace graph::storage {
 		};
 
         explicit Impl(const std::shared_ptr<std::pmr::memory_resource> &memory)
-            : route(size_t{0U}, memory ? memory.get() : std::pmr::new_delete_resource()) {}
+            // RouteFrame has no default constructor. The empty-list overload
+            // is fallible too, without requiring default-constructible frames.
+            : route(std::initializer_list<RouteFrame>{}, memory ? memory.get() : std::pmr::new_delete_resource()) {}
         // The lazy cursor outlives its creation scope; every advance rebinds
         // this context before decoding routes or allocating retained leaves.
         std::shared_ptr<MetadataPageReadContext> read_context;

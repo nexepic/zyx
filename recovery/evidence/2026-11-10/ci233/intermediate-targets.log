@@ -1,0 +1,29 @@
+Running tests...
+
+================================================================================
+ ZYX Graph Database - Unit Test Suite
+================================================================================
+ Target: 162 tests across 12 suites
+
+[  8% |   1/ 12] PASS NativeReadSessionTokenBudgetTest (150 ms)
+[ 16% |   2/ 12] PASS RelocatableProcessCrashTest (4025 ms)
+[ 25% |   3/ 12] PASS RelocatableProcessCrashAdjacencyMaintenanceTest (722 ms)
+[ 33% |   4/ 12] PASS RelocatableProcessCrashBTreeTest (652 ms)
+[ 41% |   5/ 12] PASS RelocatableProcessCrashBulkEdgeStagingTest (2647 ms)
+[ 50% |   6/ 12] PASS RelocatableProcessCrashDdlTest (1583 ms)
+[ 58% |   7/ 12] PASS RelocatableProcessCrashGraphWriteTest (818 ms)
+[ 66% |   8/ 12] PASS RelocatableProcessCrashLargeValueTest (550 ms)
+[ 75% |   9/ 12] PASS RelocatableProcessCrashLargeValueMaintenanceTest (5667 ms)
+[ 83% |  10/ 12] PASS RelocatableProcessCrashOrdinaryEdgeTest (2517 ms)
+[ 91% |  11/ 12] PASS RelocatableProcessCrashSharedPagePoolTest (262 ms)
+[100% |  12/ 12] PASS RelocatableProcessCrashVectorTest (1749 ms)
+
+================================================================================
+  ALL TESTS PASSED!
+
+  Passed: 162
+  Failed: 0
+  Time  : 21350 ms
+================================================================================
+
+{"command": ["/workspace/zyx-ci-reconstructed/buildDir/zyx_test_suite", "--gtest_filter=NativeReadSessionTokenBudgetTest.*:RelocatableProcessCrash*"], "completed_at_unix_seconds": 1794296388.1808698, "exit_code": 0, "jobs": 1, "launcher_pid": 21112, "run_id": "native-20261110T073806-20947", "started_at_unix_seconds": 1794296366.68587, "working_directory": "/workspace/zyx-ci-reconstructed"}
