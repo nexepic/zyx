@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
@@ -14,6 +15,11 @@ namespace graph::query::execution::detail {
 template<class T> class CellScratchVector final {
     static_assert(std::is_trivially_copyable_v<T> && std::is_nothrow_default_constructible_v<T>);
 public:
+    CellScratchVector() = default;
+    CellScratchVector(const CellScratchVector &) = delete;
+    CellScratchVector &operator=(const CellScratchVector &) = delete;
+    CellScratchVector(CellScratchVector &&) = delete;
+    CellScratchVector &operator=(CellScratchVector &&) = delete;
     static size_t allocationUpper(size_t count) {
         if (count <= 1U) return 0U;
         if (count > SIZE_MAX / sizeof(T)) throw std::overflow_error("Property cell scratch overflowed");
