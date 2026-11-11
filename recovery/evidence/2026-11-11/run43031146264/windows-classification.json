@@ -1,0 +1,18 @@
+{
+  "run_id": 43031146264,
+  "tested_remote_sha": "6c4e620b05dcfbf073b9b9ecaa1c8e9fdca7fa9e",
+  "windows_job": 130558217072,
+  "failure_stage": "Configure and Build",
+  "compiler_errors": [
+    "2026-11-11T14:00:21.2605835Z C:\\Users\\runneradmin\\.conan2\\p\\b\\boostc7b4da3ee029d\\p\\include\\boost/container/detail/copy_move_algo.hpp(949,10): error: object of type '(anonymous namespace)::SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted",
+    "2026-11-11T14:00:21.2674855Z C:\\Users\\runneradmin\\.conan2\\p\\b\\boostc7b4da3ee029d\\p\\include\\boost/container/detail/advanced_insert_int.hpp(145,13): error: object of type '(anonymous namespace)::SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted"
+  ],
+  "compiler_root_causes": 1,
+  "unit_tests_executed": 0,
+  "new_windows_budget_test_results": null,
+  "windows_log_complete_cleanup_present": true,
+  "windows_log_sha256": "b3a9379437f0e2cd439a14849548beb54c180d1081ab0c6611ec710c7d60c919",
+  "local_fix_commit": "480e15ec55ce2c60f1d8496e4e1091194e64744e",
+  "native_windows_fix_validation": "not executed",
+  "prior_unresolved_budget_cases": "not rerun in this Windows job"
+}

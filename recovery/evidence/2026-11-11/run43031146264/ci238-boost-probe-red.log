@@ -1,4 +1,4 @@
-In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from /workspace/ci238-boost-probe-before.cpp:5:
 In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
 In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
 In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
@@ -27,13 +27,13 @@ In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/
 src/query/execution/ConsumedPrefixCompaction.hpp:28:81: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::resize' requested here
    28 |             if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
       |                                                                                 ^
-/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
-   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
-      |                         ^
-/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
-   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+/workspace/ci238-boost-probe-before.cpp:34:10: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   34 |    try { compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)); }
+      |          ^
+/workspace/ci238-boost-probe-before.cpp:17:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   17 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
       |     ^
-In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from /workspace/ci238-boost-probe-before.cpp:5:
 In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
 In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
 In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
@@ -61,13 +61,13 @@ In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.
 src/query/execution/ConsumedPrefixCompaction.hpp:28:81: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::resize' requested here
    28 |             if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
       |                                                                                 ^
-/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
-   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
-      |                         ^
-/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
-   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+/workspace/ci238-boost-probe-before.cpp:34:10: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   34 |    try { compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)); }
+      |          ^
+/workspace/ci238-boost-probe-before.cpp:17:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   17 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
       |     ^
-In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from /workspace/ci238-boost-probe-before.cpp:5:
 In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
 In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
 In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
@@ -96,9 +96,9 @@ In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/
 src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::swap' requested here
    40 |         rows.swap(compacted);
       |              ^
-/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
-   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
-      |                         ^
+/workspace/ci238-boost-probe-before.cpp:34:10: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   34 |    try { compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)); }
+      |          ^
 /workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:940:4: note: candidate template ignored: substitution failure [with I = SwapOnlyRow *, F = SwapOnlyRow *]
   940 |    move_backward(I f, I l, F r)
       |    ^
@@ -107,7 +107,7 @@ src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation o
       |                                                                                           ~~~~
   953 |    move_backward(I f, I l, F r) BOOST_NOEXCEPT_OR_NOTHROW
       |    ^
-In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from /workspace/ci238-boost-probe-before.cpp:5:
 In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
 In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
 In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
@@ -146,13 +146,13 @@ In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/
 src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::swap' requested here
    40 |         rows.swap(compacted);
       |              ^
-/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
-   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
-      |                         ^
-/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
-   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+/workspace/ci238-boost-probe-before.cpp:34:10: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   34 |    try { compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)); }
+      |          ^
+/workspace/ci238-boost-probe-before.cpp:17:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   17 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
       |     ^
-In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from /workspace/ci238-boost-probe-before.cpp:5:
 In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
 In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
 In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
@@ -172,10 +172,10 @@ In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/
 src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::swap' requested here
    40 |         rows.swap(compacted);
       |              ^
-/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
-   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
-      |                         ^
-/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
-   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+/workspace/ci238-boost-probe-before.cpp:34:10: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   34 |    try { compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)); }
+      |          ^
+/workspace/ci238-boost-probe-before.cpp:17:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   17 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
       |     ^
 5 errors generated.

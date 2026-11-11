@@ -1,0 +1,18 @@
+[
+  {
+    "job": "asan",
+    "characters": 2117834,
+    "sha256": "d44bdf9f526692db43b36b0440bfc6aebef3cbaad39df554e63158a6193cb796",
+    "last_line": "2026-11-11T14:17:05.7907720Z   SupportsEntityPropertyLocations",
+    "complete_job_log": false,
+    "limitation": "Current successful job-log response ends at test discovery; no RSS or final gate output available."
+  },
+  {
+    "job": "macos",
+    "characters": 2117774,
+    "sha256": "39cac66bc5d59d75fec8a2107a5de9bedf391e208b4994b22b6b401f550727ab",
+    "last_line": "2026-11-11T14:13:00.3419210Z   RetainsAnActiveOnlineVectorRawPool",
+    "complete_job_log": false,
+    "limitation": "Current successful job-log response ends at test discovery; no RSS or final gate output available."
+  }
+]

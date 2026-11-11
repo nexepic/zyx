@@ -1,0 +1,21 @@
+{
+  "compiler_arguments": [
+    "clang++",
+    "-std=c++20",
+    "-I/workspace/ci238-boost-include",
+    "-Iinclude",
+    "-Isrc",
+    "-isystem",
+    "/workspace/zyx-sysroot/usr/include",
+    "/workspace/ci238-boost-probe.cpp",
+    "-o",
+    "/workspace/ci238-boost-probe-verified"
+  ],
+  "compile_exit": 0,
+  "execution_exit": 0,
+  "output": "CI_BOOST_COMPACTION version=108300 scenarios=3 move_operations=0 identity_retry_semantics=passed native_windows=0",
+  "policy": "temporary OwnedVector header selects existing Boost branches; no Windows or STL platform macros defined",
+  "boost_version": 108300,
+  "native_windows": false,
+  "ci_boost_version": "1.87.0; local source download denied403 and not retried"
+}
