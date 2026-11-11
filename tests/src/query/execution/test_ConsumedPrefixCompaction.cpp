@@ -157,3 +157,79 @@ TEST(ConsumedPrefixCompactionTest, PotentiallyThrowingMovesKeepOriginalStorage) 
     EXPECT_FALSE(compactConsumedPrefix(rows, first, SIZE_MAX));
     EXPECT_EQ(first, 1U); EXPECT_EQ(rows[1].id, 2);
 }
+
+namespace {
+struct SwapOnlyRow {
+    static inline unsigned defaults = 0U, failDefault = 0U, moves = 0U;
+    static inline bool semanticFailure = false;
+    std::unique_ptr<int> payload;
+    SwapOnlyRow() {
+        if (++defaults == failDefault) {
+            if (semanticFailure) throw std::runtime_error("empty preparation cancelled");
+            throw std::bad_alloc();
+        }
+    }
+    explicit SwapOnlyRow(int value) : payload(std::make_unique<int>(value)) {}
+    SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+    SwapOnlyRow(const SwapOnlyRow &) = delete;
+    friend void swap(SwapOnlyRow &left, SwapOnlyRow &right) noexcept { left.payload.swap(right.payload); }
+};
+}
+
+TEST(ConsumedPrefixCompactionTest, NoThrowSwapTransfersPayloadWhenMoveMayThrow) {
+    static_assert(!std::is_nothrow_move_constructible_v<SwapOnlyRow>);
+    static_assert(std::is_nothrow_swappable_v<SwapOnlyRow>);
+    SwapOnlyRow::defaults = SwapOnlyRow::failDefault = SwapOnlyRow::moves = 0U;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
+    {
+        utils::OwnedVector<SwapOnlyRow> rows{utils::OwnedPmrAllocator<SwapOnlyRow>(budget)};
+        rows.reserve(4U);
+        for (int value = 0; value < 4; ++value) rows.emplace_back(value);
+        const auto *third = rows[2].payload.get(), *fourth = rows[3].payload.get();
+        rows[0].payload.reset(); rows[1].payload.reset();
+        size_t first = 2U;
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+        EXPECT_EQ(first, 0U); ASSERT_EQ(rows.size(), 2U);
+        EXPECT_EQ(rows[0].payload.get(), third); EXPECT_EQ(rows[1].payload.get(), fourth);
+        EXPECT_EQ(SwapOnlyRow::moves, 0U);
+        EXPECT_EQ(budget->peak(), 6U * sizeof(SwapOnlyRow));
+        EXPECT_EQ(budget->used(), 2U * sizeof(SwapOnlyRow));
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, FailedEmptyPreparationLeavesAllSourcePayloadsAndAllowsRetry) {
+    SwapOnlyRow::defaults = SwapOnlyRow::moves = 0U; SwapOnlyRow::failDefault = 2U;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
+    {
+        utils::OwnedVector<SwapOnlyRow> rows{utils::OwnedPmrAllocator<SwapOnlyRow>(budget)};
+        rows.reserve(4U); for (int value = 0; value < 4; ++value) rows.emplace_back(value);
+        const auto *third = rows[2].payload.get(), *fourth = rows[3].payload.get();
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows.size(), 4U);
+        EXPECT_EQ(rows[2].payload.get(), third); EXPECT_EQ(rows[3].payload.get(), fourth);
+        EXPECT_EQ(budget->used(), 4U * sizeof(SwapOnlyRow));
+        SwapOnlyRow::failDefault = 0U;
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+        EXPECT_EQ(rows[0].payload.get(), third); EXPECT_EQ(rows[1].payload.get(), fourth);
+        EXPECT_EQ(SwapOnlyRow::moves, 0U);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, SemanticPreparationFailurePropagatesWithoutChangingTheSource) {
+    SwapOnlyRow::defaults = SwapOnlyRow::moves = 0U; SwapOnlyRow::failDefault = 2U;
+    SwapOnlyRow::semanticFailure = true;
+    struct Restore { ~Restore() { SwapOnlyRow::semanticFailure = false; SwapOnlyRow::failDefault = 0U; } } restore;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
+    {
+        utils::OwnedVector<SwapOnlyRow> rows{utils::OwnedPmrAllocator<SwapOnlyRow>(budget)};
+        rows.reserve(4U); for (int value = 0; value < 4; ++value) rows.emplace_back(value);
+        const auto *third = rows[2].payload.get(); size_t first = 2U;
+        EXPECT_THROW(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)), std::runtime_error);
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows[2].payload.get(), third);
+        EXPECT_EQ(budget->used(), 4U * sizeof(SwapOnlyRow));
+    }
+    EXPECT_EQ(budget->used(), 0U); EXPECT_EQ(SwapOnlyRow::moves, 0U);
+}

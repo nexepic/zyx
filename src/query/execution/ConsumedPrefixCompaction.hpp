@@ -13,7 +13,8 @@ namespace graph::query::execution::detail {
 // buffers coexist until the swap; element payload ownership only moves.
 template<class Row>
 bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
-    if constexpr (!std::is_nothrow_move_constructible_v<Row>) return false;
+    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
     else {
         if (first == 0U || first >= rows.size()) return false;
         const size_t remaining = rows.size() - first;
@@ -22,12 +23,20 @@ bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t 
         if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
                 remaining > headroom / sizeof(Row)) return false;
         utils::OwnedVector<Row> compacted(rows.get_allocator());
-        try { compacted.reserve(remaining); }
+        try {
+            compacted.reserve(remaining);
+            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+        }
         catch (const MaterializedByteLimitExceeded &) { return false; }
         catch (const ResourceAdmissionDenied &) { return false; }
         catch (const std::bad_alloc &) { return false; }
-        for (size_t index = first; index < rows.size(); ++index)
-            compacted.emplace_back(std::move(rows[index]));
+        // Prepare every empty destination before touching the source. A
+        // throwing move trait need not prevent a nonthrowing node/credit swap.
+        for (size_t index = first; index < rows.size(); ++index) {
+            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+                compacted.emplace_back(std::move(rows[index]));
+            else { using std::swap; swap(compacted[index - first], rows[index]); }
+        }
         rows.swap(compacted);
         first = 0U;
         return true;
