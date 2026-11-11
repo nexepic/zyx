@@ -1204,8 +1204,8 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesDurableQueryMemoryPolicyToThe
 	static_cast<void>(engine.execute("CALL dbms.setConfig('query.max_memory_mb', 0)"));
     const auto result = engine.execute(query);
     ASSERT_EQ(result.rowCount(), rows);
-    EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(int64_t{0}));
-    EXPECT_EQ(result.getRows().back().at("value").asPrimitive(), PropertyValue(int64_t{8192}));
+    EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), graph::PropertyValue(int64_t{0}));
+    EXPECT_EQ(result.getRows().back().at("value").asPrimitive(), graph::PropertyValue(int64_t{8192}));
     EXPECT_GE(result.retainedResourceBytes(), rows * (sizeof(graph::query::QueryResult::Row) +
         sizeof(graph::query::QueryResult::Row::value_type)));
     EXPECT_LE(result.retainedResourceBytes(), 64U * 1024U * 1024U);
