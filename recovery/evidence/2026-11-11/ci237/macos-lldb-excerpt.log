@@ -1,0 +1,27 @@
+(lldb) target create "/Users/runner/work/zyx/zyx/buildDir/zyx_test_suite"
+2026-11-11T06:47:53.4939900Z Current executable set to '/Users/runner/work/zyx/zyx/buildDir/zyx_test_suite' (arm64).
+2026-11-11T06:47:53.4941620Z (lldb) settings set -- target.run-args  "--gtest_filter=HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact"
+2026-11-11T06:47:53.4942660Z (lldb) settings set target.disable-aslr false
+2026-11-11T06:47:53.4943290Z (lldb) command script import /Users/runner/work/zyx/zyx/scripts/lldb_quota_trace.py
+2026-11-11T06:48:05.1220510Z Test process PID 97249 is still running (30s elapsed; timeout 300s).
+2026-11-11T06:48:30.9421770Z CI_QUOTA_BREAKPOINT locations=1
+2026-11-11T06:48:30.9424780Z (lldb) run
+2026-11-11T06:48:32.8871700Z CI_DIAGNOSTICS_PROCESS pid=98916 owner_id_namespace=424840985051137 fork_support=ready
+2026-11-11T06:48:32.9028320Z 
+2026-11-11T06:48:32.9034940Z ================================================================================
+2026-11-11T06:48:32.9045360Z  ZYX Graph Database - Unit Test Suite
+2026-11-11T06:48:32.9046070Z ================================================================================
+2026-11-11T06:48:32.9047010Z  Target: 1 tests across 1 suites
+2026-11-11T06:48:32.9047380Z 
+2026-11-11T06:48:35.4549380Z Test process PID 97249 is still running (60s elapsed; timeout 300s).
+2026-11-11T06:49:05.6326040Z Test process PID 97249 is still running (91s elapsed; timeout 300s).
+2026-11-11T06:49:36.5975400Z Test process PID 97249 is still running (122s elapsed; timeout 300s).
+2026-11-11T06:50:07.2384650Z Test process PID 97249 is still running (152s elapsed; timeout 300s).
+2026-11-11T06:50:37.3427200Z Test process PID 97249 is still running (182s elapsed; timeout 300s).
+2026-11-11T06:51:07.6189870Z Test process PID 97249 is still running (213s elapsed; timeout 300s).
+2026-11-11T06:51:38.0115600Z Test process PID 97249 is still running (243s elapsed; timeout 300s).
+2026-11-11T06:52:08.2343010Z Test process PID 97249 is still running (273s elapsed; timeout 300s).
+2026-11-11T06:52:35.0997330Z 
+2026-11-11T06:52:35.0999210Z Test process exceeded 300s; terminating process tree...
+2026-11-11T06:52:35.3244960Z CI_EVIDENCE directory=macos-conversion-quota-stack exit=124 output_bytes=1541 truncated=False
+2026-11-11T06:52:35.3475430Z ##[error]Process completed 
