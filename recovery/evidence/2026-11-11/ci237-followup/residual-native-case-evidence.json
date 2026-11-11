@@ -1,0 +1,443 @@
+{
+  "run": 42970353066,
+  "scope": "30 previously unresolved failure identities; bounded excerpts from isolated native diagnostics, not new runs",
+  "cases": [
+    {
+      "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "trace": [
+        "2026-11-11T06:45:05.7142359Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3720",
+        "2026-11-11T06:45:05.7273409Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=632 available=3088",
+        "2026-11-11T06:45:05.7278924Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=632 available=3088",
+        "2026-11-11T06:45:05.7286907Z CI_BUDGET owner=6425271074838 account_id=0 operation=replace requested=4428 previous=2428 embedded=0 used=2980 peak=3432 maximum=3720 available=740 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:05.7316482Z CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+      ]
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "trace": [
+        "2026-11-11T06:45:07.2205878Z CI_BUDGET owner=5549097746451 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2336350Z CI_BUDGET owner=5549097746451 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2343046Z CI_BUDGET owner=5549097746451 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2372275Z CI_BUDGET owner=5549097746452 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2493388Z CI_BUDGET owner=5549097746452 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2498648Z CI_BUDGET owner=5549097746452 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2512445Z CI_BUDGET owner=5549097746453 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2631936Z CI_BUDGET owner=5549097746453 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2635872Z CI_BUDGET owner=5549097746453 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2652478Z CI_BUDGET owner=5549097746456 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2763390Z CI_BUDGET owner=5549097746456 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2769805Z CI_BUDGET owner=5549097746456 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2776820Z CI_BUDGET owner=5549097746457 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2781520Z CI_BUDGET owner=5549097746457 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2782856Z CI_BUDGET owner=5549097746457 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2789393Z CI_BUDGET owner=5549097746458 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2794419Z CI_BUDGET owner=5549097746458 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2795703Z CI_BUDGET owner=5549097746458 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:07.2846761Z CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+      ]
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "trace": [
+        "2026-11-11T06:45:08.7969492Z CI_BUDGET owner=5033701670932 account_id=0 operation=replace requested=2720 previous=2704 embedded=0 used=3936 peak=3936 maximum=3936 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:08.8022144Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=88 available=3848",
+        "2026-11-11T06:45:08.8060473Z CI_BUDGET owner=5033701670932 account_id=0 operation=wouldExceed requested=3266 previous=252 embedded=0 used=964 peak=3936 maximum=3936 available=2972 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:08.8061622Z CI_PREFETCH pressure_line=1340 rows=1 buffered=344 used=432 available=3504",
+        "2026-11-11T06:45:08.8101031Z CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "trace": [
+        "2026-11-11T06:45:20.9408913Z CI_BUDGET owner=42502996361219 account_id=0 operation=wouldExceed requested=10104 previous=90 embedded=0 used=651 peak=651 maximum=4824 available=4173 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:20.9417859Z CI_PROCEDURE_PRESSURE owner=42502996361226 phase=source_result_overlap source_rows=1 source_capacity=1 source_row_width=208 source_backing=208 external_source=16 source_retained=640 result_rows=0 result_capacity=1 result_row_width=80 result_and_output=4984 requested_backing=0 maximum=5000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "trace": [
+        "2026-11-11T06:45:22.1850321Z CI_PROCEDURE_PRESSURE owner=40218073760003 phase=source_result_overlap source_rows=192 source_capacity=192 source_row_width=208 source_backing=39936 external_source=4800 source_retained=73272 result_rows=146 result_capacity=256 result_row_width=80 result_and_output=184095 requested_backing=0 maximum=262144 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=162352 relocation_valid=1"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "trace": [
+        "2026-11-11T06:45:25.7146367Z CI_BUDGET owner=37074157699075 account_id=0 operation=wouldExceed requested=4836 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:25.7148699Z CI_BUDGET owner=37074157699075 account_id=0 operation=wouldExceed requested=3224 previous=0 embedded=0 used=2981 peak=3085 maximum=5848 available=2867 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:25.7151510Z CI_BUDGET owner=37074157699075 account_id=0 operation=wouldExceed requested=1612 previous=0 embedded=0 used=4495 peak=4607 maximum=5848 available=1353 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:25.7165238Z CI_PROCEDURE_PRESSURE owner=37074157699081 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2424 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5576 requested_backing=0 maximum=8000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2616 relocation_valid=1"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "trace": [
+        "2026-11-11T06:45:28.2085122Z CI_BUDGET owner=30459908063237 account_id=0 operation=wouldExceed requested=4194 previous=0 embedded=0 used=1467 peak=1467 maximum=4792 available=3325 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:28.2088390Z CI_BUDGET owner=30459908063237 account_id=0 operation=wouldExceed requested=2796 previous=0 embedded=0 used=2515 peak=2875 maximum=4792 available=2277 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:28.2090280Z CI_BUDGET owner=30459908063237 account_id=0 operation=wouldExceed requested=1398 previous=0 embedded=0 used=3563 peak=3931 maximum=4792 available=1229 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:28.2108025Z CI_PROCEDURE_PRESSURE owner=30459908063251 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=5584 result_rows=0 result_capacity=3 result_row_width=80 result_and_output=3584 requested_backing=0 maximum=9000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "trace": [
+        "2026-11-11T06:45:34.2352791Z CI_PROCEDURE_PRESSURE owner=27127013441544 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2736 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5624 requested_backing=0 maximum=8192 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2640 relocation_valid=1"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "trace": [
+        "2026-11-11T06:45:41.4031886Z CI_BUDGET owner=5531917877249 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4033541Z CI_BUDGET owner=5531917877249 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4040107Z CI_BUDGET owner=5531917877250 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4041799Z CI_BUDGET owner=5531917877250 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4045754Z CI_BUDGET owner=5531917877251 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4047401Z CI_BUDGET owner=5531917877251 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4055084Z CI_BUDGET owner=5531917877252 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:41.4056782Z CI_BUDGET owner=5531917877252 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "trace": [
+        "2026-11-11T06:45:42.5861542Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=3120",
+        "2026-11-11T06:45:42.5862815Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=2684 source_admission=1",
+        "2026-11-11T06:45:42.5863877Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=2936",
+        "2026-11-11T06:45:42.5865825Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=2500 source_admission=1",
+        "2026-11-11T06:45:42.5866822Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1592 available=2752",
+        "2026-11-11T06:45:42.5867774Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=2028 available=2316 source_admission=1",
+        "2026-11-11T06:45:42.5875265Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "trace": [
+        "2026-11-11T06:45:43.8232967Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=1672",
+        "2026-11-11T06:45:43.8234290Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=1236 source_admission=1",
+        "2026-11-11T06:45:43.8235713Z CI_PREFETCH_INPUT row_bytes=624 bindings=1 metadata=0 properties=1 charge=624 used=1512 available=1384",
+        "2026-11-11T06:45:43.8237513Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=1528 available=1368 source_admission=1",
+        "2026-11-11T06:45:43.8239116Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=1488",
+        "2026-11-11T06:45:43.8240260Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=1052 source_admission=1",
+        "2026-11-11T06:45:43.8240839Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=968 available=1928",
+        "2026-11-11T06:45:43.8241416Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1404 available=1492 source_admission=1",
+        "2026-11-11T06:45:43.8241986Z CI_PREFETCH_INPUT row_bytes=624 bindings=1 metadata=0 properties=1 charge=624 used=1256 available=1640",
+        "2026-11-11T06:45:43.8242522Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=1272 available=1624 source_admission=1",
+        "2026-11-11T06:45:43.8244051Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=0 used=1776 available=1120 maximum=3056"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "trace": [
+        "2026-11-11T06:45:44.9281093Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=3120",
+        "2026-11-11T06:45:44.9282148Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=2684 source_admission=1",
+        "2026-11-11T06:45:44.9283073Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=2936",
+        "2026-11-11T06:45:44.9283953Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=2500 source_admission=1",
+        "2026-11-11T06:45:44.9284754Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1592 available=2752",
+        "2026-11-11T06:45:44.9285604Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=2028 available=2316 source_admission=1",
+        "2026-11-11T06:45:44.9289390Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "trace": [
+        "2026-11-11T06:45:46.0440505Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=2632",
+        "2026-11-11T06:45:46.0441173Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=2196 source_admission=1",
+        "2026-11-11T06:45:46.0443199Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=2448",
+        "2026-11-11T06:45:46.0444588Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=2012 source_admission=1",
+        "2026-11-11T06:45:46.0445526Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=968 available=2888",
+        "2026-11-11T06:45:46.0446431Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1404 available=2452 source_admission=1",
+        "2026-11-11T06:45:46.0449765Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=2817 available=1039 maximum=4016"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "trace": [
+        "2026-11-11T06:45:47.3604594Z CI_BUDGET owner=22247930593282 account_id=0 operation=replace requested=8695 previous=4471 embedded=0 used=7743 peak=8706 maximum=9600 available=1857 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "trace": [
+        "2026-11-11T06:45:52.2163960Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=3204 available=4828 source_admission=1",
+        "2026-11-11T06:45:52.2169169Z CI_PREFETCH_READ rows=3 nodes=2 edges=0 structures=248 payload=16 working_set=264 admitted=272 used=2224 available=5808 source_admission=1",
+        "2026-11-11T06:45:52.2171202Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=780 available=7252 source_admission=1",
+        "2026-11-11T06:45:52.2177827Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=240 payload=16 working_set=256 admitted=264 used=2472 available=5136 source_admission=1",
+        "2026-11-11T06:45:52.2180365Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=240 payload=16 working_set=256 admitted=264 used=2840 available=4768 source_admission=1",
+        "2026-11-11T06:45:52.2183712Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=240 payload=16 working_set=256 admitted=264 used=4268 available=3340 source_admission=1",
+        "2026-11-11T06:45:52.2185762Z CI_BUDGET owner=38001870635011 account_id=0 operation=replace requested=7148 previous=2540 embedded=0 used=3836 peak=5572 maximum=7608 available=3772 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "trace": [
+        "2026-11-11T06:45:53.3691162Z CI_BUDGET owner=22608707846145 account_id=0 operation=replace requested=513 previous=0 embedded=0 used=3734 peak=3902 maximum=3936 available=202 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "trace": [
+        "2026-11-11T06:45:54.6855344Z CI_BUDGET owner=27315992002562 account_id=0 operation=replace requested=7316 previous=4084 embedded=0 used=5316 peak=6339 maximum=7232 available=1916 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "trace": [
+        "2026-11-11T06:45:58.4374850Z CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2880",
+        "2026-11-11T06:45:58.4385997Z CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3008",
+        "2026-11-11T06:45:58.4389372Z CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3136",
+        "2026-11-11T06:45:58.4395450Z CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3264",
+        "2026-11-11T06:45:58.4401071Z CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3392",
+        "2026-11-11T06:45:58.4407157Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3520",
+        "2026-11-11T06:45:58.4412953Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3648",
+        "2026-11-11T06:45:58.4419423Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3776",
+        "2026-11-11T06:45:58.4425757Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3904",
+        "2026-11-11T06:45:58.4431577Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4032",
+        "2026-11-11T06:45:58.4437949Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4160",
+        "2026-11-11T06:45:58.4444067Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4288",
+        "2026-11-11T06:45:58.4450239Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4416",
+        "2026-11-11T06:45:58.4456400Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4544",
+        "2026-11-11T06:45:58.4461889Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4672",
+        "2026-11-11T06:45:58.4467933Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4800",
+        "2026-11-11T06:45:58.4473948Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4928",
+        "2026-11-11T06:45:58.4480244Z CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=5056",
+        "2026-11-11T06:45:58.4486419Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5184",
+        "2026-11-11T06:45:58.4492812Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5312",
+        "2026-11-11T06:45:58.4500054Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5440",
+        "2026-11-11T06:45:58.4501459Z CI_TRACE_TRUNCATED summary_kind=successful process_limit=20",
+        "2026-11-11T06:45:58.4506811Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5568",
+        "2026-11-11T06:45:58.4512748Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5696",
+        "2026-11-11T06:45:58.4523603Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5824",
+        "2026-11-11T06:45:58.4525186Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5952",
+        "2026-11-11T06:45:58.4529214Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6080",
+        "2026-11-11T06:45:58.4534339Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6208",
+        "2026-11-11T06:45:58.4539697Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6336",
+        "2026-11-11T06:45:58.4544888Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6464",
+        "2026-11-11T06:45:58.4550411Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6592",
+        "2026-11-11T06:45:58.4556072Z CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6720"
+      ]
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "trace": [
+        "2026-11-11T06:45:59.8007501Z CI_BUDGET owner=23502061043715 account_id=0 operation=replace requested=4929 previous=2177 embedded=0 used=2776 peak=3397 maximum=3736 available=960 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:45:59.8032567Z CI_BUDGET owner=23502061043717 account_id=0 operation=replace requested=17715 previous=6659 embedded=0 used=7523 peak=11086 maximum=11256 available=3733 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "trace": [
+        "2026-11-11T06:46:01.2022713Z CI_BUDGET owner=25426206392322 account_id=0 operation=replace requested=533 previous=453 embedded=0 used=2021 peak=2021 maximum=2040 available=19 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "trace": [
+        "2026-11-11T06:46:02.4785263Z CI_BUDGET owner=25013889531908 account_id=0 operation=replace requested=20738 previous=8002 embedded=0 used=8770 peak=14138 maximum=14880 available=6110 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "trace": [
+        "2026-11-11T06:46:03.6290965Z CI_SORT_REJECTION line=704 rows=4 retained=18076 key_slots=352 used=30953 available=3543"
+      ]
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "trace": [
+        "2026-11-11T06:46:12.2876802Z CI_BUDGET owner=37572373905410 account_id=0 operation=replace requested=269 previous=0 embedded=0 used=525 peak=709 maximum=736 available=211 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:46:12.2884270Z CI_BUDGET owner=37572373905412 account_id=0 operation=replace requested=2122 previous=970 embedded=0 used=1154 peak=1154 maximum=1236 available=82 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "trace": [
+        "2026-11-11T06:46:13.6051532Z CI_BUDGET owner=38019050504194 account_id=0 operation=replace requested=2154 previous=986 embedded=0 used=1186 peak=1856 maximum=1856 available=670 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "trace": [
+        "2026-11-11T06:46:14.8188128Z CI_BUDGET owner=14413910245378 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=56 available=56 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "trace": [
+        "2026-11-11T06:46:38.6216138Z CI_BUDGET owner=13812614823937 account_id=0 operation=wouldExceed requested=1704 previous=0 embedded=0 used=9307 peak=9307 maximum=10296 available=989 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:46:38.6217658Z CI_BUDGET owner=13812614823937 account_id=0 operation=wouldExceed requested=930 previous=912 embedded=0 used=10291 peak=10291 maximum=10296 available=5 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:46:38.6229725Z CI_PROCEDURE_PRESSURE owner=13812614823959 phase=source_result_overlap source_rows=19 source_capacity=19 source_row_width=208 source_backing=3952 external_source=1600 source_retained=7264 result_rows=1 result_capacity=19 result_row_width=80 result_and_output=3608 requested_backing=0 maximum=12000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=992 relocation_valid=1",
+        "2026-11-11T06:46:38.8834534Z CI_PROCEDURE_PRESSURE owner=13812614824569 phase=minimum_result_growth source_rows=88 source_capacity=88 source_row_width=208 source_backing=18304 external_source=9600 source_retained=34312 result_rows=512 result_capacity=512 result_row_width=80 result_and_output=550007 requested_backing=41087 maximum=1048576 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=507904 relocation_valid=1"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "trace": [
+        "2026-11-11T06:46:40.0125140Z CI_BUDGET owner=27298812133382 account_id=0 operation=wouldExceed requested=1522 previous=208 embedded=0 used=1234 peak=1234 maximum=2447 available=1213 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:46:40.0127254Z CI_BUDGET owner=27298812133382 account_id=0 operation=wouldExceed requested=1434 previous=120 embedded=0 used=1138 peak=1234 maximum=2447 available=1309 parent_charge=0 parent_maximum=0 owned_parent_charge=0",
+        "2026-11-11T06:46:40.0150210Z CI_BUDGET owner=27298812133396 account_id=27298812133395 operation=replace requested=112 previous=0 embedded=0 used=2504 peak=2504 maximum=2599 available=95 parent_charge=2504 parent_maximum=2599 owned_parent_charge=0",
+        "2026-11-11T06:46:40.0165814Z CI_BUDGET owner=27298812133409 account_id=27298812133399 operation=replace requested=1328 previous=0 embedded=0 used=9768 peak=9768 maximum=10240 available=472 parent_charge=9768 parent_maximum=10240 owned_parent_charge=0",
+        "2026-11-11T06:46:40.0168926Z CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+      ]
+    },
+    {
+      "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "trace": [
+        "2026-11-11T06:46:41.5595660Z CI_RESOURCE account_id=24962349924374 class=0 lease=10128 requested=11152 available=752 account=32016/32768 database=68451600/268435456 database_class=32016/201326592 process=68451600/536870912 process_class=32016/536870912",
+        "2026-11-11T06:46:41.5597503Z CI_BUDGET owner=24962349924376 account_id=24962349924374 operation=parent requested=1024 previous=0 embedded=0 used=10128 peak=13792 maximum=67107000 available=67096872 parent_charge=10128 parent_maximum=32768 owned_parent_charge=0",
+        "2026-11-11T06:46:41.5599058Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=8 lease=10120 account=32008 database=68451592 process=68451592",
+        "2026-11-11T06:46:41.5601150Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=480 lease=9640 account=31528 database=68451112 process=68451112",
+        "2026-11-11T06:46:41.5603445Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=4464 lease=5176 account=27064 database=68446648 process=68446648",
+        "2026-11-11T06:46:41.5607594Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=4 lease=5172 account=27060 database=68446644 process=68446644",
+        "2026-11-11T06:46:41.5611116Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=16 lease=5156 account=27044 database=68446628 process=68446628",
+        "2026-11-11T06:46:41.5613531Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=72 lease=5084 account=26972 database=68446556 process=68446556",
+        "2026-11-11T06:46:41.5615521Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=16 lease=5068 account=26956 database=68446540 process=68446540",
+        "2026-11-11T06:46:41.5616826Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=56 lease=5012 account=26900 database=68446484 process=68446484",
+        "2026-11-11T06:46:41.5617949Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=16 lease=4996 account=26884 database=68446468 process=68446468",
+        "2026-11-11T06:46:41.5619119Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=112 lease=4884 account=26772 database=68446356 process=68446356",
+        "2026-11-11T06:46:41.5620996Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=32 lease=4852 account=26740 database=68446324 process=68446324",
+        "2026-11-11T06:46:41.5622860Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=8 lease=4844 account=26732 database=68446316 process=68446316",
+        "2026-11-11T06:46:41.5624129Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=88 lease=4756 account=26644 database=68446228 process=68446228",
+        "2026-11-11T06:46:41.5625246Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=88 lease=4668 account=26556 database=68446140 process=68446140",
+        "2026-11-11T06:46:41.5626454Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=112 lease=4556 account=26444 database=68446028 process=68446028",
+        "2026-11-11T06:46:41.5627503Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=32 lease=4524 account=26412 database=68445996 process=68445996",
+        "2026-11-11T06:46:41.5628742Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=160 lease=4364 account=26252 database=68445836 process=68445836",
+        "2026-11-11T06:46:41.5629883Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=4 lease=4360 account=26248 database=68445832 process=68445832",
+        "2026-11-11T06:46:41.5630913Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=16 lease=4344 account=26232 database=68445816 process=68445816",
+        "2026-11-11T06:46:41.5632079Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=72 lease=4272 account=26160 database=68445744 process=68445744",
+        "2026-11-11T06:46:41.5633261Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=16 lease=4256 account=26144 database=68445728 process=68445728",
+        "2026-11-11T06:46:41.5634426Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=112 lease=4144 account=26032 database=68445616 process=68445616",
+        "2026-11-11T06:46:41.5635798Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=32 lease=4112 account=26000 database=68445584 process=68445584",
+        "2026-11-11T06:46:41.5636925Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=8 lease=4104 account=25992 database=68445576 process=68445576",
+        "2026-11-11T06:46:41.5638153Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=88 lease=4016 account=25904 database=68445488 process=68445488",
+        "2026-11-11T06:46:41.5639293Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=112 lease=3904 account=25792 database=68445376 process=68445376",
+        "2026-11-11T06:46:41.5640458Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=32 lease=3872 account=25760 database=68445344 process=68445344",
+        "2026-11-11T06:46:41.5641575Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=1760 lease=0 account=24000 database=68443584 process=68443584",
+        "2026-11-11T06:46:41.5643429Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=112 lease=3760 account=23888 database=68443472 process=68443472",
+        "2026-11-11T06:46:41.5644674Z CI_RESOURCE account_id=24962349924374 refund class=0 amount=32 lease=3728 account=23856 database=68443440 process=68443440"
+      ]
+    },
+    {
+      "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "trace": [
+        "2026-11-11T06:47:11.7418997Z CI_BUDGET owner=28759101014017 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=1045650 peak=1047755 maximum=1048576 available=2926 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "trace": [
+        "2026-11-11T06:47:23.0936033Z CI_BUDGET owner=22900765622273 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=1045650 peak=1047755 maximum=1048576 available=2926 parent_charge=0 parent_maximum=0 owned_parent_charge=0"
+      ]
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "trace": []
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "trace": []
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "trace": []
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "trace": []
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "trace": []
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "trace": []
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "trace": []
+    },
+    {
+      "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "trace": []
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "trace": []
+    },
+    {
+      "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "trace": []
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "trace": []
+    },
+    {
+      "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "trace": []
+    }
+  ]
+}

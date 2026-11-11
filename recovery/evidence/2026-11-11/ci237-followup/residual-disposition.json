@@ -1,0 +1,217 @@
+{
+  "run": 42970353066,
+  "unique_previously_unresolved_cases": 30,
+  "native_pass_claims": 0,
+  "cases": [
+    {
+      "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "observed_phase": "procedure source/result or result-relocation coexistence",
+      "disposition": "Native trace proves simultaneous admitted source/result pressure; ownership transfer or reduced live storage is required. Existing charges cannot simply be removed.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "observed_phase": "procedure source/result or result-relocation coexistence",
+      "disposition": "Prepared nonthrowing swap compaction candidate af3365362; no native row trait result yet. Empty-row heap guard remains; cannot assert that native compaction executes.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "observed_phase": "procedure source/result or result-relocation coexistence",
+      "disposition": "Native trace proves simultaneous admitted source/result pressure; ownership transfer or reduced live storage is required. Existing charges cannot simply be removed.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "observed_phase": "procedure source/result or result-relocation coexistence",
+      "disposition": "Native trace proves simultaneous admitted source/result pressure; ownership transfer or reduced live storage is required. Existing charges cannot simply be removed.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "observed_phase": "procedure source/result or result-relocation coexistence",
+      "disposition": "Native trace proves simultaneous admitted source/result pressure; ownership transfer or reduced live storage is required. Existing charges cannot simply be removed.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "observed_phase": "retained final result plus current source/output preflight",
+      "disposition": "Native output preflight rejects before publication. This is not evidence that the allocation fee is spurious.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "observed_phase": "retained final result plus current source/output preflight",
+      "disposition": "Native output preflight rejects before publication. This is not evidence that the allocation fee is spurious.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "observed_phase": "retained final result plus current source/output preflight",
+      "disposition": "Native output preflight rejects before publication. This is not evidence that the allocation fee is spurious.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "observed_phase": "retained final result plus current source/output preflight",
+      "disposition": "Native output preflight rejects before publication. This is not evidence that the allocation fee is spurious.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "observed_phase": "sort enrichment/key retention",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "observed_phase": "earlier shared-budget rejection than expected count-frontier rejection",
+      "disposition": "Native assertion compares shared-materialization error with count-frontier-specific error. Trace rejects 112 at local maximum 56, and ample retry completes. No blanket test relaxation: dedicated frontier attribution is still required.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "observed_phase": "procedure source/result or result-relocation coexistence",
+      "disposition": "Known-cardinality reservation candidate 5c147b7f7 avoids 512-to-513 relocation; Linux capacity regression failed before and passes after. Other pressure subcases and native success remain unverified.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "observed_phase": "bounded native followup needed",
+      "disposition": "Native attribution incomplete; unchanged quota and semantic expectations retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "observed_phase": "parent query account",
+      "disposition": "Native account 32016/32768 rejects additional 1024 with only 752 available. Exact caller is unknown; new bounded native stack diagnostic targets this case.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 2
+    },
+    {
+      "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "observed_phase": "native conversion/maintenance workspace",
+      "disposition": "Conversion shows request4032 with2926 available at1MiB; exact live owner needs stack attribution. New300s stack diagnostic targets tail conversion; mature-shape diagnostic retained.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 1
+    },
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "observed_phase": "native conversion/maintenance workspace",
+      "disposition": "Existing native LLDB attempt timed out without rejection stack. Source attribution remains incomplete; no budget reduction justified.",
+      "native_status": "not rerun; not accepted as fixed",
+      "isolated_log_records": 1
+    }
+  ]
+}

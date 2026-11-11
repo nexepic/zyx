@@ -1,0 +1,42 @@
+CI_CASE_BEGIN LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound
+2026-11-11T06:46:14.8178801Z CI_BUDGET_SUMMARY kind=materialized owner=14413910245377 phase=before_member_release used=0 peak=176 maximum=320 parent_charge=0 events=0 suppressed=0
+2026-11-11T06:46:14.8188128Z CI_BUDGET owner=14413910245378 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=56 available=56 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:14.8189499Z CI_BUDGET_SUMMARY kind=materialized owner=14413910245378 phase=before_member_release used=0 peak=0 maximum=56 parent_charge=0 events=1 suppressed=0
+2026-11-11T06:46:14.8194919Z CI_BUDGET_SUMMARY kind=materialized owner=14413910245379 phase=before_member_release used=0 peak=176 maximum=65536 parent_charge=0 events=0 suppressed=0
+2026-11-11T06:46:14.8216632Z CI_BUDGET_SUMMARY kind=materialized owner=14413910245380 phase=before_member_release used=0 peak=709 maximum=64152 parent_charge=0 events=0 suppressed=0
+2026-11-11T06:46:14.8218609Z CI_CASE_END LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound failed=1
+2026-11-11T06:46:15.0994645Z 
+2026-11-11T06:46:15.0995493Z ================================================================================
+2026-11-11T06:46:15.0995899Z  ZYX Graph Database - Unit Test Suite
+2026-11-11T06:46:15.0996255Z ================================================================================
+2026-11-11T06:46:15.0997475Z  Target: 1 tests across 1 suites
+2026-11-11T06:46:15.0997669Z 
+2026-11-11T06:46:15.0997674Z 
+2026-11-11T06:46:15.0998166Z [  0% |   0/  1] X ChargesInitialCountFrontierCapacityToMaterializedByteBound FAILED
+2026-11-11T06:46:15.0998786Z               D:\a\zyx\zyx\tests\src\query\execution\test_LogicalPlanVarLengthRuntime.cpp:561
+2026-11-11T06:46:15.0999175Z               Expected equality of these values:
+2026-11-11T06:46:15.0999422Z                 error.what()
+2026-11-11T06:46:15.0999711Z                   Which is: "shared materialization exceeded its byte bound"
+2026-11-11T06:46:15.1000110Z                 "logical-plan variable-length count exceeded its materialized byte bound"
+2026-11-11T06:46:15.1000371Z 
+2026-11-11T06:46:15.1000700Z [100% |   1/  1] FAIL LogicalPlanVarLengthRuntimeTest (1 failures, 4 ms)
+2026-11-11T06:46:15.1000993Z 
+2026-11-11T06:46:15.1001186Z ================================================================================
+2026-11-11T06:46:15.1001498Z   TESTS FAILED!
+2026-11-11T06:46:15.1001630Z 
+2026-11-11T06:46:15.1001730Z   Passed: 0
+2026-11-11T06:46:15.1001945Z   Failed: 1
+2026-11-11T06:46:15.1002125Z   Time  : 4 ms
+2026-11-11T06:46:15.1002417Z ================================================================================
+2026-11-11T06:46:15.1002621Z 
+2026-11-11T06:46:15.1398435Z CI_FAILED_CASE {"xml": "tests.xml", "class": "LogicalPlanVarLengthRuntimeTest", "name": "ChargesInitialCountFrontierCapacityToMaterializedByteBound", "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp", "line": "544", "identity_truncated": false, "assertion_locations": [{"file": "test_LogicalPlanVarLengthRuntime.cpp", "line": "561"}], "observations": {"kinds": ["byte_bound"], "scalars": [], "truncated": false}, "failures": 1}
+2026-11-11T06:46:15.1399743Z CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False
+2026-11-11T06:46:15.1401739Z CI_CASE_JOURNAL {"started": 1, "completed": 1, "failed": 1, "last_started": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound", "last_completed": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound", "last_started_observed_seconds": 0.23500000000012733, "last_completed_observed_seconds": 0.23500000000012733, "failed_names": ["LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound"], "failed_names_truncated": false, "oversized_lines": 0, "counts_are_observed_not_discovery": true}
+2026-11-11T06:46:15.1404042Z CI_EVIDENCE directory=budget-810712600e293f9c exit=1 output_bytes=2654 truncated=False
+2026-11-11T06:46:15.1463797Z CI_BUDGET_CASE END LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound exit=1
+2026-11-11T06:46:15.1464861Z CI_BUDGET_CASE BEGIN PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership
+2026-11-11T06:46:15.8925946Z CI_DIAGNOSTICS_PROCESS pid=3812 owner_id_namespace=16372415332353 fork_support=ready
+2026-11-11T06:46:15.8927512Z CI_LAYOUT pointer=8 string=40 property_value=88 property_map=80 read_value=104 read_row=160 result_value=352 result_row=80 result_pair=392 result_pair_alignment=8 owning_byte_vector=48
+2026-11-11T06:46:15.8929116Z CI_MAP_LAYOUT entries=2 pair=392 alignment=8 buckets=8 actual_pmr_structural=1384 model_upper=1384 allocation_requests=6 largest_request=408 value_heap_excluded=1
+2026-11-11T06:46:15.8930411Z CI_MAP_LAYOUT_FINAL live=0
+2026-11-11T06:46:15.9272137Z
