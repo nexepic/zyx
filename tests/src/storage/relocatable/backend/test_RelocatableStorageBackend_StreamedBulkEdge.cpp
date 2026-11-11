@@ -838,7 +838,7 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgePublicationRebasesOverDisj
 	reopened.close();
 }
 
-TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasesAcrossHandlesWithMaintenanceEnabled) {
+TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasesAcrossTransactionsWithMaintenanceEnabled) {
 	materializeNativeDatabase();
 	RelocatableStorageBackendOptions options = backendOptions();
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -857,14 +857,14 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasesAcrossHandlesWithMa
 			bulk->appendPersistedBulkEdges({"BULK_MAINTENANCE_REBASE", sources, targets, {}});
 	ASSERT_EQ(staged.size(), 1U);
 
-	RelocatableStorageBackendOptions writerOptions = backendOptions();
-	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
-	RelocatableStorageBackend concurrentWriter(std::move(writerOptions));
-	concurrentWriter.open();
+	auto beforeExternal = backend.openLogicalGraphReadSnapshot();
+	// Competing transactions publish through the supported single writable owner.
 	const std::vector<uint64_t> external =
-			concurrentWriter.createLogicalEdges({{nodes[0], nodes[1], "MAINTENANCE_EXTERNAL", {}}});
+			backend.createLogicalEdges({{nodes[0], nodes[1], "MAINTENANCE_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	concurrentWriter.close();
+	EXPECT_EQ(beforeExternal->readEdge(external.front()), std::nullopt);
+	EXPECT_EQ(beforeExternal->readEdge(staged.front()), std::nullopt);
+	beforeExternal.reset();
 
 	EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
 	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_COMMITTED);
@@ -1053,14 +1053,14 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasePreservesAnOperatorP
 			bulk->appendPersistedBulkEdges({"BULK_PAUSED_MAINTENANCE", sources, targets, {}});
 	ASSERT_EQ(staged.size(), 1U);
 
-	RelocatableStorageBackendOptions writerOptions = backendOptions();
-	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
-	RelocatableStorageBackend concurrentWriter(std::move(writerOptions));
-	concurrentWriter.open();
+	auto beforeExternal = backend.openLogicalGraphReadSnapshot();
+	// Competing transactions publish through the supported single writable owner.
 	const std::vector<uint64_t> external =
-			concurrentWriter.createLogicalEdges({{nodes[0], nodes[1], "PAUSED_MAINTENANCE_EXTERNAL", {}}});
+			backend.createLogicalEdges({{nodes[0], nodes[1], "PAUSED_MAINTENANCE_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	concurrentWriter.close();
+	EXPECT_EQ(beforeExternal->readEdge(external.front()), std::nullopt);
+	EXPECT_EQ(beforeExternal->readEdge(staged.front()), std::nullopt);
+	beforeExternal.reset();
 
 	EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
 	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_COMMITTED);

@@ -235,14 +235,10 @@ TEST_F(RelocatableStorageBackendTest,
 			bulk->appendPersistedBulkEdges({"BULK_REBASED_COUNT_DIVERGENCE", sources, targets, {}});
 	ASSERT_EQ(rejected.size(), 2U);
 
-	RelocatableStorageBackendOptions writerOptions = backendOptions();
-	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
-	RelocatableStorageBackend concurrentWriter(std::move(writerOptions));
-	concurrentWriter.open();
+	// Competing transactions publish through the supported single writable owner.
 	const std::vector<uint64_t> external =
-			concurrentWriter.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
+			backend.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	concurrentWriter.close();
 
 	std::atomic<bool> injected{false};
 	{
@@ -341,14 +337,10 @@ TEST_F(RelocatableStorageBackendTest,
 			bulk->appendPersistedBulkEdges({"BULK_REBASED_ORDER_DIVERGENCE", sources, targets, {}});
 	ASSERT_EQ(rejected.size(), 2U);
 
-	RelocatableStorageBackendOptions writerOptions = backendOptions();
-	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
-	RelocatableStorageBackend concurrentWriter(std::move(writerOptions));
-	concurrentWriter.open();
+	// Competing transactions publish through the supported single writable owner.
 	const std::vector<uint64_t> external =
-			concurrentWriter.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
+			backend.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	concurrentWriter.close();
 
 	std::atomic<bool> injected{false};
 	{
