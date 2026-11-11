@@ -80,7 +80,11 @@ TEST_F(PropertySubblockMapMutationTest, RejectedNewPrefixKeepsPreviousFinalState
         // rejection point must leave no retained workspace or published edit.
         EXPECT_THROW({
             Mutation refused(transaction, *btree_pages_, *metadata_, MAP_ID, 1, tooSmall);
-            refused.set(key(1), value(2));
+            try { refused.set(key(1), value(2)); }
+            catch (const MaterializedByteLimitExceeded &) {
+                EXPECT_EQ(refused.changedPrefixCount(), 0U);
+                throw;
+            }
         }, MaterializedByteLimitExceeded);
         EXPECT_EQ(tooSmall.used(), 0U);
         Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget);
