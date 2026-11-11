@@ -1521,17 +1521,19 @@ namespace graph::storage {
 			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue ranged read exceeds addressable buffer size");
 		}
 		// The returned standard vector owns its debug iterator proxy even at zero capacity.
+        admit(utils::detail::standardContainerProxyBytes());
         if (!bufferAdmission) {
             if (auto *scope = property_decode::AllocationScope::current())
                 scope->admit(utils::detail::standardContainerProxyBytes());
         }
 		std::vector<std::byte> result;
 		if (!verificationSink) {
-            admit(static_cast<size_t>(length));
+            admit(utils::detail::addStandardHeapBytes(utils::detail::standardContainerProxyBytes(),
+                utils::detail::standardAllocatorRequestBytes(static_cast<size_t>(length), alignof(std::byte))));
             if (!bufferAdmission) detail::admitScopedPropertyVectorGrowth(result, static_cast<size_t>(length));
             result.reserve(static_cast<size_t>(length));
         }
-		admit(result.capacity());
+		admit(utils::detail::standardVectorHeapBufferBytes(result));
 		if (length == 0U) {
 			return result;
 		}
@@ -1555,7 +1557,7 @@ namespace graph::storage {
 					if (cache && cache->valid_ && cache->chunk_ == *chunk &&
 						cache->mutation_epoch_ == io_->dataMutationEpoch() &&
 						cache->raw_.size() == chunk->uncompressed_bytes) {
-						admit(checkedReadBufferSum(result.capacity(), retainedChildren));
+						admit(checkedReadBufferSum(utils::detail::standardVectorHeapBufferBytes(result), retainedChildren));
 						rawChunk = cache->raw_;
 						debug::PerfTrace::addValue("native_graph.read.large_value_range_chunk_reuse", 1);
 					} else {
@@ -1564,7 +1566,7 @@ namespace graph::storage {
 						if (cache) cache->clear();
 						const uint64_t epoch = io_->dataMutationEpoch();
 						const auto admitChunk = [&](size_t bytes) {
-                            admit(checkedReadBufferSum(checkedReadBufferSum(result.capacity(), retainedChildren), bytes));
+                            admit(checkedReadBufferSum(checkedReadBufferSum(utils::detail::standardVectorHeapBufferBytes(result), retainedChildren), bytes));
                         };
                         ownedChunk = readRawChunk(snapshot, immutableManifest, *chunk, firstPageHint,
                             bufferAdmission ? std::function<void(size_t)>(std::ref(admitChunk)) : std::function<void(size_t)>{});
@@ -1596,7 +1598,7 @@ namespace graph::storage {
 				 ++childRange) {
 				const LargeValueManifest child = readManifestNode(snapshot, immutableManifest, childRange->page_id,
 																				BufferPoolReadHint::BPRH_SEQUENTIAL, [&](size_t bytes) {
-					admit(checkedReadBufferSum(checkedReadBufferSum(result.capacity(), retainedChildren), bytes));
+					admit(checkedReadBufferSum(checkedReadBufferSum(utils::detail::standardVectorHeapBufferBytes(result), retainedChildren), bytes));
 				});
 				validateManifestChild(node, *childRange, child);
 				const size_t childBytes = checkedReadBufferSum(child.media_type.capacity(),
@@ -1609,7 +1611,7 @@ namespace graph::storage {
 		if (delivered != length) { // ZYX_COV_EXCL_LINE: manifest validation makes the covered ranges contiguous.
 			fail(FormatError::FERR_INVALID_STATE, "LargeValue chunk coverage did not satisfy the requested range");
 		}
-		admit(result.capacity());
+		admit(utils::detail::standardVectorHeapBufferBytes(result));
 		return result;
 	}
 

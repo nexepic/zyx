@@ -76,9 +76,13 @@ TEST_F(PropertySubblockMapMutationTest, RejectedNewPrefixKeepsPreviousFinalState
     NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
     auto transaction = planner.beginTransaction();
     {
-        Mutation refused(transaction, *btree_pages_, *metadata_, MAP_ID, 1, tooSmall);
-        EXPECT_THROW(refused.set(key(1), value(2)), MaterializedByteLimitExceeded);
-        EXPECT_EQ(refused.changedPrefixCount(), 0U); EXPECT_EQ(tooSmall.used(), 0U);
+        // Empty debug containers may need admission before set(). Either
+        // rejection point must leave no retained workspace or published edit.
+        EXPECT_THROW({
+            Mutation refused(transaction, *btree_pages_, *metadata_, MAP_ID, 1, tooSmall);
+            refused.set(key(1), value(2));
+        }, MaterializedByteLimitExceeded);
+        EXPECT_EQ(tooSmall.used(), 0U);
         Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget);
         mutation.set(key(1), value(2));
         EXPECT_THROW(mutation.set(key(2), value(3)), FormatException);
