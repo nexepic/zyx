@@ -1,0 +1,38 @@
+CI_RSS_PHASE phase=before-query asan_available=1 live=5719635 heap=40878080
+2026-11-11T06:48:02.1474050Z CI_RSS_MACH phase=before-query resident=459948032 internal=118095872 external=341852160 reusable=0 compressed=0 footprint=122109120
+2026-11-11T06:48:02.1475460Z CI_RSS_ASAN phase=before-query free=18555888
+2026-11-11T06:48:02.1476170Z CI_RSS_BEGIN rss=459948032 asan_available=1 live=5719635 heap=40878080
+2026-11-11T06:48:04.2395850Z CI_RSS_PHASE phase=sort-before-first-spill asan_available=1 live=11292403 heap=58048512
+2026-11-11T06:48:04.2396860Z CI_RSS_MACH phase=sort-before-first-spill resident=487899136 internal=136232960 external=351666176 reusable=0 compressed=0 footprint=140838336
+2026-11-11T06:48:04.2397930Z CI_RSS_ASAN phase=sort-before-first-spill free=21743752
+2026-11-11T06:48:04.6219220Z CI_RSS_PHASE phase=sort-after-first-spill asan_available=1 live=9064925 heap=62242816
+2026-11-11T06:48:04.6220630Z CI_RSS_MACH phase=sort-after-first-spill resident=493092864 internal=140640256 external=352452608 reusable=0 compressed=0 footprint=145327872
+2026-11-11T06:48:04.6223200Z CI_RSS_ASAN phase=sort-after-first-spill free=23350776
+2026-11-11T06:48:07.9982160Z CI_RSS_PHASE phase=sort-before-merge asan_available=1 live=8486827 heap=75579392
+2026-11-11T06:48:07.9984850Z CI_RSS_MACH phase=sort-before-merge resident=508362752 internal=155893760 external=352468992 reusable=0 compressed=0 footprint=160663616
+2026-11-11T06:48:07.9986370Z CI_RSS_ASAN phase=sort-before-merge free=24823264
+2026-11-11T06:48:07.9990440Z CI_RSS_PHASE phase=sort-merge-level-begin asan_available=1 live=8486827 heap=75579392
+2026-11-11T06:48:07.9992220Z CI_RSS_MACH phase=sort-merge-level-begin resident=508395520 internal=155926528 external=352468992 reusable=0 compressed=0 footprint=160696384
+2026-11-11T06:48:07.9993960Z CI_RSS_ASAN phase=sort-merge-level-begin free=24823264
+2026-11-11T06:48:09.2865480Z CI_RSS_PHASE phase=sort-merge-level-end asan_available=1 live=10096619 heap=87244800
+2026-11-11T06:48:09.2866150Z CI_RSS_MACH phase=sort-merge-level-end resident=523616256 internal=170639360 external=352976896 reusable=0 compressed=0 footprint=175409216
+2026-11-11T06:48:09.2866810Z CI_RSS_ASAN phase=sort-merge-level-end free=26356104
+2026-11-11T06:48:09.2868710Z CI_RSS_PHASE phase=sort-merge-level-begin asan_available=1 live=10096619 heap=87244800
+2026-11-11T06:48:09.2870170Z CI_RSS_MACH phase=sort-merge-level-begin resident=523616256 internal=170639360 external=352976896 reusable=0 compressed=0 footprint=175409216
+2026-11-11T06:48:09.2870970Z CI_RSS_ASAN phase=sort-merge-level-begin free=26356104
+2026-11-11T06:48:09.9565340Z CI_RSS_REJECT limit=67108864 baseline=459980800 current=527417344 asan_available=1 live=10470429 heap=90587136
+2026-11-11T06:48:09.9568510Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10470429 heap=90587136
+2026-11-11T06:48:09.9572860Z CI_RSS_MACH phase=rejection-before-unwind resident=527417344 internal=174440448 external=352976896 reusable=0 compressed=0 footprint=179210304
+2026-11-11T06:48:09.9574100Z CI_RSS_ASAN phase=rejection-before-unwind free=26916480
+2026-11-11T06:48:09.9581740Z Stats: StackDepot: 221844 ids; 44M allocated
+2026-11-11T06:48:09.9582400Z Stats: SizeClassAllocator64: 52M mapped (4608425984M rss) in 271027 allocations; remains 271027
+2026-11-11T06:48:09.9695400Z Global quarantine stats: batches: 216; bytes: 44827332 (user: 43057860); chunks: 198891 (capacity: 220536); 90% chunks used; 4% memory overhead
+2026-11-11T06:48:10.1200740Z CI_RSS_PHASE phase=sort-merge-level-failure asan_available=1 live=10115062 heap=90587136
+2026-11-11T06:48:10.1203000Z CI_RSS_MACH phase=sort-merge-level-failure resident=528171008 internal=174981120 external=353189888 reusable=0 compressed=0 footprint=179750976
+2026-11-11T06:48:10.1204750Z CI_RSS_ASAN phase=sort-merge-level-failure free=26915608
+2026-11-11T06:48:10.6348660Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=6343308 heap=95305728
+2026-11-11T06:48:10.6349730Z CI_RSS_MACH phase=after-backend-destruction resident=534986752 internal=181207040 external=353779712 reusable=0 compressed=0 footprint=185976896
+2026-11-11T06:48:10.6350770Z CI_RSS_ASAN phase=after-backend-destruction free=27462352
+2026-11-11T06:48:10.6362080Z Stats: StackDepot: 224113 ids; 44M allocated
+2026-11-11T06:48:10.6363290Z Stats: SizeClassAllocator64: 53M mapped (4608425984M rss) in 274603 allocations; remains 274603
+2026-11-11T06:48:10.6451970Z Global quarantine stats: batches: 228; bytes: 53387056 (user: 51519280); chunks: 206882 (capacity: 232788); 88% chunks used; 3% memory overhead

@@ -1,0 +1,1039 @@
+{
+  "run": 42970353066,
+  "job": 130357146034,
+  "cases": [
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+      "line": "578",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+      "line": "1592",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1622"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1627"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1622"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1627"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": true
+      },
+      "failures": 12,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+      "line": "28",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "88"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "91"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "92"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "97"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "6"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 5,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "416",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "495",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1445",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1533",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1050",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "62",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "80"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "81"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "83"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "80"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": true
+      },
+      "failures": 9,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1228",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1298",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1332",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1391",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1451",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_Batching.cpp",
+      "line": "1756",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "671",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "747",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "497",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "631",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "702",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "766",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+          "line": "779"
+        },
+        {
+          "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+          "line": "780"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "10"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 3,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanUnionRuntimeTest",
+      "name": "SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnionRuntime.cpp",
+      "line": "364",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanReadRuntimeTest",
+      "name": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+      "line": "1824",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanReadRuntimeTest",
+      "name": "SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+      "line": "1904",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanVarLengthRuntimeTest",
+      "name": "ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp",
+      "line": "544",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanVarLengthRuntime.cpp",
+          "line": "561"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "74",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_TopK.cpp",
+      "line": "376",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+      "line": "209",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "resource_admission"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+      "line": "1650",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "resource_admission"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "production eager empty Codebook cache sentinels suspected",
+      "repair_status": "candidate lazy cache; exact native attribution pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "BuildingScanMembershipTest",
+      "name": "MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\entity\\test_BuildingScanMembership.cpp",
+      "line": "783",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_BuildingScanMembership.cpp",
+          "line": "802"
+        },
+        {
+          "file": "test_BuildingScanMembership.cpp",
+          "line": "802"
+        },
+        {
+          "file": "test_BuildingScanMembership.cpp",
+          "line": "802"
+        },
+        {
+          "file": "test_BuildingScanMembership.cpp",
+          "line": "802"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "16"
+          },
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "24"
+          },
+          {
+            "label": "Which is",
+            "value": "8"
+          },
+          {
+            "label": "Which is",
+            "value": "24"
+          },
+          {
+            "label": "Which is",
+            "value": "8"
+          },
+          {
+            "label": "Which is",
+            "value": "24"
+          },
+          {
+            "label": "Which is",
+            "value": "8"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 12,
+      "classification": "test retained-vector assertion omitted proxy",
+      "repair_status": "candidate complete retained-byte assertion; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableMetadataStoreTest",
+      "name": "PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_LargeValueStore_RangeReuse.cpp",
+      "line": "187",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LargeValueStore_RangeReuse.cpp",
+          "line": "202"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "100047"
+          },
+          {
+            "label": "Which is",
+            "value": "100063"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "production returned-vector proxy undercharge",
+      "repair_status": "candidate full result backing admission; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableProcessCrashBulkEdgeStagingTest",
+      "name": "LiveCrossProcessBulkSessionRejectsAnotherSessionAndCrashReleasesTheLeaseForRetry",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\format\\test_RelocatableProcessCrash_BulkEdgeStaging.cpp",
+      "line": "240",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableProcessCrash_BulkEdgeStaging.cpp",
+          "line": "258"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "storage_io"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "Windows mandatory lease blocks bootstrap read",
+      "repair_status": "candidate native error preservation and platform contract assertion; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableBTreePageCodecTest",
+      "name": "RebindingReleasesSourceKeysBeforeValidatingTheDestination",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\index\\test_BTreePage.cpp",
+      "line": "903",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "test observer omitted combined MSVC proxy refund",
+      "repair_status": "candidate counter correction; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyPoolTailReuseTest",
+      "name": "ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyPoolTailReuse.cpp",
+      "line": "8",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyPoolTailReuse.cpp",
+          "line": "28"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyReadContextTest",
+      "name": "FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+      "line": "1071",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1116"
+        },
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1116"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "2968"
+          },
+          {
+            "label": "Which is",
+            "value": "2848"
+          },
+          {
+            "label": "Which is",
+            "value": "2968"
+          },
+          {
+            "label": "Which is",
+            "value": "2848"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 2,
+      "classification": "test baseline excluded live MetadataWriteBatch",
+      "repair_status": "candidate lifetime assertion correction; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyReadContextTest",
+      "name": "FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+      "line": "1123",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1146"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "120"
+          },
+          {
+            "label": "Which is",
+            "value": "0"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "test baseline excluded live MetadataWriteBatch",
+      "repair_status": "candidate lifetime assertion correction; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyReadContextTest",
+      "name": "MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+      "line": "1404",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1464"
+        },
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1467"
+        },
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1478"
+        },
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1484"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "8664"
+          },
+          {
+            "label": "Which is",
+            "value": "8544"
+          },
+          {
+            "label": "Which is",
+            "value": "8664"
+          },
+          {
+            "label": "Which is",
+            "value": "8544"
+          },
+          {
+            "label": "Which is",
+            "value": "8664"
+          },
+          {
+            "label": "Which is",
+            "value": "8544"
+          },
+          {
+            "label": "Which is",
+            "value": "8664"
+          },
+          {
+            "label": "Which is",
+            "value": "8544"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 7,
+      "classification": "test baseline excluded live MetadataWriteBatch",
+      "repair_status": "candidate lifetime assertion correction; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyReadContextTest",
+      "name": "WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+      "line": "1552",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyReadContext.cpp",
+          "line": "1605"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "2968"
+          },
+          {
+            "label": "Which is",
+            "value": "2848"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "test baseline excluded live MetadataWriteBatch",
+      "repair_status": "candidate lifetime assertion correction; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyMatureShapeCostsTest",
+      "name": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp",
+      "line": "127",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyShapeCosts.cpp",
+          "line": "172"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "unresolved budget or resource ownership",
+      "repair_status": "unresolved; do not change threshold without root-cause evidence"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "PropertySubblockMapMutationTest",
+      "name": "RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_PropertySubblockMapMutation.cpp",
+      "line": "74",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "test rejected empty-vector proxy during construction",
+      "repair_status": "candidate scoped constructor/set rejection assertion; native validation pending"
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableBTreePageCodecTest",
+      "name": "RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\index\\test_BTreePage.cpp",
+      "line": "353",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_BTreePage.cpp",
+          "line": "390"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "257"
+          },
+          {
+            "label": "Which is",
+            "value": "0"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 1,
+      "classification": "test observer omitted combined MSVC proxy refund",
+      "repair_status": "candidate counter correction; native validation pending"
+    }
+  ],
+  "unique_failures": 41,
+  "counting_note": "41 unique failures; isolated diagnostics overlap ordinary tests and are not added."
+}

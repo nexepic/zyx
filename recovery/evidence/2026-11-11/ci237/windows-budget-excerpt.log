@@ -1,0 +1,224 @@
+2026-11-11T06:44:26.7597553Z CI_BUDGET owner=28982439313409 account_id=0 operation=replace requested=8271 previous=0 embedded=0 used=0 peak=0 maximum=1024 available=1024 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:44:36.3354317Z CI_BUDGET owner=33036888440833 account_id=0 operation=replace requested=104 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:44:37.8309607Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=3476 available=67105228 source_admission=1
+2026-11-11T06:44:37.8316880Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=3476 available=67105228 source_admission=1
+2026-11-11T06:44:38.6989394Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=2788 available=67105916 source_admission=1
+2026-11-11T06:44:38.6999442Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=2788 available=67105916 source_admission=1
+2026-11-11T06:44:39.3554084Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=2788 available=67105916 source_admission=1
+2026-11-11T06:44:48.4237566Z CI_BUDGET owner=29016799051777 account_id=0 operation=replace requested=104 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:44:51.7286232Z CI_BUDGET owner=39462159515649 account_id=0 operation=replace requested=8 previous=0 embedded=0 used=16 peak=16 maximum=23 available=7 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:44:57.7355505Z CI_BUDGET owner=6356551598083 account_id=6356551598082 operation=parent requested=8 previous=0 embedded=0 used=16 peak=16 maximum=24 available=8 parent_charge=16 parent_maximum=24 owned_parent_charge=0
+2026-11-11T06:45:04.1141234Z CI_PREFETCH_READ rows=2 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=5396 available=67021444 source_admission=1
+2026-11-11T06:45:05.7142359Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3720
+2026-11-11T06:45:05.7273409Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=632 available=3088
+2026-11-11T06:45:05.7278924Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=632 available=3088
+2026-11-11T06:45:05.7286907Z CI_BUDGET owner=6425271074838 account_id=0 operation=replace requested=4428 previous=2428 embedded=0 used=2980 peak=3432 maximum=3720 available=740 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:06.0267865Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:07.2205878Z CI_BUDGET owner=5549097746451 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2336350Z CI_BUDGET owner=5549097746451 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2343046Z CI_BUDGET owner=5549097746451 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2372275Z CI_BUDGET owner=5549097746452 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2493388Z CI_BUDGET owner=5549097746452 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2498648Z CI_BUDGET owner=5549097746452 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2512445Z CI_BUDGET owner=5549097746453 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2631936Z CI_BUDGET owner=5549097746453 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2635872Z CI_BUDGET owner=5549097746453 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2652478Z CI_BUDGET owner=5549097746456 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2763390Z CI_BUDGET owner=5549097746456 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2769805Z CI_BUDGET owner=5549097746456 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2776820Z CI_BUDGET owner=5549097746457 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2781520Z CI_BUDGET owner=5549097746457 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2782856Z CI_BUDGET owner=5549097746457 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2789393Z CI_BUDGET owner=5549097746458 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2794419Z CI_BUDGET owner=5549097746458 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:07.2795703Z CI_BUDGET owner=5549097746458 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:08.7969492Z CI_BUDGET owner=5033701670932 account_id=0 operation=replace requested=2720 previous=2704 embedded=0 used=3936 peak=3936 maximum=3936 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:08.8022144Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=88 available=3848
+2026-11-11T06:45:08.8060473Z CI_BUDGET owner=5033701670932 account_id=0 operation=wouldExceed requested=3266 previous=252 embedded=0 used=964 peak=3936 maximum=3936 available=2972 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:08.8061622Z CI_PREFETCH pressure_line=1340 rows=1 buffered=344 used=432 available=3504
+2026-11-11T06:45:10.2043960Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3936
+2026-11-11T06:45:10.2077393Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3936
+2026-11-11T06:45:10.2081464Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3936
+2026-11-11T06:45:10.2085494Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3936
+2026-11-11T06:45:10.2089152Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3936
+2026-11-11T06:45:10.2093133Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=3936
+2026-11-11T06:45:10.2145086Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=5840
+2026-11-11T06:45:10.2146322Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=344 available=5496
+2026-11-11T06:45:10.2177057Z CI_BUDGET owner=26834955665427 account_id=0 operation=wouldExceed requested=3360 previous=346 embedded=0 used=4618 peak=4618 maximum=5840 available=1222 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:10.2178159Z CI_PREFETCH pressure_line=1340 rows=2 buffered=3992 used=3992 available=1848
+2026-11-11T06:45:10.2179997Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=4008 available=1832 source_admission=1
+2026-11-11T06:45:10.2188892Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=5840
+2026-11-11T06:45:10.2190440Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=344 available=5496
+2026-11-11T06:45:10.2192197Z CI_BUDGET owner=26834955665427 account_id=0 operation=wouldExceed requested=3360 previous=346 embedded=0 used=4618 peak=4618 maximum=5840 available=1222 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:10.2193510Z CI_PREFETCH pressure_line=1340 rows=2 buffered=3992 used=3992 available=1848
+2026-11-11T06:45:10.2194504Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=4008 available=1832 source_admission=1
+2026-11-11T06:45:10.2199099Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=5840
+2026-11-11T06:45:10.2200010Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=344 available=5496
+2026-11-11T06:45:10.2203390Z CI_BUDGET owner=26834955665427 account_id=0 operation=wouldExceed requested=3360 previous=346 embedded=0 used=4618 peak=4618 maximum=5840 available=1222 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:10.2204697Z CI_PREFETCH pressure_line=1340 rows=2 buffered=3992 used=3992 available=1848
+2026-11-11T06:45:10.2205622Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=4008 available=1832 source_admission=1
+2026-11-11T06:45:15.7740389Z CI_BUDGET owner=24017457119234 account_id=24017457119233 operation=parent requested=112 previous=0 embedded=0 used=259007 peak=259007 maximum=259199 available=192 parent_charge=259007 parent_maximum=259199 owned_parent_charge=0
+2026-11-11T06:45:17.2407622Z CI_BUDGET owner=27315992002571 account_id=0 operation=replace requested=3976 previous=0 embedded=0 used=0 peak=0 maximum=1918 available=1918 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:19.7266969Z CI_BUDGET owner=16904991277080 account_id=0 operation=wouldExceed requested=1310 previous=296 embedded=0 used=1779 peak=1779 maximum=2791 available=1012 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:19.7269428Z CI_BUDGET owner=16904991277081 account_id=16904991277075 operation=replace requested=1024 previous=0 embedded=0 used=2592 peak=2592 maximum=2999 available=407 parent_charge=2592 parent_maximum=2999 owned_parent_charge=0
+2026-11-11T06:45:20.9408913Z CI_BUDGET owner=42502996361219 account_id=0 operation=wouldExceed requested=10104 previous=90 embedded=0 used=651 peak=651 maximum=4824 available=4173 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:21.2204263Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:45:22.4639111Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:45:23.3387318Z CI_BUDGET owner=12987981103109 account_id=0 operation=wouldExceed requested=5706 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:23.3388508Z CI_BUDGET owner=12987981103109 account_id=0 operation=wouldExceed requested=3804 previous=0 embedded=0 used=2663 peak=3527 maximum=5848 available=3185 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:25.7146367Z CI_BUDGET owner=37074157699075 account_id=0 operation=wouldExceed requested=4836 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:25.7148699Z CI_BUDGET owner=37074157699075 account_id=0 operation=wouldExceed requested=3224 previous=0 embedded=0 used=2981 peak=3085 maximum=5848 available=2867 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:25.7151510Z CI_BUDGET owner=37074157699075 account_id=0 operation=wouldExceed requested=1612 previous=0 embedded=0 used=4495 peak=4607 maximum=5848 available=1353 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:26.1814280Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:45:27.0204393Z CI_BUDGET owner=4776003633157 account_id=0 operation=wouldExceed requested=3338 previous=2324 embedded=0 used=3807 peak=3807 maximum=4740 available=933 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:27.0213764Z CI_BUDGET owner=4776003633162 account_id=0 operation=wouldExceed requested=296 previous=0 embedded=0 used=4531 peak=4531 maximum=4740 available=209 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:27.0215339Z CI_BUDGET owner=4776003633162 account_id=0 operation=wouldExceed requested=208 previous=0 embedded=0 used=4535 peak=4653 maximum=4740 available=205 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:28.2085122Z CI_BUDGET owner=30459908063237 account_id=0 operation=wouldExceed requested=4194 previous=0 embedded=0 used=1467 peak=1467 maximum=4792 available=3325 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:28.2088390Z CI_BUDGET owner=30459908063237 account_id=0 operation=wouldExceed requested=2796 previous=0 embedded=0 used=2515 peak=2875 maximum=4792 available=2277 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:28.2090280Z CI_BUDGET owner=30459908063237 account_id=0 operation=wouldExceed requested=1398 previous=0 embedded=0 used=3563 peak=3931 maximum=4792 available=1229 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:28.4879897Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:45:29.4346884Z CI_BUDGET owner=29944511987713 account_id=0 operation=wouldExceed requested=648 previous=0 embedded=0 used=3439 peak=3439 maximum=3880 available=441 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:29.4348664Z CI_BUDGET owner=29944511987713 account_id=0 operation=wouldExceed requested=420 previous=402 embedded=0 used=3865 peak=3865 maximum=3880 available=15 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:29.4368551Z CI_BUDGET owner=29944511987742 account_id=0 operation=wouldExceed requested=648 previous=0 embedded=0 used=3439 peak=3439 maximum=3880 available=441 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:29.4369639Z CI_BUDGET owner=29944511987742 account_id=0 operation=wouldExceed requested=420 previous=402 embedded=0 used=3865 peak=3865 maximum=3880 available=15 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:34.5137016Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:45:41.4031886Z CI_BUDGET owner=5531917877249 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4033541Z CI_BUDGET owner=5531917877249 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4040107Z CI_BUDGET owner=5531917877250 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4041799Z CI_BUDGET owner=5531917877250 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4045754Z CI_BUDGET owner=5531917877251 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4047401Z CI_BUDGET owner=5531917877251 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4055084Z CI_BUDGET owner=5531917877252 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.4056782Z CI_BUDGET owner=5531917877252 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:41.6843759Z               C++ exception with description "logical-plan Node Property batch exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:42.5861542Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=3120
+2026-11-11T06:45:42.5862815Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=2684 source_admission=1
+2026-11-11T06:45:42.5863877Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=2936
+2026-11-11T06:45:42.5865825Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=2500 source_admission=1
+2026-11-11T06:45:42.5866822Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1592 available=2752
+2026-11-11T06:45:42.5867774Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=2028 available=2316 source_admission=1
+2026-11-11T06:45:42.5875265Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504
+2026-11-11T06:45:42.8656597Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:43.8232967Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=1672
+2026-11-11T06:45:43.8234290Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=1236 source_admission=1
+2026-11-11T06:45:43.8235713Z CI_PREFETCH_INPUT row_bytes=624 bindings=1 metadata=0 properties=1 charge=624 used=1512 available=1384
+2026-11-11T06:45:43.8237513Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=1528 available=1368 source_admission=1
+2026-11-11T06:45:43.8239116Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=1488
+2026-11-11T06:45:43.8240260Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=1052 source_admission=1
+2026-11-11T06:45:43.8240839Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=968 available=1928
+2026-11-11T06:45:43.8241416Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1404 available=1492 source_admission=1
+2026-11-11T06:45:43.8241986Z CI_PREFETCH_INPUT row_bytes=624 bindings=1 metadata=0 properties=1 charge=624 used=1256 available=1640
+2026-11-11T06:45:43.8242522Z CI_PREFETCH_READ rows=1 nodes=0 edges=0 structures=16 payload=0 working_set=16 admitted=16 used=1272 available=1624 source_admission=1
+2026-11-11T06:45:43.8244051Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=0 used=1776 available=1120 maximum=3056
+2026-11-11T06:45:44.1004958Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:44.9281093Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=3120
+2026-11-11T06:45:44.9282148Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=2684 source_admission=1
+2026-11-11T06:45:44.9283073Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=2936
+2026-11-11T06:45:44.9283953Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=2500 source_admission=1
+2026-11-11T06:45:44.9284754Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1592 available=2752
+2026-11-11T06:45:44.9285604Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=2028 available=2316 source_admission=1
+2026-11-11T06:45:44.9289390Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504
+2026-11-11T06:45:45.2109357Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:46.0440505Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1224 available=2632
+2026-11-11T06:45:46.0441173Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1660 available=2196 source_admission=1
+2026-11-11T06:45:46.0443199Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=1408 available=2448
+2026-11-11T06:45:46.0444588Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1844 available=2012 source_admission=1
+2026-11-11T06:45:46.0445526Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=344 used=968 available=2888
+2026-11-11T06:45:46.0446431Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=1404 available=2452 source_admission=1
+2026-11-11T06:45:46.0449765Z CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=2817 available=1039 maximum=4016
+2026-11-11T06:45:46.5248323Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:47.3604594Z CI_BUDGET owner=22247930593282 account_id=0 operation=replace requested=8695 previous=4471 embedded=0 used=7743 peak=8706 maximum=9600 available=1857 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:47.7877917Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:51.0048449Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=1304
+2026-11-11T06:45:51.0052156Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=408 working_set=552 admitted=556 used=1180 available=124 source_admission=1
+2026-11-11T06:45:51.0056578Z CI_PREFETCH_INPUT row_bytes=344 bindings=1 metadata=0 properties=0 charge=0 used=0 available=1304
+2026-11-11T06:45:51.0057330Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=408 working_set=552 admitted=556 used=1180 available=124 source_admission=1
+2026-11-11T06:45:52.2163960Z CI_PREFETCH_READ rows=3 nodes=3 edges=0 structures=336 payload=24 working_set=360 admitted=372 used=3204 available=4828 source_admission=1
+2026-11-11T06:45:52.2169169Z CI_PREFETCH_READ rows=3 nodes=2 edges=0 structures=248 payload=16 working_set=264 admitted=272 used=2224 available=5808 source_admission=1
+2026-11-11T06:45:52.2171202Z CI_PREFETCH_READ rows=1 nodes=1 edges=0 structures=144 payload=8 working_set=152 admitted=156 used=780 available=7252 source_admission=1
+2026-11-11T06:45:52.2177827Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=240 payload=16 working_set=256 admitted=264 used=2472 available=5136 source_admission=1
+2026-11-11T06:45:52.2180365Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=240 payload=16 working_set=256 admitted=264 used=2840 available=4768 source_admission=1
+2026-11-11T06:45:52.2183712Z CI_PREFETCH_READ rows=2 nodes=2 edges=0 structures=240 payload=16 working_set=256 admitted=264 used=4268 available=3340 source_admission=1
+2026-11-11T06:45:52.2185762Z CI_BUDGET owner=38001870635011 account_id=0 operation=replace requested=7148 previous=2540 embedded=0 used=3836 peak=5572 maximum=7608 available=3772 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:52.4993955Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:53.3691162Z CI_BUDGET owner=22608707846145 account_id=0 operation=replace requested=513 previous=0 embedded=0 used=3734 peak=3902 maximum=3936 available=202 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:53.6514899Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:54.6855344Z CI_BUDGET owner=27315992002562 account_id=0 operation=replace requested=7316 previous=4084 embedded=0 used=5316 peak=6339 maximum=7232 available=1916 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:54.9356822Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:57.1082524Z CI_BUDGET owner=10926396801025 account_id=0 operation=replace requested=1056 previous=530 embedded=0 used=530 peak=530 maximum=864 available=334 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:57.1145871Z CI_BUDGET owner=10926396801028 account_id=0 operation=replace requested=1065 previous=539 embedded=0 used=539 peak=539 maximum=864 available=325 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:58.4595159Z CI_BUDGET owner=5995774345254 account_id=0 operation=wouldExceed requested=12168 previous=5040 embedded=0 used=5200 peak=5200 maximum=7776 available=2576 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:58.4896188Z CI_BUDGET owner=5995774345310 account_id=0 operation=wouldExceed requested=11758 previous=3320 embedded=0 used=6800 peak=6800 maximum=8624 available=1824 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:58.4905445Z CI_RESULT_REJECTION requested=10435 source_row=10344 result_rows=0 used=10184 available=8592 maximum=19896
+2026-11-11T06:45:58.9523204Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:45:59.8007501Z CI_BUDGET owner=23502061043715 account_id=0 operation=replace requested=4929 previous=2177 embedded=0 used=2776 peak=3397 maximum=3736 available=960 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:45:59.8032567Z CI_BUDGET owner=23502061043717 account_id=0 operation=replace requested=17715 previous=6659 embedded=0 used=7523 peak=11086 maximum=11256 available=3733 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:00.0775723Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:01.2022713Z CI_BUDGET owner=25426206392322 account_id=0 operation=replace requested=533 previous=453 embedded=0 used=2021 peak=2021 maximum=2040 available=19 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:01.4798074Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:02.4785263Z CI_BUDGET owner=25013889531908 account_id=0 operation=replace requested=20738 previous=8002 embedded=0 used=8770 peak=14138 maximum=14880 available=6110 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:02.7625780Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:03.9058631Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:04.8503258Z CI_BUDGET owner=36249523978242 account_id=0 operation=wouldExceed requested=1420 previous=0 embedded=0 used=352 peak=352 maximum=736 available=384 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:06.0651782Z CI_BUDGET owner=19842748907522 account_id=0 operation=wouldExceed requested=2956 previous=1540 embedded=0 used=13563 peak=13563 maximum=14016 available=453 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:07.2013364Z CI_BUDGET owner=15960098471938 account_id=0 operation=wouldExceed requested=5900 previous=3076 embedded=0 used=12467 peak=12596 maximum=14016 available=1549 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:08.3239510Z CI_BUDGET owner=23450521436162 account_id=0 operation=wouldExceed requested=2956 previous=1540 embedded=0 used=13219 peak=13219 maximum=14016 available=797 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:09.6274347Z CI_BUDGET owner=34359738368002 account_id=0 operation=wouldExceed requested=5900 previous=3076 embedded=0 used=12383 peak=12420 maximum=14016 available=1633 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:10.9836942Z CI_BUDGET owner=43327630082050 account_id=0 operation=wouldExceed requested=5900 previous=3076 embedded=0 used=12291 peak=12420 maximum=14016 available=1725 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:12.2876802Z CI_BUDGET owner=37572373905410 account_id=0 operation=replace requested=269 previous=0 embedded=0 used=525 peak=709 maximum=736 available=211 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:12.2884270Z CI_BUDGET owner=37572373905412 account_id=0 operation=replace requested=2122 previous=970 embedded=0 used=1154 peak=1154 maximum=1236 available=82 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:12.5638312Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:13.6051532Z CI_BUDGET owner=38019050504194 account_id=0 operation=replace requested=2154 previous=986 embedded=0 used=1186 peak=1856 maximum=1856 available=670 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:13.8783554Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:14.8188128Z CI_BUDGET owner=14413910245378 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=56 available=56 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:19.5362764Z CI_BUDGET owner=7181185318913 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:21.8295793Z CI_BUDGET owner=33071248179201 account_id=0 operation=replace requested=472 previous=0 embedded=0 used=1048575 peak=1048575 maximum=1048576 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:23.0374627Z CI_BUDGET owner=32916629356545 account_id=0 operation=replace requested=48 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:29.0166507Z CI_BUDGET owner=24120536334337 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:29.0168488Z CI_BUDGET owner=24120536334337 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:29.0170023Z CI_BUDGET owner=24120536334337 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:29.0171058Z CI_BUDGET owner=24120536334337 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:29.0172089Z CI_BUDGET owner=24120536334337 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:29.0173103Z CI_BUDGET owner=24120536334337 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:38.6216138Z CI_BUDGET owner=13812614823937 account_id=0 operation=wouldExceed requested=1704 previous=0 embedded=0 used=9307 peak=9307 maximum=10296 available=989 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:38.6217658Z CI_BUDGET owner=13812614823937 account_id=0 operation=wouldExceed requested=930 previous=912 embedded=0 used=10291 peak=10291 maximum=10296 available=5 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:39.1637828Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:46:40.0125140Z CI_BUDGET owner=27298812133382 account_id=0 operation=wouldExceed requested=1522 previous=208 embedded=0 used=1234 peak=1234 maximum=2447 available=1213 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:40.0127254Z CI_BUDGET owner=27298812133382 account_id=0 operation=wouldExceed requested=1434 previous=120 embedded=0 used=1138 peak=1234 maximum=2447 available=1309 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:46:40.0150210Z CI_BUDGET owner=27298812133396 account_id=27298812133395 operation=replace requested=112 previous=0 embedded=0 used=2504 peak=2504 maximum=2599 available=95 parent_charge=2504 parent_maximum=2599 owned_parent_charge=0
+2026-11-11T06:46:40.0165814Z CI_BUDGET owner=27298812133409 account_id=27298812133399 operation=replace requested=1328 previous=0 embedded=0 used=9768 peak=9768 maximum=10240 available=472 parent_charge=9768 parent_maximum=10240 owned_parent_charge=0
+2026-11-11T06:46:40.2969589Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:46:41.5597503Z CI_BUDGET owner=24962349924376 account_id=24962349924374 operation=parent requested=1024 previous=0 embedded=0 used=10128 peak=13792 maximum=67107000 available=67096872 parent_charge=10128 parent_maximum=32768 owned_parent_charge=0
+2026-11-11T06:46:41.8474211Z               C++ exception with description "hierarchical resource admission denied" thrown in the test body.
+2026-11-11T06:46:43.2490328Z               C++ exception with description "hierarchical resource admission denied" thrown in the test body.
+2026-11-11T06:47:05.8585928Z               C++ exception with description "bad allocation" thrown in the test body.
+2026-11-11T06:47:11.7418997Z CI_BUDGET owner=28759101014017 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=1045650 peak=1047755 maximum=1048576 available=2926 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:47:14.2495945Z CI_BUDGET owner=14396730376194 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=544 peak=544 maximum=1024 available=480 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:47:15.5719716Z CI_BUDGET owner=35802847379458 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=456 peak=456 maximum=1024 available=568 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:47:23.0936033Z CI_BUDGET owner=22900765622273 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=1045650 peak=1047755 maximum=1048576 available=2926 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:47:24.2998962Z CI_BUDGET owner=23484881174529 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:47:24.5750417Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:47:27.7572614Z CI_BUDGET owner=37125697306625 account_id=0 operation=replace requested=32 previous=0 embedded=0 used=1048576 peak=1048576 maximum=1048576 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0
+2026-11-11T06:55:16.6784388Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:55:16.6786343Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:55:16.6788798Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:55:16.6790980Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:55:16.6793143Z               C++ exception with description "logical procedure source and retained result exceeded their byte bound" thrown in the test body.
+2026-11-11T06:55:16.6795194Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:26.3622568Z               C++ exception with description "logical-plan Node Property batch exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:26.3624081Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:26.3625506Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:26.3627300Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:26.3628762Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:26.3630846Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2518877Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2521427Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2524061Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2529542Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2531943Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2534464Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2543785Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.2554445Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.7773052Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:55:30.7774668Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
+2026-11-11T06:59:34.2781755Z               C++ exception with description "shared materialization exceeded its byte bound" thrown in the test body.
