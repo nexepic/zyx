@@ -1,0 +1,506 @@
+CI_EVIDENCE directory=asan-publication exit=0 output_bytes=686 truncated=False
+2026-11-11T14:17:08.9611580Z ##[group]Run unset ZYX_CI_BUDGET_TRACE ZYX_CI_RSS_TRACE ZYX_CI_LAYOUT_TRACE
+2026-11-11T14:17:08.9612100Z unset ZYX_CI_BUDGET_TRACE ZYX_CI_RSS_TRACE ZYX_CI_LAYOUT_TRACE
+2026-11-11T14:17:08.9612540Z ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+2026-11-11T14:17:08.9613160Z   --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection' \
+2026-11-11T14:17:08.9614010Z   | grep -F 'NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+2026-11-11T14:17:08.9614660Z ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+2026-11-11T14:17:08.9615380Z   python scripts/run_ci_evidence.py --name asan-cold-rss-control --timeout 180 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+2026-11-11T14:17:08.9616520Z     --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+2026-11-11T14:17:08.9657540Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T14:17:08.9657820Z env:
+2026-11-11T14:17:08.9658040Z   ZYX_CI_EVIDENCE_DIR: /Users/runner/work/_temp/ci-evidence
+2026-11-11T14:17:08.9658310Z   ZYX_CI_DEADLINE_UNIX: 1794409523
+2026-11-11T14:17:08.9658610Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:08.9659020Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.10.11/arm64/lib/pkgconfig
+2026-11-11T14:17:08.9659480Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:08.9659850Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:08.9660220Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:08.9660510Z ##[endgroup]
+2026-11-11T14:17:09.6773820Z   NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+2026-11-11T14:17:17.0260620Z 
+2026-11-11T14:17:17.0372910Z ================================================================================
+2026-11-11T14:17:17.0405050Z  ZYX Graph Database - Unit Test Suite
+2026-11-11T14:17:17.0408900Z ================================================================================
+2026-11-11T14:17:17.0426090Z  Target: 1 tests across 1 suites
+2026-11-11T14:17:17.0426890Z 
+2026-11-11T14:17:17.0427010Z 
+2026-11-11T14:17:17.0429280Z [  0% |   0/  1] X NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection FAILED
+2026-11-11T14:17:17.0448420Z               <unknown>:-1
+2026-11-11T14:17:17.0451830Z               C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 64MB, baseline RSS: 439MB, current RSS: 503MB)" thrown in the test body.
+2026-11-11T14:17:17.0454020Z 
+2026-11-11T14:17:17.0455740Z [100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 6355 ms)
+2026-11-11T14:17:17.0456560Z 
+2026-11-11T14:17:17.0457030Z ================================================================================
+2026-11-11T14:17:17.0457580Z   TESTS FAILED!
+2026-11-11T14:17:17.0457850Z 
+2026-11-11T14:17:17.0458080Z   Passed: 0
+2026-11-11T14:17:17.0468090Z   Failed: 1
+2026-11-11T14:17:17.0469340Z   Time  : 6355 ms
+2026-11-11T14:17:17.0470710Z ================================================================================
+2026-11-11T14:17:17.0471590Z 
+2026-11-11T14:17:17.1788180Z CI_FAILED_CASE {"xml": "tests.xml", "class": "RelocatableStorageBackendTest", "name": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection", "file": "/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp", "line": "45", "identity_truncated": false, "assertion_locations": [], "observations": {"kinds": ["rss_guard"], "scalars": [], "truncated": false}, "failures": 1}
+2026-11-11T14:17:17.1893510Z CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False
+2026-11-11T14:17:17.2015110Z CI_EVIDENCE directory=asan-cold-rss-control exit=1 output_bytes=1030 truncated=False
+2026-11-11T14:17:17.2175980Z ##[error]Process completed with exit code 1.
+2026-11-11T14:17:17.2335520Z ##[group]Run ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+2026-11-11T14:17:17.2336030Z ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+2026-11-11T14:17:17.2337130Z   --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection' \
+2026-11-11T14:17:17.2338400Z   | grep -F 'NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+2026-11-11T14:17:17.2339080Z ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+2026-11-11T14:17:17.2340750Z   python scripts/run_ci_evidence.py --name asan-cold-rss --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+2026-11-11T14:17:17.2343010Z     --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+2026-11-11T14:17:17.2440960Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T14:17:17.2441320Z env:
+2026-11-11T14:17:17.2441740Z   ZYX_CI_EVIDENCE_DIR: /Users/runner/work/_temp/ci-evidence
+2026-11-11T14:17:17.2442100Z   ZYX_CI_DEADLINE_UNIX: 1794409523
+2026-11-11T14:17:17.2442680Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:17.2443800Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.10.11/arm64/lib/pkgconfig
+2026-11-11T14:17:17.2444350Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:17.2444910Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:17.2445620Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:17.2446160Z   ZYX_CI_RSS_TRACE: 1
+2026-11-11T14:17:17.2446600Z   ZYX_CI_BUDGET_TRACE: 1
+2026-11-11T14:17:17.2446880Z ##[endgroup]
+2026-11-11T14:17:18.2934660Z CI_DIAGNOSTICS_PROCESS pid=91439 owner_id_namespace=392727514578945 fork_support=ready
+2026-11-11T14:17:18.4254840Z   NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+2026-11-11T14:17:19.3075620Z CI_DIAGNOSTICS_PROCESS pid=91585 owner_id_namespace=393354579804161 fork_support=ready
+2026-11-11T14:17:19.4696000Z CI_BUDGET_SUMMARY kind=account owner=393354579804163 phase=before_member_release used=0 peak=262144 maximum=262144 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:19.4698580Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804165 phase=before_member_release used=0 peak=75592 maximum=1048576 parent_charge=1048576 events=0 suppressed=0
+2026-11-11T14:17:19.4700890Z CI_BUDGET_SUMMARY kind=account owner=393354579804162 phase=before_member_release used=0 peak=1048576 maximum=1048576 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:19.4703490Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804166 phase=before_member_release used=0 peak=426265 maximum=67108864 parent_charge=67108864 events=0 suppressed=0
+2026-11-11T14:17:19.4705830Z CI_BUDGET_SUMMARY kind=account owner=393354579804161 phase=before_member_release used=0 peak=67108864 maximum=67108864 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:19.5658150Z CI_BUDGET_SUMMARY kind=account owner=393354579804169 phase=before_member_release used=0 peak=262144 maximum=262144 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:19.5660730Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804171 phase=before_member_release used=0 peak=108968 maximum=1048576 parent_charge=1048576 events=0 suppressed=0
+2026-11-11T14:17:19.5663260Z CI_BUDGET_SUMMARY kind=account owner=393354579804168 phase=before_member_release used=0 peak=1048576 maximum=1048576 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:19.5667100Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804172 phase=before_member_release used=0 peak=192776 maximum=67108864 parent_charge=67108864 events=0 suppressed=0
+2026-11-11T14:17:19.5670140Z CI_BUDGET_SUMMARY kind=account owner=393354579804167 phase=before_member_release used=0 peak=67108864 maximum=67108864 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:19.6253170Z CI_RSS_PHASE phase=before-query asan_available=1 live=5722771 heap=40878080
+2026-11-11T14:17:19.6254930Z CI_RSS_MACH phase=before-query resident=460849152 internal=118161408 external=342687744 reusable=0 compressed=0 footprint=122191104
+2026-11-11T14:17:19.6256300Z CI_RSS_ASAN phase=before-query free=18546432
+2026-11-11T14:17:19.6257300Z CI_RSS_BEGIN rss=460849152 asan_available=1 live=5722771 heap=40878080
+2026-11-11T14:17:19.6844810Z CI_BUDGET_SUMMARY kind=materialized owner=393354579804177 phase=before_member_release used=0 peak=48 maximum=8388608 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:21.1275820Z CI_RSS_PHASE phase=sort-before-first-spill asan_available=1 live=11295539 heap=58048512
+2026-11-11T14:17:21.1310550Z CI_RSS_MACH phase=sort-before-first-spill resident=488898560 internal=136298496 external=352600064 reusable=0 compressed=0 footprint=140903872
+2026-11-11T14:17:21.1335760Z CI_RSS_ASAN phase=sort-before-first-spill free=21735576
+2026-11-11T14:17:21.4745850Z CI_RSS_PHASE phase=sort-after-first-spill asan_available=1 live=9068061 heap=62242816
+2026-11-11T14:17:21.4747560Z CI_RSS_MACH phase=sort-after-first-spill resident=493961216 internal=140558336 external=353402880 reusable=0 compressed=0 footprint=145245952
+2026-11-11T14:17:21.4749010Z CI_RSS_ASAN phase=sort-after-first-spill free=23366984
+2026-11-11T14:17:24.1631580Z CI_RSS_PHASE phase=sort-before-merge asan_available=1 live=8489963 heap=75579392
+2026-11-11T14:17:24.1632720Z CI_RSS_MACH phase=sort-before-merge resident=509067264 internal=155648000 external=353419264 reusable=0 compressed=0 footprint=160434304
+2026-11-11T14:17:24.1633530Z CI_RSS_ASAN phase=sort-before-merge free=24877872
+2026-11-11T14:17:24.1640590Z CI_SORT_MERGE phase=begin level=0 runs=3 input_rows=20000 decoded=0 read_fragments=0 read_payload_bytes=0 written_fragments=10 written_payload_bytes=1240160 materialized_used=2364474
+2026-11-11T14:17:24.1641450Z CI_RSS_PHASE phase=sort-merge-level-begin asan_available=1 live=8489963 heap=75579392
+2026-11-11T14:17:24.1642170Z CI_RSS_MACH phase=sort-merge-level-begin resident=509100032 internal=155680768 external=353419264 reusable=0 compressed=0 footprint=160467072
+2026-11-11T14:17:24.1642880Z CI_RSS_ASAN phase=sort-merge-level-begin free=24877872
+2026-11-11T14:17:25.0602520Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804179 phase=before_member_release used=0 peak=26912 maximum=8388608 parent_charge=8388608 events=0 suppressed=0
+2026-11-11T14:17:25.0605000Z CI_BUDGET_SUMMARY kind=account owner=393354579804178 phase=before_member_release used=0 peak=8388608 maximum=8388608 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:25.1143540Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804181 phase=before_member_release used=0 peak=26912 maximum=8388608 parent_charge=8388608 events=0 suppressed=0
+2026-11-11T14:17:25.1144810Z CI_BUDGET_SUMMARY kind=account owner=393354579804180 phase=before_member_release used=0 peak=8388608 maximum=8388608 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:25.1146610Z CI_SORT_MERGE phase=end level=0 runs=2 input_rows=20000 decoded=16384 read_fragments=8 read_payload_bytes=1015936 written_fragments=18 written_payload_bytes=2256096 materialized_used=2364394
+2026-11-11T14:17:25.1147690Z CI_RSS_PHASE phase=sort-merge-level-end asan_available=1 live=10099755 heap=87244800
+2026-11-11T14:17:25.1148470Z CI_RSS_MACH phase=sort-merge-level-end resident=524091392 internal=170147840 external=353943552 reusable=0 compressed=0 footprint=174934144
+2026-11-11T14:17:25.1149060Z CI_RSS_ASAN phase=sort-merge-level-end free=26459096
+2026-11-11T14:17:25.1149820Z CI_SORT_MERGE phase=begin level=1 runs=2 input_rows=20000 decoded=16384 read_fragments=8 read_payload_bytes=1015936 written_fragments=18 written_payload_bytes=2256096 materialized_used=2364394
+2026-11-11T14:17:25.1150680Z CI_RSS_PHASE phase=sort-merge-level-begin asan_available=1 live=10099755 heap=87244800
+2026-11-11T14:17:25.1151880Z CI_RSS_MACH phase=sort-merge-level-begin resident=524091392 internal=170147840 external=353943552 reusable=0 compressed=0 footprint=174934144
+2026-11-11T14:17:25.1152540Z CI_RSS_ASAN phase=sort-merge-level-begin free=26459096
+2026-11-11T14:17:25.4853010Z CI_RSS_REJECT limit=67108864 baseline=460881920 current=528318464 asan_available=1 live=10473565 heap=90652672
+2026-11-11T14:17:25.4855110Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10473565 heap=90652672
+2026-11-11T14:17:25.4857630Z CI_RSS_MACH phase=rejection-before-unwind resident=528318464 internal=174374912 external=353943552 reusable=0 compressed=0 footprint=179161216
+2026-11-11T14:17:25.4859540Z CI_RSS_ASAN phase=rejection-before-unwind free=26791696
+2026-11-11T14:17:25.4861510Z Stats: 51M malloced (9M for red zones) by 267512 calls
+2026-11-11T14:17:25.4862890Z Stats: 0M realloced by 0 calls
+2026-11-11T14:17:25.4864050Z Stats: 41M freed by 197547 calls
+2026-11-11T14:17:25.4865710Z Stats: 0M really freed by 0 calls
+2026-11-11T14:17:25.4867310Z Stats: 86M (86M-0M) mmaped; 352 maps, 0 unmaps
+2026-11-11T14:17:25.4872700Z   mallocs by size class: 2:21786; 3:45661; 4:55694; 6:21643; 7:21318; 8:38529; 10:37; 11:19770; 12:4267; 13:20266; 14:46; 15:288; 16:220; 17:487; 18:13449; 19:381; 20:22; 21:265; 22:160; 23:860; 24:93; 25:165; 26:26; 27:58; 28:38; 29:40; 30:10; 31:29; 32:4; 33:1352; 35:6; 36:1; 37:374; 38:9; 39:7; 41:8; 42:12; 43:5; 45:3; 47:4; 48:1; 49:6; 50:3; 51:5; 52:6; 
+2026-11-11T14:17:25.4880120Z Stats: malloc large: 98
+2026-11-11T14:17:25.4882160Z Stats: StackDepot: 220381 ids; 44M allocated
+2026-11-11T14:17:25.4883330Z Stats: SizeClassAllocator64: 52M mapped (4608425984M rss) in 269233 allocations; remains 269233
+2026-11-11T14:17:25.4886670Z   02 (    32): mapped:    768K allocs:   21888 frees:       0 inuse:  21888 num_freed_chunks    2688 avail:  24576 rss: 103213432832K releases:      0 last released:      0K region: 0x602000000000
+2026-11-11T14:17:25.4888780Z   03 (    48): mapped:   2304K allocs:   45696 frees:       0 inuse:  45696 num_freed_chunks    3456 avail:  49152 rss: 103280541696K releases:      0 last released:      0K region: 0x603000000000
+2026-11-11T14:17:25.4893940Z   04 (    64): mapped:   3584K allocs:   55808 frees:       0 inuse:  55808 num_freed_chunks    1536 avail:  57344 rss: 103347650560K releases:      0 last released:      0K region: 0x604000000000
+2026-11-11T14:17:25.4896950Z   06 (    96): mapped:   2048K allocs:   21760 frees:       0 inuse:  21760 num_freed_chunks      85 avail:  21845 rss: 103481868288K releases:      0 last released:      0K region: 0x606000000000
+2026-11-11T14:17:25.4899920Z   07 (   112): mapped:   2560K allocs:   21376 frees:       0 inuse:  21376 num_freed_chunks    2029 avail:  23405 rss: 103548977152K releases:      0 last released:      0K region: 0x607000000000
+2026-11-11T14:17:25.4904730Z   08 (   128): mapped:   4864K allocs:   38656 frees:       0 inuse:  38656 num_freed_chunks     256 avail:  38912 rss: 103616086016K releases:      0 last released:      0K region: 0x608000000000
+2026-11-11T14:17:25.4906260Z   10 (   160): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1510 avail:   1638 rss: 103750303744K releases:      0 last released:      0K region: 0x60a000000000
+2026-11-11T14:17:25.4908010Z   11 (   176): mapped:   3584K allocs:   19840 frees:       0 inuse:  19840 num_freed_chunks    1012 avail:  20852 rss: 103817412608K releases:      0 last released:      0K region: 0x60b000000000
+2026-11-11T14:17:25.4909290Z   12 (   192): mapped:   1024K allocs:    4352 frees:       0 inuse:   4352 num_freed_chunks    1109 avail:   5461 rss: 103884521472K releases:      0 last released:      0K region: 0x60c000000000
+2026-11-11T14:17:25.4910910Z   13 (   208): mapped:   4352K allocs:   20352 frees:       0 inuse:  20352 num_freed_chunks    1073 avail:  21425 rss: 103951630336K releases:      0 last released:      0K region: 0x60d000000000
+2026-11-11T14:17:25.4913030Z   14 (   224): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1042 avail:   1170 rss: 104018739200K releases:      0 last released:      0K region: 0x60e000000000
+2026-11-11T14:17:25.4914110Z   15 (   240): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     708 avail:   1092 rss: 104085848064K releases:      0 last released:      0K region: 0x60f000000000
+2026-11-11T14:17:25.4915210Z   16 (   256): mapped:    256K allocs:     256 frees:       0 inuse:    256 num_freed_chunks     768 avail:   1024 rss: 104152956928K releases:      0 last released:      0K region: 0x610000000000
+2026-11-11T14:17:25.4916280Z   17 (   320): mapped:    256K allocs:     512 frees:       0 inuse:    512 num_freed_chunks     307 avail:    819 rss: 104220065792K releases:      0 last released:      0K region: 0x611000000000
+2026-11-11T14:17:25.4917690Z   18 (   384): mapped:   5120K allocs:   13568 frees:       0 inuse:  13568 num_freed_chunks      85 avail:  13653 rss: 104287174656K releases:      0 last released:      0K region: 0x612000000000
+2026-11-11T14:17:25.4918910Z   19 (   448): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     201 avail:    585 rss: 104354283520K releases:      0 last released:      0K region: 0x613000000000
+2026-11-11T14:17:25.4920120Z   20 (   512): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     384 avail:    512 rss: 104421392384K releases:      0 last released:      0K region: 0x614000000000
+2026-11-11T14:17:25.4921110Z   21 (   640): mapped:    256K allocs:     306 frees:       0 inuse:    306 num_freed_chunks     103 avail:    409 rss: 104488501248K releases:      0 last released:      0K region: 0x615000000000
+2026-11-11T14:17:25.4922200Z   22 (   768): mapped:    256K allocs:     170 frees:       0 inuse:    170 num_freed_chunks     171 avail:    341 rss: 104555610112K releases:      0 last released:      0K region: 0x616000000000
+2026-11-11T14:17:25.4923230Z   23 (   896): mapped:    768K allocs:     876 frees:       0 inuse:    876 num_freed_chunks       1 avail:    877 rss: 104622718976K releases:      0 last released:      0K region: 0x617000000000
+2026-11-11T14:17:25.4924350Z   24 (  1024): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     128 avail:    256 rss: 104689827840K releases:      0 last released:      0K region: 0x618000000000
+2026-11-11T14:17:25.4925350Z   25 (  1280): mapped:    256K allocs:     204 frees:       0 inuse:    204 num_freed_chunks       0 avail:    204 rss: 104756936704K releases:      0 last released:      0K region: 0x619000000000
+2026-11-11T14:17:25.4926350Z   26 (  1536): mapped:    256K allocs:      42 frees:       0 inuse:     42 num_freed_chunks     128 avail:    170 rss: 104824045568K releases:      0 last released:      0K region: 0x61a000000000
+2026-11-11T14:17:25.4927400Z   27 (  1792): mapped:    256K allocs:      72 frees:       0 inuse:     72 num_freed_chunks      74 avail:    146 rss: 104891154432K releases:      0 last released:      0K region: 0x61b000000000
+2026-11-11T14:17:25.4928470Z   28 (  2048): mapped:    256K allocs:      64 frees:       0 inuse:     64 num_freed_chunks      64 avail:    128 rss: 104958263296K releases:      0 last released:      0K region: 0x61c000000000
+2026-11-11T14:17:25.4929470Z   29 (  2560): mapped:    256K allocs:      50 frees:       0 inuse:     50 num_freed_chunks      52 avail:    102 rss: 105025372160K releases:      0 last released:      0K region: 0x61d000000000
+2026-11-11T14:17:25.4930490Z   30 (  3072): mapped:    256K allocs:      21 frees:       0 inuse:     21 num_freed_chunks      64 avail:     85 rss: 105092481024K releases:      0 last released:      0K region: 0x61e000000000
+2026-11-11T14:17:25.4931500Z   31 (  3584): mapped:    256K allocs:      36 frees:       0 inuse:     36 num_freed_chunks      37 avail:     73 rss: 105159589888K releases:      0 last released:      0K region: 0x61f000000000
+2026-11-11T14:17:25.4932560Z   32 (  4096): mapped:    256K allocs:      16 frees:       0 inuse:     16 num_freed_chunks      48 avail:     64 rss: 105226698752K releases:      0 last released:      0K region: 0x620000000000
+2026-11-11T14:17:25.4934000Z   33 (  5120): mapped:   6912K allocs:    1356 frees:       0 inuse:   1356 num_freed_chunks      26 avail:   1382 rss: 105293807616K releases:      0 last released:      0K region: 0x621000000000
+2026-11-11T14:17:25.4935120Z   35 (  7168): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks      27 avail:     36 rss: 105428025344K releases:      0 last released:      0K region: 0x623000000000
+2026-11-11T14:17:25.4936230Z   36 (  8192): mapped:   1792K allocs:     216 frees:       0 inuse:    216 num_freed_chunks       8 avail:    224 rss: 105495134208K releases:      0 last released:      0K region: 0x624000000000
+2026-11-11T14:17:25.4937400Z   37 ( 10240): mapped:   3840K allocs:     378 frees:       0 inuse:    378 num_freed_chunks       6 avail:    384 rss: 105562243072K releases:      0 last released:      0K region: 0x625000000000
+2026-11-11T14:17:25.4938690Z   38 ( 12288): mapped:    256K allocs:      10 frees:       0 inuse:     10 num_freed_chunks      11 avail:     21 rss: 105629351936K releases:      0 last released:      0K region: 0x626000000000
+2026-11-11T14:17:25.4939760Z   39 ( 14336): mapped:    256K allocs:       8 frees:       0 inuse:      8 num_freed_chunks      10 avail:     18 rss: 105696460800K releases:      0 last released:      0K region: 0x627000000000
+2026-11-11T14:17:25.4940750Z   41 ( 20480): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks       3 avail:     12 rss: 105830678528K releases:      0 last released:      0K region: 0x629000000000
+2026-11-11T14:17:25.4941820Z   42 ( 24576): mapped:    512K allocs:      12 frees:       0 inuse:     12 num_freed_chunks       9 avail:     21 rss: 105897787392K releases:      0 last released:      0K region: 0x62a000000000
+2026-11-11T14:17:25.4942780Z   43 ( 28672): mapped:    256K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       3 avail:      9 rss: 105964896256K releases:      0 last released:      0K region: 0x62b000000000
+2026-11-11T14:17:25.4943840Z   45 ( 40960): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       3 avail:      6 rss: 106099113984K releases:      0 last released:      0K region: 0x62d000000000
+2026-11-11T14:17:25.4944800Z   47 ( 57344): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       0 avail:      4 rss: 106233331712K releases:      0 last released:      0K region: 0x62f000000000
+2026-11-11T14:17:25.4946050Z   48 ( 65536): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       3 avail:      4 rss: 106300440576K releases:      0 last released:      0K region: 0x630000000000
+2026-11-11T14:17:25.4947040Z   49 ( 81920): mapped:    512K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106367549440K releases:      0 last released:      0K region: 0x631000000000
+2026-11-11T14:17:25.4948030Z   50 ( 98304): mapped:    512K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       2 avail:      5 rss: 106434658304K releases:      0 last released:      0K region: 0x632000000000
+2026-11-11T14:17:25.4949170Z   51 (114688): mapped:    768K allocs:       5 frees:       0 inuse:      5 num_freed_chunks       1 avail:      6 rss: 106501767168K releases:      0 last released:      0K region: 0x633000000000
+2026-11-11T14:17:25.4950290Z   52 (131072): mapped:    768K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106568876032K releases:      0 last released:      0K region: 0x634000000000
+2026-11-11T14:17:25.4951150Z Stats: LargeMmapAllocator: allocated 98 times, remains 98 (23744 K) max 23 M; by size logs: 17:87; 18:4; 19:4; 20:3; 
+2026-11-11T14:17:25.4951820Z Quarantine limits: global: 256Mb; thread local: 1024Kb
+2026-11-11T14:17:25.4952430Z Global quarantine stats: batches: 214; bytes: 44930876 (user: 43177788); chunks: 197190 (capacity: 218494); 90% chunks used; 4% memory overhead
+2026-11-11T14:17:25.5789300Z CI_SORT_MERGE phase=failure level=1 runs=2 input_rows=20000 decoded=24378 read_fragments=13 read_payload_bytes=1633040 written_fragments=21 written_payload_bytes=2648976 materialized_used=2364394
+2026-11-11T14:17:25.5891250Z CI_RSS_PHASE phase=sort-merge-level-failure asan_available=1 live=10118198 heap=90652672
+2026-11-11T14:17:25.5993670Z CI_RSS_MACH phase=sort-merge-level-failure resident=529022976 internal=174899200 external=354123776 reusable=0 compressed=0 footprint=179685504
+2026-11-11T14:17:25.6096770Z CI_RSS_ASAN phase=sort-merge-level-failure free=26790824
+2026-11-11T14:17:25.8227200Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804183 phase=before_member_release used=0 peak=26912 maximum=8388608 parent_charge=8388608 events=0 suppressed=0
+2026-11-11T14:17:25.8285370Z CI_BUDGET_SUMMARY kind=account owner=393354579804182 phase=before_member_release used=0 peak=8388608 maximum=8388608 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:25.8287180Z CI_BUDGET_SUMMARY kind=prepaid owner=393354579804184 phase=before_member_release used=0 peak=1400 maximum=266240 parent_charge=266240 events=0 suppressed=0
+2026-11-11T14:17:25.9231160Z CI_BUDGET_SUMMARY kind=materialized owner=393354579804185 phase=before_member_release used=0 peak=7243366 maximum=8306664 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:25.9333050Z CI_BUDGET_SUMMARY kind=materialized owner=393354579804186 phase=before_member_release used=0 peak=26824 maximum=8388584 parent_charge=0 events=0 suppressed=0
+2026-11-11T14:17:25.9436920Z CI_TRACE_TRUNCATED summary_kind=successful process_limit=20
+2026-11-11T14:17:25.9538570Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=6346436 heap=95633408
+2026-11-11T14:17:25.9640370Z CI_RSS_MACH phase=after-backend-destruction resident=535838720 internal=181092352 external=354746368 reusable=0 compressed=0 footprint=185878656
+2026-11-11T14:17:25.9656810Z CI_RSS_ASAN phase=after-backend-destruction free=27599712
+2026-11-11T14:17:25.9657390Z Stats: 55M malloced (9M for red zones) by 271184 calls
+2026-11-11T14:17:25.9759980Z Stats: 0M realloced by 0 calls
+2026-11-11T14:17:25.9761370Z Stats: 49M freed by 205059 calls
+2026-11-11T14:17:25.9863520Z Stats: 0M really freed by 0 calls
+2026-11-11T14:17:25.9918210Z Stats: 91M (91M-0M) mmaped; 380 maps, 0 unmaps
+2026-11-11T14:17:25.9948820Z   mallocs by size class: 2:21801; 3:47152; 4:57372; 6:21698; 7:21375; 8:38539; 10:37; 11:19771; 12:4277; 13:20267; 14:47; 15:288; 16:223; 17:490; 18:13497; 19:382; 20:22; 21:267; 22:162; 23:1025; 24:93; 25:167; 26:26; 27:59; 28:82; 29:41; 30:10; 31:29; 32:6; 33:1396; 35:6; 36:1; 37:383; 38:9; 39:7; 41:8; 42:12; 43:5; 45:3; 47:4; 48:1; 49:6; 50:4; 51:6; 52:6; 
+2026-11-11T14:17:25.9960920Z Stats: malloc large: 122
+2026-11-11T14:17:25.9972730Z Stats: StackDepot: 222650 ids; 44M allocated
+2026-11-11T14:17:25.9988880Z Stats: SizeClassAllocator64: 53M mapped (4608425984M rss) in 272756 allocations; remains 272756
+2026-11-11T14:17:26.0002310Z   02 (    32): mapped:    768K allocs:   21888 frees:       0 inuse:  21888 num_freed_chunks    2688 avail:  24576 rss: 103213432832K releases:      0 last released:      0K region: 0x602000000000
+2026-11-11T14:17:26.0010590Z   03 (    48): mapped:   2304K allocs:   47232 frees:       0 inuse:  47232 num_freed_chunks    1920 avail:  49152 rss: 103280541696K releases:      0 last released:      0K region: 0x603000000000
+2026-11-11T14:17:26.0013240Z   04 (    64): mapped:   3840K allocs:   57472 frees:       0 inuse:  57472 num_freed_chunks    3968 avail:  61440 rss: 103347650560K releases:      0 last released:      0K region: 0x604000000000
+2026-11-11T14:17:26.0018030Z   06 (    96): mapped:   2048K allocs:   21760 frees:       0 inuse:  21760 num_freed_chunks      85 avail:  21845 rss: 103481868288K releases:      0 last released:      0K region: 0x606000000000
+2026-11-11T14:17:26.0020620Z   07 (   112): mapped:   2560K allocs:   21376 frees:       0 inuse:  21376 num_freed_chunks    2029 avail:  23405 rss: 103548977152K releases:      0 last released:      0K region: 0x607000000000
+2026-11-11T14:17:26.0024410Z   08 (   128): mapped:   4864K allocs:   38656 frees:       0 inuse:  38656 num_freed_chunks     256 avail:  38912 rss: 103616086016K releases:      0 last released:      0K region: 0x608000000000
+2026-11-11T14:17:26.0064820Z   10 (   160): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1510 avail:   1638 rss: 103750303744K releases:      0 last released:      0K region: 0x60a000000000
+2026-11-11T14:17:26.0066250Z   11 (   176): mapped:   3584K allocs:   19840 frees:       0 inuse:  19840 num_freed_chunks    1012 avail:  20852 rss: 103817412608K releases:      0 last released:      0K region: 0x60b000000000
+2026-11-11T14:17:26.0068650Z   12 (   192): mapped:   1024K allocs:    4352 frees:       0 inuse:   4352 num_freed_chunks    1109 avail:   5461 rss: 103884521472K releases:      0 last released:      0K region: 0x60c000000000
+2026-11-11T14:17:26.0069910Z   13 (   208): mapped:   4352K allocs:   20352 frees:       0 inuse:  20352 num_freed_chunks    1073 avail:  21425 rss: 103951630336K releases:      0 last released:      0K region: 0x60d000000000
+2026-11-11T14:17:26.0071000Z   14 (   224): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1042 avail:   1170 rss: 104018739200K releases:      0 last released:      0K region: 0x60e000000000
+2026-11-11T14:17:26.0072230Z   15 (   240): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     708 avail:   1092 rss: 104085848064K releases:      0 last released:      0K region: 0x60f000000000
+2026-11-11T14:17:26.0073380Z   16 (   256): mapped:    256K allocs:     256 frees:       0 inuse:    256 num_freed_chunks     768 avail:   1024 rss: 104152956928K releases:      0 last released:      0K region: 0x610000000000
+2026-11-11T14:17:26.0074480Z   17 (   320): mapped:    256K allocs:     512 frees:       0 inuse:    512 num_freed_chunks     307 avail:    819 rss: 104220065792K releases:      0 last released:      0K region: 0x611000000000
+2026-11-11T14:17:26.0075530Z   18 (   384): mapped:   5120K allocs:   13568 frees:       0 inuse:  13568 num_freed_chunks      85 avail:  13653 rss: 104287174656K releases:      0 last released:      0K region: 0x612000000000
+2026-11-11T14:17:26.0076840Z   19 (   448): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     201 avail:    585 rss: 104354283520K releases:      0 last released:      0K region: 0x613000000000
+2026-11-11T14:17:26.0077760Z   20 (   512): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     384 avail:    512 rss: 104421392384K releases:      0 last released:      0K region: 0x614000000000
+2026-11-11T14:17:26.0078750Z   21 (   640): mapped:    256K allocs:     306 frees:       0 inuse:    306 num_freed_chunks     103 avail:    409 rss: 104488501248K releases:      0 last released:      0K region: 0x615000000000
+2026-11-11T14:17:26.0079880Z   22 (   768): mapped:    256K allocs:     170 frees:       0 inuse:    170 num_freed_chunks     171 avail:    341 rss: 104555610112K releases:      0 last released:      0K region: 0x616000000000
+2026-11-11T14:17:26.0081070Z   23 (   896): mapped:   1024K allocs:    1095 frees:       0 inuse:   1095 num_freed_chunks      75 avail:   1170 rss: 104622718976K releases:      0 last released:      0K region: 0x617000000000
+2026-11-11T14:17:26.0082060Z   24 (  1024): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     128 avail:    256 rss: 104689827840K releases:      0 last released:      0K region: 0x618000000000
+2026-11-11T14:17:26.0083840Z   25 (  1280): mapped:    256K allocs:     204 frees:       0 inuse:    204 num_freed_chunks       0 avail:    204 rss: 104756936704K releases:      0 last released:      0K region: 0x619000000000
+2026-11-11T14:17:26.0084880Z   26 (  1536): mapped:    256K allocs:      42 frees:       0 inuse:     42 num_freed_chunks     128 avail:    170 rss: 104824045568K releases:      0 last released:      0K region: 0x61a000000000
+2026-11-11T14:17:26.0086300Z   27 (  1792): mapped:    256K allocs:      72 frees:       0 inuse:     72 num_freed_chunks      74 avail:    146 rss: 104891154432K releases:      0 last released:      0K region: 0x61b000000000
+2026-11-11T14:17:26.0087400Z   28 (  2048): mapped:    256K allocs:      96 frees:       0 inuse:     96 num_freed_chunks      32 avail:    128 rss: 104958263296K releases:      0 last released:      0K region: 0x61c000000000
+2026-11-11T14:17:26.0088360Z   29 (  2560): mapped:    256K allocs:      50 frees:       0 inuse:     50 num_freed_chunks      52 avail:    102 rss: 105025372160K releases:      0 last released:      0K region: 0x61d000000000
+2026-11-11T14:17:26.0089280Z   30 (  3072): mapped:    256K allocs:      21 frees:       0 inuse:     21 num_freed_chunks      64 avail:     85 rss: 105092481024K releases:      0 last released:      0K region: 0x61e000000000
+2026-11-11T14:17:26.0090490Z   31 (  3584): mapped:    256K allocs:      36 frees:       0 inuse:     36 num_freed_chunks      37 avail:     73 rss: 105159589888K releases:      0 last released:      0K region: 0x61f000000000
+2026-11-11T14:17:26.0091460Z   32 (  4096): mapped:    256K allocs:      16 frees:       0 inuse:     16 num_freed_chunks      48 avail:     64 rss: 105226698752K releases:      0 last released:      0K region: 0x620000000000
+2026-11-11T14:17:26.0092590Z   33 (  5120): mapped:   7168K allocs:    1404 frees:       0 inuse:   1404 num_freed_chunks      29 avail:   1433 rss: 105293807616K releases:      0 last released:      0K region: 0x621000000000
+2026-11-11T14:17:26.0095880Z   35 (  7168): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks      27 avail:     36 rss: 105428025344K releases:      0 last released:      0K region: 0x623000000000
+2026-11-11T14:17:26.0098540Z   36 (  8192): mapped:   2048K allocs:     232 frees:       0 inuse:    232 num_freed_chunks      24 avail:    256 rss: 105495134208K releases:      0 last released:      0K region: 0x624000000000
+2026-11-11T14:17:26.0101260Z   37 ( 10240): mapped:   3840K allocs:     384 frees:       0 inuse:    384 num_freed_chunks       0 avail:    384 rss: 105562243072K releases:      0 last released:      0K region: 0x625000000000
+2026-11-11T14:17:26.0103830Z   38 ( 12288): mapped:    256K allocs:      10 frees:       0 inuse:     10 num_freed_chunks      11 avail:     21 rss: 105629351936K releases:      0 last released:      0K region: 0x626000000000
+2026-11-11T14:17:26.0106330Z   39 ( 14336): mapped:    256K allocs:       8 frees:       0 inuse:      8 num_freed_chunks      10 avail:     18 rss: 105696460800K releases:      0 last released:      0K region: 0x627000000000
+2026-11-11T14:17:26.0108830Z   41 ( 20480): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks       3 avail:     12 rss: 105830678528K releases:      0 last released:      0K region: 0x629000000000
+2026-11-11T14:17:26.0111290Z   42 ( 24576): mapped:    512K allocs:      12 frees:       0 inuse:     12 num_freed_chunks       9 avail:     21 rss: 105897787392K releases:      0 last released:      0K region: 0x62a000000000
+2026-11-11T14:17:26.0113820Z   43 ( 28672): mapped:    256K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       3 avail:      9 rss: 105964896256K releases:      0 last released:      0K region: 0x62b000000000
+2026-11-11T14:17:26.0116350Z   45 ( 40960): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       3 avail:      6 rss: 106099113984K releases:      0 last released:      0K region: 0x62d000000000
+2026-11-11T14:17:26.0118800Z   47 ( 57344): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       0 avail:      4 rss: 106233331712K releases:      0 last released:      0K region: 0x62f000000000
+2026-11-11T14:17:26.0121420Z   48 ( 65536): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       3 avail:      4 rss: 106300440576K releases:      0 last released:      0K region: 0x630000000000
+2026-11-11T14:17:26.0124970Z   49 ( 81920): mapped:    512K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106367549440K releases:      0 last released:      0K region: 0x631000000000
+2026-11-11T14:17:26.0128220Z   50 ( 98304): mapped:    512K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       1 avail:      5 rss: 106434658304K releases:      0 last released:      0K region: 0x632000000000
+2026-11-11T14:17:26.0131160Z   51 (114688): mapped:    768K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106501767168K releases:      0 last released:      0K region: 0x633000000000
+2026-11-11T14:17:26.0134120Z   52 (131072): mapped:    768K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106568876032K releases:      0 last released:      0K region: 0x634000000000
+2026-11-11T14:17:26.0137250Z Stats: LargeMmapAllocator: allocated 122 times, remains 122 (27584 K) max 26 M; by size logs: 17:111; 18:4; 19:4; 20:3; 
+2026-11-11T14:17:26.0139680Z Quarantine limits: global: 256Mb; thread local: 1024Kb
+2026-11-11T14:17:26.0140550Z Global quarantine stats: batches: 226; bytes: 53432344 (user: 51580952); chunks: 204884 (capacity: 230746); 88% chunks used; 3% memory overhead
+2026-11-11T14:17:26.0141110Z 
+2026-11-11T14:17:26.0142820Z ================================================================================
+2026-11-11T14:17:26.0143420Z  ZYX Graph Database - Unit Test Suite
+2026-11-11T14:17:26.0143940Z ================================================================================
+2026-11-11T14:17:26.0144440Z  Target: 1 tests across 1 suites
+2026-11-11T14:17:26.0144670Z 
+2026-11-11T14:17:26.0144680Z 
+2026-11-11T14:17:26.0145230Z [  0% |   0/  1] X NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection FAILED
+2026-11-11T14:17:26.0146030Z               <unknown>:-1
+2026-11-11T14:17:26.0146860Z               C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 64MB, baseline RSS: 439MB, current RSS: 503MB)" thrown in the test body.
+2026-11-11T14:17:26.0147840Z 
+2026-11-11T14:17:26.0148700Z [100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 6589 ms)
+2026-11-11T14:17:26.0149190Z 
+2026-11-11T14:17:26.0149510Z ================================================================================
+2026-11-11T14:17:26.0149970Z   TESTS FAILED!
+2026-11-11T14:17:26.0150160Z 
+2026-11-11T14:17:26.0150340Z   Passed: 0
+2026-11-11T14:17:26.0150630Z   Failed: 1
+2026-11-11T14:17:26.0151020Z   Time  : 6589 ms
+2026-11-11T14:17:26.0151550Z ================================================================================
+2026-11-11T14:17:26.0151840Z 
+2026-11-11T14:17:26.1334910Z CI_FAILED_CASE {"xml": "tests.xml", "class": "RelocatableStorageBackendTest", "name": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection", "file": "/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp", "line": "45", "identity_truncated": false, "assertion_locations": [], "observations": {"kinds": ["rss_guard"], "scalars": [], "truncated": false}, "failures": 1}
+2026-11-11T14:17:26.1434630Z CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False
+2026-11-11T14:17:26.1435540Z CI_EVIDENCE directory=asan-cold-rss exit=1 output_bytes=27892 truncated=False
+2026-11-11T14:17:26.1440300Z ##[error]Process completed with exit code 1.
+2026-11-11T14:17:26.1531240Z ##[group]Run # Attribution only: reporting may alter residency before QueryGuard starts.
+2026-11-11T14:17:26.1531870Z # Attribution only: reporting may alter residency before QueryGuard starts.
+2026-11-11T14:17:26.1532330Z # The two cold controls above and the formal gates remain unchanged.
+2026-11-11T14:17:26.1532870Z ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+2026-11-11T14:17:26.1533550Z   python scripts/run_ci_evidence.py --name asan-rss-warmed-statistics --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+2026-11-11T14:17:26.1534360Z     --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+2026-11-11T14:17:26.2265960Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-11T14:17:26.2266640Z env:
+2026-11-11T14:17:26.2267700Z   ZYX_CI_EVIDENCE_DIR: /Users/runner/work/_temp/ci-evidence
+2026-11-11T14:17:26.2268420Z   ZYX_CI_DEADLINE_UNIX: 1794409523
+2026-11-11T14:17:26.2269130Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:26.2270590Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.10.11/arm64/lib/pkgconfig
+2026-11-11T14:17:26.2271690Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:26.2272990Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:26.2274000Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.10.11/arm64
+2026-11-11T14:17:26.2274730Z   ZYX_CI_RSS_TRACE: 1
+2026-11-11T14:17:26.2275190Z   ZYX_CI_RSS_BASELINE_STATS: 1
+2026-11-11T14:17:26.2275690Z ##[endgroup]
+2026-11-11T14:17:27.1707210Z CI_DIAGNOSTICS_PROCESS pid=91636 owner_id_namespace=393573623136257 fork_support=ready
+2026-11-11T14:17:27.4787760Z CI_RSS_PHASE phase=before-query asan_available=1 live=5722803 heap=40878080
+2026-11-11T14:17:27.4789050Z CI_RSS_MACH phase=before-query resident=460816384 internal=118128640 external=342687744 reusable=0 compressed=0 footprint=122158336
+2026-11-11T14:17:27.4789740Z CI_RSS_ASAN phase=before-query free=18546328
+2026-11-11T14:17:27.4790180Z Stats: 16M malloced (5M for red zones) by 164898 calls
+2026-11-11T14:17:27.4790510Z Stats: 0M realloced by 0 calls
+2026-11-11T14:17:27.4790750Z Stats: 10M freed by 110347 calls
+2026-11-11T14:17:27.4791050Z Stats: 0M really freed by 0 calls
+2026-11-11T14:17:27.4791320Z Stats: 38M (38M-0M) mmaped; 158 maps, 0 unmaps
+2026-11-11T14:17:27.4792050Z   mallocs by size class: 2:14597; 3:33409; 4:24543; 6:19004; 7:15208; 8:21989; 10:37; 11:18146; 12:3990; 13:235; 14:35; 15:264; 16:42; 17:310; 18:11847; 19:114; 20:14; 21:135; 22:78; 23:257; 24:23; 25:65; 26:1; 27:7; 29:18; 31:12; 32:1; 33:286; 37:212; 38:2; 39:1; 41:3; 45:3; 48:1; 49:6; 
+2026-11-11T14:17:27.4792780Z Stats: malloc large: 3
+2026-11-11T14:17:27.4793010Z Stats: StackDepot: 208014 ids; 44M allocated
+2026-11-11T14:17:27.4793480Z Stats: SizeClassAllocator64: 29M mapped (3677683712M rss) in 166522 allocations; remains 166522
+2026-11-11T14:17:27.4794260Z   02 (    32): mapped:    512K allocs:   14720 frees:       0 inuse:  14720 num_freed_chunks    1664 avail:  16384 rss: 103213432832K releases:      0 last released:      0K region: 0x602000000000
+2026-11-11T14:17:27.4795210Z   03 (    48): mapped:   1792K allocs:   33536 frees:       0 inuse:  33536 num_freed_chunks    4693 avail:  38229 rss: 103280541696K releases:      0 last released:      0K region: 0x603000000000
+2026-11-11T14:17:27.4796280Z   04 (    64): mapped:   1536K allocs:   24576 frees:       0 inuse:  24576 num_freed_chunks       0 avail:  24576 rss: 103347650560K releases:      0 last released:      0K region: 0x604000000000
+2026-11-11T14:17:27.4797410Z   06 (    96): mapped:   1792K allocs:   19072 frees:       0 inuse:  19072 num_freed_chunks      42 avail:  19114 rss: 103481868288K releases:      0 last released:      0K region: 0x606000000000
+2026-11-11T14:17:27.4799150Z   07 (   112): mapped:   1792K allocs:   15232 frees:       0 inuse:  15232 num_freed_chunks    1152 avail:  16384 rss: 103548977152K releases:      0 last released:      0K region: 0x607000000000
+2026-11-11T14:17:27.4800110Z   08 (   128): mapped:   2816K allocs:   22016 frees:       0 inuse:  22016 num_freed_chunks     512 avail:  22528 rss: 103616086016K releases:      0 last released:      0K region: 0x608000000000
+2026-11-11T14:17:27.4801060Z   10 (   160): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1510 avail:   1638 rss: 103750303744K releases:      0 last released:      0K region: 0x60a000000000
+2026-11-11T14:17:27.4801980Z   11 (   176): mapped:   3328K allocs:   18176 frees:       0 inuse:  18176 num_freed_chunks    1186 avail:  19362 rss: 103817412608K releases:      0 last released:      0K region: 0x60b000000000
+2026-11-11T14:17:27.4802920Z   12 (   192): mapped:    768K allocs:    4096 frees:       0 inuse:   4096 num_freed_chunks       0 avail:   4096 rss: 103884521472K releases:      0 last released:      0K region: 0x60c000000000
+2026-11-11T14:17:27.4803850Z   13 (   208): mapped:    256K allocs:     256 frees:       0 inuse:    256 num_freed_chunks    1004 avail:   1260 rss: 103951630336K releases:      0 last released:      0K region: 0x60d000000000
+2026-11-11T14:17:27.4804920Z   14 (   224): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1042 avail:   1170 rss: 104018739200K releases:      0 last released:      0K region: 0x60e000000000
+2026-11-11T14:17:27.4806050Z   15 (   240): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     708 avail:   1092 rss: 104085848064K releases:      0 last released:      0K region: 0x60f000000000
+2026-11-11T14:17:27.4806950Z   16 (   256): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     896 avail:   1024 rss: 104152956928K releases:      0 last released:      0K region: 0x610000000000
+2026-11-11T14:17:27.4807820Z   17 (   320): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     435 avail:    819 rss: 104220065792K releases:      0 last released:      0K region: 0x611000000000
+2026-11-11T14:17:27.4808760Z   18 (   384): mapped:   4608K allocs:   11904 frees:       0 inuse:  11904 num_freed_chunks     384 avail:  12288 rss: 104287174656K releases:      0 last released:      0K region: 0x612000000000
+2026-11-11T14:17:27.4809750Z   19 (   448): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     457 avail:    585 rss: 104354283520K releases:      0 last released:      0K region: 0x613000000000
+2026-11-11T14:17:27.4810690Z   20 (   512): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     384 avail:    512 rss: 104421392384K releases:      0 last released:      0K region: 0x614000000000
+2026-11-11T14:17:27.4811530Z   21 (   640): mapped:    256K allocs:     204 frees:       0 inuse:    204 num_freed_chunks     205 avail:    409 rss: 104488501248K releases:      0 last released:      0K region: 0x615000000000
+2026-11-11T14:17:27.4812490Z   22 (   768): mapped:    256K allocs:      85 frees:       0 inuse:     85 num_freed_chunks     256 avail:    341 rss: 104555610112K releases:      0 last released:      0K region: 0x616000000000
+2026-11-11T14:17:27.4813390Z   23 (   896): mapped:    256K allocs:     292 frees:       0 inuse:    292 num_freed_chunks       0 avail:    292 rss: 104622718976K releases:      0 last released:      0K region: 0x617000000000
+2026-11-11T14:17:27.4814270Z   24 (  1024): mapped:    256K allocs:      64 frees:       0 inuse:     64 num_freed_chunks     192 avail:    256 rss: 104689827840K releases:      0 last released:      0K region: 0x618000000000
+2026-11-11T14:17:27.4815210Z   25 (  1280): mapped:    256K allocs:     102 frees:       0 inuse:    102 num_freed_chunks     102 avail:    204 rss: 104756936704K releases:      0 last released:      0K region: 0x619000000000
+2026-11-11T14:17:27.4816400Z   26 (  1536): mapped:    256K allocs:      42 frees:       0 inuse:     42 num_freed_chunks     128 avail:    170 rss: 104824045568K releases:      0 last released:      0K region: 0x61a000000000
+2026-11-11T14:17:27.4817340Z   27 (  1792): mapped:    256K allocs:      36 frees:       0 inuse:     36 num_freed_chunks     110 avail:    146 rss: 104891154432K releases:      0 last released:      0K region: 0x61b000000000
+2026-11-11T14:17:27.4818210Z   29 (  2560): mapped:    256K allocs:      25 frees:       0 inuse:     25 num_freed_chunks      77 avail:    102 rss: 105025372160K releases:      0 last released:      0K region: 0x61d000000000
+2026-11-11T14:17:27.4819070Z   31 (  3584): mapped:    256K allocs:      18 frees:       0 inuse:     18 num_freed_chunks      55 avail:     73 rss: 105159589888K releases:      0 last released:      0K region: 0x61f000000000
+2026-11-11T14:17:27.4819950Z   32 (  4096): mapped:    256K allocs:      16 frees:       0 inuse:     16 num_freed_chunks      48 avail:     64 rss: 105226698752K releases:      0 last released:      0K region: 0x620000000000
+2026-11-11T14:17:27.4820840Z   33 (  5120): mapped:   1536K allocs:     288 frees:       0 inuse:    288 num_freed_chunks      19 avail:    307 rss: 105293807616K releases:      0 last released:      0K region: 0x621000000000
+2026-11-11T14:17:27.4821940Z   36 (  8192): mapped:   1024K allocs:     120 frees:       0 inuse:    120 num_freed_chunks       8 avail:    128 rss: 105495134208K releases:      0 last released:      0K region: 0x624000000000
+2026-11-11T14:17:27.4823090Z   37 ( 10240): mapped:   2304K allocs:     216 frees:       0 inuse:    216 num_freed_chunks      14 avail:    230 rss: 105562243072K releases:      0 last released:      0K region: 0x625000000000
+2026-11-11T14:17:27.4824170Z   38 ( 12288): mapped:    256K allocs:       5 frees:       0 inuse:      5 num_freed_chunks      16 avail:     21 rss: 105629351936K releases:      0 last released:      0K region: 0x626000000000
+2026-11-11T14:17:27.4825090Z   39 ( 14336): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks      14 avail:     18 rss: 105696460800K releases:      0 last released:      0K region: 0x627000000000
+2026-11-11T14:17:27.4826060Z   41 ( 20480): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       9 avail:     12 rss: 105830678528K releases:      0 last released:      0K region: 0x629000000000
+2026-11-11T14:17:27.4826950Z   45 ( 40960): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       3 avail:      6 rss: 106099113984K releases:      0 last released:      0K region: 0x62d000000000
+2026-11-11T14:17:27.4827910Z   48 ( 65536): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       3 avail:      4 rss: 106300440576K releases:      0 last released:      0K region: 0x630000000000
+2026-11-11T14:17:27.4828770Z   49 ( 81920): mapped:    512K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106367549440K releases:      0 last released:      0K region: 0x631000000000
+2026-11-11T14:17:27.4829490Z Stats: LargeMmapAllocator: allocated 3 times, remains 3 (480 K) max 0 M; by size logs: 17:3; 
+2026-11-11T14:17:27.4829920Z Quarantine limits: global: 256Mb; thread local: 1024Kb
+2026-11-11T14:17:27.4830460Z Global quarantine stats: batches: 114; bytes: 11596682 (user: 10662794); chunks: 109697 (capacity: 116394); 94% chunks used; 8% memory overhead
+2026-11-11T14:17:27.4831010Z CI_RSS_BEGIN rss=461340672 asan_available=1 live=5722803 heap=40878080
+2026-11-11T14:17:28.8651020Z CI_RSS_PHASE phase=sort-before-first-spill asan_available=1 live=11295571 heap=58048512
+2026-11-11T14:17:28.8652930Z CI_RSS_MACH phase=sort-before-first-spill resident=489406464 internal=136806400 external=352600064 reusable=0 compressed=0 footprint=141411776
+2026-11-11T14:17:28.8654420Z CI_RSS_ASAN phase=sort-before-first-spill free=21735472
+2026-11-11T14:17:29.1477620Z CI_RSS_PHASE phase=sort-after-first-spill asan_available=1 live=9068093 heap=62242816
+2026-11-11T14:17:29.1508240Z CI_RSS_MACH phase=sort-after-first-spill resident=494485504 internal=141082624 external=353402880 reusable=0 compressed=0 footprint=145770240
+2026-11-11T14:17:29.1509260Z CI_RSS_ASAN phase=sort-after-first-spill free=23366880
+2026-11-11T14:17:31.8217320Z CI_RSS_PHASE phase=sort-before-merge asan_available=1 live=8489995 heap=75579392
+2026-11-11T14:17:31.8285920Z CI_RSS_MACH phase=sort-before-merge resident=509591552 internal=156172288 external=353419264 reusable=0 compressed=0 footprint=160958592
+2026-11-11T14:17:31.8286750Z CI_RSS_ASAN phase=sort-before-merge free=24877768
+2026-11-11T14:17:31.8287710Z CI_SORT_MERGE phase=begin level=0 runs=3 input_rows=20000 decoded=0 read_fragments=0 read_payload_bytes=0 written_fragments=10 written_payload_bytes=1240160 materialized_used=2364474
+2026-11-11T14:17:31.8289240Z CI_RSS_PHASE phase=sort-merge-level-begin asan_available=1 live=8489995 heap=75579392
+2026-11-11T14:17:31.8290890Z CI_RSS_MACH phase=sort-merge-level-begin resident=509624320 internal=156205056 external=353419264 reusable=0 compressed=0 footprint=160991360
+2026-11-11T14:17:31.8292970Z CI_RSS_ASAN phase=sort-merge-level-begin free=24877768
+2026-11-11T14:17:33.1186840Z CI_SORT_MERGE phase=end level=0 runs=2 input_rows=20000 decoded=16384 read_fragments=8 read_payload_bytes=1015936 written_fragments=18 written_payload_bytes=2256096 materialized_used=2364394
+2026-11-11T14:17:33.1191540Z CI_RSS_PHASE phase=sort-merge-level-end asan_available=1 live=10099787 heap=87244800
+2026-11-11T14:17:33.1192730Z CI_RSS_MACH phase=sort-merge-level-end resident=524615680 internal=170672128 external=353943552 reusable=0 compressed=0 footprint=175458432
+2026-11-11T14:17:33.1194020Z CI_RSS_ASAN phase=sort-merge-level-end free=26458992
+2026-11-11T14:17:33.1194980Z CI_SORT_MERGE phase=begin level=1 runs=2 input_rows=20000 decoded=16384 read_fragments=8 read_payload_bytes=1015936 written_fragments=18 written_payload_bytes=2256096 materialized_used=2364394
+2026-11-11T14:17:33.1196930Z CI_RSS_PHASE phase=sort-merge-level-begin asan_available=1 live=10099787 heap=87244800
+2026-11-11T14:17:33.1197890Z CI_RSS_MACH phase=sort-merge-level-begin resident=524615680 internal=170672128 external=353943552 reusable=0 compressed=0 footprint=175458432
+2026-11-11T14:17:33.1198700Z CI_RSS_ASAN phase=sort-merge-level-begin free=26458992
+2026-11-11T14:17:33.6008570Z CI_RSS_REJECT limit=67108864 baseline=461373440 current=528842752 asan_available=1 live=10473597 heap=90652672
+2026-11-11T14:17:33.6013340Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10473597 heap=90652672
+2026-11-11T14:17:33.6018770Z CI_RSS_MACH phase=rejection-before-unwind resident=528842752 internal=174899200 external=353943552 reusable=0 compressed=0 footprint=179685504
+2026-11-11T14:17:33.6121220Z CI_RSS_ASAN phase=rejection-before-unwind free=26791592
+2026-11-11T14:17:33.6134670Z Stats: 51M malloced (9M for red zones) by 267512 calls
+2026-11-11T14:17:33.6135230Z Stats: 0M realloced by 0 calls
+2026-11-11T14:17:33.6135600Z Stats: 41M freed by 197547 calls
+2026-11-11T14:17:33.6136050Z Stats: 0M really freed by 0 calls
+2026-11-11T14:17:33.6136430Z Stats: 86M (86M-0M) mmaped; 352 maps, 0 unmaps
+2026-11-11T14:17:33.6137610Z   mallocs by size class: 2:21786; 3:45661; 4:55694; 6:21639; 7:21322; 8:38529; 10:37; 11:19770; 12:4267; 13:20266; 14:46; 15:288; 16:220; 17:487; 18:13449; 19:381; 20:22; 21:265; 22:160; 23:860; 24:93; 25:165; 26:26; 27:58; 28:38; 29:40; 30:10; 31:29; 32:4; 33:1352; 35:6; 36:1; 37:374; 38:9; 39:7; 41:8; 42:12; 43:5; 45:3; 47:4; 48:1; 49:6; 50:3; 51:5; 52:6; 
+2026-11-11T14:17:33.6138760Z Stats: malloc large: 98
+2026-11-11T14:17:33.6139290Z Stats: StackDepot: 220381 ids; 44M allocated
+2026-11-11T14:17:33.6139980Z Stats: SizeClassAllocator64: 52M mapped (4608425984M rss) in 269233 allocations; remains 269233
+2026-11-11T14:17:33.6140900Z   02 (    32): mapped:    768K allocs:   21888 frees:       0 inuse:  21888 num_freed_chunks    2688 avail:  24576 rss: 103213432832K releases:      0 last released:      0K region: 0x602000000000
+2026-11-11T14:17:33.6143090Z   03 (    48): mapped:   2304K allocs:   45696 frees:       0 inuse:  45696 num_freed_chunks    3456 avail:  49152 rss: 103280541696K releases:      0 last released:      0K region: 0x603000000000
+2026-11-11T14:17:33.6144710Z   04 (    64): mapped:   3584K allocs:   55808 frees:       0 inuse:  55808 num_freed_chunks    1536 avail:  57344 rss: 103347650560K releases:      0 last released:      0K region: 0x604000000000
+2026-11-11T14:17:33.6145860Z   06 (    96): mapped:   2048K allocs:   21760 frees:       0 inuse:  21760 num_freed_chunks      85 avail:  21845 rss: 103481868288K releases:      0 last released:      0K region: 0x606000000000
+2026-11-11T14:17:33.6146990Z   07 (   112): mapped:   2560K allocs:   21376 frees:       0 inuse:  21376 num_freed_chunks    2029 avail:  23405 rss: 103548977152K releases:      0 last released:      0K region: 0x607000000000
+2026-11-11T14:17:33.6148270Z   08 (   128): mapped:   4864K allocs:   38656 frees:       0 inuse:  38656 num_freed_chunks     256 avail:  38912 rss: 103616086016K releases:      0 last released:      0K region: 0x608000000000
+2026-11-11T14:17:33.6149450Z   10 (   160): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1510 avail:   1638 rss: 103750303744K releases:      0 last released:      0K region: 0x60a000000000
+2026-11-11T14:17:33.6150900Z   11 (   176): mapped:   3584K allocs:   19840 frees:       0 inuse:  19840 num_freed_chunks    1012 avail:  20852 rss: 103817412608K releases:      0 last released:      0K region: 0x60b000000000
+2026-11-11T14:17:33.6152180Z   12 (   192): mapped:   1024K allocs:    4352 frees:       0 inuse:   4352 num_freed_chunks    1109 avail:   5461 rss: 103884521472K releases:      0 last released:      0K region: 0x60c000000000
+2026-11-11T14:17:33.6153250Z   13 (   208): mapped:   4352K allocs:   20352 frees:       0 inuse:  20352 num_freed_chunks    1073 avail:  21425 rss: 103951630336K releases:      0 last released:      0K region: 0x60d000000000
+2026-11-11T14:17:33.6154350Z   14 (   224): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1042 avail:   1170 rss: 104018739200K releases:      0 last released:      0K region: 0x60e000000000
+2026-11-11T14:17:33.6155530Z   15 (   240): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     708 avail:   1092 rss: 104085848064K releases:      0 last released:      0K region: 0x60f000000000
+2026-11-11T14:17:33.6156640Z   16 (   256): mapped:    256K allocs:     256 frees:       0 inuse:    256 num_freed_chunks     768 avail:   1024 rss: 104152956928K releases:      0 last released:      0K region: 0x610000000000
+2026-11-11T14:17:33.6157780Z   17 (   320): mapped:    256K allocs:     512 frees:       0 inuse:    512 num_freed_chunks     307 avail:    819 rss: 104220065792K releases:      0 last released:      0K region: 0x611000000000
+2026-11-11T14:17:33.6158960Z   18 (   384): mapped:   5120K allocs:   13568 frees:       0 inuse:  13568 num_freed_chunks      85 avail:  13653 rss: 104287174656K releases:      0 last released:      0K region: 0x612000000000
+2026-11-11T14:17:33.6159990Z   19 (   448): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     201 avail:    585 rss: 104354283520K releases:      0 last released:      0K region: 0x613000000000
+2026-11-11T14:17:33.6161170Z   20 (   512): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     384 avail:    512 rss: 104421392384K releases:      0 last released:      0K region: 0x614000000000
+2026-11-11T14:17:33.6162190Z   21 (   640): mapped:    256K allocs:     306 frees:       0 inuse:    306 num_freed_chunks     103 avail:    409 rss: 104488501248K releases:      0 last released:      0K region: 0x615000000000
+2026-11-11T14:17:33.6165830Z   22 (   768): mapped:    256K allocs:     170 frees:       0 inuse:    170 num_freed_chunks     171 avail:    341 rss: 104555610112K releases:      0 last released:      0K region: 0x616000000000
+2026-11-11T14:17:33.6170020Z   23 (   896): mapped:    768K allocs:     876 frees:       0 inuse:    876 num_freed_chunks       1 avail:    877 rss: 104622718976K releases:      0 last released:      0K region: 0x617000000000
+2026-11-11T14:17:33.6173510Z   24 (  1024): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     128 avail:    256 rss: 104689827840K releases:      0 last released:      0K region: 0x618000000000
+2026-11-11T14:17:33.6176310Z   25 (  1280): mapped:    256K allocs:     204 frees:       0 inuse:    204 num_freed_chunks       0 avail:    204 rss: 104756936704K releases:      0 last released:      0K region: 0x619000000000
+2026-11-11T14:17:33.6179280Z   26 (  1536): mapped:    256K allocs:      42 frees:       0 inuse:     42 num_freed_chunks     128 avail:    170 rss: 104824045568K releases:      0 last released:      0K region: 0x61a000000000
+2026-11-11T14:17:33.6182280Z   27 (  1792): mapped:    256K allocs:      72 frees:       0 inuse:     72 num_freed_chunks      74 avail:    146 rss: 104891154432K releases:      0 last released:      0K region: 0x61b000000000
+2026-11-11T14:17:33.6185030Z   28 (  2048): mapped:    256K allocs:      64 frees:       0 inuse:     64 num_freed_chunks      64 avail:    128 rss: 104958263296K releases:      0 last released:      0K region: 0x61c000000000
+2026-11-11T14:17:33.6189550Z   29 (  2560): mapped:    256K allocs:      50 frees:       0 inuse:     50 num_freed_chunks      52 avail:    102 rss: 105025372160K releases:      0 last released:      0K region: 0x61d000000000
+2026-11-11T14:17:33.6292630Z   30 (  3072): mapped:    256K allocs:      21 frees:       0 inuse:     21 num_freed_chunks      64 avail:     85 rss: 105092481024K releases:      0 last released:      0K region: 0x61e000000000
+2026-11-11T14:17:33.6309920Z   31 (  3584): mapped:    256K allocs:      36 frees:       0 inuse:     36 num_freed_chunks      37 avail:     73 rss: 105159589888K releases:      0 last released:      0K region: 0x61f000000000
+2026-11-11T14:17:33.6311040Z   32 (  4096): mapped:    256K allocs:      16 frees:       0 inuse:     16 num_freed_chunks      48 avail:     64 rss: 105226698752K releases:      0 last released:      0K region: 0x620000000000
+2026-11-11T14:17:33.6312050Z   33 (  5120): mapped:   6912K allocs:    1356 frees:       0 inuse:   1356 num_freed_chunks      26 avail:   1382 rss: 105293807616K releases:      0 last released:      0K region: 0x621000000000
+2026-11-11T14:17:33.6313230Z   35 (  7168): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks      27 avail:     36 rss: 105428025344K releases:      0 last released:      0K region: 0x623000000000
+2026-11-11T14:17:33.6314350Z   36 (  8192): mapped:   1792K allocs:     216 frees:       0 inuse:    216 num_freed_chunks       8 avail:    224 rss: 105495134208K releases:      0 last released:      0K region: 0x624000000000
+2026-11-11T14:17:33.6315360Z   37 ( 10240): mapped:   3840K allocs:     378 frees:       0 inuse:    378 num_freed_chunks       6 avail:    384 rss: 105562243072K releases:      0 last released:      0K region: 0x625000000000
+2026-11-11T14:17:33.6316420Z   38 ( 12288): mapped:    256K allocs:      10 frees:       0 inuse:     10 num_freed_chunks      11 avail:     21 rss: 105629351936K releases:      0 last released:      0K region: 0x626000000000
+2026-11-11T14:17:33.6317500Z   39 ( 14336): mapped:    256K allocs:       8 frees:       0 inuse:      8 num_freed_chunks      10 avail:     18 rss: 105696460800K releases:      0 last released:      0K region: 0x627000000000
+2026-11-11T14:17:33.6318590Z   41 ( 20480): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks       3 avail:     12 rss: 105830678528K releases:      0 last released:      0K region: 0x629000000000
+2026-11-11T14:17:33.6319610Z   42 ( 24576): mapped:    512K allocs:      12 frees:       0 inuse:     12 num_freed_chunks       9 avail:     21 rss: 105897787392K releases:      0 last released:      0K region: 0x62a000000000
+2026-11-11T14:17:33.6321050Z   43 ( 28672): mapped:    256K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       3 avail:      9 rss: 105964896256K releases:      0 last released:      0K region: 0x62b000000000
+2026-11-11T14:17:33.6322140Z   45 ( 40960): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       3 avail:      6 rss: 106099113984K releases:      0 last released:      0K region: 0x62d000000000
+2026-11-11T14:17:33.6323150Z   47 ( 57344): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       0 avail:      4 rss: 106233331712K releases:      0 last released:      0K region: 0x62f000000000
+2026-11-11T14:17:33.6324250Z   48 ( 65536): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       3 avail:      4 rss: 106300440576K releases:      0 last released:      0K region: 0x630000000000
+2026-11-11T14:17:33.6325320Z   49 ( 81920): mapped:    512K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106367549440K releases:      0 last released:      0K region: 0x631000000000
+2026-11-11T14:17:33.6326370Z   50 ( 98304): mapped:    512K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       2 avail:      5 rss: 106434658304K releases:      0 last released:      0K region: 0x632000000000
+2026-11-11T14:17:33.6327610Z   51 (114688): mapped:    768K allocs:       5 frees:       0 inuse:      5 num_freed_chunks       1 avail:      6 rss: 106501767168K releases:      0 last released:      0K region: 0x633000000000
+2026-11-11T14:17:33.6328730Z   52 (131072): mapped:    768K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106568876032K releases:      0 last released:      0K region: 0x634000000000
+2026-11-11T14:17:33.6329740Z Stats: LargeMmapAllocator: allocated 98 times, remains 98 (23744 K) max 23 M; by size logs: 17:87; 18:4; 19:4; 20:3; 
+2026-11-11T14:17:33.6330410Z Quarantine limits: global: 256Mb; thread local: 1024Kb
+2026-11-11T14:17:33.6331090Z Global quarantine stats: batches: 214; bytes: 44930948 (user: 43177860); chunks: 197190 (capacity: 218494); 90% chunks used; 4% memory overhead
+2026-11-11T14:17:33.6958230Z CI_SORT_MERGE phase=failure level=1 runs=2 input_rows=20000 decoded=24378 read_fragments=13 read_payload_bytes=1633040 written_fragments=21 written_payload_bytes=2648976 materialized_used=2364394
+2026-11-11T14:17:33.7059810Z CI_RSS_PHASE phase=sort-merge-level-failure asan_available=1 live=10118230 heap=90652672
+2026-11-11T14:17:33.7161540Z CI_RSS_MACH phase=sort-merge-level-failure resident=529055744 internal=174931968 external=354123776 reusable=0 compressed=0 footprint=179718272
+2026-11-11T14:17:33.7264320Z CI_RSS_ASAN phase=sort-merge-level-failure free=26790720
+2026-11-11T14:17:34.0555610Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=6346468 heap=95633408
+2026-11-11T14:17:34.0657980Z CI_RSS_MACH phase=after-backend-destruction resident=535871488 internal=181125120 external=354746368 reusable=0 compressed=0 footprint=185911424
+2026-11-11T14:17:34.0759650Z CI_RSS_ASAN phase=after-backend-destruction free=27599608
+2026-11-11T14:17:34.0861870Z Stats: 55M malloced (9M for red zones) by 271184 calls
+2026-11-11T14:17:34.0906830Z Stats: 0M realloced by 0 calls
+2026-11-11T14:17:34.0907800Z Stats: 49M freed by 205059 calls
+2026-11-11T14:17:34.0908580Z Stats: 0M really freed by 0 calls
+2026-11-11T14:17:34.0909480Z Stats: 91M (91M-0M) mmaped; 380 maps, 0 unmaps
+2026-11-11T14:17:34.0912120Z   mallocs by size class: 2:21801; 3:47152; 4:57372; 6:21694; 7:21379; 8:38539; 10:37; 11:19771; 12:4277; 13:20267; 14:47; 15:288; 16:223; 17:490; 18:13497; 19:382; 20:22; 21:267; 22:162; 23:1025; 24:93; 25:167; 26:26; 27:59; 28:82; 29:41; 30:10; 31:29; 32:6; 33:1396; 35:6; 36:1; 37:383; 38:9; 39:7; 41:8; 42:12; 43:5; 45:3; 47:4; 48:1; 49:6; 50:4; 51:6; 52:6; 
+2026-11-11T14:17:34.0914490Z Stats: malloc large: 122
+2026-11-11T14:17:34.0915440Z Stats: StackDepot: 222650 ids; 44M allocated
+2026-11-11T14:17:34.0916910Z Stats: SizeClassAllocator64: 53M mapped (4608425984M rss) in 272884 allocations; remains 272884
+2026-11-11T14:17:34.0920680Z   02 (    32): mapped:    768K allocs:   21888 frees:       0 inuse:  21888 num_freed_chunks    2688 avail:  24576 rss: 103213432832K releases:      0 last released:      0K region: 0x602000000000
+2026-11-11T14:17:34.0922290Z   03 (    48): mapped:   2304K allocs:   47232 frees:       0 inuse:  47232 num_freed_chunks    1920 avail:  49152 rss: 103280541696K releases:      0 last released:      0K region: 0x603000000000
+2026-11-11T14:17:34.0923380Z   04 (    64): mapped:   3840K allocs:   57472 frees:       0 inuse:  57472 num_freed_chunks    3968 avail:  61440 rss: 103347650560K releases:      0 last released:      0K region: 0x604000000000
+2026-11-11T14:17:34.0924420Z   06 (    96): mapped:   2048K allocs:   21760 frees:       0 inuse:  21760 num_freed_chunks      85 avail:  21845 rss: 103481868288K releases:      0 last released:      0K region: 0x606000000000
+2026-11-11T14:17:34.0925570Z   07 (   112): mapped:   2560K allocs:   21504 frees:       0 inuse:  21504 num_freed_chunks    1901 avail:  23405 rss: 103548977152K releases:      0 last released:      0K region: 0x607000000000
+2026-11-11T14:17:34.0926730Z   08 (   128): mapped:   4864K allocs:   38656 frees:       0 inuse:  38656 num_freed_chunks     256 avail:  38912 rss: 103616086016K releases:      0 last released:      0K region: 0x608000000000
+2026-11-11T14:17:34.0928230Z   10 (   160): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1510 avail:   1638 rss: 103750303744K releases:      0 last released:      0K region: 0x60a000000000
+2026-11-11T14:17:34.0929270Z   11 (   176): mapped:   3584K allocs:   19840 frees:       0 inuse:  19840 num_freed_chunks    1012 avail:  20852 rss: 103817412608K releases:      0 last released:      0K region: 0x60b000000000
+2026-11-11T14:17:34.0930380Z   12 (   192): mapped:   1024K allocs:    4352 frees:       0 inuse:   4352 num_freed_chunks    1109 avail:   5461 rss: 103884521472K releases:      0 last released:      0K region: 0x60c000000000
+2026-11-11T14:17:34.0931380Z   13 (   208): mapped:   4352K allocs:   20352 frees:       0 inuse:  20352 num_freed_chunks    1073 avail:  21425 rss: 103951630336K releases:      0 last released:      0K region: 0x60d000000000
+2026-11-11T14:17:34.0932520Z   14 (   224): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks    1042 avail:   1170 rss: 104018739200K releases:      0 last released:      0K region: 0x60e000000000
+2026-11-11T14:17:34.0933640Z   15 (   240): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     708 avail:   1092 rss: 104085848064K releases:      0 last released:      0K region: 0x60f000000000
+2026-11-11T14:17:34.0934660Z   16 (   256): mapped:    256K allocs:     256 frees:       0 inuse:    256 num_freed_chunks     768 avail:   1024 rss: 104152956928K releases:      0 last released:      0K region: 0x610000000000
+2026-11-11T14:17:34.0935630Z   17 (   320): mapped:    256K allocs:     512 frees:       0 inuse:    512 num_freed_chunks     307 avail:    819 rss: 104220065792K releases:      0 last released:      0K region: 0x611000000000
+2026-11-11T14:17:34.0936820Z   18 (   384): mapped:   5120K allocs:   13568 frees:       0 inuse:  13568 num_freed_chunks      85 avail:  13653 rss: 104287174656K releases:      0 last released:      0K region: 0x612000000000
+2026-11-11T14:17:34.0938050Z   19 (   448): mapped:    256K allocs:     384 frees:       0 inuse:    384 num_freed_chunks     201 avail:    585 rss: 104354283520K releases:      0 last released:      0K region: 0x613000000000
+2026-11-11T14:17:34.0938970Z   20 (   512): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     384 avail:    512 rss: 104421392384K releases:      0 last released:      0K region: 0x614000000000
+2026-11-11T14:17:34.0940030Z   21 (   640): mapped:    256K allocs:     306 frees:       0 inuse:    306 num_freed_chunks     103 avail:    409 rss: 104488501248K releases:      0 last released:      0K region: 0x615000000000
+2026-11-11T14:17:34.0941320Z   22 (   768): mapped:    256K allocs:     170 frees:       0 inuse:    170 num_freed_chunks     171 avail:    341 rss: 104555610112K releases:      0 last released:      0K region: 0x616000000000
+2026-11-11T14:17:34.0942500Z   23 (   896): mapped:   1024K allocs:    1095 frees:       0 inuse:   1095 num_freed_chunks      75 avail:   1170 rss: 104622718976K releases:      0 last released:      0K region: 0x617000000000
+2026-11-11T14:17:34.0943700Z   24 (  1024): mapped:    256K allocs:     128 frees:       0 inuse:    128 num_freed_chunks     128 avail:    256 rss: 104689827840K releases:      0 last released:      0K region: 0x618000000000
+2026-11-11T14:17:34.0944710Z   25 (  1280): mapped:    256K allocs:     204 frees:       0 inuse:    204 num_freed_chunks       0 avail:    204 rss: 104756936704K releases:      0 last released:      0K region: 0x619000000000
+2026-11-11T14:17:34.0945810Z   26 (  1536): mapped:    256K allocs:      42 frees:       0 inuse:     42 num_freed_chunks     128 avail:    170 rss: 104824045568K releases:      0 last released:      0K region: 0x61a000000000
+2026-11-11T14:17:34.0946800Z   27 (  1792): mapped:    256K allocs:      72 frees:       0 inuse:     72 num_freed_chunks      74 avail:    146 rss: 104891154432K releases:      0 last released:      0K region: 0x61b000000000
+2026-11-11T14:17:34.0948120Z   28 (  2048): mapped:    256K allocs:      96 frees:       0 inuse:     96 num_freed_chunks      32 avail:    128 rss: 104958263296K releases:      0 last released:      0K region: 0x61c000000000
+2026-11-11T14:17:34.0969440Z   29 (  2560): mapped:    256K allocs:      50 frees:       0 inuse:     50 num_freed_chunks      52 avail:    102 rss: 105025372160K releases:      0 last released:      0K region: 0x61d000000000
+2026-11-11T14:17:34.0970570Z   30 (  3072): mapped:    256K allocs:      21 frees:       0 inuse:     21 num_freed_chunks      64 avail:     85 rss: 105092481024K releases:      0 last released:      0K region: 0x61e000000000
+2026-11-11T14:17:34.0971560Z   31 (  3584): mapped:    256K allocs:      36 frees:       0 inuse:     36 num_freed_chunks      37 avail:     73 rss: 105159589888K releases:      0 last released:      0K region: 0x61f000000000
+2026-11-11T14:17:34.0972580Z   32 (  4096): mapped:    256K allocs:      16 frees:       0 inuse:     16 num_freed_chunks      48 avail:     64 rss: 105226698752K releases:      0 last released:      0K region: 0x620000000000
+2026-11-11T14:17:34.0974130Z   33 (  5120): mapped:   7168K allocs:    1404 frees:       0 inuse:   1404 num_freed_chunks      29 avail:   1433 rss: 105293807616K releases:      0 last released:      0K region: 0x621000000000
+2026-11-11T14:17:34.0975050Z   35 (  7168): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks      27 avail:     36 rss: 105428025344K releases:      0 last released:      0K region: 0x623000000000
+2026-11-11T14:17:34.0976060Z   36 (  8192): mapped:   2048K allocs:     232 frees:       0 inuse:    232 num_freed_chunks      24 avail:    256 rss: 105495134208K releases:      0 last released:      0K region: 0x624000000000
+2026-11-11T14:17:34.0977100Z   37 ( 10240): mapped:   3840K allocs:     384 frees:       0 inuse:    384 num_freed_chunks       0 avail:    384 rss: 105562243072K releases:      0 last released:      0K region: 0x625000000000
+2026-11-11T14:17:34.0978140Z   38 ( 12288): mapped:    256K allocs:      10 frees:       0 inuse:     10 num_freed_chunks      11 avail:     21 rss: 105629351936K releases:      0 last released:      0K region: 0x626000000000
+2026-11-11T14:17:34.0979500Z   39 ( 14336): mapped:    256K allocs:       8 frees:       0 inuse:      8 num_freed_chunks      10 avail:     18 rss: 105696460800K releases:      0 last released:      0K region: 0x627000000000
+2026-11-11T14:17:34.0980920Z   41 ( 20480): mapped:    256K allocs:       9 frees:       0 inuse:      9 num_freed_chunks       3 avail:     12 rss: 105830678528K releases:      0 last released:      0K region: 0x629000000000
+2026-11-11T14:17:34.0982940Z   42 ( 24576): mapped:    512K allocs:      12 frees:       0 inuse:     12 num_freed_chunks       9 avail:     21 rss: 105897787392K releases:      0 last released:      0K region: 0x62a000000000
+2026-11-11T14:17:34.0984390Z   43 ( 28672): mapped:    256K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       3 avail:      9 rss: 105964896256K releases:      0 last released:      0K region: 0x62b000000000
+2026-11-11T14:17:34.0985840Z   45 ( 40960): mapped:    256K allocs:       3 frees:       0 inuse:      3 num_freed_chunks       3 avail:      6 rss: 106099113984K releases:      0 last released:      0K region: 0x62d000000000
+2026-11-11T14:17:34.0987040Z   47 ( 57344): mapped:    256K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       0 avail:      4 rss: 106233331712K releases:      0 last released:      0K region: 0x62f000000000
+2026-11-11T14:17:34.0988270Z   48 ( 65536): mapped:    256K allocs:       1 frees:       0 inuse:      1 num_freed_chunks       3 avail:      4 rss: 106300440576K releases:      0 last released:      0K region: 0x630000000000
+2026-11-11T14:17:34.0989200Z   49 ( 81920): mapped:    512K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106367549440K releases:      0 last released:      0K region: 0x631000000000
+2026-11-11T14:17:34.0990480Z   50 ( 98304): mapped:    512K allocs:       4 frees:       0 inuse:      4 num_freed_chunks       1 avail:      5 rss: 106434658304K releases:      0 last released:      0K region: 0x632000000000
+2026-11-11T14:17:34.0991740Z   51 (114688): mapped:    768K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106501767168K releases:      0 last released:      0K region: 0x633000000000
+2026-11-11T14:17:34.0992850Z   52 (131072): mapped:    768K allocs:       6 frees:       0 inuse:      6 num_freed_chunks       0 avail:      6 rss: 106568876032K releases:      0 last released:      0K region: 0x634000000000
+2026-11-11T14:17:34.0993970Z Stats: LargeMmapAllocator: allocated 122 times, remains 122 (27584 K) max 26 M; by size logs: 17:111; 18:4; 19:4; 20:3; 
+2026-11-11T14:17:34.0995090Z Quarantine limits: global: 256Mb; thread local: 1024Kb
+2026-11-11T14:17:34.0995920Z Global quarantine stats: batches: 226; bytes: 53432416 (user: 51581024); chunks: 204884 (capacity: 230746); 88% chunks used; 3% memory overhead
+2026-11-11T14:17:34.0998370Z 
+2026-11-11T14:17:34.1017400Z ================================================================================
+2026-11-11T14:17:34.1019240Z  ZYX Graph Database - Unit Test Suite
+2026-11-11T14:17:34.1019900Z ================================================================================
+2026-11-11T14:17:34.1020360Z  Target: 1 tests across 1 suites
+2026-11-11T14:17:34.1020570Z 
+2026-11-11T14:17:34.1020650Z 
+2026-11-11T14:17:34.1021220Z [  0% |   0/  1] X NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection FAILED
+2026-11-11T14:17:34.1022000Z               <unknown>:-1
+2026-11-11T14:17:34.1022730Z               C++ exception with description "Query exceeded memory limit of 64MB (query resident growth: 64MB, baseline RSS: 440MB, current RSS: 504MB)" thrown in the test body.
+2026-11-11T14:17:34.1023780Z 
+2026-11-11T14:17:34.1024340Z [100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 6841 ms)
+2026-11-11T14:17:34.1024860Z 
+2026-11-11T14:17:34.1025210Z ================================================================================
+2026-11-11T14:17:34.1025680Z   TESTS FAILED!
+2026-11-11T14:17:34.1025930Z 
+2026-11-11T14:17:34.1026110Z   Passed: 0
+2026-11-11T14:17:34.1026470Z   Failed: 1
+2026-11-11T14:17:34.1026870Z   Time  : 6842 ms
+2026-11-11T14:17:34.1027360Z ================================================================================
+2026-11-11T14:17:34.1027660Z 
+2026-11-11T14:17:34.2618270Z CI_FAILED_CASE {"xml": "tests.xml", "class": "RelocatableStorageBackendTest", "name": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection", "file": "/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp", "line": "45", "identity_truncated": false, "assertion_locations": [], "observations": {"kinds": ["rss_guard"], "scalars": [], "truncated": false}, "failures": 1}
+2026-11-11T14:17:34.2720610Z CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False
+2026-11-11T14:17:34.2815620Z CI_EVIDENCE directory=asan-rss-warmed-statistics exit=1 output_bytes=32727 truncated=False
+2026-11-11T14:17:34.2838140Z ##[error]Process completed with exit code 1.
+2026-11-11T14:17:34.2906490Z 

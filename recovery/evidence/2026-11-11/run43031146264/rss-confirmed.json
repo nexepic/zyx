@@ -1,0 +1,57 @@
+{
+  "run_id": 43031146264,
+  "job_id": 130558216716,
+  "case": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+  "diagnostics": {
+    "asan-cold-rss-control": {
+      "exit": 1,
+      "output_bytes": 1030,
+      "truncated": false
+    },
+    "asan-cold-rss": {
+      "exit": 1,
+      "output_bytes": 27892,
+      "truncated": false
+    },
+    "asan-rss-warmed-statistics": {
+      "exit": 1,
+      "output_bytes": 32727,
+      "truncated": false
+    },
+    "asan-gate": {
+      "exit": 0,
+      "output_bytes": 241141,
+      "truncated": false
+    }
+  },
+  "formal_passed": 711,
+  "formal_failed": 0,
+  "cold_trace": {
+    "baseline": 460881920,
+    "current": 528318464,
+    "limit": 67108864,
+    "growth": 67436544,
+    "growth_mib": 64.3125,
+    "live_before": 5722771,
+    "live_at_rejection": 10473565,
+    "live_growth": 4750794,
+    "heap_before": 40878080,
+    "heap_at_rejection": 90652672,
+    "heap_growth": 49774592
+  },
+  "warmed_attribution": {
+    "guard_baseline": 461373440,
+    "guard_current": 528842752,
+    "growth": 67469312,
+    "quarantine_before": 11596682,
+    "quarantine_at_rejection": 44930948,
+    "quarantine_growth": 33334266,
+    "quarantine_user_growth": 32515066,
+    "stack_depot_ids_before": 208014,
+    "stack_depot_ids_at_rejection": 220381,
+    "stack_depot_reported_allocation_before": "44M",
+    "stack_depot_reported_allocation_at_rejection": "44M"
+  },
+  "interpretation": "RSS failures confirmed; native root cause unresolved. Warmed diagnostic is attribution only. No-observer control failure means diagnostic observers are not necessary to trigger rejection. Counters overlap and must not be summed. Rounded StackDepot allocation is not an exact byte delta.",
+  "log_sha256": "397e9d24ef868619121628c2eef18fa104230fdaaadc629dc2f04d4bacce3a3a"
+}
