@@ -197,7 +197,11 @@ TEST_F(RelocatableMetadataStoreTest, PrivateSequentialChunkWorkspaceDoesNotAccum
   graph::storage::detail::PropertyDecodeWorkspace workspace(budget);
   const auto result = store.readRangeFromManifest(snapshot, manifest, 0U, input.size());
   EXPECT_EQ(result, input);
-  EXPECT_EQ(budget->used(), result.capacity());
+  // Include the retained STL proxy and large-allocation prefix as well as
+  // capacity. They are real owners on MSVC and must not be refunded early.
+  EXPECT_EQ(budget->used(), graph::utils::detail::standardVectorHeapBufferBytes(result));
+  EXPECT_LE(budget->used(), 163840U);
+  RecordProperty("retained_result_bytes", budget->used());
  }
  EXPECT_EQ(budget->used(), 0U);
 }

@@ -1190,15 +1190,25 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesDurableQueryMemoryPolicyToThe
 	graph::query::QueryEngine engine(backend, backend);
 	static_cast<void>(engine.execute("CALL dbms.setConfig('query.max_memory_mb', 1)"));
 
-	// range() materializes its rows during execution, after QueryGuard captures
-	// the query baseline. This verifies a durable per-query memory policy rather
-	// than rejecting the database process's preexisting resident set.
-	// Keep the successful run below the independent 64 MiB execution materialization limit.
-	const std::string query = "UNWIND range(0, 65536) AS value RETURN value";
+	// Test the durable 1 MiB policy independently of allocator reuse/RSS noise.
+    // Even the final row objects and entries exceed 1 MiB; no allocation
+    // estimator is used to choose this lower bound. 65K MSVC hash-map rows
+    // can exceed the separate 64 MiB execution limit after the policy is reset,
+    // so they do not isolate the setting this test exercises.
+    constexpr size_t rows = 8193U;
+    static_assert(rows * (sizeof(graph::query::QueryResult::Row) +
+        sizeof(graph::query::QueryResult::Row::value_type)) > 1024U * 1024U);
+	const std::string query = "UNWIND range(0, 8192) AS value RETURN value";
 	EXPECT_THROW(static_cast<void>(engine.execute(query)), graph::query::QueryMemoryExceededException);
 
 	static_cast<void>(engine.execute("CALL dbms.setConfig('query.max_memory_mb', 0)"));
-	EXPECT_NO_THROW(static_cast<void>(engine.execute(query)));
+    const auto result = engine.execute(query);
+    ASSERT_EQ(result.rowCount(), rows);
+    EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(int64_t{0}));
+    EXPECT_EQ(result.getRows().back().at("value").asPrimitive(), PropertyValue(int64_t{8192}));
+    EXPECT_GE(result.retainedResourceBytes(), rows * (sizeof(graph::query::QueryResult::Row) +
+        sizeof(graph::query::QueryResult::Row::value_type)));
+    EXPECT_LE(result.retainedResourceBytes(), 64U * 1024U * 1024U);
 	backend->close();
 }
 
