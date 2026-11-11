@@ -4,8 +4,30 @@
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 using namespace relocatable_storage_backend_test;
 namespace {
+	// Raw catalog fixtures still use the production position-independent read
+	// path. An fstream-only reader cannot borrow byte zero from the active
+	// Windows bulk lease and reports a false truncation/IO failure instead.
+	struct TokenStatisticsHandles {
+		file_handle_t write = INVALID_FILE_HANDLE, read = INVALID_FILE_HANDLE;
+		explicit TokenStatisticsHandles(const std::filesystem::path &path) {
+			write = portable_open_rw(path.string().c_str());
+			if (write == INVALID_FILE_HANDLE) throw std::runtime_error("token statistics fixture could not open writer");
+			read = portable_open(path.string().c_str(), O_RDONLY);
+			if (read == INVALID_FILE_HANDLE) {
+				static_cast<void>(portable_close_rw(write)); write = INVALID_FILE_HANDLE;
+				throw std::runtime_error("token statistics fixture could not open reader");
+			}
+		}
+		~TokenStatisticsHandles() {
+			if (read != INVALID_FILE_HANDLE) static_cast<void>(portable_close(read));
+			if (write != INVALID_FILE_HANDLE) static_cast<void>(portable_close_rw(write));
+		}
+		TokenStatisticsHandles(const TokenStatisticsHandles &) = delete;
+		TokenStatisticsHandles &operator=(const TokenStatisticsHandles &) = delete;
+	};
 	struct TokenStatisticsView {
 		std::shared_ptr<std::fstream> file;
+		TokenStatisticsHandles handles; // Outlives StorageIO and every catalog reader.
 		std::shared_ptr<StorageIO> io;
 		std::unique_ptr<RelocatableMetadataStore> metadata;
 		SlottedPagePool pool;
@@ -16,7 +38,7 @@ namespace {
 		SystemCatalog catalog;
 		explicit TokenStatisticsView(const std::filesystem::path &path) :
 			file(std::make_shared<std::fstream>(path, std::ios::in | std::ios::out | std::ios::binary)),
-			io(std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE)),
+			handles(path), io(std::make_shared<StorageIO>(file, handles.write, handles.read)),
 			metadata(RelocatableMetadataStore::open(io)), pool(io, *metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY),
 			entities(io, *metadata), labels(io, *metadata, pool), properties(pool, *metadata), pages(pool, *metadata),
 			catalog(pages, *metadata) {}
