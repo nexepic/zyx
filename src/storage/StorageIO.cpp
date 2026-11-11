@@ -482,20 +482,30 @@ namespace graph::storage {
 					portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
 #endif
 #ifdef _WIN32
+            DWORD readError = bytesRead < 0 ? ::GetLastError() : ERROR_SUCCESS;
             // The old byte-zero lease denies a second handle, including an
             // independently opened read-only backend in this process.
-            if (bytesRead < 0 && offset == 0U && ::GetLastError() == ERROR_LOCK_VIOLATION
+            if (bytesRead < 0 && offset == 0U && readError == ERROR_LOCK_VIOLATION
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
                 && !nativeReadHookForTesting
 #endif
             ) {
                 const auto borrowed = detail::WindowsLeaseReadBridge::readLockedByte(readFd_, buf, size);
                 // A lease may have ended between the failed read and lookup.
-                bytesRead = borrowed ? *borrowed : portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+                if (borrowed) { bytesRead = borrowed->bytes; readError = borrowed->error; }
+                else {
+                    bytesRead = portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+                    readError = bytesRead < 0 ? ::GetLastError() : ERROR_SUCCESS;
+                }
             }
 #endif
 			if (bytesRead < 0) {
-				throw std::runtime_error("StorageIO::readAt pread failed at offset " + std::to_string(offset));
+				#ifdef _WIN32
+                const std::error_code error(static_cast<int>(readError), std::system_category());
+#else
+                const std::error_code error(errno, std::generic_category());
+#endif
+                throw std::system_error(error, "StorageIO::readAt pread failed at offset " + std::to_string(offset));
 			}
 			return static_cast<size_t>(bytesRead);
 		}

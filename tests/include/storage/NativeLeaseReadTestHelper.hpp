@@ -10,7 +10,7 @@ inline pwrite_ssize_t readWithNativeLease(file_handle_t fd, void *buffer, size_t
 #ifdef _WIN32
     if (result < 0 && offset == 0 && ::GetLastError() == ERROR_LOCK_VIOLATION) {
         const auto borrowed = detail::WindowsLeaseReadBridge::readLockedByte(fd, buffer, bytes);
-        if (borrowed) return *borrowed;
+        if (borrowed) { ::SetLastError(borrowed->error); return borrowed->bytes; }
         result = static_cast<pwrite_ssize_t>(portable_pread(fd, buffer, bytes, offset));
     }
 #endif

@@ -76,14 +76,16 @@ public:
         static_cast<void>(::UnlockFileEx(handle, 0U, 1U, 0U, &overlapped));
         ::CloseHandle(handle);
     }
-    static std::optional<pwrite_ssize_t> readLockedByte(file_handle_t reader, void *buffer, size_t bytes) {
+    struct ReadResult { pwrite_ssize_t bytes; DWORD error; };
+    static std::optional<ReadResult> readLockedByte(file_handle_t reader, void *buffer, size_t bytes) {
         const auto id = identity(reader);
         if (!id) return std::nullopt;
         auto &state = registry();
         std::lock_guard guard(state.mutex);
         const auto owner = state.owners.find(*id);
         if (owner == state.owners.end()) return std::nullopt;
-        return static_cast<pwrite_ssize_t>(portable_pread(owner->second, buffer, bytes, 0));
+        const auto count = static_cast<pwrite_ssize_t>(portable_pread(owner->second, buffer, bytes, 0));
+        return ReadResult{count, count < 0 ? ::GetLastError() : ERROR_SUCCESS};
     }
 };
 }

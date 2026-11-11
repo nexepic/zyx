@@ -255,17 +255,29 @@ TEST_F(RelocatableProcessCrashBulkEdgeStagingTest,
 	competingOptions.data_path = databasePath;
 	competingOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
 	RelocatableStorageBackend competing(std::move(competingOptions));
+    const std::array<uint64_t, 1U> sources{1U};
+    const std::array<uint64_t, 1U> targets{2U};
+#ifdef _WIN32
+    // Windows byte-range locks are mandatory: another process cannot read
+    // the bootstrap byte while the live bulk session holds its lease.
+    try {
+        competing.open();
+        FAIL() << "competing open read through another process's mandatory lease";
+    } catch (const std::system_error &error) {
+        EXPECT_EQ(error.code(), std::error_code(ERROR_LOCK_VIOLATION, std::system_category()));
+    }
+#else
 	ASSERT_NO_THROW(competing.open());
 	std::unique_ptr<LogicalGraphTransaction> competingTransaction = competing.beginLogicalGraphTransaction(false);
 	auto *const competingBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(competingTransaction.get());
 	ASSERT_NE(competingBulk, nullptr);
-	const std::array<uint64_t, 1U> sources{1U};
-	const std::array<uint64_t, 1U> targets{2U};
 	EXPECT_THROW(static_cast<void>(competingBulk->appendPersistedBulkEdges({"COMPETING", sources, targets, {}})),
 			 LogicalGraphMutationConflict);
 	EXPECT_NO_THROW(competingTransaction->rollback());
 	competingTransaction.reset();
 	competing.close();
+
+#endif
 
 	child.terminate();
 
