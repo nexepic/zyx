@@ -1520,6 +1520,11 @@ namespace graph::storage {
 		if (!verificationSink && length > std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue ranged read exceeds addressable buffer size");
 		}
+		// The returned standard vector owns its debug iterator proxy even at zero capacity.
+        if (!bufferAdmission) {
+            if (auto *scope = property_decode::AllocationScope::current())
+                scope->admit(utils::detail::standardContainerProxyBytes());
+        }
 		std::vector<std::byte> result;
 		if (!verificationSink) {
             admit(static_cast<size_t>(length));

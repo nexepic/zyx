@@ -357,7 +357,7 @@ TEST(RelocatableBTreePageCodecTest, RestartSearchBorrowsProbeKeysButReturnsAnInd
         void reserveUnmanaged(size_t bytes) override {
             if (bytes == 257U) { ++allocations; live += bytes; }
         }
-        void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U) live -= bytes; }
+        void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U + graph::utils::detail::standardContainerProxyBytes()) live -= 257U; }
     private:
         void *do_allocate(size_t bytes, size_t alignment) override {
             return std::pmr::new_delete_resource()->allocate(bytes, alignment);
@@ -909,7 +909,7 @@ TEST(RelocatableBTreePageCodecTest, RebindingReleasesSourceKeysBeforeValidatingT
    if (live_keys == 32U) throw std::bad_alloc();
    peak_keys = std::max(peak_keys, ++live_keys);
   }
-  void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U) --live_keys; }
+  void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U + graph::utils::detail::standardContainerProxyBytes()) --live_keys; }
  private:
   void *do_allocate(size_t bytes, size_t alignment) override {
    return std::pmr::new_delete_resource()->allocate(bytes, alignment);
