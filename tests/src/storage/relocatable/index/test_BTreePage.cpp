@@ -382,6 +382,7 @@ TEST(RelocatableBTreePageCodecTest, RestartSearchBorrowsProbeKeysButReturnsAnInd
         const auto found = PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, entries.front().key);
         ASSERT_TRUE(found.has_value());
         EXPECT_EQ(memory->allocations, 1U); // Only the selected restart-group entry.
+        RecordProperty("restart_key_allocations", memory->allocations);
         EXPECT_EQ(memory->live, 257U);
         std::fill(encoded.begin(), encoded.end(), std::byte{});
         EXPECT_EQ(*found, entries.front()); // No stream borrow escapes the lookup.

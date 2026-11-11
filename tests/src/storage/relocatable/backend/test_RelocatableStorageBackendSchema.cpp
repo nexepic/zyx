@@ -1209,6 +1209,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesDurableQueryMemoryPolicyToThe
     EXPECT_GE(result.retainedResourceBytes(), rows * (sizeof(graph::query::QueryResult::Row) +
         sizeof(graph::query::QueryResult::Row::value_type)));
     EXPECT_LE(result.retainedResourceBytes(), 64U * 1024U * 1024U);
+    RecordProperty("retained_result_bytes", result.retainedResourceBytes());
 	backend->close();
 }
 

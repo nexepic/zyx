@@ -20,6 +20,11 @@ import xml.etree.ElementTree as ET
 LOG_LIMIT = 8 * 1024 * 1024
 TAIL_LIMIT = 1024 * 1024
 CONSOLE_LIMIT = 1024 * 1024
+NUMERIC_CASE_METRICS = frozenset((
+    'largest_local_budget_peak_bytes', 'escaped_result_account_bytes',
+    'retained_object_lower_bound_bytes', 'retained_result_bytes',
+    'restart_key_allocations',
+))
 
 
 class CaseJournal:
@@ -212,6 +217,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
         documents = []
         failed_cases = []
         failed_case_count = 0
+        numeric_metrics = []
+        numeric_metrics_truncated = False
         for xml in list(directory.rglob('*.xml'))[:128]:
             item = {'path': str(xml.relative_to(directory)), 'bytes': xml.stat().st_size}
             if item['bytes'] > 16*1024*1024:
@@ -221,6 +228,13 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                     tree = ET.parse(xml).getroot()
                     item.update(parse_state='complete', summary=dict(tree.attrib))
                     for case in tree.iter('testcase'):
+                        for prop in case.findall('properties/property'):
+                            name, value = prop.get('name', ''), prop.get('value', '')
+                            if name in NUMERIC_CASE_METRICS and re.fullmatch(r'\d{1,20}', value):
+                                if len(numeric_metrics) < 64:
+                                    numeric_metrics.append({'class': case.get('classname', '')[:256],
+                                        'name': case.get('name', '')[:256], 'metric': name, 'value': value})
+                                else: numeric_metrics_truncated = True
                         failures = list(case.findall('failure')) + list(case.findall('error'))
                         if not failures:
                             continue
@@ -233,8 +247,8 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                                 location = re.search(r'(?:^|[/\\])([A-Za-z0-9_.-]+\.(?:cpp|hpp|inc)):(\d+):?$', first)
                                 if location:
                                     locations.append({'file': location[1][:256], 'line': location[2][:32]})
-                            # Test identities and source locations only: do not
-                            # echo arbitrary assertion values or payloads here.
+                            # Keep identities, locations and bounded numeric evidence;
+                            # arbitrary assertion strings stay in the artifact.
                             failed_cases.append({'xml': item['path'],
                                 'class': case.get('classname', '')[:256],
                                 'name': case.get('name', '')[:256],
@@ -250,6 +264,12 @@ def run_evidence(command, directory, timeout, *, gtest=False):
         record['xml_documents'] = documents
         record['failed_case_count'] = failed_case_count
         record['failed_cases'] = failed_cases
+        record['numeric_case_metrics'] = numeric_metrics
+        record['numeric_case_metrics_truncated'] = numeric_metrics_truncated
+        for metric in numeric_metrics:
+            print('CI_CASE_METRIC ' + json.dumps(metric, ensure_ascii=True), flush=True)
+        if numeric_metrics_truncated:
+            print('CI_CASE_METRIC_TRUNCATED process_limit=64', flush=True)
         record['failed_cases_truncated'] = failed_case_count > len(failed_cases)
         record['xml_present'] = bool(documents)
         if (directory / 'process.json').is_file():

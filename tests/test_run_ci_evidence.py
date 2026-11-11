@@ -170,6 +170,33 @@ def test_failure_observation_scan_and_scalar_count_are_bounded():
     assert len(observed['scalars']) == 8 and observed['truncated']
 
 
+def test_successful_numeric_metrics_survive_console_cap_without_payloads(tmp_path):
+    xml = ('<testsuites><testsuite><testcase classname="Suite" name="Case"><properties>'
+           '<property name="escaped_result_account_bytes" value="251464"/>'
+           '<property name="retained_result_bytes" value="private-secret"/>'
+           '<property name="private-metric" value="123"/>'
+           '</properties></testcase></testsuite></testsuites>')
+    program = ("import os,sys;from pathlib import Path;sys.stdout.write('a'*(2*1024*1024));"
+               f"Path(os.environ['GTEST_OUTPUT'][4:]).write_text({xml!r})")
+    p, r = invoke(tmp_path, program)
+    assert p.returncode == 0 and r['console_truncated']
+    assert r['numeric_case_metrics'] == [{'class': 'Suite', 'name': 'Case',
+        'metric': 'escaped_result_account_bytes', 'value': '251464'}]
+    assert b'CI_CASE_METRIC ' in p.stdout and b'251464' in p.stdout
+    assert b'private-secret' not in p.stdout and b'private-metric' not in p.stdout
+
+
+def test_numeric_metric_count_is_bounded_and_reports_truncation(tmp_path):
+    xml = '<testsuites><testsuite>' + ''.join(
+        f'<testcase classname="Suite" name="Case{i}"><properties><property name="retained_result_bytes" value="{i}"/></properties></testcase>'
+        for i in range(80)) + '</testsuite></testsuites>'
+    p, r = invoke(tmp_path, "import os;from pathlib import Path;"
+                  f"Path(os.environ['GTEST_OUTPUT'][4:]).write_text({xml!r})")
+    assert p.returncode == 0 and len(r['numeric_case_metrics']) == 64
+    assert r['numeric_case_metrics_truncated']
+    assert b'CI_CASE_METRIC_TRUNCATED process_limit=64' in p.stdout
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='POSIX signal identity')
 def test_crash_keeps_raw_signal(tmp_path):
     p, r = invoke(tmp_path, "import os,signal;os.kill(os.getpid(),signal.SIGTERM)")

@@ -102,8 +102,35 @@ WINDOWS = [
     'NativeReadSessionTokenBudgetTest.EveryOwnedPropertyInsertionFailurePreservesItsOldEntryAndRefunds',
     'NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry',
     'NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect',
+    'LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches',
+    'LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget',
+    'RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose',
+    'RelocatableStorageBackendTest.WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache',
+    'RelocatableStorageBackendTest.StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry',
+    'RelocatableStorageBackendTest.StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry',
+    'RelocatableStorageBackendTest.StreamedBulkEdgeRebasesAcrossTransactionsWithMaintenanceEnabled',
+    'RelocatableStorageBackendTest.StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService',
+    'RelocatableStorageBackendTest.TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges',
+    'RelocatableStorageBackendTest.TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure',
+    'RelocatableStorageBackendSchemaTest.AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard',
+    'BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots',
+    'RelocatableMetadataStoreTest.PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers',
+    'RelocatableProcessCrashBulkEdgeStagingTest.LiveCrossProcessBulkSessionRejectsAnotherSessionAndCrashReleasesTheLeaseForRetry',
+    'RelocatableBTreePageCodecTest.RebindingReleasesSourceKeysBeforeValidatingTheDestination',
+    'HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool',
+    'HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes',
+    'HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation',
+    'HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges',
+    'HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce',
+    'HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact',
+    'PropertySubblockMapMutationTest.RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes',
+    'ProcedurePayloadAdmissionTest.PreparedHashBucketsAreChargedOnceAndNeverShrunkByInsertion',
+    'ProcedurePayloadAdmissionTest.MissingHashCapacityStillRequiresAdmissionBeforeRehash',
+    'ProcedurePayloadAdmissionTest.ReusingBucketsDoesNotBypassNodeAdmissionAndAllowsRetryAfterRefund',
+    'RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner',
 ]
 MACOS = [
+    'LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads',
     'LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure',
     'RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose',
     'HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact',
@@ -135,6 +162,8 @@ def main():
     cases = {'windows': WINDOWS, 'macos': MACOS, 'asan': ASAN}[args.platform]
     runner = Path(__file__).with_name('run_test_process.py')
     failures = []
+    child_env = os.environ.copy()
+    child_env.setdefault('ZYX_CI_CASE_TRACE', '1')
     for case in cases:
         print(f'CI_BUDGET_CASE BEGIN {case}', flush=True)
         listing = subprocess.run([str(args.binary), '--gtest_list_tests', '--gtest_filter=' + case],
@@ -151,7 +180,7 @@ def main():
             command = [sys.executable, str(Path(__file__).with_name('run_ci_evidence.py')),
                        '--name', 'budget-' + token, '--timeout', timeout, '--gtest', '--',
                        str(args.binary), '--gtest_filter=' + case]
-        status = subprocess.call(command)
+        status = subprocess.call(command, env=child_env)
         print(f'CI_BUDGET_CASE END {case} exit={status}', flush=True)
         if status:
             failures.append(case)
