@@ -673,10 +673,21 @@ namespace graph::storage {
 		// Binary-search restart keys, then decode only the selected restart group.
 		const auto restartKeyAt = [&stream, &offsets, includesValue](size_t candidate) {
 			size_t offset = offsets[candidate];
-			auto entry = decodeOne(stream, offset, {}, true, includesValue);
-			// restartOffsets() proved this offset lies inside the stream; decodeOne()
-			// consequently either returns the restart entry or throws a codec error.
-			return std::move(entry->key);
+			// Restart keys have no predecessor. Compare their authenticated stream
+			// bytes directly, instead of allocating an owning key (and an MSVC
+			// iterator proxy) for each binary-search probe. The input span outlives
+			// this synchronous search; only the final returned entry owns a key.
+			const auto shared = readVarint(stream, offset);
+			const auto suffix = readVarint(stream, offset);
+			if (shared != 0U || suffix > stream.size() - offset) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+					"relocatable packed B+Tree restart key exceeds the stream");
+			}
+			const auto result = stream.subspan(offset, static_cast<size_t>(suffix));
+			offset += static_cast<size_t>(suffix);
+			// Preserve validation of the encoded value, even for a skipped probe.
+			if (includesValue) static_cast<void>(readVarint(stream, offset));
+			return result;
 		};
 		size_t firstGreater = 0U;
 		size_t upper = offsets.size();

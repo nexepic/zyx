@@ -350,6 +350,45 @@ TEST(RelocatableBTreePageCodecTest, FindsKeysAcrossPackedRestartGroups) {
 	EXPECT_FALSE(PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, missing).has_value());
 }
 
+TEST(RelocatableBTreePageCodecTest, RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner) {
+    class Keys final : public graph::utils::UnmanagedAllocationResource {
+    public:
+        size_t allocations = 0U, live = 0U;
+        void reserveUnmanaged(size_t bytes) override {
+            if (bytes == 257U) { ++allocations; live += bytes; }
+        }
+        void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U) live -= bytes; }
+    private:
+        void *do_allocate(size_t bytes, size_t alignment) override {
+            return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+        }
+        void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+            std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    };
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 33U; ++i) {
+        BTreePageEntry entry;
+        entry.key.resize(257U, std::byte{'k'});
+        entry.key.back() = static_cast<std::byte>(i);
+        entry.value_or_child = i + 1U;
+        entries.push_back(std::move(entry));
+    }
+    auto encoded = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries);
+    auto memory = std::make_shared<Keys>();
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        const auto found = PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, entries.front().key);
+        ASSERT_TRUE(found.has_value());
+        EXPECT_EQ(memory->allocations, 1U); // Only the selected restart-group entry.
+        EXPECT_EQ(memory->live, 257U);
+        std::fill(encoded.begin(), encoded.end(), std::byte{});
+        EXPECT_EQ(*found, entries.front()); // No stream borrow escapes the lookup.
+    }
+    EXPECT_EQ(memory->live, 0U);
+}
+
 TEST(RelocatableBTreePageCodecTest, RoundTripsAnOrderedKeyThatExtendsItsPredecessor) {
 	const std::vector<BTreePageEntry> entries = {
 			{{std::byte{'p'}}, 1U},
