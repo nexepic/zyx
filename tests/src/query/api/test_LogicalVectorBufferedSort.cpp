@@ -20,6 +20,7 @@
 #include "graph/query/logical/operators/LogicalSort.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
 #include "graph/query/logical/operators/LogicalSkip.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::query {
 	TEST(LogicalVectorBufferedSortTest, PermutesMultipleCyclesAndFixedRowsWithStableTiesAndAlignedPayloads) {
@@ -88,19 +89,53 @@ namespace graph::query {
 		LogicalReadExecutionOptions options;
 		options.bounds.maximum_materialized_bytes = 256U * 1024U;
 		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
-		const auto execute = [&] {
+		const auto execute = [&](const QueryContext &context = QueryContext{}) {
 			return runtime.execute(project, options.bounds, options.maximum_vector_mapping_entries,
 			options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 			options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 			options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-			options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+			options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
 		};
-		// Final two-column publication also shares the source allowance.
-		EXPECT_THROW(static_cast<void>(execute()), std::runtime_error);
+		// A 256 KiB rejection is not a portable contract: consumed-source
+		// compaction can make this query fit on libc++. Reject below the
+		// independent final object-storage lower bound instead. Keep the fixed
+		// 512 KiB efficiency ceiling below; neither boundary follows a measured
+		// peak or changes when an implementation starts retaining more memory.
+        constexpr size_t resultLowerBound = 300U *
+            (sizeof(QueryResult::Row) + 2U * sizeof(QueryResult::Row::value_type));
+        using namespace execution::detail;
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8U * 1024U * 1024U));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
+        options.bounds.maximum_materialized_bytes = resultLowerBound - 1U;
+        auto denied = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, resultLowerBound - 1U);
+        QueryContext deniedContext; deniedContext.resource_account = denied;
+		EXPECT_THROW(static_cast<void>(execute(deniedContext)), std::runtime_error);
+        EXPECT_EQ(denied->used(), 0U);
 		backend->state->property_column_ids.clear();
 		options.bounds.maximum_materialized_bytes = 512U * 1024U;
-		const auto result = execute();
+        size_t peak = 0U;
+        debug::PerfTrace::ScopedObserver observe(&peak,
+            [](void *p, std::string_view key, int64_t bytes, bool duration) noexcept {
+                if (!duration && key == "logical_plan.materialized_budget_peak_bytes" && bytes >= 0)
+                    *static_cast<size_t *>(p) = std::max(*static_cast<size_t *>(p), static_cast<size_t>(bytes));
+            });
+		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 512U * 1024U);
+        QueryContext context; context.resource_account = account;
+        {
+        const auto result = execute(context);
 		ASSERT_EQ(result.rowCount(), 300U);
+        EXPECT_GT(peak, 0U);
+        EXPECT_LE(peak, 512U * 1024U);
+        // This lower bound uses the actual retained object count/capacity,
+        // independently of the materialization estimator under test.
+        size_t retainedLowerBound = result.getRows().capacity() * sizeof(QueryResult::Row);
+        for (const auto &row : result.getRows()) retainedLowerBound += row.size() * sizeof(QueryResult::Row::value_type);
+        EXPECT_LE(retainedLowerBound, 512U * 1024U);
+        EXPECT_GE(account->used(), retainedLowerBound);
+        EXPECT_LE(account->used(), 512U * 1024U);
+        RecordProperty("largest_local_budget_peak_bytes", peak);
+        RecordProperty("escaped_result_account_bytes", account->used());
+        RecordProperty("retained_object_lower_bound_bytes", retainedLowerBound);
         // Known-cardinality publication must not retain a 512-slot geometric
         // buffer or repeatedly relocate the public hash-map rows.
         EXPECT_LE(result.getRows().capacity(), 300U);
@@ -113,6 +148,8 @@ namespace graph::query {
 		EXPECT_EQ(backend->state->property_column_ids[1].size(), 44U);
 		EXPECT_EQ(backend->state->node_batch_reads, 0U);
 		EXPECT_EQ(backend->state->node_point_reads, 0U);
+        }
+        EXPECT_EQ(account->used(), 0U);
 	}
 
 	TEST(LogicalVectorBufferedSortTest, CompactsProjectedFilterAndDistinctRowsWithoutMisaligningOwnedPayloads) {
