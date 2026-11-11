@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "graph/utils/AdmissionPmrContainers.hpp"
 #include "graph/utils/StandardContainerHeapBytes.hpp"
+#include "graph/core/PropertyTypes.hpp"
 #include <memory_resource>
 #include <unordered_map>
 #include <unordered_set>
