@@ -1,0 +1,10 @@
+{
+  "tested_source_commit": "a49d05eccde39c3f9b465e9c7301a5d96abbdf00",
+  "exit_code": 0,
+  "tests": 235,
+  "passed": 235,
+  "failed": 0,
+  "duration_ms": 278855,
+  "xml_present": false,
+  "evidence": "targeted-console.log.gz and targeted-shards.json; one-process launcher did not emit XML"
+}
