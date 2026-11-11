@@ -246,6 +246,19 @@ jobs:
               --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
         shell: bash
 
+      - name: Compare sanitizer allocator statistics with a warmed reporting baseline
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_RSS_BASELINE_STATS: '1'
+        run: |
+          # Attribution only: reporting may alter residency before QueryGuard starts.
+          # The two cold controls above and the formal gates remain unchanged.
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-rss-warmed-statistics --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+        shell: bash
+
       # Independent processes reset diagnostic caps for every known failed case.
       # These additional runs never replace the complete sanitizer gate.
       - name: Diagnose sanitizer admission cases

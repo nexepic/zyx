@@ -57,8 +57,10 @@ static inline void traceResidentMemory(const char *phase, [[maybe_unused]] bool 
 #ifdef ZYX_RSS_ASAN_COUNTERS
     if(__sanitizer_get_free_bytes)std::fprintf(stderr,"CI_RSS_ASAN phase=%s free=%zu\n",phase,__sanitizer_get_free_bytes());
     else std::fputs("CI_RSS_ASAN free_counter_unavailable\n",stderr);
-    // Do not warm the large statistics/reporting path before the RSS baseline.
-    if(printAllocatorStats && std::strcmp(phase,"before-query")!=0) {
+    // Keep cold diagnostics unprimed. A separate attribution run explicitly
+    // captures matching pre-query stats and must be identified as warmed.
+    if(printAllocatorStats && (std::strcmp(phase,"before-query")!=0 ||
+        std::getenv("ZYX_CI_RSS_BASELINE_STATS"))) {
         if(__asan_print_accumulated_stats)__asan_print_accumulated_stats();
         else std::fputs("CI_RSS_ASAN statistics_unavailable\n",stderr);
     }
