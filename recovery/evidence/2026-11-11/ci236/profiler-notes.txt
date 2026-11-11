@@ -1,0 +1,11 @@
+Temporary profiling only; not compiled into the database or test target.
+
+Sources: allocation-count.c (whole process), query-allocation-sample.c (query interval), query-profiler-test.patch.gz (decompress; hooks around one engine.execute).
+Linux/glibc only: uses private __libc_* interposition, not a portable product API.
+Compile interposer with: cc -O2 -fPIC -shared query-allocation-sample.c -ldl -o query-allocation-sample.so
+Apply the patch to a COPY of tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp. Compile that copy with the corresponding buildDir compile command, replacing input and output only. In the zyx_test_suite link command replace only that test object. Other objects/core remain current-source. The sampled executable must not be used for full acceptance/coverage results.
+Run the copied test with LD_PRELOAD=<absolute interposer> and --gtest_filter=RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection, using a distinct LLVM_PROFILE_FILE outside the acceptance run directory.
+
+No source query text or row payload is captured by the sampler. Site output contains executable-relative offsets and aggregate request statistics. Symbols are resolved using addr2line -f -C on the corresponding sampled executable. The profiler adds fixed storage, unwinding and CPU overhead; timings are not a benchmark. Samples are cumulative requests, not live heap or resident size. APIs not interposed are not counted. A no-overflow table does not make sampled byte totals full-attribution statistics.
+
+The pure-SLL temporary control changes only parser prediction mode for this valid query; it is NOT a validated parser mode or fallback implementation. It produced exactly the same request count and cumulative bytes, so it was rejected and is not included in product sources.

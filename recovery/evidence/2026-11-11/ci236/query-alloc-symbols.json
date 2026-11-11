@@ -1,0 +1,594 @@
+[
+  {
+    "hits": 247,
+    "sampled_requested": 8337,
+    "symbols": [
+      "std::__new_allocator<char>::allocate(unsigned long, void const*)",
+      "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_S_allocate(std::allocator<char>&, unsigned long)",
+      "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_create(unsigned long&, unsigned long)",
+      "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)",
+      "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned long, unsigned long, char const*, unsigned long)",
+      "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::assign(char const*, unsigned long)",
+      "std::enable_if<__and_<std::is_convertible<std::basic_string_view<char, std::char_traits<char> > const&, std::basic_string_view<char, std::char_traits<char> > >, std::__not_<std::is_convertible<std::basic_string_view<char, std::char_traits<char> > const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const*> >, std::__not_<std::is_convertible<std::basic_string_view<char, std::char_traits<char> > const&, char const*> > >::value, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&>::type std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::assign<std::basic_string_view<char, std::char_traits<char> > >(std::basic_string_view<char, std::char_traits<char> > const&)",
+      "graph::debug::ScopedPerfTimer::ScopedPerfTimer(std::basic_string_view<char, std::char_traits<char> >)",
+      "graph::utils::calculateCrc(void const*, unsigned long)",
+      "graph::storage::(anonymous namespace)::calculateCrc(std::span<std::byte const, 18446744073709551615ul>)",
+      "graph::storage::CatalogRadixPageCodec::decode(std::span<std::byte const, 18446744073709551615ul>)",
+      "graph::storage::MetadataPageFile::readMetadataRadixUnresolved(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const",
+      "graph::storage::MetadataPageFile::readMetadataRadixUnresolvedView(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const"
+    ]
+  },
+  {
+    "hits": 188,
+    "sampled_requested": 12032,
+    "symbols": [
+      "std::__new_allocator<graph::PropertyValue>::allocate(unsigned long, void const*)",
+      "std::_Vector_base<graph::PropertyValue, std::allocator<graph::PropertyValue> >::_M_allocate(unsigned long)",
+      "std::vector<graph::PropertyValue, std::allocator<graph::PropertyValue> >::reserve(unsigned long)",
+      "graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_10::operator()(graph::query::execution::detail::QuerySpillRowCodec::Record&, graph::query::execution::MaterializedByteReservation&) const",
+      "graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const",
+      "bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation), graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_5>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)>::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_55::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56::operator()(graph::query::execution::LogicalPlanReadRow) const",
+      "bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)",
+      "std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)"
+    ]
+  },
+  {
+    "hits": 170,
+    "sampled_requested": 24480,
+    "symbols": [
+      "boost::container::new_allocator<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true> >::allocate(unsigned long)",
+      "boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>* boost::container::dtl::node_alloc_holder<boost::container::new_allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> > >, boost::intrusive::rbtree_impl<boost::intrusive::bhtraits<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::intrusive::rbtree_node_traits<void*, true>, (boost::intrusive::link_mode_type)0, boost::intrusive::dft_tag, 3u>, boost::container::dtl::key_of_node<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::container::dtl::select1st<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const> >, std::less<void>, unsigned long, true, void> >::create_node<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef>&&)",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const",
+      "bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17&, graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation>(graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation), graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_17>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)>::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const",
+      "graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7::operator()(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation) const",
+      "bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7&, graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7&, graph::query::execution::detail::QuerySpillRowCodec::Record&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7&, graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7&, graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation>(graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7&, graph::query::execution::detail::QuerySpillRowCodec::Record&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::_Function_handler<bool (graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation), graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)::$_7>::_M_invoke(std::_Any_data const&, graph::query::execution::detail::QuerySpillRowCodec::Record&&, graph::query::execution::MaterializedByteReservation&&)",
+      "std::function<bool (graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)>::operator()(graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation) const",
+      "graph::query::execution::detail::ExternalQuerySort::finish(std::function<bool (graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)> const&)"
+    ]
+  },
+  {
+    "hits": 143,
+    "sampled_requested": 20592,
+    "symbols": [
+      "boost::container::new_allocator<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true> >::allocate(unsigned long)",
+      "boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>* boost::container::dtl::node_alloc_holder<boost::container::new_allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> > >, boost::intrusive::rbtree_impl<boost::intrusive::bhtraits<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::intrusive::rbtree_node_traits<void*, true>, (boost::intrusive::link_mode_type)0, boost::intrusive::dft_tag, 3u>, boost::container::dtl::key_of_node<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::container::dtl::select1st<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const> >, std::less<void>, unsigned long, true, void> >::create_node<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef>&&)",
+      "graph::query::execution::detail::QuerySpillRowCodec::decodeInto(std::span<std::byte const, 18446744073709551615ul>, unsigned long, graph::query::execution::detail::QuerySpillRowCodec::Record&)",
+      "graph::query::execution::detail::ExternalQuerySort::Cursor::advance()",
+      "graph::query::execution::detail::ExternalQuerySort::finish(std::function<bool (graph::query::execution::detail::QuerySpillRowCodec::Record, graph::query::execution::MaterializedByteReservation)> const&)",
+      "graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)",
+      "graph::query::execution::(anonymous namespace)::executeOnSnapshot(graph::storage::LogicalGraphReadSnapshot&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)",
+      "graph::query::execution::(anonymous namespace)::executeInternal(graph::storage::LogicalGraphReadBackend const&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)",
+      "graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0::operator()(std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const&, unsigned long) const",
+      "graph::query::execution::LogicalPlanReadRuntimeStats graph::query::execution::(anonymous namespace)::executeWithBatchedOutputMaterialization<graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_1>(graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0&&, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_1&&, bool, bool, graph::query::QueryContext const*)"
+    ]
+  },
+  {
+    "hits": 125,
+    "sampled_requested": 18000,
+    "symbols": [
+      "boost::container::new_allocator<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true> >::allocate(unsigned long)",
+      "boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>* boost::container::dtl::node_alloc_holder<boost::container::new_allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> > >, boost::intrusive::rbtree_impl<boost::intrusive::bhtraits<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::intrusive::rbtree_node_traits<void*, true>, (boost::intrusive::link_mode_type)0, boost::intrusive::dft_tag, 3u>, boost::container::dtl::key_of_node<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::container::dtl::select1st<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const> >, std::less<void>, unsigned long, true, void> >::create_node<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::PropertyValue>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::PropertyValue&&)",
+      "boost::intrusive::tree_iterator<boost::intrusive::bhtraits<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::intrusive::rbtree_node_traits<void*, true>, (boost::intrusive::link_mode_type)0, boost::intrusive::dft_tag, 3u>, false> boost::container::dtl::tree<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, int, std::less<void>, void, void>::priv_insert_or_assign_commit<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::PropertyValue>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::PropertyValue&&, boost::intrusive::insert_commit_data_t<boost::intrusive::compact_rbtree_node<void*>*>&)",
+      "std::pair<boost::container::dtl::iterator_from_iiterator<boost::intrusive::tree_iterator<boost::intrusive::bhtraits<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::intrusive::rbtree_node_traits<void*, true>, (boost::intrusive::link_mode_type)0, boost::intrusive::dft_tag, 3u>, false>, false>, bool> boost::container::dtl::tree<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, int, std::less<void>, void, void>::insert_or_assign<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::PropertyValue>(boost::container::dtl::iterator_from_iiterator<boost::intrusive::tree_iterator<boost::intrusive::bhtraits<boost::container::base_node<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::variant<graph::PropertyValue, graph::storage::LogicalGraphNode, graph::storage::LogicalGraphEdge, graph::storage::EntityRef> >, boost::container::dtl::intrusive_tree_hook<void*, (boost::container::tree_type_enum)0, true>, true>, boost::intrusive::rbtree_node_traits<void*, true>, (boost::intrusive::link_mode_type)0, boost::intrusive::dft_tag, 3u>, false>, true>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::PropertyValue&&)",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_55::operator()(graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation) const",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56::operator()(graph::query::execution::LogicalPlanReadRow) const",
+      "bool std::__invoke_impl<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(std::__invoke_other, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)",
+      "std::enable_if<is_invocable_r_v<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>, bool>::type std::__invoke_r<bool, graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow>(graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56&, graph::query::execution::LogicalPlanReadRow&&)",
+      "std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow), graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)::$_56>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&&)",
+      "std::function<bool (graph::query::execution::LogicalPlanReadRow)>::operator()(graph::query::execution::LogicalPlanReadRow) const",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)",
+      "graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)",
+      "graph::query::execution::(anonymous namespace)::visitSpillableSort(graph::query::logical::LogicalSort const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::storage::LogicalQueryScratchProvider&)"
+    ]
+  },
+  {
+    "hits": 74,
+    "sampled_requested": 5920,
+    "symbols": [
+      "antlr4::atn::ParserATNSimulator::getEpsilonTarget(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::Transition const*, bool, bool, bool, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::computeStartState(antlr4::atn::ATNState*, antlr4::RuleContext*, bool)",
+      "antlr4::atn::ParserATNSimulator::adaptivePredict(antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "CypherParser::statement()"
+    ]
+  },
+  {
+    "hits": 57,
+    "sampled_requested": 1368,
+    "symbols": [
+      "std::__new_allocator<std::__detail::_Hash_node<std::pair<unsigned long const, graph::storage::SegmentState>, false> >::allocate(unsigned long, void const*)",
+      "std::__detail::_Hash_node<std::pair<unsigned long const, graph::storage::SegmentState>, false>* std::__detail::_Hashtable_alloc<std::allocator<std::__detail::_Hash_node<std::pair<unsigned long const, graph::storage::SegmentState>, false> > >::_M_allocate_node<unsigned long, graph::storage::SegmentState&>(unsigned long&&, graph::storage::SegmentState&)",
+      "std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::SegmentState>, std::allocator<std::pair<unsigned long const, graph::storage::SegmentState> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_Scoped_node::_Scoped_node<unsigned long, graph::storage::SegmentState&>(std::__detail::_Hashtable_alloc<std::allocator<std::__detail::_Hash_node<std::pair<unsigned long const, graph::storage::SegmentState>, false> > >*, unsigned long&&, graph::storage::SegmentState&)",
+      "std::pair<std::__detail::_Node_iterator<std::pair<unsigned long const, graph::storage::SegmentState>, false, false>, bool> std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::SegmentState>, std::allocator<std::pair<unsigned long const, graph::storage::SegmentState> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_emplace<unsigned long, graph::storage::SegmentState&>(std::integral_constant<bool, true>, unsigned long&&, graph::storage::SegmentState&)",
+      "std::pair<std::__detail::_Node_iterator<std::pair<unsigned long const, graph::storage::SegmentState>, false, false>, bool> std::_Hashtable<unsigned long, std::pair<unsigned long const, graph::storage::SegmentState>, std::allocator<std::pair<unsigned long const, graph::storage::SegmentState> >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::emplace<unsigned long, graph::storage::SegmentState&>(unsigned long&&, graph::storage::SegmentState&)",
+      "std::pair<std::__detail::_Node_iterator<std::pair<unsigned long const, graph::storage::SegmentState>, false, false>, bool> std::unordered_map<unsigned long, graph::storage::SegmentState, std::hash<unsigned long>, std::equal_to<unsigned long>, std::allocator<std::pair<unsigned long const, graph::storage::SegmentState> > >::emplace<unsigned long, graph::storage::SegmentState&>(unsigned long&&, graph::storage::SegmentState&)",
+      "graph::storage::(anonymous namespace)::validatePage(graph::storage::CatalogLeafPage const&)::$_0::operator()(graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::SegmentState) const",
+      "graph::storage::(anonymous namespace)::validatePage(graph::storage::CatalogLeafPage const&)",
+      "graph::storage::CatalogLeafPageCodec::encode(graph::storage::CatalogLeafPage const&)",
+      "graph::storage::MetadataPageFile::writeCatalogLeaf(graph::storage::PhysicalPageRef, graph::storage::CatalogLeafPage const&) const",
+      "graph::storage::(anonymous namespace)::writeLeaf(graph::storage::(anonymous namespace)::MutableLeaf&, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPageFile&, graph::storage::MetadataWriteBatch&)",
+      "graph::storage::(anonymous namespace)::writeNode(graph::storage::(anonymous namespace)::MutableNode&, graph::storage::CatalogRadixPageKind, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPageFile&, graph::storage::MetadataWriteBatch&)",
+      "graph::storage::CatalogTree::prepareUpsert(graph::storage::MetadataWriteBatch&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)"
+    ]
+  },
+  {
+    "hits": 22,
+    "sampled_requested": 1408,
+    "symbols": [
+      "antlr4::atn::SingletonPredictionContext::create(std::shared_ptr<antlr4::atn::PredictionContext const>, unsigned long)",
+      "antlr4::atn::ParserATNSimulator::ruleTransition(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::RuleTransition const*)",
+      "antlr4::atn::ParserATNSimulator::getEpsilonTarget(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::Transition const*, bool, bool, bool, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::computeStartState(antlr4::atn::ATNState*, antlr4::RuleContext*, bool)",
+      "antlr4::atn::ParserATNSimulator::adaptivePredict(antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "CypherParser::singleQuery()",
+      "CypherParser::regularQuery()",
+      "CypherParser::query()",
+      "CypherParser::statement()"
+    ]
+  },
+  {
+    "hits": 15,
+    "sampled_requested": 1200,
+    "symbols": [
+      "antlr4::atn::ParserATNSimulator::ruleTransition(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::RuleTransition const*)",
+      "antlr4::atn::ParserATNSimulator::getEpsilonTarget(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::Transition const*, bool, bool, bool, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  },
+  {
+    "hits": 15,
+    "sampled_requested": 4200,
+    "symbols": [
+      "std::__detail::_Map_base<antlr4::atn::ATNConfig*, std::pair<antlr4::atn::ATNConfig* const, antlrcpp::BitSet>, std::allocator<std::pair<antlr4::atn::ATNConfig* const, antlrcpp::BitSet> >, std::__detail::_Select1st, AltAndContextConfigComparer, AltAndContextConfigHasher, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, false, true>, true>::operator[](antlr4::atn::ATNConfig*&&)",
+      "antlr4::atn::PredictionModeClass::getConflictingAltSubsets(antlr4::atn::ATNConfigSet*)",
+      "antlr4::atn::PredictionModeClass::hasSLLConflictTerminatingPrediction(antlr4::atn::PredictionMode, antlr4::atn::ATNConfigSet*)",
+      "antlr4::atn::ParserATNSimulator::computeTargetState(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, unsigned long)",
+      "antlr4::atn::ParserATNSimulator::execATN(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "antlr4::atn::ParserATNSimulator::adaptivePredict(antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "CypherParser::singleQuery()",
+      "CypherParser::regularQuery()",
+      "CypherParser::query()",
+      "CypherParser::statement()",
+      "CypherParser::cypher()",
+      "graph::parser::cypher::CypherParserImpl::parseToLogical(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) const",
+      "graph::query::QueryEngine::buildPlanWithAccount(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::Language, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)"
+    ]
+  },
+  {
+    "hits": 14,
+    "sampled_requested": 336,
+    "symbols": [
+      "antlr4::atn::ATNConfigSet::add(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::computeStartState(antlr4::atn::ATNState*, antlr4::RuleContext*, bool)",
+      "antlr4::atn::ParserATNSimulator::adaptivePredict(antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "CypherParser::singleQuery()",
+      "CypherParser::regularQuery()"
+    ]
+  },
+  {
+    "hits": 12,
+    "sampled_requested": 480,
+    "symbols": [
+      "std::__detail::_Map_base<std::shared_ptr<antlr4::atn::PredictionContext const>, std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> >, std::allocator<std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> > >, std::__detail::_Select1st, std::equal_to<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::hash<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>, true>::operator[](std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::getCachedContextImpl(std::shared_ptr<antlr4::atn::PredictionContext const> const&, antlr4::atn::PredictionContextCache&, std::unordered_map<std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, std::hash<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::equal_to<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::allocator<std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> > > >&)",
+      "antlr4::atn::PredictionContext::getCachedContext(std::shared_ptr<antlr4::atn::PredictionContext const> const&, antlr4::atn::PredictionContextCache&)",
+      "antlr4::atn::ATNSimulator::getCachedContext(std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "antlr4::atn::ATNConfigSet::optimizeConfigs(antlr4::atn::ATNSimulator*)",
+      "antlr4::atn::ParserATNSimulator::addDFAState(antlr4::dfa::DFA&, antlr4::dfa::DFAState*)",
+      "antlr4::atn::ParserATNSimulator::addDFAEdge(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, long, antlr4::dfa::DFAState*)",
+      "antlr4::atn::ParserATNSimulator::computeTargetState(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, unsigned long)",
+      "antlr4::atn::ParserATNSimulator::execATN(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "antlr4::atn::ParserATNSimulator::adaptivePredict(antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "CypherParser::singleQuery()",
+      "CypherParser::regularQuery()",
+      "CypherParser::query()"
+    ]
+  },
+  {
+    "hits": 11,
+    "sampled_requested": 1144,
+    "symbols": [
+      "std::_Hashtable<std::shared_ptr<antlr4::atn::PredictionContext const>, std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> >, std::allocator<std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> > >, std::__detail::_Select1st, std::equal_to<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::hash<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_M_insert_unique_node(unsigned long, unsigned long, std::__detail::_Hash_node<std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> >, false>*, unsigned long)",
+      "std::__detail::_Map_base<std::shared_ptr<antlr4::atn::PredictionContext const>, std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> >, std::allocator<std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> > >, std::__detail::_Select1st, std::equal_to<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::hash<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>, true>::operator[](std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::getCachedContextImpl(std::shared_ptr<antlr4::atn::PredictionContext const> const&, antlr4::atn::PredictionContextCache&, std::unordered_map<std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, std::hash<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::equal_to<std::shared_ptr<antlr4::atn::PredictionContext const> >, std::allocator<std::pair<std::shared_ptr<antlr4::atn::PredictionContext const> const, std::shared_ptr<antlr4::atn::PredictionContext const> > > >&)",
+      "antlr4::atn::PredictionContext::getCachedContext(std::shared_ptr<antlr4::atn::PredictionContext const> const&, antlr4::atn::PredictionContextCache&)",
+      "antlr4::atn::ATNSimulator::getCachedContext(std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "antlr4::atn::ATNConfigSet::optimizeConfigs(antlr4::atn::ATNSimulator*)",
+      "antlr4::atn::ParserATNSimulator::addDFAState(antlr4::dfa::DFA&, antlr4::dfa::DFAState*)",
+      "antlr4::atn::ParserATNSimulator::addDFAEdge(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, long, antlr4::dfa::DFAState*)",
+      "antlr4::atn::ParserATNSimulator::computeTargetState(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, unsigned long)",
+      "antlr4::atn::ParserATNSimulator::execATN(antlr4::dfa::DFA&, antlr4::dfa::DFAState*, antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "antlr4::atn::ParserATNSimulator::adaptivePredict(antlr4::TokenStream*, unsigned long, antlr4::ParserRuleContext*)",
+      "CypherParser::singleQuery()",
+      "CypherParser::regularQuery()"
+    ]
+  },
+  {
+    "hits": 10,
+    "sampled_requested": 320,
+    "symbols": [
+      "(anonymous namespace)::edgeFactory(antlr4::atn::ATN const&, antlr4::atn::TransitionType, unsigned long, unsigned long, unsigned long, unsigned long, std::vector<antlr4::misc::IntervalSet, std::allocator<antlr4::misc::IntervalSet> > const&)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherparserParserInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())",
+      "void antlr4::internal::call_once<void (&)()>(antlr4::internal::OnceFlag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 9,
+    "sampled_requested": 88,
+    "symbols": [
+      "antlr4::atn::ATNState::addTransition(unsigned long, std::unique_ptr<antlr4::atn::Transition const, std::default_delete<antlr4::atn::Transition const> >)",
+      "antlr4::atn::ATNState::addTransition(std::unique_ptr<antlr4::atn::Transition const, std::default_delete<antlr4::atn::Transition const> >)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherparserParserInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 8,
+    "sampled_requested": 640,
+    "symbols": [
+      "antlr4::atn::ParserATNSimulator::getEpsilonTarget(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::Transition const*, bool, bool, bool, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closureCheckingStopState(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closureCheckingStopState(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closureCheckingStopState(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  },
+  {
+    "hits": 7,
+    "sampled_requested": 56,
+    "symbols": [
+      "antlr4::atn::ATNState::addTransition(unsigned long, std::unique_ptr<antlr4::atn::Transition const, std::default_delete<antlr4::atn::Transition const> >)",
+      "antlr4::atn::ATNState::addTransition(std::unique_ptr<antlr4::atn::Transition const, std::default_delete<antlr4::atn::Transition const> >)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherlexerLexerInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 5,
+    "sampled_requested": 480,
+    "symbols": [
+      "(anonymous namespace)::stateFactory(antlr4::atn::ATNStateType, unsigned long)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherlexerLexerInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())",
+      "void antlr4::internal::call_once<void (&)()>(antlr4::internal::OnceFlag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 5,
+    "sampled_requested": 440,
+    "symbols": [
+      "antlr4::atn::PredictionContext::merge(std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::PredictionContext::mergeSingletons(std::shared_ptr<antlr4::atn::SingletonPredictionContext const>, std::shared_ptr<antlr4::atn::SingletonPredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::PredictionContext::merge(std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ATNConfigSet::add(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 320,
+    "symbols": [
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "antlr4::atn::LL1Analyzer::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, antlr4::RuleContext*) const",
+      "antlr4::atn::LL1Analyzer::LOOK(antlr4::atn::ATNState*, antlr4::RuleContext*) const",
+      "antlr4::atn::ATN::nextTokens(antlr4::atn::ATNState*) const",
+      "antlr4::DefaultErrorStrategy::sync(antlr4::Parser*)",
+      "CypherParser::singleQuery()",
+      "CypherParser::regularQuery()"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 96,
+    "symbols": [
+      "antlr4::atn::PredictionContext::mergeArrays(std::shared_ptr<antlr4::atn::ArrayPredictionContext const>, std::shared_ptr<antlr4::atn::ArrayPredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::PredictionContext::merge(std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ATNConfigSet::add(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 128,
+    "symbols": [
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherparserParserInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())",
+      "void antlr4::internal::call_once<void (&)()>(antlr4::internal::OnceFlag&, void (&)())",
+      "CypherParser::initialize()"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 384,
+    "symbols": [
+      "(anonymous namespace)::stateFactory(antlr4::atn::ATNStateType, unsigned long)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherparserParserInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())",
+      "void antlr4::internal::call_once<void (&)()>(antlr4::internal::OnceFlag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 128,
+    "symbols": [
+      "std::pair<std::__detail::_Node_iterator<std::shared_ptr<antlr4::atn::ATNConfig>, true, true>, bool> std::_Hashtable<std::shared_ptr<antlr4::atn::ATNConfig>, std::shared_ptr<antlr4::atn::ATNConfig>, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> >, std::__detail::_Identity, antlr4::atn::ATNConfig::Comparer, antlr4::atn::ATNConfig::Hasher, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, true, true> >::_M_insert_unique<std::shared_ptr<antlr4::atn::ATNConfig> const&, std::shared_ptr<antlr4::atn::ATNConfig> const&, std::__detail::_AllocNode<std::allocator<std::__detail::_Hash_node<std::shared_ptr<antlr4::atn::ATNConfig>, true> > > >(std::shared_ptr<antlr4::atn::ATNConfig> const&, std::shared_ptr<antlr4::atn::ATNConfig> const&, std::__detail::_AllocNode<std::allocator<std::__detail::_Hash_node<std::shared_ptr<antlr4::atn::ATNConfig>, true> > > const&) [clone .isra.0]",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 192,
+    "symbols": [
+      "(anonymous namespace)::edgeFactory(antlr4::atn::ATN const&, antlr4::atn::TransitionType, unsigned long, unsigned long, unsigned long, unsigned long, std::vector<antlr4::misc::IntervalSet, std::allocator<antlr4::misc::IntervalSet> > const&)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherlexerLexerInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())",
+      "void antlr4::internal::call_once<void (&)()>(antlr4::internal::OnceFlag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 192,
+    "symbols": [
+      "std::__new_allocator<std::_Rb_tree_node<std::pair<unsigned long, unsigned char> > >::allocate(unsigned long, void const*)",
+      "std::_Rb_tree<std::pair<unsigned long, unsigned char>, std::pair<unsigned long, unsigned char>, std::_Identity<std::pair<unsigned long, unsigned char> >, std::less<std::pair<unsigned long, unsigned char> >, std::allocator<std::pair<unsigned long, unsigned char> > >::_M_get_node()",
+      "std::_Rb_tree_node<std::pair<unsigned long, unsigned char> >* std::_Rb_tree<std::pair<unsigned long, unsigned char>, std::pair<unsigned long, unsigned char>, std::_Identity<std::pair<unsigned long, unsigned char> >, std::less<std::pair<unsigned long, unsigned char> >, std::allocator<std::pair<unsigned long, unsigned char> > >::_M_create_node<unsigned long, unsigned char const&>(unsigned long&&, unsigned char const&)",
+      "std::_Rb_tree<std::pair<unsigned long, unsigned char>, std::pair<unsigned long, unsigned char>, std::_Identity<std::pair<unsigned long, unsigned char> >, std::less<std::pair<unsigned long, unsigned char> >, std::allocator<std::pair<unsigned long, unsigned char> > >::_Auto_node::_Auto_node<unsigned long, unsigned char const&>(std::_Rb_tree<std::pair<unsigned long, unsigned char>, std::pair<unsigned long, unsigned char>, std::_Identity<std::pair<unsigned long, unsigned char> >, std::less<std::pair<unsigned long, unsigned char> >, std::allocator<std::pair<unsigned long, unsigned char> > >&, unsigned long&&, unsigned char const&)",
+      "std::pair<std::_Rb_tree_iterator<std::pair<unsigned long, unsigned char> >, bool> std::_Rb_tree<std::pair<unsigned long, unsigned char>, std::pair<unsigned long, unsigned char>, std::_Identity<std::pair<unsigned long, unsigned char> >, std::less<std::pair<unsigned long, unsigned char> >, std::allocator<std::pair<unsigned long, unsigned char> > >::_M_emplace_unique<unsigned long, unsigned char const&>(unsigned long&&, unsigned char const&)",
+      "std::pair<std::_Rb_tree_const_iterator<std::pair<unsigned long, unsigned char> >, bool> std::set<std::pair<unsigned long, unsigned char>, std::less<std::pair<unsigned long, unsigned char> >, std::allocator<std::pair<unsigned long, unsigned char> > >::emplace<unsigned long, unsigned char const&>(unsigned long&&, unsigned char const&)",
+      "graph::storage::MetadataWriteBatch::allocatePage()",
+      "graph::storage::(anonymous namespace)::writeLeaf(graph::storage::(anonymous namespace)::MutableLeaf&, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPageFile&, graph::storage::MetadataWriteBatch&)",
+      "graph::storage::(anonymous namespace)::writeNode(graph::storage::(anonymous namespace)::MutableNode&, graph::storage::CatalogRadixPageKind, graph::storage::StrongUInt64<graph::storage::GenerationTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, graph::storage::MetadataPageFile&, graph::storage::MetadataWriteBatch&)",
+      "graph::storage::CatalogTree::prepareUpsert(graph::storage::MetadataWriteBatch&, std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)",
+      "graph::storage::MetadataReservationCoordinator::prepare(graph::storage::MetadataWriteBatch&, graph::storage::CatalogReservationPublicationRequest const&) const",
+      "graph::storage::RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalogImpl(std::span<graph::storage::CatalogSlotReservationRequest const, 18446744073709551615ul>, std::span<graph::storage::PageLocation const, 18446744073709551615ul>, std::span<graph::storage::ExtentLocation const, 18446744073709551615ul>, std::span<graph::storage::EntityPageLocation const, 18446744073709551615ul>, std::span<graph::storage::EntityPageLocation const, 18446744073709551615ul>, std::span<graph::storage::VectorManifestLocation const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)> const*, std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>, std::span<graph::storage::PageLocation, 18446744073709551615ul>)> const*, std::span<graph::storage::PageLocation, 18446744073709551615ul>, graph::storage::MetadataPublishOptions const&)",
+      "graph::storage::RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalog(std::span<graph::storage::CatalogSlotReservationRequest const, 18446744073709551615ul>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::PhysicalSlotIdTag>, graph::storage::StrongUInt64<graph::storage::LogSequenceNumberTag>, std::function<void (std::span<graph::storage::CatalogEntry const, 18446744073709551615ul>)> const&, graph::storage::MetadataPublishOptions const&)"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 256,
+    "symbols": [
+      "antlr4::atn::SingletonPredictionContext::create(std::shared_ptr<antlr4::atn::PredictionContext const>, unsigned long)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "antlr4::atn::LL1Analyzer::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, antlr4::RuleContext*) const",
+      "antlr4::atn::LL1Analyzer::LOOK(antlr4::atn::ATNState*, antlr4::RuleContext*) const",
+      "antlr4::atn::ATN::nextTokens(antlr4::atn::ATNState*) const",
+      "antlr4::DefaultErrorStrategy::sync(antlr4::Parser*)",
+      "CypherParser::statement()",
+      "CypherParser::cypher()",
+      "graph::parser::cypher::CypherParserImpl::parseToLogical(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) const"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 320,
+    "symbols": [
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)"
+    ]
+  },
+  {
+    "hits": 4,
+    "sampled_requested": 128,
+    "symbols": [
+      "antlr4::misc::IntervalSet::IntervalSet(antlr4::misc::IntervalSet const&)",
+      "(anonymous namespace)::edgeFactory(antlr4::atn::ATN const&, antlr4::atn::TransitionType, unsigned long, unsigned long, unsigned long, unsigned long, std::vector<antlr4::misc::IntervalSet, std::allocator<antlr4::misc::IntervalSet> > const&)",
+      "antlr4::atn::ATNDeserializer::deserialize(antlr4::atn::SerializedATNView) const",
+      "(anonymous namespace)::cypherlexerLexerInitialize()",
+      "void std::__invoke_impl<void, void (&)()>(std::__invoke_other, void (&)())",
+      "std::__invoke_result<void (&)()>::type std::__invoke<void (&)()>(void (&)())",
+      "std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::operator()() const",
+      "std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (&)()>(std::once_flag&, void (&)())::{lambda()#1}>(void (&)())::{lambda()#1}::__invoke()",
+      "__gthread_once(int*, void (*)())",
+      "void std::call_once<void (&)()>(std::once_flag&, void (&)())"
+    ]
+  },
+  {
+    "hits": 3,
+    "sampled_requested": 240,
+    "symbols": [
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)",
+      "(anonymous namespace)::LL1AnalyzerImpl::LOOK(antlr4::atn::ATNState*, antlr4::atn::ATNState*, std::shared_ptr<antlr4::atn::PredictionContext const> const&)"
+    ]
+  },
+  {
+    "hits": 3,
+    "sampled_requested": 24,
+    "symbols": [
+      "antlr4::atn::ArrayPredictionContext::ArrayPredictionContext(antlr4::atn::SingletonPredictionContext const&)",
+      "antlr4::atn::PredictionContext::merge(std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ATNConfigSet::add(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  },
+  {
+    "hits": 3,
+    "sampled_requested": 192,
+    "symbols": [
+      "antlr4::atn::PredictionContextMergeCache::put(std::shared_ptr<antlr4::atn::PredictionContext const> const&, std::shared_ptr<antlr4::atn::PredictionContext const> const&, std::shared_ptr<antlr4::atn::PredictionContext const>)",
+      "antlr4::atn::PredictionContext::mergeSingletons(std::shared_ptr<antlr4::atn::SingletonPredictionContext const>, std::shared_ptr<antlr4::atn::SingletonPredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::PredictionContext::merge(std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::PredictionContext::mergeSingletons(std::shared_ptr<antlr4::atn::SingletonPredictionContext const>, std::shared_ptr<antlr4::atn::SingletonPredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::PredictionContext::merge(std::shared_ptr<antlr4::atn::PredictionContext const>, std::shared_ptr<antlr4::atn::PredictionContext const>, bool, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ATNConfigSet::add(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::PredictionContextMergeCache*)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)",
+      "antlr4::atn::ParserATNSimulator::closure_(std::shared_ptr<antlr4::atn::ATNConfig> const&, antlr4::atn::ATNConfigSet*, std::unordered_set<std::shared_ptr<antlr4::atn::ATNConfig>, antlr4::atn::ATNConfig::Hasher, antlr4::atn::ATNConfig::Comparer, std::allocator<std::shared_ptr<antlr4::atn::ATNConfig> > >&, bool, bool, int, bool)"
+    ]
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "scope": "Linux glibc, non-ASan isolated query; fixed 2048-entry sample table, one in 128 requests. Cumulative requested bytes and counts, NOT live memory, RSS, Apple allocator behavior or query resource ownership. No API/model semantics changed by sampler.",
+  "query": {
+    "request_calls": 166996,
+    "requested_bytes": 47440411,
+    "table_overflow": 0
+  },
+  "sll_control": {
+    "request_calls": 166996,
+    "requested_bytes": 47440411,
+    "table_overflow": 0,
+    "production_change": false
+  },
+  "notes": [
+    "Pure SLL has no observed allocation improvement; it is not included in production.",
+    "Initial 128-entry table overflowed; only 2048-entry no-overflow sample is used.",
+    "BTree old/new whole-process AB/BA had identical allocation counts; no claim that restart-key borrowing fixes RSS.",
+    "Request stacks include row/map/spill and enabled duration-timer labels, as well as ANTLR. Sampling is not full live-allocation attribution."
+  ]
+}

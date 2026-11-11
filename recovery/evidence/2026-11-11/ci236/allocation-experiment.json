@@ -1,0 +1,49 @@
+{
+  "scope": "Whole isolated Linux non-ASan test process, malloc/calloc/realloc request calls; not query-only or RSS attribution. Only BTree production TU differs.",
+  "samples": [
+    {
+      "round": 0,
+      "mode": "before",
+      "exit": 0,
+      "counts": [
+        256201,
+        56363414,
+        259785,
+        0
+      ]
+    },
+    {
+      "round": 0,
+      "mode": "after",
+      "exit": 0,
+      "counts": [
+        256201,
+        56363466,
+        259785,
+        0
+      ]
+    },
+    {
+      "round": 1,
+      "mode": "after",
+      "exit": 0,
+      "counts": [
+        256201,
+        56363466,
+        259785,
+        0
+      ]
+    },
+    {
+      "round": 1,
+      "mode": "before",
+      "exit": 0,
+      "counts": [
+        256201,
+        56363414,
+        259785,
+        0
+      ]
+    }
+  ]
+}

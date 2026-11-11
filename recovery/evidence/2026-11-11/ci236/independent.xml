@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="9" failures="0" disabled="0" errors="0" time="2.173" timestamp="2026-11-11T04:48:10.184" name="AllTests">
+  <testsuite name="ProcedurePayloadAdmissionTest" tests="3" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-11T04:48:10.185">
+    <testcase name="PreparedHashBucketsAreChargedOnceAndNeverShrunkByInsertion" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ProcedurePayloadAdmission.cpp" line="5" status="run" result="completed" time="0." timestamp="2026-11-11T04:48:10.185" classname="ProcedurePayloadAdmissionTest" />
+    <testcase name="MissingHashCapacityStillRequiresAdmissionBeforeRehash" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ProcedurePayloadAdmission.cpp" line="34" status="run" result="completed" time="0." timestamp="2026-11-11T04:48:10.185" classname="ProcedurePayloadAdmissionTest" />
+    <testcase name="ReusingBucketsDoesNotBypassNodeAdmissionAndAllowsRetryAfterRefund" file="/workspace/zyx-ci-reconstructed/tests/src/query/execution/test_ProcedurePayloadAdmission.cpp" line="51" status="run" result="completed" time="0." timestamp="2026-11-11T04:48:10.185" classname="ProcedurePayloadAdmissionTest" />
+  </testsuite>
+  <testsuite name="RelocatableStorageBackendTest" tests="4" failures="0" disabled="0" skipped="0" errors="0" time="1.89" timestamp="2026-11-11T04:48:10.185">
+    <testcase name="StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_BulkEdgeCorruption.cpp" line="217" status="run" result="completed" time="0.505" timestamp="2026-11-11T04:48:10.185" classname="RelocatableStorageBackendTest" />
+    <testcase name="StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_BulkEdgeCorruption.cpp" line="321" status="run" result="completed" time="0.459" timestamp="2026-11-11T04:48:10.691" classname="RelocatableStorageBackendTest" />
+    <testcase name="StreamedBulkEdgeRebasesAcrossTransactionsWithMaintenanceEnabled" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdge.cpp" line="841" status="run" result="completed" time="0.469" timestamp="2026-11-11T04:48:11.151" classname="RelocatableStorageBackendTest" />
+    <testcase name="StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_StreamedBulkEdge.cpp" line="1035" status="run" result="completed" time="0.454" timestamp="2026-11-11T04:48:11.621" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+  <testsuite name="RelocatableStorageBackendSchemaTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.246" timestamp="2026-11-11T04:48:12.076">
+    <testcase name="AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp" line="1187" status="run" result="completed" time="0.246" timestamp="2026-11-11T04:48:12.076" classname="RelocatableStorageBackendSchemaTest" />
+  </testsuite>
+  <testsuite name="RelocatableMetadataStoreTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.031" timestamp="2026-11-11T04:48:12.324">
+    <testcase name="PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers" file="/workspace/zyx-ci-reconstructed/tests/src/storage/relocatable/property/test_LargeValueStore_RangeReuse.cpp" line="187" status="run" result="completed" time="0.031" timestamp="2026-11-11T04:48:12.324" classname="RelocatableMetadataStoreTest">
+      <properties>
+        <property name="retained_result_bytes" value="100000"/>
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>

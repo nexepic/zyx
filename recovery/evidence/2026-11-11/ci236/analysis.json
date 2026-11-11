@@ -1,0 +1,1674 @@
+{
+  "run_id": 42949545430,
+  "sha": "e1747897c36542ceba6547a4f796a0c17a2a26a2",
+  "jobs": [
+    {
+      "id": 130290367108,
+      "name": "Native storage ASan+UBSan (macOS)",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Install Project Dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Configure and build native storage ASan+UBSan tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Record sanitizer test discovery",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Diagnose concurrent publication with ASan+UBSan",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Diagnose cold RSS without budget or RSS observers",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Diagnose RSS-guarded spill with default ASan+UBSan checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Diagnose sanitizer admission cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Run native storage ASan+UBSan gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 17
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35
+        }
+      ]
+    },
+    {
+      "id": 130290367220,
+      "name": "Build on macos-latest",
+      "status": "completed",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Diagnose fresh string allocations (macOS)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Install System Deps (Linux)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8
+        },
+        {
+          "name": "Install LLVM (Windows)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Windows)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Unix)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Configure and Build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Diagnose Windows fresh string allocations",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 13
+        },
+        {
+          "name": "Prepare Stage 10 evidence directory",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Record Stage 10 endurance configuration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Record enabled test discovery",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Diagnose Windows ingest failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 17
+        },
+        {
+          "name": "Diagnose Windows plan cache failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 18
+        },
+        {
+          "name": "Diagnose Windows read session termination",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19
+        },
+        {
+          "name": "Diagnose Windows projection binding allocation failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 20
+        },
+        {
+          "name": "Diagnose Windows slot allocation failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 21
+        },
+        {
+          "name": "Diagnose Windows materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 22
+        },
+        {
+          "name": "Diagnose Windows final shape duration",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 23
+        },
+        {
+          "name": "Diagnose macOS materialization budgets",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Locate the macOS conversion quota rejection",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        },
+        {
+          "name": "Run Unit Tests",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 26
+        },
+        {
+          "name": "Run storage stress gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Run native format lifecycle gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 28
+        },
+        {
+          "name": "Repeat Stage 10 recovery and maintenance gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 29
+        },
+        {
+          "name": "Run requested Stage 10 endurance gate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 30
+        },
+        {
+          "name": "Run native storage calibration smoke pipeline",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 31
+        },
+        {
+          "name": "Run reviewed P0 bulk-Edge calibration candidate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 32
+        },
+        {
+          "name": "Collect native storage evidence manifest",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 33
+        },
+        {
+          "name": "Upload Stage 10 evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Generate Coverage Report",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 35
+        },
+        {
+          "name": "Upload to Codecov",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 36
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 39
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 77
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 78
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 79
+        }
+      ]
+    },
+    {
+      "id": 130290367324,
+      "name": "Build on ubuntu-latest",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Diagnose fresh string allocations (macOS)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7
+        },
+        {
+          "name": "Install System Deps (Linux)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Install LLVM (Windows)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Windows)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Unix)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Configure and Build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Diagnose Windows fresh string allocations",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 13
+        },
+        {
+          "name": "Prepare Stage 10 evidence directory",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Record Stage 10 endurance configuration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Record enabled test discovery",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Diagnose Windows ingest failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 17
+        },
+        {
+          "name": "Diagnose Windows plan cache failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 18
+        },
+        {
+          "name": "Diagnose Windows read session termination",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19
+        },
+        {
+          "name": "Diagnose Windows projection binding allocation failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 20
+        },
+        {
+          "name": "Diagnose Windows slot allocation failures",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 21
+        },
+        {
+          "name": "Diagnose Windows materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 22
+        },
+        {
+          "name": "Diagnose Windows final shape duration",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 23
+        },
+        {
+          "name": "Diagnose macOS materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 24
+        },
+        {
+          "name": "Locate the macOS conversion quota rejection",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 25
+        },
+        {
+          "name": "Run Unit Tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26
+        },
+        {
+          "name": "Run storage stress gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Run native format lifecycle gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28
+        },
+        {
+          "name": "Repeat Stage 10 recovery and maintenance gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29
+        },
+        {
+          "name": "Run requested Stage 10 endurance gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 30
+        },
+        {
+          "name": "Run native storage calibration smoke pipeline",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31
+        },
+        {
+          "name": "Run reviewed P0 bulk-Edge calibration candidate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 32
+        },
+        {
+          "name": "Collect native storage evidence manifest",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33
+        },
+        {
+          "name": "Upload Stage 10 evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Generate Coverage Report",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35
+        },
+        {
+          "name": "Upload to Codecov",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 36
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 39
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 77
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 78
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 79
+        }
+      ]
+    },
+    {
+      "id": 130290367357,
+      "name": "Native storage TSan (macOS)",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Install Project Dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Configure and build native storage TSan tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run native storage TSan concurrency gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 12
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25
+        }
+      ]
+    },
+    {
+      "id": 130290367433,
+      "name": "Build on windows-latest",
+      "status": "completed",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Prepare diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Set up Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Install Common Tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Validate diagnostic supervisor failure paths",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Diagnose fresh string allocations (macOS)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7
+        },
+        {
+          "name": "Install System Deps (Linux)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8
+        },
+        {
+          "name": "Install LLVM (Windows)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Windows)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Install Project Dependencies (Conan) (Unix)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 11
+        },
+        {
+          "name": "Configure and Build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Diagnose Windows fresh string allocations",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Prepare Stage 10 evidence directory",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Record Stage 10 endurance configuration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        },
+        {
+          "name": "Record enabled test discovery",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16
+        },
+        {
+          "name": "Diagnose Windows ingest failures",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Diagnose Windows plan cache failures",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Diagnose Windows read session termination",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Diagnose Windows projection binding allocation failures",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Diagnose Windows slot allocation failures",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        },
+        {
+          "name": "Diagnose Windows materialization budgets",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22
+        },
+        {
+          "name": "Diagnose Windows final shape duration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23
+        },
+        {
+          "name": "Diagnose macOS materialization budgets",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 24
+        },
+        {
+          "name": "Locate the macOS conversion quota rejection",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 25
+        },
+        {
+          "name": "Run Unit Tests",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 26
+        },
+        {
+          "name": "Run storage stress gates",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27
+        },
+        {
+          "name": "Run native format lifecycle gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 28
+        },
+        {
+          "name": "Repeat Stage 10 recovery and maintenance gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 29
+        },
+        {
+          "name": "Run requested Stage 10 endurance gate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 30
+        },
+        {
+          "name": "Run native storage calibration smoke pipeline",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 31
+        },
+        {
+          "name": "Run reviewed P0 bulk-Edge calibration candidate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 32
+        },
+        {
+          "name": "Collect native storage evidence manifest",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 33
+        },
+        {
+          "name": "Upload Stage 10 evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34
+        },
+        {
+          "name": "Generate Coverage Report",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 35
+        },
+        {
+          "name": "Upload to Codecov",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 36
+        },
+        {
+          "name": "Collect diagnostic build metadata",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37
+        },
+        {
+          "name": "Upload diagnostic evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38
+        },
+        {
+          "name": "Require diagnostic supervisor checks",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 39
+        },
+        {
+          "name": "Post Set up Python",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 77
+        },
+        {
+          "name": "Post Checkout Code",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 78
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 79
+        }
+      ]
+    }
+  ],
+  "windows": {
+    "ordinary_passed": 11023,
+    "ordinary_failed": 47,
+    "stress_passed": 6,
+    "budget_diagnostics_total": 86,
+    "budget_diagnostics_failed": 25,
+    "unique_failures": [
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+        "line": "578",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+        "line": "1592",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1622"
+          },
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1627"
+          },
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1622"
+          },
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1627"
+          }
+        ],
+        "failures": 12
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+        "line": "28",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "88"
+          },
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "91"
+          },
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "92"
+          },
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "97"
+          }
+        ],
+        "failures": 5
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "416",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "495",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "MetadataSemanticErrorsPrecedeJointPressureSplitting",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "1445",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "1533",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "CompleteSemanticErrorsPrecedeJointPressureRetry",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "1050",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "62",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "80"
+          },
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "81"
+          },
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "83"
+          },
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "80"
+          }
+        ],
+        "failures": 9
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1228",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1298",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1332",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1391",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1451",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_Batching.cpp",
+        "line": "1756",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+        "line": "671",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+        "line": "747",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "497",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "631",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "702",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "766",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+            "line": "779"
+          },
+          {
+            "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+            "line": "780"
+          }
+        ],
+        "failures": 3
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanUnionRuntimeTest",
+        "name": "SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnionRuntime.cpp",
+        "line": "364",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanReadRuntimeTest",
+        "name": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+        "line": "1824",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanReadRuntimeTest",
+        "name": "SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+        "line": "1904",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalPlanVarLengthRuntimeTest",
+        "name": "ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp",
+        "line": "544",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LogicalPlanVarLengthRuntime.cpp",
+            "line": "561"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "CountsRetainedQueryResultRowsAcrossProcedureBatches",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "74",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_TopK.cpp",
+        "line": "376",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+        "line": "209",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+        "line": "1650",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "StreamedBulkEdgeRebasedManifestCountDivergenceRetainsExternalGraphAndAllowsRetry",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableStorageBackend_BulkEdgeCorruption.cpp",
+        "line": "217",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "StreamedBulkEdgeRebasedRunOrderingDivergenceRetainsExternalGraphAndAllowsRetry",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableStorageBackend_BulkEdgeCorruption.cpp",
+        "line": "325",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "StreamedBulkEdgeRebasesAcrossHandlesWithMaintenanceEnabled",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableStorageBackend_StreamedBulkEdge.cpp",
+        "line": "841",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "StreamedBulkEdgeRebasePreservesAnOperatorPausedMaintenanceService",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableStorageBackend_StreamedBulkEdge.cpp",
+        "line": "1035",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "TokenCountsFollowStreamedImportForKnownNewAndUntypedEdges",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableTokenCardinality.cpp",
+        "line": "118",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "TokenCountsRebaseStreamedWritesAndRollBackCatalogFailure",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableTokenCardinality.cpp",
+        "line": "174",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableStorageBackendSchemaTest",
+        "name": "AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableStorageBackendSchema.cpp",
+        "line": "1187",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_RelocatableStorageBackendSchema.cpp",
+            "line": "1201"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "BuildingScanMembershipTest",
+        "name": "MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\entity\\test_BuildingScanMembership.cpp",
+        "line": "783",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_BuildingScanMembership.cpp",
+            "line": "802"
+          },
+          {
+            "file": "test_BuildingScanMembership.cpp",
+            "line": "802"
+          },
+          {
+            "file": "test_BuildingScanMembership.cpp",
+            "line": "802"
+          },
+          {
+            "file": "test_BuildingScanMembership.cpp",
+            "line": "802"
+          }
+        ],
+        "failures": 12
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableMetadataStoreTest",
+        "name": "PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_LargeValueStore_RangeReuse.cpp",
+        "line": "187",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LargeValueStore_RangeReuse.cpp",
+            "line": "200"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableProcessCrashBulkEdgeStagingTest",
+        "name": "LiveCrossProcessBulkSessionRejectsAnotherSessionAndCrashReleasesTheLeaseForRetry",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\format\\test_RelocatableProcessCrash_BulkEdgeStaging.cpp",
+        "line": "240",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_RelocatableProcessCrash_BulkEdgeStaging.cpp",
+            "line": "258"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "RelocatableBTreePageCodecTest",
+        "name": "RebindingReleasesSourceKeysBeforeValidatingTheDestination",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\index\\test_BTreePage.cpp",
+        "line": "863",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "HybridPropertyPoolTailReuseTest",
+        "name": "ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyPoolTailReuse.cpp",
+        "line": "8",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyPoolTailReuse.cpp",
+            "line": "28"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "HybridPropertyReadContextTest",
+        "name": "FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+        "line": "1071",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1116"
+          },
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1116"
+          }
+        ],
+        "failures": 2
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "HybridPropertyReadContextTest",
+        "name": "FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+        "line": "1123",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1146"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "HybridPropertyReadContextTest",
+        "name": "MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+        "line": "1404",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1464"
+          },
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1467"
+          },
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1478"
+          },
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1484"
+          }
+        ],
+        "failures": 7
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "HybridPropertyReadContextTest",
+        "name": "WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyReadContext.cpp",
+        "line": "1552",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyReadContext.cpp",
+            "line": "1605"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "HybridPropertyMatureShapeCostsTest",
+        "name": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp",
+        "line": "127",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyShapeCosts.cpp",
+            "line": "172"
+          }
+        ],
+        "failures": 1
+      },
+      {
+        "xml": "xml\\shard-0.xml",
+        "class": "PropertySubblockMapMutationTest",
+        "name": "RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_PropertySubblockMapMutation.cpp",
+        "line": "74",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "failures": 1
+      }
+    ],
+    "pressure_snapshots": [
+      "2026-11-11T03:24:12.7971589Z CI_PROCEDURE_PRESSURE owner=41609643164554 phase=source_result_overlap source_rows=300 source_capacity=300 source_row_width=208 source_backing=62400 external_source=4800 source_retained=151824 result_rows=57 result_capacity=300 result_row_width=80 result_and_output=106335 requested_backing=0 maximum=262144 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=80712 relocation_valid=1\r",
+      "2026-11-11T03:24:14.0310065Z CI_PROCEDURE_PRESSURE owner=21320217657350 phase=source_result_overlap source_rows=1 source_capacity=1 source_row_width=208 source_backing=208 external_source=16 source_retained=608 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=9528 requested_backing=0 maximum=8192 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1\r",
+      "2026-11-11T03:24:15.1156741Z CI_PROCEDURE_PRESSURE owner=34084860461059 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=0 source_retained=11854 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=7351 requested_backing=0 maximum=16384 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1\r",
+      "2026-11-11T03:24:17.3396156Z CI_PROCEDURE_PRESSURE owner=9620726743050 phase=source_result_overlap source_rows=1 source_capacity=1 source_row_width=208 source_backing=208 external_source=16 source_retained=640 result_rows=0 result_capacity=1 result_row_width=80 result_and_output=4984 requested_backing=0 maximum=5000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1\r",
+      "2026-11-11T03:24:18.5610333Z CI_PROCEDURE_PRESSURE owner=31387620999427 phase=source_result_overlap source_rows=192 source_capacity=192 source_row_width=208 source_backing=39936 external_source=4800 source_retained=73272 result_rows=146 result_capacity=256 result_row_width=80 result_and_output=184095 requested_backing=0 maximum=262144 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=162352 relocation_valid=1\r",
+      "2026-11-11T03:24:19.7207013Z CI_PROCEDURE_PRESSURE owner=13297218748431 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=7944 result_rows=0 result_capacity=0 result_row_width=80 result_and_output=4472 requested_backing=0 maximum=7500 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1\r",
+      "2026-11-11T03:24:21.7297273Z CI_PROCEDURE_PRESSURE owner=34205119545353 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2424 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5576 requested_backing=0 maximum=8000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2616 relocation_valid=1\r",
+      "2026-11-11T03:24:24.0176128Z CI_PROCEDURE_PRESSURE owner=29308856827923 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=5584 result_rows=0 result_capacity=3 result_row_width=80 result_and_output=3584 requested_backing=0 maximum=9000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1\r",
+      "2026-11-11T03:24:28.4825089Z CI_PROCEDURE_PRESSURE owner=35407710388236 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=4448 result_rows=0 result_capacity=3 result_row_width=80 result_and_output=3480 requested_backing=0 maximum=6619 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1\r",
+      "2026-11-11T03:24:29.5433976Z CI_PROCEDURE_PRESSURE owner=28621662060552 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2736 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5624 requested_backing=0 maximum=8192 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=2640 relocation_valid=1\r"
+    ],
+    "note": "Case journal counts are observed, not discovery/exact-once counts. Windows completed with exit 1; no timeout/exit 3 in this run."
+  },
+  "cold_rss": {
+    "control_exit": 1,
+    "observed_exit": 1,
+    "limit_bytes": 67108864,
+    "baseline_bytes": 460734464,
+    "rejection_bytes": 528236544,
+    "live_before_bytes": 5717411,
+    "live_rejection_bytes": 10468205,
+    "heap_before_bytes": 40878080,
+    "heap_rejection_bytes": 90587136,
+    "merge_failure_level": 1,
+    "materialized_bytes_at_failure": 2364394,
+    "allocator_stats_at_rejection": [
+      "51M malloced by 269337 calls",
+      "41M freed; 0M really freed",
+      "StackDepot: 221747 ids; 44M allocated",
+      "Quarantine user bytes 43055167"
+    ],
+    "attribution": "Absolute runtime counters, not query-attributed deltas for StackDepot/quarantine; no proven sole cause."
+  },
+  "artifact_block": {
+    "id": 13828065446,
+    "action": "Materialize connector-provided artifact bytes using normal environment urllib",
+    "result": "URLError: Tunnel connection failed: 403 Forbidden",
+    "retried": false,
+    "bypassed": false
+  }
+}
