@@ -204,4 +204,12 @@ TEST_F(RelocatableMetadataStoreTest, PrivateSequentialChunkWorkspaceDoesNotAccum
   RecordProperty("retained_result_bytes", budget->used());
  }
  EXPECT_EQ(budget->used(), 0U);
+ size_t lastAdmission = 0U;
+ const auto callbackResult = store.readRangeFromManifest(snapshot, manifest, 0U, input.size(),
+  [&](size_t bytes) { lastAdmission = bytes; });
+ EXPECT_EQ(callbackResult, input);
+ const auto retainedBytes = graph::utils::detail::standardVectorHeapBufferBytes(callbackResult);
+ EXPECT_EQ(lastAdmission, retainedBytes);
+ EXPECT_THROW(static_cast<void>(store.readRangeFromManifest(snapshot, manifest, 0U, input.size(),
+  [&](size_t bytes) { if (bytes >= retainedBytes) throw std::length_error("result backing denied"); })), std::length_error);
 }
