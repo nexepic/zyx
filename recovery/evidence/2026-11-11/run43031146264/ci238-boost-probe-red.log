@@ -1,0 +1,181 @@
+In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
+In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/advanced_insert_int.hpp:28:
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:944:10: error: object of type 'SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted
+  944 |       *r = ::boost::move(*l);
+      |          ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1438:25: note: in instantiation of function template specialization 'boost::container::move_backward<SwapOnlyRow *, SwapOnlyRow *>' requested here
+ 1438 |       boost::container::move_backward(pos, last_m_n, last);
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1478:7: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_nonempty_middle_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 1478 |       expand_forward_and_insert_nonempty_middle_alloc(a, pos, last, n, insertion_proxy);
+      |       ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:3058:25: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 3058 |       boost::container::expand_forward_and_insert_alloc
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2890:16: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range_expand_forward<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2890 |          this->priv_insert_forward_range_expand_forward
+      |                ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2927:16: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2927 |          this->priv_insert_forward_range(this->back_ptr(), size_type(new_size - sz), this->priv_resize_proxy(u));
+      |                ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:1594:13: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_resize<boost::container::value_init_t, boost::move_detail::integral_constant<unsigned int, 1>>' requested here
+ 1594 |    {  this->priv_resize(new_size, value_init, alloc_version());  }
+      |             ^
+src/query/execution/ConsumedPrefixCompaction.hpp:28:81: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::resize' requested here
+   28 |             if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+      |                                                                                 ^
+/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
+      |                         ^
+/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+      |     ^
+In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
+In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
+/workspace/zyx-sysroot/usr/include/boost/container/detail/advanced_insert_int.hpp:144:13: error: object of type 'SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted
+  144 |          *p = ::boost::move(*vp);
+      |             ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1440:23: note: in instantiation of function template specialization 'boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::copy_n_and_update<SwapOnlyRow *>' requested here
+ 1440 |       insertion_proxy.copy_n_and_update(a, pos, n);
+      |                       ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1478:7: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_nonempty_middle_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 1478 |       expand_forward_and_insert_nonempty_middle_alloc(a, pos, last, n, insertion_proxy);
+      |       ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:3058:25: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 3058 |       boost::container::expand_forward_and_insert_alloc
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2890:16: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range_expand_forward<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2890 |          this->priv_insert_forward_range_expand_forward
+      |                ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2927:16: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2927 |          this->priv_insert_forward_range(this->back_ptr(), size_type(new_size - sz), this->priv_resize_proxy(u));
+      |                ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:1594:13: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_resize<boost::container::value_init_t, boost::move_detail::integral_constant<unsigned int, 1>>' requested here
+ 1594 |    {  this->priv_resize(new_size, value_init, alloc_version());  }
+      |             ^
+src/query/execution/ConsumedPrefixCompaction.hpp:28:81: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::resize' requested here
+   28 |             if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+      |                                                                                 ^
+/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
+      |                         ^
+/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+      |     ^
+In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
+In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/advanced_insert_int.hpp:28:
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1438:7: error: no matching function for call to 'move_backward'
+ 1438 |       boost::container::move_backward(pos, last_m_n, last);
+      |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1478:7: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_nonempty_middle_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 1478 |       expand_forward_and_insert_nonempty_middle_alloc(a, pos, last, n, insertion_proxy);
+      |       ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:3058:25: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 3058 |       boost::container::expand_forward_and_insert_alloc
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2890:16: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range_expand_forward<boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 2890 |          this->priv_insert_forward_range_expand_forward
+      |                ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2088:20: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range<boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 2088 |       return this->priv_insert_forward_range(vector_iterator_get_ptr(pos), static_cast<size_type>(sz), proxy);
+      |                    ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2644:17: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::insert<boost::move_iterator<SwapOnlyRow *>>' requested here
+ 2644 |             sml.insert( sml.cend()
+      |                 ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2207:13: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_swap<boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2207 |       this->priv_swap(x, dtl::bool_<dtl::is_version<allocator_type, 0>::value>());
+      |             ^
+src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::swap' requested here
+   40 |         rows.swap(compacted);
+      |              ^
+/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:940:4: note: candidate template ignored: substitution failure [with I = SwapOnlyRow *, F = SwapOnlyRow *]
+  940 |    move_backward(I f, I l, F r)
+      |    ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:953:4: note: candidate template ignored: substitution failure [with I = SwapOnlyRow *, F = SwapOnlyRow *]: no type named 'type' in 'boost::container::dtl::enable_if_memtransfer_copy_assignable<SwapOnlyRow *, SwapOnlyRow *, SwapOnlyRow *>'
+  952 | BOOST_CONTAINER_FORCEINLINE typename dtl::enable_if_memtransfer_copy_assignable<I, F, F>::type
+      |                                                                                           ~~~~
+  953 |    move_backward(I f, I l, F r) BOOST_NOEXCEPT_OR_NOTHROW
+      |    ^
+In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
+In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/advanced_insert_int.hpp:28:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:28:
+/workspace/zyx-sysroot/usr/include/boost/container/detail/construct_in_place.hpp:67:10: error: object of type 'SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted
+   67 | {  *dest = *source;  }
+      |          ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:834:25: note: in instantiation of function template specialization 'boost::container::assign_in_place<SwapOnlyRow *, boost::move_iterator<SwapOnlyRow *>>' requested here
+  834 |       boost::container::assign_in_place(r, f);
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/advanced_insert_int.hpp:91:42: note: in instantiation of function template specialization 'boost::container::copy_n_source<boost::move_iterator<SwapOnlyRow *>, unsigned long, SwapOnlyRow *>' requested here
+   91 |       this->first_ = ::boost::container::copy_n_source(this->first_, n, p);
+      |                                          ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1440:23: note: in instantiation of function template specialization 'boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>::copy_n_and_update<SwapOnlyRow *>' requested here
+ 1440 |       insertion_proxy.copy_n_and_update(a, pos, n);
+      |                       ^
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:1478:7: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_nonempty_middle_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 1478 |       expand_forward_and_insert_nonempty_middle_alloc(a, pos, last, n, insertion_proxy);
+      |       ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:3058:25: note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_alloc<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, SwapOnlyRow *, boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 3058 |       boost::container::expand_forward_and_insert_alloc
+      |                         ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2890:16: note: (skipping 1 context in backtrace; use -ftemplate-backtrace-limit=0 to see all)
+ 2890 |          this->priv_insert_forward_range_expand_forward
+      |                ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2088:20: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_insert_forward_range<boost::container::dtl::insert_range_proxy<graph::utils::OwnedPmrAllocator<SwapOnlyRow>, boost::move_iterator<SwapOnlyRow *>>>' requested here
+ 2088 |       return this->priv_insert_forward_range(vector_iterator_get_ptr(pos), static_cast<size_type>(sz), proxy);
+      |                    ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2644:17: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::insert<boost::move_iterator<SwapOnlyRow *>>' requested here
+ 2644 |             sml.insert( sml.cend()
+      |                 ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2207:13: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_swap<boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2207 |       this->priv_swap(x, dtl::bool_<dtl::is_version<allocator_type, 0>::value>());
+      |             ^
+src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::swap' requested here
+   40 |         rows.swap(compacted);
+      |              ^
+/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
+      |                         ^
+/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+      |     ^
+In file included from /workspace/ci238-boost-probe-before.cpp:3:
+In file included from src/query/execution/ConsumedPrefixCompaction.hpp:8:
+In file included from /workspace/ci238-boost-include/graph/utils/OwnedVector.hpp:8:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:32:
+In file included from /workspace/zyx-sysroot/usr/include/boost/container/detail/advanced_insert_int.hpp:28:
+/workspace/zyx-sysroot/usr/include/boost/container/detail/copy_move_algo.hpp:887:10: error: object of type 'SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted
+  887 |       *r = ::boost::move(*f);
+      |          ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2187:83: note: in instantiation of function template specialization 'boost::container::move<SwapOnlyRow *, SwapOnlyRow *>' requested here
+ 2187 |          T* const new_last_ptr = boost::movelib::to_raw_pointer(boost::container::move(last_ptr, old_end_ptr, first_ptr));
+      |                                                                                   ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2649:17: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::erase' requested here
+ 2649 |             big.erase(big.nth(common_elements), big.cend());
+      |                 ^
+/workspace/zyx-sysroot/usr/include/boost/container/vector.hpp:2207:13: note: in instantiation of function template specialization 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::priv_swap<boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>>' requested here
+ 2207 |       this->priv_swap(x, dtl::bool_<dtl::is_version<allocator_type, 0>::value>());
+      |             ^
+src/query/execution/ConsumedPrefixCompaction.hpp:40:14: note: in instantiation of member function 'boost::container::vector<SwapOnlyRow, graph::utils::OwnedPmrAllocator<SwapOnlyRow>>::swap' requested here
+   40 |         rows.swap(compacted);
+      |              ^
+/workspace/ci238-boost-probe-before.cpp:25:25: note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<SwapOnlyRow>' requested here
+   25 |  size_t first=2; assert(compactConsumedPrefix(rows,first,2*sizeof(SwapOnlyRow)));
+      |                         ^
+/workspace/ci238-boost-probe-before.cpp:15:5: note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+   15 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+      |     ^
+5 errors generated.

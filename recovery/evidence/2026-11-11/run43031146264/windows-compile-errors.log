@@ -1,0 +1,87 @@
+2026-11-11T14:00:21.2598386Z C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\include\vcruntime.h(348,47): note: expanded from macro '_CRT_DEPRECATE_TEXT'
+2026-11-11T14:00:21.2599367Z   348 | #define _CRT_DEPRECATE_TEXT(_Text) __declspec(deprecated(_Text))
+2026-11-11T14:00:21.2599918Z       |                                               ^
+2026-11-11T14:00:21.2600576Z In file included from D:\a\zyx\zyx\tests\src\query\execution\test_ConsumedPrefixCompaction.cpp:3:
+2026-11-11T14:00:21.2601433Z In file included from D:\a\zyx\zyx\src\query/execution/ConsumedPrefixCompaction.hpp:8:
+2026-11-11T14:00:21.2602184Z In file included from D:\a\zyx\zyx\include\graph/utils/OwnedVector.hpp:8:
+2026-11-11T14:00:21.2603059Z In file included from C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp:32:
+2026-11-11T14:00:21.2604158Z In file included from C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/advanced_insert_int.hpp:28:
+2026-11-11T14:00:21.2605835Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/copy_move_algo.hpp(949,10): error: object of type '(anonymous namespace)::SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted
+2026-11-11T14:00:21.2607542Z   949 |       *r = ::boost::move(*l);
+2026-11-11T14:00:21.2607967Z       |          ^
+2026-11-11T14:00:21.2610147Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/copy_move_algo.hpp(1443,25): note: in instantiation of function template specialization 'boost::container::move_backward<(anonymous namespace)::SwapOnlyRow *, (anonymous namespace)::SwapOnlyRow *>' requested here
+2026-11-11T14:00:21.2611939Z  1443 |       boost::container::move_backward(pos, last_m_n, last);
+2026-11-11T14:00:21.2612481Z       |                         ^
+2026-11-11T14:00:21.2614811Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/copy_move_algo.hpp(1483,7): note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_nonempty_middle_alloc<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>, (anonymous namespace)::SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2617699Z  1483 |       expand_forward_and_insert_nonempty_middle_alloc(a, pos, last, n, insertion_proxy);
+2026-11-11T14:00:21.2618337Z       |       ^
+2026-11-11T14:00:21.2620518Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(3262,25): note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_alloc<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>, (anonymous namespace)::SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2622810Z  3262 |       boost::container::expand_forward_and_insert_alloc
+2026-11-11T14:00:21.2623280Z       |                         ^
+2026-11-11T14:00:21.2625404Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(3094,16): note: in instantiation of function template specialization 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::priv_insert_forward_range_expand_forward<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2628120Z  3094 |          this->priv_insert_forward_range_expand_forward
+2026-11-11T14:00:21.2628628Z       |                ^
+2026-11-11T14:00:21.2630782Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(3131,16): note: in instantiation of function template specialization 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::priv_insert_forward_range<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2633271Z  3131 |          this->priv_insert_forward_range(this->back_ptr(), size_type(new_size - sz), this->priv_resize_proxy(u));
+2026-11-11T14:00:21.2634012Z       |                ^
+2026-11-11T14:00:21.2635877Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(1617,13): note: in instantiation of function template specialization 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::priv_resize<boost::container::value_init_t, boost::move_detail::integral_constant<unsigned int, 1>>' requested here
+2026-11-11T14:00:21.2637818Z  1617 |    {  this->priv_resize(new_size, value_init, alloc_version());  }
+2026-11-11T14:00:21.2638425Z       |             ^
+2026-11-11T14:00:21.2639752Z D:\a\zyx\zyx\src\query/execution/ConsumedPrefixCompaction.hpp(28,81): note: in instantiation of member function 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::resize' requested here
+2026-11-11T14:00:21.2641405Z    28 |             if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+2026-11-11T14:00:21.2642103Z       |                                                                                 ^
+2026-11-11T14:00:21.2644058Z D:\a\zyx\zyx\tests\src\query\execution\test_ConsumedPrefixCompaction.cpp(191,21): note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<(anonymous namespace)::SwapOnlyRow>' requested here
+2026-11-11T14:00:21.2645673Z   191 |         ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+2026-11-11T14:00:21.2646316Z       |                     ^
+2026-11-11T14:00:21.2647678Z D:\a\zyx\zyx\tests\src\query\execution\test_ConsumedPrefixCompaction.cpp(173,5): note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+2026-11-11T14:00:21.2648976Z   173 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+2026-11-11T14:00:21.2649869Z       |     ^
+2026-11-11T14:00:21.2650439Z In file included from D:\a\zyx\zyx\tests\src\query\execution\test_ConsumedPrefixCompaction.cpp:3:
+2026-11-11T14:00:21.2651272Z In file included from D:\a\zyx\zyx\src\query/execution/ConsumedPrefixCompaction.hpp:8:
+2026-11-11T14:00:21.2651995Z In file included from D:\a\zyx\zyx\include\graph/utils/OwnedVector.hpp:8:
+2026-11-11T14:00:21.2652854Z In file included from C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp:32:
+2026-11-11T14:00:21.2674855Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/advanced_insert_int.hpp(145,13): error: object of type '(anonymous namespace)::SwapOnlyRow' cannot be assigned because its copy assignment operator is implicitly deleted
+2026-11-11T14:00:21.2676790Z   145 |          *p = ::boost::move(*vp);
+2026-11-11T14:00:21.2843405Z       |             ^
+2026-11-11T14:00:21.2906761Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/copy_move_algo.hpp(1445,23): note: in instantiation of function template specialization 'boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::copy_n_and_update<(anonymous namespace)::SwapOnlyRow *>' requested here
+2026-11-11T14:00:21.2909021Z  1445 |       insertion_proxy.copy_n_and_update(a, pos, n);
+2026-11-11T14:00:21.2909686Z       |                       ^
+2026-11-11T14:00:21.2912105Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/detail/copy_move_algo.hpp(1483,7): note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_nonempty_middle_alloc<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>, (anonymous namespace)::SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2914784Z  1483 |       expand_forward_and_insert_nonempty_middle_alloc(a, pos, last, n, insertion_proxy);
+2026-11-11T14:00:21.2915432Z       |       ^
+2026-11-11T14:00:21.2917687Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(3262,25): note: in instantiation of function template specialization 'boost::container::expand_forward_and_insert_alloc<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>, (anonymous namespace)::SwapOnlyRow *, boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2920348Z  3262 |       boost::container::expand_forward_and_insert_alloc
+2026-11-11T14:00:21.2920871Z       |                         ^
+2026-11-11T14:00:21.2923904Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(3094,16): note: in instantiation of function template specialization 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::priv_insert_forward_range_expand_forward<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2926412Z  3094 |          this->priv_insert_forward_range_expand_forward
+2026-11-11T14:00:21.2926920Z       |                ^
+2026-11-11T14:00:21.2929110Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(3131,16): note: in instantiation of function template specialization 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::priv_insert_forward_range<boost::container::dtl::insert_value_initialized_n_proxy<graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>>' requested here
+2026-11-11T14:00:21.2931973Z  3131 |          this->priv_insert_forward_range(this->back_ptr(), size_type(new_size - sz), this->priv_resize_proxy(u));
+2026-11-11T14:00:21.2932718Z       |                ^
+2026-11-11T14:00:21.2934663Z C:\Users\runneradmin\.conan2\p\b\boostc7b4da3ee029d\p\include\boost/container/vector.hpp(1617,13): note: in instantiation of function template specialization 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::priv_resize<boost::container::value_init_t, boost::move_detail::integral_constant<unsigned int, 1>>' requested here
+2026-11-11T14:00:21.2936816Z  1617 |    {  this->priv_resize(new_size, value_init, alloc_version());  }
+2026-11-11T14:00:21.2937389Z       |             ^
+2026-11-11T14:00:21.2938723Z D:\a\zyx\zyx\src\query/execution/ConsumedPrefixCompaction.hpp(28,81): note: in instantiation of member function 'boost::container::vector<(anonymous namespace)::SwapOnlyRow, graph::utils::OwnedPmrAllocator<(anonymous namespace)::SwapOnlyRow>>::resize' requested here
+2026-11-11T14:00:21.2940966Z    28 |             if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+2026-11-11T14:00:21.2941732Z       |                                                                                 ^
+2026-11-11T14:00:21.2945275Z D:\a\zyx\zyx\tests\src\query\execution\test_ConsumedPrefixCompaction.cpp(191,21): note: in instantiation of function template specialization 'graph::query::execution::detail::compactConsumedPrefix<(anonymous namespace)::SwapOnlyRow>' requested here
+2026-11-11T14:00:21.2946839Z   191 |         ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+2026-11-11T14:00:21.2947466Z       |                     ^
+2026-11-11T14:00:21.2948534Z D:\a\zyx\zyx\tests\src\query\execution\test_ConsumedPrefixCompaction.cpp(173,5): note: copy assignment operator is implicitly deleted because 'SwapOnlyRow' has a user-declared move constructor
+2026-11-11T14:00:21.2949900Z   173 |     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+2026-11-11T14:00:21.2950616Z       |     ^
+2026-11-11T14:00:21.2950970Z 2 warnings and 2 errors generated.
+2026-11-11T14:00:21.2951723Z [364/879] Building CXX object CMakeFiles\zyx_test_suite.dir\tests\src\query\execution\test_BoundNodeScanBatch.cpp.obj
+2026-11-11T14:00:21.2952673Z In file included from D:\a\zyx\zyx\tests\src\query\execution\test_BoundNodeScanBatch.cpp:2:
+2026-11-11T14:00:21.2953551Z In file included from D:\a\zyx\zyx\src\query/execution/BoundNodeScanBatch.hpp:4:
+2026-11-11T14:00:21.2954270Z In file included from D:\a\zyx\zyx\src\query/execution/BatchEnvelope.hpp:5:
+2026-11-11T14:00:21.2954970Z In file included from D:\a\zyx\zyx\src\query/execution/BoundColumnLayout.hpp:14:
+2026-11-11T14:00:21.2955721Z In file included from D:\a\zyx\zyx\src\query/execution/BudgetMemoryResource.hpp:3:
+2026-11-11T14:00:21.2956555Z In file included from D:\a\zyx\zyx\include\graph/query/execution/MaterializedByteBudget.hpp:12:
+2026-11-11T14:00:21.2957425Z In file included from D:\a\zyx\zyx\include\graph/query/execution/ResourceCoordinator.hpp:13:
+2026-11-11T14:00:21.2959653Z D:\a\zyx\zyx\include\graph/debug/CiBudgetTrace.hpp(92,49): warning: 'getenv' is deprecated: This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-declarations]
+2026-11-11T14:00:21.2961822Z    92 |     static bool enabled() noexcept {return std::getenv("ZYX_CI_BUDGET_TRACE")!=nullptr;}
+2026-11-11T14:00:21.2962506Z       |                                                 ^
+2026-11-11T14:00:21.2963314Z C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt\stdlib.h(1183,20): note: 'getenv' has been explicitly marked deprecated here
+2026-11-11T14:00:21.2964062Z  1183 |     _Check_return_ _CRT_INSECURE_DEPRECATE(_dupenv_s)
+2026-11-11T14:00:21.2964621Z       |                    ^

@@ -172,6 +172,11 @@ struct SwapOnlyRow {
     explicit SwapOnlyRow(int value) : payload(std::make_unique<int>(value)) {}
     SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
     SwapOnlyRow(const SwapOnlyRow &) = delete;
+    SwapOnlyRow &operator=(const SwapOnlyRow &) = delete;
+    // Boost instantiates assignment paths during resize; executing one is still unsafe.
+    SwapOnlyRow &operator=(SwapOnlyRow &&) noexcept(false) {
+        ++moves; throw std::runtime_error("unsafe move assignment");
+    }
     friend void swap(SwapOnlyRow &left, SwapOnlyRow &right) noexcept { left.payload.swap(right.payload); }
 };
 }
@@ -179,6 +184,8 @@ struct SwapOnlyRow {
 TEST(ConsumedPrefixCompactionTest, NoThrowSwapTransfersPayloadWhenMoveMayThrow) {
     static_assert(!std::is_nothrow_move_constructible_v<SwapOnlyRow>);
     static_assert(std::is_nothrow_swappable_v<SwapOnlyRow>);
+    static_assert(std::is_move_assignable_v<SwapOnlyRow>);
+    static_assert(!std::is_nothrow_move_assignable_v<SwapOnlyRow>);
     SwapOnlyRow::defaults = SwapOnlyRow::failDefault = SwapOnlyRow::moves = 0U;
     auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
     {

@@ -1,0 +1,389 @@
+[0;34m>>> GoogleTest filter: ConsumedPrefixCompactionTest.*[0m
+[1;33m>>> [1/5] Quick Mode: Reusing existing build directory.[0m
+[0;34m>>> [2/5] Configuring and compiling...[0m
+-- Configuring done (2.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /workspace/zyx/buildDir
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_ConsumedPrefixCompaction.cpp.o
+[2/3] Linking CXX executable zyx_test_suite
+[0;34m>>> [3/5] Running tests...[0m
+
+[38;5;105;1m================================================================================[0m
+[1m ZYX Graph Database - Unit Test Suite[0m
+[38;5;105;1m================================================================================[0m
+ Target: 10 tests across 1 suites
+
+[38;5;105;1m[100% |   1/  1][0m [1;32mPASS[0m [1mConsumedPrefixCompactionTest[0m [38;5;105;1m(0 ms)[0m
+
+[38;5;105;1m================================================================================[0m
+[1;32m  ALL TESTS PASSED![0m
+
+  Passed: [1;32m10[0m
+  Failed: [1;31m0[0m
+  Time  : 0 ms
+[38;5;105;1m================================================================================[0m
+
+{"command": ["/workspace/zyx/buildDir/zyx_test_suite", "--gtest_filter=ConsumedPrefixCompactionTest.*"], "completed_at_unix_seconds": 1794406718.2745104, "exit_code": 0, "jobs": 1, "launcher_pid": 22822, "run_id": "ci238-targeted", "started_at_unix_seconds": 1794406718.157673, "working_directory": "/workspace/zyx"}
+[0;34m>>> [4/5] Verifying CTest registration...[0m
+Internal ctest changing into directory: /workspace/zyx/buildDir
+Test project /workspace/zyx/buildDir
+  Test #1: zyx_all_tests
+
+Total Tests: 1
+[0;34m>>> [5/5] Generating reports...[0m
+    1|       |#pragma once
+    2|       |#include <cstddef>
+    3|       |#include <limits>
+    4|       |#include <new>
+    5|       |#include <type_traits>
+    6|       |#include <utility>
+    7|       |#include "graph/query/execution/MaterializedByteBudget.hpp"
+    8|       |#include "graph/utils/OwnedVector.hpp"
+    9|       |
+   10|       |namespace graph::query::execution::detail {
+   11|       |// Optional compaction before constructing the next output. The caller supplies
+   12|       |// headroom after charging every existing source and result owner. Old and new
+   13|       |// buffers coexist until the swap; element payload ownership only moves.
+   14|       |template<class Row>
+   15|     77|bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
+   16|       |    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+   17|      1|        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
+   18|     76|    else {
+   19|     [0;35m76[0m|        if (first == 0U || first >= rows.size()) return false;
+                                         ^75                   ^1
+  ------------------
+  |  Branch (19:13): [[0;41mTrue[0m: 0, False: 2]
+  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 2]
+  ------------------
+  |  Branch (19:13): [[0;41mTrue[0m: 0, False: 6]
+  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 6]
+  ------------------
+  |  Branch (19:13): [True: 1, False: 63]
+  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 63]
+  ------------------
+  |  Branch (19:13): [[0;41mTrue[0m: 0, False: 4]
+  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 4]
+  ------------------
+  |  Branch (19:13): [[0;41mTrue[0m: 0, [0;41mFalse[0m: 0]
+  |  Branch (19:28): [[0;41mTrue[0m: 0, [0;41mFalse[0m: 0]
+  ------------------
+   20|     75|        const size_t remaining = rows.size() - first;
+   21|       |        // Reclaim after at least a quarter is consumed, while temporary space
+   22|       |        // can still fit. Geometric compaction moves fewer than 3*N elements.
+   23|     [0;35m75[0m|        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+                                                                             ^24
+  ------------------
+  |  Branch (23:13): [[0;41mTrue[0m: 0, False: 2]
+  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 2]
+  ------------------
+  |  Branch (23:13): [[0;41mTrue[0m: 0, False: 6]
+  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 6]
+  ------------------
+  |  Branch (23:13): [True: 51, False: 12]
+  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 12]
+  ------------------
+  |  Branch (23:13): [[0;41mTrue[0m: 0, False: 4]
+  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 4]
+  ------------------
+  |  Branch (23:13): [[0;41mTrue[0m: 0, [0;41mFalse[0m: 0]
+  |  Branch (23:64): [[0;41mTrue[0m: 0, [0;41mFalse[0m: 0]
+  ------------------
+   24|     [0;35m75[0m|                remaining > headroom / sizeof(Row)) return false;
+                              ^24                                 ^52
+  ------------------
+  |  Branch (24:17): [True: 1, False: 1]
+  ------------------
+  |  Branch (24:17): [[0;41mTrue[0m: 0, False: 6]
+  ------------------
+  |  Branch (24:17): [[0;41mTrue[0m: 0, False: 12]
+  ------------------
+  |  Branch (24:17): [[0;41mTrue[0m: 0, False: 4]
+  ------------------
+  |  Branch (24:17): [[0;41mTrue[0m: 0, [0;41mFalse[0m: 0]
+  ------------------
+   25|     23|        utils::OwnedVector<Row> compacted(rows.get_allocator());
+   26|     23|        try {
+   27|     23|            compacted.reserve(remaining);
+   28|     23|            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+                          ^0                                                        ^4
+   29|     23|        }
+   30|     23|        catch (const MaterializedByteLimitExceeded &) { return false; }
+                                                                    ^1
+   31|     23|        catch (const ResourceAdmissionDenied &) { return false; }
+                                                              ^1
+   32|     23|        catch (const std::bad_alloc &) { return false; }
+                                                     ^2
+   33|       |        // Prepare every empty destination before touching the source. A
+   34|       |        // throwing move trait need not prevent a nonthrowing node/credit swap.
+   35|    [0;35m215[0m|        for (size_t index = first; index < rows.size(); ++index) {
+                      ^18                                             ^197
+  ------------------
+  |  Branch (35:36): [True: 2, False: 1]
+  ------------------
+  |  Branch (35:36): [True: 10, False: 3]
+  ------------------
+  |  Branch (35:36): [True: 181, False: 12]
+  ------------------
+  |  Branch (35:36): [True: 4, False: 2]
+  ------------------
+  |  Branch (35:36): [[0;41mTrue[0m: 0, [0;41mFalse[0m: 0]
+  ------------------
+   36|       |            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+   37|    193|                compacted.emplace_back(std::move(rows[index]));
+   38|      4|            else { using std::swap; swap(compacted[index - first], rows[index]); }
+   39|    197|        }
+   40|     18|        rows.swap(compacted);
+   41|     18|        first = 0U;
+   42|     18|        return true;
+   43|     23|    }
+   44|     77|}
+  ------------------
+  | [0;36m_ZN5graph5query9execution6detail21compactConsumedPrefixISt10unique_ptrIiSt14default_deleteIiEEEEbRNS_5utils11OwnedVectorIT_EERmm:
+[0m  |   15|      2|bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
+  |   16|       |    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+  |   17|       |        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
+  |   18|      2|    else {
+  |   19|      [0;35m2[0m|        if (first == 0U || first >= rows.size()) [0;41mreturn false[0m;
+  |                                                               ^0
+  |  ------------------
+  |  |  Branch (19:13): [[0;41mTrue[0m: 0, False: 2]
+  |  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 2]
+  |  ------------------
+  |   20|      2|        const size_t remaining = rows.size() - first;
+  |   21|       |        // Reclaim after at least a quarter is consumed, while temporary space
+  |   22|       |        // can still fit. Geometric compaction moves fewer than 3*N elements.
+  |   23|      [0;35m2[0m|        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+  |  ------------------
+  |  |  Branch (23:13): [[0;41mTrue[0m: 0, False: 2]
+  |  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 2]
+  |  ------------------
+  |   24|      [0;35m2[0m|                remaining > headroom / sizeof(Row)) return false;
+  |                                                                  ^1
+  |  ------------------
+  |  |  Branch (24:17): [True: 1, False: 1]
+  |  ------------------
+  |   25|      1|        utils::OwnedVector<Row> compacted(rows.get_allocator());
+  |   26|      1|        try {
+  |   27|      1|            compacted.reserve(remaining);
+  |   28|       |            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+  |   29|      1|        }
+  |   30|      1|        catch (const MaterializedByteLimitExceeded &) [0;41m{ return false; }[0m
+  |                                                                    ^0
+  |   31|      1|        catch (const ResourceAdmissionDenied &) [0;41m{ return false; }[0m
+  |                                                              ^0
+  |   32|      1|        catch (const std::bad_alloc &) [0;41m{ return false; }[0m[0;41m[0m
+  |                                                     ^0
+  |   33|       |        // Prepare every empty destination before touching the source. A
+  |   34|       |        // throwing move trait need not prevent a nonthrowing node/credit swap.
+  |   35|      [0;35m3[0m|        for (size_t index = first; index < rows.size(); ++index) {
+  |                      ^1                                              ^2
+  |  ------------------
+  |  |  Branch (35:36): [True: 2, False: 1]
+  |  ------------------
+  |   36|       |            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+  |   37|      2|                compacted.emplace_back(std::move(rows[index]));
+  |   38|       |            else { using std::swap; swap(compacted[index - first], rows[index]); }
+  |   39|      2|        }
+  |   40|      1|        rows.swap(compacted);
+  |   41|      1|        first = 0U;
+  |   42|      1|        return true;
+  |   43|      1|    }
+  |   44|      2|}
+  ------------------
+  | [0;36m_ZN5graph5query9execution6detail21compactConsumedPrefixIiEEbRNS_5utils11OwnedVectorIT_EERmm:
+[0m  |   15|      6|bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
+  |   16|       |    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+  |   17|       |        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
+  |   18|      6|    else {
+  |   19|      [0;35m6[0m|        if (first == 0U || first >= rows.size()) [0;41mreturn false[0m;
+  |                                                               ^0
+  |  ------------------
+  |  |  Branch (19:13): [[0;41mTrue[0m: 0, False: 6]
+  |  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 6]
+  |  ------------------
+  |   20|      6|        const size_t remaining = rows.size() - first;
+  |   21|       |        // Reclaim after at least a quarter is consumed, while temporary space
+  |   22|       |        // can still fit. Geometric compaction moves fewer than 3*N elements.
+  |   23|      [0;35m6[0m|        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+  |  ------------------
+  |  |  Branch (23:13): [[0;41mTrue[0m: 0, False: 6]
+  |  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 6]
+  |  ------------------
+  |   24|      [0;35m6[0m|                remaining > headroom / sizeof(Row)) [0;41mreturn false[0m;
+  |                                                                  ^0
+  |  ------------------
+  |  |  Branch (24:17): [[0;41mTrue[0m: 0, False: 6]
+  |  ------------------
+  |   25|      6|        utils::OwnedVector<Row> compacted(rows.get_allocator());
+  |   26|      6|        try {
+  |   27|      6|            compacted.reserve(remaining);
+  |   28|       |            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+  |   29|      6|        }
+  |   30|      6|        catch (const MaterializedByteLimitExceeded &) { return false; }
+  |                                                                    ^1
+  |   31|      6|        catch (const ResourceAdmissionDenied &) { return false; }
+  |                                                              ^1
+  |   32|      6|        catch (const std::bad_alloc &) { return false; }
+  |                                                     ^1
+  |   33|       |        // Prepare every empty destination before touching the source. A
+  |   34|       |        // throwing move trait need not prevent a nonthrowing node/credit swap.
+  |   35|     [0;35m13[0m|        for (size_t index = first; index < rows.size(); ++index) {
+  |                      ^3                                              ^10
+  |  ------------------
+  |  |  Branch (35:36): [True: 10, False: 3]
+  |  ------------------
+  |   36|       |            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+  |   37|     10|                compacted.emplace_back(std::move(rows[index]));
+  |   38|       |            else { using std::swap; swap(compacted[index - first], rows[index]); }
+  |   39|     10|        }
+  |   40|      3|        rows.swap(compacted);
+  |   41|      3|        first = 0U;
+  |   42|      3|        return true;
+  |   43|      6|    }
+  |   44|      6|}
+  ------------------
+  | [0;36mtest_ConsumedPrefixCompaction.cpp:_ZN5graph5query9execution6detail21compactConsumedPrefixIZN69ConsumedPrefixCompactionTest_GeometricCompactionBoundsTotalMoves_Test8TestBodyEvE3RowEEbRNS_5utils11OwnedVectorIT_EERmm:
+[0m  |   15|     64|bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
+  |   16|       |    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+  |   17|       |        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
+  |   18|     64|    else {
+  |   19|     [0;35m64[0m|        if (first == 0U || first >= rows.size()) return false;
+  |                                         ^63                   ^1
+  |  ------------------
+  |  |  Branch (19:13): [True: 1, False: 63]
+  |  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 63]
+  |  ------------------
+  |   20|     63|        const size_t remaining = rows.size() - first;
+  |   21|       |        // Reclaim after at least a quarter is consumed, while temporary space
+  |   22|       |        // can still fit. Geometric compaction moves fewer than 3*N elements.
+  |   23|     [0;35m63[0m|        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+  |                                                                             ^12
+  |  ------------------
+  |  |  Branch (23:13): [True: 51, False: 12]
+  |  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 12]
+  |  ------------------
+  |   24|     [0;35m63[0m|                remaining > headroom / sizeof(Row)) return false;
+  |                              ^12                                 ^51
+  |  ------------------
+  |  |  Branch (24:17): [[0;41mTrue[0m: 0, False: 12]
+  |  ------------------
+  |   25|     12|        utils::OwnedVector<Row> compacted(rows.get_allocator());
+  |   26|     12|        try {
+  |   27|     12|            compacted.reserve(remaining);
+  |   28|       |            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+  |   29|     12|        }
+  |   30|     12|        catch (const MaterializedByteLimitExceeded &) [0;41m{ return false; }[0m
+  |                                                                    ^0
+  |   31|     12|        catch (const ResourceAdmissionDenied &) [0;41m{ return false; }[0m
+  |                                                              ^0
+  |   32|     12|        catch (const std::bad_alloc &) [0;41m{ return false; }[0m[0;41m[0m
+  |                                                     ^0
+  |   33|       |        // Prepare every empty destination before touching the source. A
+  |   34|       |        // throwing move trait need not prevent a nonthrowing node/credit swap.
+  |   35|    [0;35m193[0m|        for (size_t index = first; index < rows.size(); ++index) {
+  |                      ^12                                             ^181
+  |  ------------------
+  |  |  Branch (35:36): [True: 181, False: 12]
+  |  ------------------
+  |   36|       |            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+  |   37|    181|                compacted.emplace_back(std::move(rows[index]));
+  |   38|       |            else { using std::swap; swap(compacted[index - first], rows[index]); }
+  |   39|    181|        }
+  |   40|     12|        rows.swap(compacted);
+  |   41|     12|        first = 0U;
+  |   42|     12|        return true;
+  |   43|     12|    }
+  |   44|     64|}
+  ------------------
+  | [0;36mtest_ConsumedPrefixCompaction.cpp:_ZN5graph5query9execution6detail21compactConsumedPrefixIZN77ConsumedPrefixCompactionTest_PotentiallyThrowingMovesKeepOriginalStorage_Test8TestBodyEvE3RowEEbRNS_5utils11OwnedVectorIT_EERmm:
+[0m  |   15|      1|bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
+  |   16|       |    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+  |   17|      1|        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
+  |   18|       |    else {
+  |   19|       |        if (first == 0U || first >= rows.size()) return false;
+  |   20|       |        const size_t remaining = rows.size() - first;
+  |   21|       |        // Reclaim after at least a quarter is consumed, while temporary space
+  |   22|       |        // can still fit. Geometric compaction moves fewer than 3*N elements.
+  |   23|       |        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+  |   24|       |                remaining > headroom / sizeof(Row)) return false;
+  |   25|       |        utils::OwnedVector<Row> compacted(rows.get_allocator());
+  |   26|       |        try {
+  |   27|       |            compacted.reserve(remaining);
+  |   28|       |            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+  |   29|       |        }
+  |   30|       |        catch (const MaterializedByteLimitExceeded &) { return false; }
+  |   31|       |        catch (const ResourceAdmissionDenied &) { return false; }
+  |   32|       |        catch (const std::bad_alloc &) { return false; }
+  |   33|       |        // Prepare every empty destination before touching the source. A
+  |   34|       |        // throwing move trait need not prevent a nonthrowing node/credit swap.
+  |   35|       |        for (size_t index = first; index < rows.size(); ++index) {
+  |   36|       |            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+  |   37|       |                compacted.emplace_back(std::move(rows[index]));
+  |   38|       |            else { using std::swap; swap(compacted[index - first], rows[index]); }
+  |   39|       |        }
+  |   40|       |        rows.swap(compacted);
+  |   41|       |        first = 0U;
+  |   42|       |        return true;
+  |   43|       |    }
+  |   44|      1|}
+  ------------------
+  | [0;36mtest_ConsumedPrefixCompaction.cpp:_ZN5graph5query9execution6detail21compactConsumedPrefixIN12_GLOBAL__N_111SwapOnlyRowEEEbRNS_5utils11OwnedVectorIT_EERmm:
+[0m  |   15|      4|bool compactConsumedPrefix(utils::OwnedVector<Row> &rows, size_t &first, size_t headroom) {
+  |   16|       |    if constexpr (!std::is_nothrow_move_constructible_v<Row> &&
+  |   17|       |        !(std::is_default_constructible_v<Row> && std::is_nothrow_swappable_v<Row>)) return false;
+  |   18|      4|    else {
+  |   19|      [0;35m4[0m|        if (first == 0U || first >= rows.size()) [0;41mreturn false[0m;
+  |                                                               ^0
+  |  ------------------
+  |  |  Branch (19:13): [[0;41mTrue[0m: 0, False: 4]
+  |  |  Branch (19:28): [[0;41mTrue[0m: 0, False: 4]
+  |  ------------------
+  |   20|      4|        const size_t remaining = rows.size() - first;
+  |   21|       |        // Reclaim after at least a quarter is consumed, while temporary space
+  |   22|       |        // can still fit. Geometric compaction moves fewer than 3*N elements.
+  |   23|      [0;35m4[0m|        if (first < remaining / 3U + (remaining % 3U != 0U) || rows.capacity() <= remaining ||
+  |  ------------------
+  |  |  Branch (23:13): [[0;41mTrue[0m: 0, False: 4]
+  |  |  Branch (23:64): [[0;41mTrue[0m: 0, False: 4]
+  |  ------------------
+  |   24|      [0;35m4[0m|                remaining > headroom / sizeof(Row)) [0;41mreturn false[0m;
+  |                                                                  ^0
+  |  ------------------
+  |  |  Branch (24:17): [[0;41mTrue[0m: 0, False: 4]
+  |  ------------------
+  |   25|      4|        utils::OwnedVector<Row> compacted(rows.get_allocator());
+  |   26|      4|        try {
+  |   27|      4|            compacted.reserve(remaining);
+  |   28|      4|            if constexpr (!std::is_nothrow_move_constructible_v<Row>) compacted.resize(remaining);
+  |   29|      4|        }
+  |   30|      4|        catch (const MaterializedByteLimitExceeded &) [0;41m{ return false; }[0m
+  |                                                                    ^0
+  |   31|      4|        catch (const ResourceAdmissionDenied &) [0;41m{ return false; }[0m
+  |                                                              ^0
+  |   32|      4|        catch (const std::bad_alloc &) { return false; }
+  |                                                     ^1
+  |   33|       |        // Prepare every empty destination before touching the source. A
+  |   34|       |        // throwing move trait need not prevent a nonthrowing node/credit swap.
+  |   35|      [0;35m6[0m|        for (size_t index = first; index < rows.size(); ++index) {
+  |                      ^2                                              ^4
+  |  ------------------
+  |  |  Branch (35:36): [True: 4, False: 2]
+  |  ------------------
+  |   36|       |            if constexpr (std::is_nothrow_move_constructible_v<Row>)
+  |   37|       |                compacted.emplace_back(std::move(rows[index]));
+  |   38|      4|            else { using std::swap; swap(compacted[index - first], rows[index]); }
+  |   39|      4|        }
+  |   40|      2|        rows.swap(compacted);
+  |   41|      2|        first = 0U;
+  |   42|      2|        return true;
+  |   43|      4|    }
+  |   44|      4|}
+  ------------------
+  | [0;31mUnexecuted instantiation: LogicalPlanProcedureRuntime.cpp:_ZN5graph5query9execution6detail21compactConsumedPrefixINS1_12_GLOBAL__N_120BufferedProcedureRowEEEbRNS_5utils11OwnedVectorIT_EERmm
+[0m  ------------------
+   45|       |}
+
+--- Coverage Detail for: src/query/execution/ConsumedPrefixCompaction.hpp ---
+[0;32m======================================================[0m
+[0;32m Done! [0m
