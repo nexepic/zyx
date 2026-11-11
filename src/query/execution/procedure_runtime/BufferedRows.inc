@@ -100,6 +100,27 @@
 			return availableBytes;
 		}
 
+        // These operators preserve a deterministic cardinality. Filters and
+        // DISTINCT deliberately keep the existing incremental allocation path.
+        [[nodiscard]] std::optional<size_t> exactProcedureResultRows(
+                const std::vector<const logical::LogicalOperator *> &operations, size_t count) {
+            for (const auto *operation : operations) {
+                if (operation->getType() == logical::LogicalOpType::LOP_PROJECT) {
+                    const auto *project = dynamic_cast<const logical::LogicalProject *>(operation);
+                    if (!project || project->isDistinct()) return std::nullopt;
+                } else if (operation->getType() == logical::LogicalOpType::LOP_SKIP) {
+                    const auto *skip = dynamic_cast<const logical::LogicalSkip *>(operation);
+                    if (!skip || skip->getOffset() < 0) return std::nullopt;
+                    count -= static_cast<size_t>(std::min<uint64_t>(count, skip->getOffset()));
+                } else if (operation->getType() == logical::LogicalOpType::LOP_LIMIT) {
+                    const auto *limit = dynamic_cast<const logical::LogicalLimit *>(operation);
+                    if (!limit || limit->getLimit() < 0) return std::nullopt;
+                    count = static_cast<size_t>(std::min<uint64_t>(count, limit->getLimit()));
+                } else return std::nullopt;
+            }
+            return count;
+        }
+
 		[[nodiscard]] std::optional<size_t> vectorProcedurePrefixThroughLimit(
 				const std::vector<const logical::LogicalOperator *> &operations, const size_t totalRows) {
 			if (operations.empty() || !std::ranges::all_of(operations, [](const logical::LogicalOperator *operation) {
@@ -362,15 +383,24 @@
         // during vector growth. Only storage actually allocated here is admitted:
         // every later source/output overlap remains checked by append below.
         void reserveInitialProcedureResult(QueryResult &result, const ProcedureRows &rows,
-                size_t maximumBytes, size_t externalSourceBytes = 0U) {
+                size_t maximumBytes, size_t externalSourceBytes = 0U,
+                std::optional<size_t> finalRowCount = std::nullopt) {
             if (rows.empty() || !result.isEmpty() || result.getRows().capacity() != 0U) return;
             const size_t source = checkedProcedureSizeAdd(externalSourceBytes,
                 publicationSourceBytes(rows, 0U));
             const size_t current = checkedProcedureSizeAdd(source, procedureQueryResultBytes(result));
-            const size_t backing = utils::detail::standardAllocatorRequestBytes(
-                checkedProcedureSizeMul(rows.size(), sizeof(QueryResult::Row)), alignof(QueryResult::Row));
-            if (current > maximumBytes || backing > maximumBytes - current) return;
-            try { result.reserveRows(rows.size()); }
+            const auto fits = [&](size_t count) {
+                if (current > maximumBytes || count > maximumBytes / sizeof(QueryResult::Row)) return false;
+                try {
+                    const auto bytes = utils::detail::standardAllocatorRequestBytes(
+                        checkedProcedureSizeMul(count, sizeof(QueryResult::Row)), alignof(QueryResult::Row));
+                    return bytes <= maximumBytes - current;
+                } catch (const std::overflow_error &) { return false; }
+            };
+            size_t requested = rows.size();
+            if (finalRowCount && *finalRowCount >= requested && fits(*finalRowCount)) requested = *finalRowCount;
+            if (!fits(requested)) return;
+            try { result.reserveRows(requested); }
             catch (const MaterializedByteLimitExceeded &) { return; }
             catch (const detail::ResourceAdmissionDenied &) { return; }
             validateProcedureResultBudget(result, source, maximumBytes);

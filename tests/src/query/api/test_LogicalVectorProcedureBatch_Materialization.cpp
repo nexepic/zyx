@@ -100,6 +100,9 @@ namespace graph::query {
         options.bounds.maximum_materialized_bytes = 1024U * 1024U;
 		const QueryResult result = execute(acrossBatches);
 		ASSERT_EQ(result.rowCount(), 600U);
+        // The cardinality is known before publication. Retain no unused row
+        // slots and avoid MSVC's deep copies of already-published maps.
+        EXPECT_LE(result.getRows().capacity(), result.rowCount());
         EXPECT_GT(backend->state->property_column_reads, 1U);
 		for (size_t index = 0U; index < result.rowCount(); ++index) {
 			EXPECT_EQ(result.getRows()[index].at("rank").asPrimitive(),

@@ -1041,6 +1041,8 @@ namespace graph::query::execution {
 				candidateCount = nextCandidateCount;
 			}
 		}
+        auto finalRowCount = exactProcedureResultRows(operations, hits.size());
+        if (finalRowCount && *finalRowCount > readBounds.maximum_rows) finalRowCount.reset();
 		if (std::ranges::any_of(operations, [](const logical::LogicalOperator *operation) {
 				return operation->getType() == logical::LogicalOpType::LOP_SORT;
 			})) {
@@ -1059,7 +1061,7 @@ namespace graph::query::execution {
 				context.checkGuard();
 				const auto batch = hitPrefix.subspan(offset, std::min(capacity, hitPrefix.size() - offset));
 				if (!appendBufferedProcedureRows(makeBufferedVectorProcedureRows(batch, context), *snapshot,
-						operations, readBounds, context, result, nullptr, &operatorRowCounts, retainedVectorSourceBytes, true)) {
+						operations, readBounds, context, result, nullptr, &operatorRowCounts, retainedVectorSourceBytes, true, finalRowCount)) {
 					break;
 				}
 			}
@@ -1086,7 +1088,7 @@ namespace graph::query::execution {
 						offset, std::min(capacity, hits.size() - offset));
 				if (!appendBufferedProcedureRows(makeBufferedVectorProcedureRows(batch, context), *snapshot,
 						operations, readBounds, context, result, &distinctRowsByOperation, &operatorRowCounts,
-						retainedVectorSourceBytes, true)) {
+						retainedVectorSourceBytes, true, finalRowCount)) {
 					break;
 				}
 			}
@@ -1103,7 +1105,7 @@ namespace graph::query::execution {
 			const auto batch = std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(
 					offset, std::min(capacity, hits.size() - offset));
 			if (!appendBufferedProcedureRows(makeBufferedVectorProcedureRows(batch, context), *snapshot, {},
-					readBounds, context, result, nullptr, nullptr, retainedVectorSourceBytes, true)) {
+					readBounds, context, result, nullptr, nullptr, retainedVectorSourceBytes, true, finalRowCount)) {
 				break;
 			}
 		}

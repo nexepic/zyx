@@ -176,7 +176,8 @@
 								 utils::OwnedVector<ProcedureDistinctRows> *distinctRowsByOperation = nullptr,
 								 std::vector<uint64_t> *operatorRowCounts = nullptr,
 								 const size_t retainedSourceBytes = 0U,
-								 const bool accountOutputTransition = false) {
+								 const bool accountOutputTransition = false,
+                std::optional<size_t> finalRowCount = std::nullopt) {
 			LogicalPlanReadRuntimeBounds batchBounds = readBounds;
 			const size_t retainedBytes = checkedProcedureSizeAdd(
 					retainedSourceBytes, procedureQueryResultBytes(result));
@@ -413,7 +414,7 @@
             for (auto &row : rows) row.reconcilePayloadCredit();
 			validateBufferedProcedureBytes(rows, batchBounds.maximum_materialized_bytes);
             if (accountOutputTransition)
-                reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes);
+                reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes, finalRowCount);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 				context.checkGuard();
