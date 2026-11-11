@@ -862,8 +862,8 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasesAcrossTransactionsW
 	const std::vector<uint64_t> external =
 			backend.createLogicalEdges({{nodes[0], nodes[1], "MAINTENANCE_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	EXPECT_EQ(beforeExternal->readEdge(external.front()), std::nullopt);
-	EXPECT_EQ(beforeExternal->readEdge(staged.front()), std::nullopt);
+	EXPECT_THROW(static_cast<void>(beforeExternal->readEdge(external.front())), FormatException);
+	EXPECT_THROW(static_cast<void>(beforeExternal->readEdge(staged.front())), FormatException);
 	beforeExternal.reset();
 
 	EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
@@ -1058,8 +1058,8 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasePreservesAnOperatorP
 	const std::vector<uint64_t> external =
 			backend.createLogicalEdges({{nodes[0], nodes[1], "PAUSED_MAINTENANCE_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	EXPECT_EQ(beforeExternal->readEdge(external.front()), std::nullopt);
-	EXPECT_EQ(beforeExternal->readEdge(staged.front()), std::nullopt);
+	EXPECT_THROW(static_cast<void>(beforeExternal->readEdge(external.front())), FormatException);
+	EXPECT_THROW(static_cast<void>(beforeExternal->readEdge(staged.front())), FormatException);
 	beforeExternal.reset();
 
 	EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
