@@ -74,6 +74,35 @@ def write_json(path, record):
     temporary.replace(path)
 
 
+def failure_observations(failures):
+    """Bounded scalar evidence; never echo arbitrary assertion strings/payloads."""
+    kinds, numbers = set(), []
+    truncated = len(failures) > 4
+    for failure in failures[:4]:
+        message = failure.get('message') or failure.text or ''
+        truncated |= len(message) > 16384
+        message = message[:16384]
+        lowered = message.lower()
+        for kind, markers in (
+            ('byte_bound', ('exceeded its byte bound', 'materialized byte bound')),
+            ('resource_admission', ('hierarchical resource admission denied',)),
+            ('rss_guard', ('query exceeded memory limit',)),
+            ('storage_io', ('storageio::',)),
+            ('file_lock', ('locked a portion', 'lock violation',)),
+            ('unexpected_success', ('actual: it throws nothing',)),
+        ):
+            if any(marker in lowered for marker in markers): kinds.add(kind)
+        for line in message.splitlines():
+            # Keep only scalar numeric/boolean assertions, never user strings,
+            # container dumps, expression source, addresses or exception text.
+            match = re.fullmatch(r'\s*(Which is:|Actual:)\s*(-?\d+(?:\.\d+)?|true|false)(?:\s+vs\s+(-?\d+(?:\.\d+)?|true|false))?\s*', line)
+            if match:
+                if len(numbers) < 8 and len(match[2]) <= 32 and (not match[3] or len(match[3]) <= 32):
+                    numbers.append({'label': match[1][:-1], 'value': match[2], **({'versus': match[3]} if match[3] else {})})
+                else: truncated = True
+    return {'kinds': sorted(kinds), 'scalars': numbers, 'truncated': truncated}
+
+
 def run_evidence(command, directory, timeout, *, gtest=False):
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=True)
@@ -214,6 +243,7 @@ def run_evidence(command, directory, timeout, *, gtest=False):
                                 'identity_truncated': any(len(case.get(key, '')) > 256
                                     for key in ('classname', 'name', 'file')),
                                 'assertion_locations': locations,
+                                'observations': failure_observations(failures),
                                 'failures': len(failures)})
                 except (ET.ParseError, OSError): item['parse_state'] = 'incomplete_or_unreadable'
             documents.append(item)

@@ -141,6 +141,35 @@ def test_failed_xml_summary_is_bounded_and_explicit(tmp_path):
     assert b'CI_FAILED_CASE_SUMMARY total=260 emitted=256 truncated=True' in p.stdout
 
 
+def test_failed_xml_exports_only_scalar_observations_and_fixed_error_categories(tmp_path):
+    import xml.etree.ElementTree as ET
+    root = ET.Element('testsuites'); suite = ET.SubElement(root, 'testsuite')
+    case = ET.SubElement(suite, 'testcase', classname='Suite', name='Case')
+    ET.SubElement(case, 'failure', message=(
+        'test.cpp:12\nWhich is: 16\nActual: 2 vs 1\n'
+        'Actual: it throws nothing.\nshared materialization exceeded its byte bound\n'
+        'Which is: private-secret-payload\nWhich is: 0x12345\nWhich is: { 1, 2 }'))
+    xml = ET.tostring(root, encoding='unicode')
+    program = ("import os,sys;from pathlib import Path;sys.stdout.write('a'*(2*1024*1024));"
+               f"Path(os.environ['GTEST_OUTPUT'][4:]).write_text({xml!r});sys.exit(7)")
+    p, r = invoke(tmp_path, program)
+    assert p.returncode == r['exit_code'] == 7
+    observation = r['failed_cases'][0]['observations']
+    assert observation == {'kinds': ['byte_bound', 'unexpected_success'], 'scalars': [
+        {'label': 'Which is', 'value': '16'}, {'label': 'Actual', 'value': '2', 'versus': '1'}], 'truncated': False}
+    assert b'private-secret-payload' not in p.stdout and b'0x12345' not in p.stdout
+
+
+def test_failure_observation_scan_and_scalar_count_are_bounded():
+    import importlib.util
+    import xml.etree.ElementTree as ET
+    spec = importlib.util.spec_from_file_location('ci_evidence', WRAPPER)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    failures = [ET.Element('failure', message=('Which is: 1\n' * 20) + 'x' * 20000)] * 6
+    observed = module.failure_observations(failures)
+    assert len(observed['scalars']) == 8 and observed['truncated']
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='POSIX signal identity')
 def test_crash_keeps_raw_signal(tmp_path):
     p, r = invoke(tmp_path, "import os,signal;os.kill(os.getpid(),signal.SIGTERM)")
