@@ -497,6 +497,18 @@ jobs:
 
       # These additional, bounded diagnostics cannot replace the unit gate.
       # Each process has its own capped rejection trace; no data values are logged.
+      - name: Diagnose bounded Windows admission stacks
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          status=0
+          python scripts/run_ci_evidence.py --name windows-query-account-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --case RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose || status=1
+          python scripts/run_ci_evidence.py --name windows-conversion-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --case HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool || status=1
+          exit "$status"
+        shell: bash
+
       - name: Diagnose Windows materialization budgets
         if: runner.os == 'Windows'
         continue-on-error: true

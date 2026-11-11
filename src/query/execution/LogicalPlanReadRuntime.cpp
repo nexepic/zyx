@@ -51,6 +51,7 @@
 #include "graph/query/execution/GuardedRowCopy.hpp"
 #include "graph/query/execution/GuardedEntityCopy.hpp"
 
+#include <atomic>
 #include <algorithm>
 #include <bit>
 #include <cctype>

@@ -21,7 +21,7 @@ def diagnose(binary, case, xml_path, debugger):
     module = Path(__file__).with_name('lldb_quota_trace.py').resolve()
     command = [debugger, '--no-lldbinit', '--batch',
                '-o', 'settings set target.disable-aslr false',
-               '-o', 'command script import ' + shlex.quote(str(module)),
+               '-o', 'command script import ' + shlex.quote(module.as_posix()),
                '-o', 'run', '-o', 'script lldb_quota_trace.report_exit(lldb.debugger)',
                '--', str(binary.resolve()), '--gtest_filter=' + case]
     environment = os.environ.copy()
