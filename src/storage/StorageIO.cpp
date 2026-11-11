@@ -19,6 +19,7 @@
 #include <span>
 #include <system_error>
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/debug/StaticPerfTimer.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 
@@ -602,7 +603,7 @@ namespace graph::storage {
 	}
 
 	uint64_t StorageIO::fileSizeUncached() const {
-		debug::ScopedPerfTimer sizeTimer("storage_io.file_size");
+		debug::StaticPerfTimer sizeTimer(debug::StaticPerfLabel{"storage_io.file_size"});
 		debug::PerfTrace::addValue("storage_io.file_size_calls", 1);
 		file_handle_t nativeHandle = writeFd_ != INVALID_FILE_HANDLE ? writeFd_ : readFd_;
 		if (nativeHandle != INVALID_FILE_HANDLE) {

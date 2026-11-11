@@ -1,0 +1,38 @@
+{
+  "scope": "Linux whole-process C++ test execution with glibc malloc/calloc/realloc interposition; cumulative requests, not live heap or RSS",
+  "controlled_changes": "Only ChecksumUtils.cpp, StorageIO.cpp and BufferPool.cpp timer implementations; identical current test objects",
+  "runs": [
+    {
+      "variant": "old",
+      "exit": 0,
+      "calls": 256109,
+      "requested_bytes": 56136618,
+      "overflow": 0,
+      "log": "/workspace/ci237-cold-old-0.log"
+    },
+    {
+      "variant": "new",
+      "exit": 0,
+      "calls": 234128,
+      "requested_bytes": 55452520,
+      "overflow": 0,
+      "log": "/workspace/ci237-cold-new-1.log"
+    },
+    {
+      "variant": "new",
+      "exit": 0,
+      "calls": 234128,
+      "requested_bytes": 55452520,
+      "overflow": 0,
+      "log": "/workspace/ci237-cold-new-2.log"
+    },
+    {
+      "variant": "old",
+      "exit": 0,
+      "calls": 256109,
+      "requested_bytes": 56136618,
+      "overflow": 0,
+      "log": "/workspace/ci237-cold-old-3.log"
+    }
+  ]
+}

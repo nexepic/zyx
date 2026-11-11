@@ -401,6 +401,15 @@ jobs:
 
       # Keep the reports and test transcripts outside the build directory so
       # every platform can upload one self-contained Stage 10 audit artifact.
+      - name: Diagnose static timer label allocation requests
+        continue-on-error: true
+        run: |
+          cmake --build buildDir --target zyx_perf_timer_allocation_probe
+          timer_binary=./buildDir/zyx_perf_timer_allocation_probe
+          if [[ "$RUNNER_OS" == "Windows" ]]; then timer_binary="$timer_binary.exe"; fi
+          python scripts/run_ci_evidence.py --name static-timer-allocations --timeout 120 -- "$timer_binary"
+        shell: bash
+
       - name: Diagnose Windows fresh string allocations
         if: runner.os == 'Windows'
         continue-on-error: true

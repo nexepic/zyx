@@ -1,0 +1,10 @@
+/workspace/ci237-static-label-negative.cpp:3:38: error: call to consteval function 'graph::debug::StaticPerfLabel::StaticPerfLabel' is not a constant expression
+    3 |  graph::debug::StaticPerfTimer timer(graph::debug::StaticPerfLabel{std::string_view(runtime)});
+      |                                      ^
+/workspace/ci237-static-label-negative.cpp:3:85: note: function parameter 'runtime' with unknown value cannot be used in a constant expression
+    3 |  graph::debug::StaticPerfTimer timer(graph::debug::StaticPerfLabel{std::string_view(runtime)});
+      |                                                                                     ^
+/workspace/ci237-static-label-negative.cpp:2:33: note: declared here
+    2 | void invalid(const std::string &runtime) {
+      |                                 ^
+1 error generated.

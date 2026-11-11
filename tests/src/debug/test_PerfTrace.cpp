@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/debug/StaticPerfTimer.hpp"
 
 using graph::debug::PerfTrace;
 using graph::debug::ScopedPerfTimer;
@@ -334,4 +335,31 @@ TEST_F(PerfTraceTest, ExistingLabelLookupPreservesOwnedKeysAndExactStringViewLen
     EXPECT_EQ(entry.valueCalls, 101U);
     EXPECT_EQ(entry.totalNs, 800U);
     EXPECT_EQ(entry.calls, 300U);
+}
+
+TEST_F(PerfTraceTest, StaticLabelsRetainAllDurationCallsWithoutOwningAString) {
+    static_assert(!std::is_constructible_v<graph::debug::StaticPerfTimer, std::string_view>);
+    PerfTrace::setEnabled(true);
+    for (unsigned i = 0; i < 100U; ++i) {
+        graph::debug::StaticPerfTimer timer(graph::debug::StaticPerfLabel{"static.duration.collection"});
+    }
+    const auto snapshot = PerfTrace::snapshotAndReset();
+    ASSERT_EQ(snapshot.size(), 1U);
+    EXPECT_EQ(snapshot.at("static.duration.collection").calls, 100U);
+}
+
+TEST_F(PerfTraceTest, StaticEmptyAndDisabledTimersDoNotPublishEntries) {
+    { graph::debug::StaticPerfTimer timer(graph::debug::StaticPerfLabel{"disabled.static.duration"}); }
+    PerfTrace::setEnabled(true);
+    { graph::debug::StaticPerfTimer timer(graph::debug::StaticPerfLabel{""}); }
+    EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+}
+
+TEST_F(PerfTraceTest, DynamicTimerStillOwnsItsLabelAfterTheSourceChanges) {
+    PerfTrace::setEnabled(true);
+    std::string label = "dynamic.duration.original.long.label";
+    { ScopedPerfTimer timer(label); label.assign(200U, 'x'); }
+    const auto snapshot = PerfTrace::snapshotAndReset();
+    ASSERT_EQ(snapshot.size(), 1U);
+    EXPECT_EQ(snapshot.at("dynamic.duration.original.long.label").calls, 1U);
 }
