@@ -159,7 +159,7 @@ template<class Map>
 #if defined(_MSVC_STL_VERSION)
     using namespace utils::detail;
     using Entry = typename Map::value_type;
-    constexpr auto node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+    constexpr auto node = standardHashNodeBytes<Entry>();
     return addStandardHeapBytes(2U * standardContainerProxyBytes(),
         addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Entry)),
             standardAllocatorRequestBytes(16U * sizeof(void *), alignof(void *))));
@@ -223,7 +223,7 @@ template<bool Copy, class T>
         } else {
         // A set has the same linked-node/bucket policy, with a value-only node.
         using Entry = typename Type::value_type;
-        constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+        constexpr size_t node = standardHashNodeBytes<Entry>();
 #if defined(_MSVC_STL_VERSION)
         size_t total = addStandardHeapBytes(2U * standardContainerProxyBytes(),
             addStandardHeapBytes(standardAllocatorRequestBytes((value.size() + 1U) * node, alignof(Entry)),
@@ -259,6 +259,13 @@ void procedureMapReserve(Map &map, size_t count) {
     if constexpr (isExecutionBindingTree<Map>) { map.reserve(count); }
     else {
     if (!count) return;
+    // reserve() may shrink an already prepared table. Reusing its admitted
+    // capacity needs neither another bucket allocation nor another grant.
+    // libstdc++'s singleton bucket is embedded, so it is not prepared storage.
+    // The internal default-load-factor tables have an exact integer capacity.
+    // Keep the conservative path for custom float load factors rather than
+    // rounding a near-SIZE_MAX product into an unsafe capacity promise.
+    if (map.bucket_count() > 1U && map.max_load_factor() == 1.0F && count <= map.bucket_count()) return;
     if (ProcedurePayloadAdmissionScope::active()) {
         using namespace utils::detail;
         if (count > ((std::numeric_limits<size_t>::max)() - 1U) / 2U) throw std::length_error("procedure hash capacity overflowed");
@@ -283,7 +290,7 @@ void procedureAdmitMapNode(Map &map, const Key &key) {
     using Entry = typename Map::value_type;
     const size_t nodeBytes = [] {
         if constexpr (isExecutionBindingTree<Map>) return executionBindingNodeBytes<Map>();
-        else return standardAllocatorRequestBytes(sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U, alignof(Entry));
+        else return standardAllocatorRequestBytes(standardHashNodeBytes<Entry>(), alignof(Entry));
     }();
     ProcedurePayloadAdmissionScope::admit(addStandardHeapBytes(nodeBytes,
         ([](const auto &input) {

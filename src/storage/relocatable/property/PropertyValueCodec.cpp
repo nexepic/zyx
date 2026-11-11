@@ -340,7 +340,7 @@ namespace graph::storage {
         size_t defaultMovingMapHeapUpper() {
 #if defined(_MSVC_STL_VERSION)
             using Entry = PropertyValue::MapType::value_type;
-            constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+            constexpr size_t node = utils::detail::standardHashNodeBytes<Entry>();
             return addStandardHeapBytes(2U * standardContainerProxyBytes(),
                 addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Entry)),
                     standardAllocatorRequestBytes(16U * sizeof(void *), alignof(void *))));
@@ -350,7 +350,7 @@ namespace graph::storage {
         }
         size_t reservedDecodedMapHeapUpper(size_t count) {
             using Entry = PropertyValue::MapType::value_type;
-            constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+            constexpr size_t node = utils::detail::standardHashNodeBytes<Entry>();
 #if defined(_MSVC_STL_VERSION)
             const auto nodes = addStandardHeapBytes(count, 1U);
             constexpr size_t bucketWidth = 2U * sizeof(void *);

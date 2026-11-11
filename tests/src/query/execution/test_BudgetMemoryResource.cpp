@@ -43,6 +43,13 @@ TEST(BudgetMemoryResourceTest, HashNodeLayoutIncludesAlignmentWithoutArbitraryPe
     using AlignedEntry = std::pair<const uint64_t, Wide>;
     EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<AlignedEntry>(),
         sizeof(std::_List_node<AlignedEntry, void *>));
+    // Decode, mutation headers and owned string sets use the same layout
+    // policy, including the sentinel and over-aligned mapped values.
+    using PropertyEntry = graph::PropertyValue::MapType::value_type;
+    EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<PropertyEntry>(),
+        sizeof(std::_List_node<PropertyEntry, void *>));
+    EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<std::string>(),
+        sizeof(std::_List_node<std::string, void *>));
 #else
     using Entry = std::pair<const uint64_t, uint64_t>;
     EXPECT_EQ(graph::utils::detail::standardHashNodeBytes<Entry>(),
