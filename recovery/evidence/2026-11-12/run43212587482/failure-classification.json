@@ -1,0 +1,83 @@
+{
+  "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch": [
+    "CI_RESULT_REJECTION"
+  ],
+  "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry": [
+    "CI_PROCEDURE_PRESSURE"
+  ],
+  "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded": [
+    "other_observation_no_precise_origin"
+  ],
+  "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool": [
+    "CI_UNMANAGED_REJECT"
+  ],
+  "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers": [
+    "CI_SORT_REJECTION"
+  ],
+  "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact": [
+    "CI_UNMANAGED_REJECT"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges": [
+    "CI_RESULT_GROWTH_REJECT"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge": [
+    "CI_RESULT_GROWTH_REJECT"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows": [
+    "CI_RESULT_REJECTION"
+  ],
+  "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication": [
+    "CI_PROCEDURE_PRESSURE"
+  ],
+  "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose": [
+    "other_observation_no_precise_origin"
+  ],
+  "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties": [
+    "CI_RESULT_GROWTH_REJECT"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations": [
+    "CI_RESULT_REJECTION"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget": [
+    "other_observation_no_precise_origin"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows": [
+    "CI_RESULT_REJECTION"
+  ],
+  "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow": [
+    "CI_RESULT_GROWTH_REJECT"
+  ],
+  "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns": [
+    "CI_NODE_RETAINED_REJECT"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation": [
+    "CI_NODE_RETAINED_REJECT"
+  ],
+  "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing": [
+    "CI_PROCEDURE_PRESSURE"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead": [
+    "CI_RESULT_GROWTH_REJECT"
+  ],
+  "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget": [
+    "CI_RESULT_GROWTH_REJECT"
+  ],
+  "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting": [
+    "CI_PROCEDURE_PRESSURE"
+  ],
+  "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches": [
+    "CI_PROCEDURE_PRESSURE"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties": [
+    "other_observation_no_precise_origin"
+  ],
+  "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget": [
+    "other_observation_no_precise_origin"
+  ],
+  "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound": [
+    "CI_COUNT_UNWIND"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations": [
+    "CI_RESULT_REJECTION"
+  ]
+}

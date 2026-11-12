@@ -1,0 +1,288 @@
+{
+  "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch": [
+    "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=2817 available=1039 maximum=4016"
+  ],
+  "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry": [
+    "CI_PROCEDURE_PRESSURE owner=22247930593288 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2736 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5624 requested_backing=0 maximum=8192 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=584 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+  ],
+  "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded": [
+    "CI_BUDGET owner=30236569763860 account_id=0 operation=replace requested=2720 previous=2704 embedded=0 used=3936 peak=3936 maximum=3936 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=30236569763860 account_id=0 operation=wouldExceed requested=3266 previous=252 embedded=0 used=964 peak=3936 maximum=3936 available=2972 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PlanInspectionAndBatching.inc site_line=1339",
+    "CI_PREFETCH pressure_line=1340 rows=1 buffered=344 used=432 available=3504",
+    "CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+  ],
+  "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool": [
+    "CI_BUDGET owner=32847909879809 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=1048572 peak=1048572 maximum=1048576 available=4 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84",
+    "CI_UNMANAGED_REJECT requested=16 previous=0 site_file=OwnedStdVector.hpp site_line=56 site_function=__cdecl graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(OwnedStdVector<T> &&) [T = std::byte]"
+  ],
+  "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers": [
+    "CI_STRING_BOUND characters=4096 raw_upper=4112 proxy=16 admitted=4175",
+    "CI_SORT_REJECTION line=704 rows=4 retained=18076 key_slots=352 used=30953 available=3543"
+  ],
+  "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact": [
+    "CI_BUDGET owner=43533788512257 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=1048572 peak=1048572 maximum=1048576 available=4 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84",
+    "CI_UNMANAGED_REJECT requested=16 previous=0 site_file=OwnedStdVector.hpp site_line=56 site_function=__cdecl graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(OwnedStdVector<T> &&) [T = std::byte]"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges": [
+    "CI_BUDGET owner=34394098106370 account_id=0 operation=replace requested=533 previous=453 embedded=0 used=2021 peak=2021 maximum=2040 available=19 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=0 old_capacity=0 preferred_capacity=1 chosen_capacity=1 minimum_capacity=1 retained_with_incoming=453 relocation_upper=0 transient=533 used=2021 maximum=2040 strategy=empty_swap"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge": [
+    "CI_BUDGET owner=31284541784066 account_id=0 operation=wouldExceed requested=10433 previous=7505 embedded=0 used=9273 peak=9273 maximum=9600 available=327 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=463",
+    "CI_BUDGET owner=31284541784066 account_id=0 operation=replace requested=10193 previous=7505 embedded=0 used=9273 peak=9273 maximum=9600 available=327 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=4 old_capacity=4 preferred_capacity=8 chosen_capacity=5 minimum_capacity=5 retained_with_incoming=7505 relocation_upper=2288 transient=10193 used=9273 maximum=9600 strategy=empty_swap"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows": [
+    "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504"
+  ],
+  "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication": [
+    "CI_BUDGET owner=19086834663429 account_id=0 operation=wouldExceed requested=4194 previous=0 embedded=0 used=1467 peak=1467 maximum=4792 available=3325 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=230",
+    "CI_BUDGET owner=19086834663429 account_id=0 operation=wouldExceed requested=2796 previous=0 embedded=0 used=2515 peak=2875 maximum=4792 available=2277 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=230",
+    "CI_BUDGET owner=19086834663429 account_id=0 operation=wouldExceed requested=1398 previous=0 embedded=0 used=3563 peak=3931 maximum=4792 available=1229 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=230",
+    "CI_PROCEDURE_PRESSURE owner=19086834663443 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=5584 result_rows=0 result_capacity=3 result_row_width=80 result_and_output=3584 requested_backing=0 maximum=9000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+  ],
+  "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose": [
+    "CI_STRING_BOUND characters=1000 raw_upper=1008 proxy=16 admitted=1024",
+    "CI_RESOURCE account_id=28673201668118 class=0 lease=10128 requested=11152 available=752 account=32016/32768 database=68451600/268435456 database_class=32016/201326592 process=68451600/536870912 process_class=32016/536870912",
+    "CI_BUDGET owner=28673201668120 account_id=28673201668118 operation=parent requested=1024 previous=0 embedded=0 used=10128 peak=13792 maximum=67107000 available=67096872 parent_charge=10128 parent_maximum=32768 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=1124",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=8 lease=10120 account=32008 database=68451592 process=68451592",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=480 lease=9640 account=31528 database=68451112 process=68451112",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=4464 lease=5176 account=27064 database=68446648 process=68446648",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=4 lease=5172 account=27060 database=68446644 process=68446644",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=5156 account=27044 database=68446628 process=68446628",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=72 lease=5084 account=26972 database=68446556 process=68446556",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=5068 account=26956 database=68446540 process=68446540",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=56 lease=5012 account=26900 database=68446484 process=68446484",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=4996 account=26884 database=68446468 process=68446468",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=112 lease=4884 account=26772 database=68446356 process=68446356",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=32 lease=4852 account=26740 database=68446324 process=68446324",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=8 lease=4844 account=26732 database=68446316 process=68446316",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=88 lease=4756 account=26644 database=68446228 process=68446228",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=88 lease=4668 account=26556 database=68446140 process=68446140",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=112 lease=4556 account=26444 database=68446028 process=68446028",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=32 lease=4524 account=26412 database=68445996 process=68445996",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=160 lease=4364 account=26252 database=68445836 process=68445836",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=4 lease=4360 account=26248 database=68445832 process=68445832",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=4344 account=26232 database=68445816 process=68445816",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=72 lease=4272 account=26160 database=68445744 process=68445744",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=4256 account=26144 database=68445728 process=68445728",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=112 lease=4144 account=26032 database=68445616 process=68445616",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=32 lease=4112 account=26000 database=68445584 process=68445584",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=8 lease=4104 account=25992 database=68445576 process=68445576",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=88 lease=4016 account=25904 database=68445488 process=68445488",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=112 lease=3904 account=25792 database=68445376 process=68445376",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=32 lease=3872 account=25760 database=68445344 process=68445344",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=1760 lease=0 account=24000 database=68443584 process=68443584",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=112 lease=3760 account=23888 database=68443472 process=68443472",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=32 lease=3728 account=23856 database=68443440 process=68443440",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=24 lease=3704 account=23832 database=68443416 process=68443416",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=24 lease=3680 account=23808 database=68443392 process=68443392",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=24 lease=3656 account=23784 database=68443368 process=68443368",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=112 lease=3544 account=23672 database=68443256 process=68443256",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=32 lease=3512 account=23640 database=68443224 process=68443224",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=3496 account=23624 database=68443208 process=68443208",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=3480 account=23608 database=68443192 process=68443192",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=3464 account=23592 database=68443176 process=68443176",
+    "CI_RESOURCE account_id=28673201668118 refund class=0 amount=16 lease=3448 account=23576 database=68443160 process=68443160",
+    "CI_TRACE_TRUNCATED kind=account owner=28673201668118 owner_limit=40 process_limit=400 notice_limit=20",
+    "CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+  ],
+  "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties": [
+    "CI_BUDGET owner=31576599560214 account_id=0 operation=replace requested=3172 previous=2428 embedded=0 used=2980 peak=3432 maximum=3720 available=740 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=1 old_capacity=1 preferred_capacity=2 chosen_capacity=2 minimum_capacity=2 retained_with_incoming=2428 relocation_upper=584 transient=3172 used=2980 maximum=3720 strategy=empty_swap",
+    "CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations": [
+    "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=0 used=1776 available=1120 maximum=3056"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget": [
+    "CI_STRING_BOUND characters=118 raw_upper=128 proxy=16 admitted=144",
+    "CI_STRING_BOUND characters=2000 raw_upper=2016 proxy=16 admitted=2032"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows": [
+    "CI_STRING_BOUND characters=111 raw_upper=112 proxy=16 admitted=128",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2880",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3008",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3136",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3264",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3392",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3520",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3648",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3776",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3904",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4032",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4160",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4288",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4416",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4544",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4672",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4800",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4928",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=5056",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5184",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5312",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5440",
+    "CI_TRACE_TRUNCATED summary_kind=successful process_limit=20",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5568",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5696",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5824",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=5952",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6080",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6208",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6336",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6464",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6592",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6720",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6848",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=6976",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=7104",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=7232",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=7360",
+    "CI_CSV field_growth required=64 capacity=63 target=94 retained=1232 old=2520 target_bytes=3760 peak=7512 limit=7488",
+    "CI_BUDGET owner=27900107554854 account_id=0 operation=wouldExceed requested=12168 previous=5040 embedded=0 used=5200 peak=5200 maximum=7776 available=2576 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=477",
+    "CI_CSV field_growth required=14 capacity=13 target=19 retained=432 old=520 target_bytes=760 peak=1712 limit=1680",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=528 old=760 target_bytes=1120 peak=2408 limit=1808",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=528 old=760 target_bytes=1120 peak=2408 limit=1936",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=528 old=760 target_bytes=1120 peak=2408 limit=2064",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=528 old=760 target_bytes=1120 peak=2408 limit=2192",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=528 old=760 target_bytes=1120 peak=2408 limit=2320",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2448",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2576",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2704",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2832",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=2960",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3088",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3216",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=672 old=1120 target_bytes=1680 peak=3472 limit=3344",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3472",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3600",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3728",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3856",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=3984",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4112",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4240",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4368",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4496",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4624",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4752",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=4880",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=896 old=1680 target_bytes=2520 peak=5096 limit=5008",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=464 old=760 target_bytes=1120 peak=2344 limit=1816",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=464 old=760 target_bytes=1120 peak=2344 limit=1944",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=464 old=760 target_bytes=1120 peak=2344 limit=2072",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=464 old=760 target_bytes=1120 peak=2344 limit=2200",
+    "CI_CSV field_growth required=20 capacity=19 target=28 retained=464 old=760 target_bytes=1120 peak=2344 limit=2328",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=2456",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=2584",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=2712",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=2840",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=2968",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=3096",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=3224",
+    "CI_CSV field_growth required=29 capacity=28 target=42 retained=608 old=1120 target_bytes=1680 peak=3408 limit=3352",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=3480",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=3608",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=3736",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=3864",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=3992",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4120",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4248",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4376",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4504",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4632",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4760",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=4888",
+    "CI_CSV field_growth required=43 capacity=42 target=63 retained=832 old=1680 target_bytes=2520 peak=5032 limit=5016",
+    "CI_BUDGET owner=27900107554910 account_id=0 operation=wouldExceed requested=11758 previous=3320 embedded=0 used=6800 peak=6800 maximum=8624 available=1824 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=477",
+    "CI_RESULT_REJECTION requested=10435 source_row=10344 result_rows=0 used=10184 available=8592 maximum=19896"
+  ],
+  "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow": [
+    "CI_BUDGET owner=37314675867650 account_id=0 operation=replace requested=269 previous=0 embedded=0 used=525 peak=709 maximum=736 available=211 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=RowAndWindowOperators.inc site_line=86",
+    "CI_BUDGET owner=37314675867652 account_id=0 operation=replace requested=1714 previous=970 embedded=0 used=1154 peak=1154 maximum=1236 available=82 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=1 old_capacity=1 preferred_capacity=2 chosen_capacity=2 minimum_capacity=2 retained_with_incoming=970 relocation_upper=584 transient=1714 used=1154 maximum=1236 strategy=empty_swap"
+  ],
+  "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns": [
+    "CI_STRING_BOUND characters=1000 raw_upper=1008 proxy=16 admitted=1024",
+    "CI_BUDGET owner=31009663877139 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=31009663877139 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_NODE_COLUMN_PRESSURE line=319 rows=3 columns=1 used_at_rejection=1830 available_at_rejection=10 local_maximum=1840 bound_maximum=2000 reports_limit=20",
+    "CI_BUDGET owner=31009663877139 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_NODE_RETAINED_REJECT rows=1 columns=1 row_structural=624 admitted_source=1014 returned_columns=1151 column_outer=32 column_inner=88 column_keys=7 column_cells=1024 used=1782 available=58",
+    "CI_NODE_COLUMN_PRESSURE line=353 rows=1 columns=1 used_at_rejection=1782 available_at_rejection=58 local_maximum=1840 bound_maximum=2000 reports_limit=20",
+    "CI_BUDGET owner=31009663877141 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=31009663877141 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=31009663877141 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_BUDGET owner=31009663877143 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=31009663877143 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=31009663877143 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_BUDGET owner=31009663877147 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=31009663877147 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=31009663877147 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_BUDGET owner=31009663877149 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=31009663877149 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=31009663877149 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_BUDGET owner=31009663877151 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_BUDGET owner=31009663877151 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=31009663877151 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation": [
+    "CI_STRING_BOUND characters=1000 raw_upper=1008 proxy=16 admitted=1024",
+    "CI_BUDGET owner=15702400434177 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_NODE_COLUMN_PRESSURE line=319 rows=3 columns=1 used_at_rejection=1828 available_at_rejection=12 local_maximum=1840 bound_maximum=2000 reports_limit=20",
+    "CI_BUDGET owner=15702400434177 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_NODE_RETAINED_REJECT rows=1 columns=1 row_structural=624 admitted_source=1012 returned_columns=1151 column_outer=32 column_inner=88 column_keys=7 column_cells=1024 used=1780 available=60",
+    "CI_NODE_COLUMN_PRESSURE line=353 rows=1 columns=1 used_at_rejection=1780 available_at_rejection=60 local_maximum=1840 bound_maximum=2000 reports_limit=20",
+    "CI_BUDGET owner=15702400434179 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=15702400434179 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_BUDGET owner=15702400434181 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=15702400434181 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341",
+    "CI_BUDGET owner=15702400434183 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318",
+    "CI_BUDGET owner=15702400434183 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=341"
+  ],
+  "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing": [
+    "CI_BUDGET owner=36799279792131 account_id=0 operation=wouldExceed requested=10104 previous=90 embedded=0 used=651 peak=651 maximum=4824 available=4173 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=VectorOutputAndTopK.inc site_line=85",
+    "CI_PROCEDURE_PRESSURE owner=36799279792138 phase=source_result_overlap source_rows=1 source_capacity=1 source_row_width=208 source_backing=208 external_source=16 source_retained=640 result_rows=0 result_capacity=1 result_row_width=80 result_and_output=4984 requested_backing=0 maximum=5000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+  ],
+  "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead": [
+    "CI_STRING_BOUND characters=121 raw_upper=128 proxy=16 admitted=144",
+    "CI_BUDGET owner=38689065402371 account_id=0 operation=wouldExceed requested=3633 previous=2177 embedded=0 used=2776 peak=2776 maximum=3736 available=960 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=463",
+    "CI_BUDGET owner=38689065402371 account_id=0 operation=replace requested=3553 previous=2177 embedded=0 used=2776 peak=2776 maximum=3736 available=960 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=2 old_capacity=2 preferred_capacity=4 chosen_capacity=3 minimum_capacity=3 retained_with_incoming=2161 relocation_upper=1152 transient=3553 used=2776 maximum=3736 strategy=empty_swap",
+    "CI_BUDGET owner=38689065402374 account_id=0 operation=wouldExceed requested=12483 previous=6659 embedded=0 used=7523 peak=8478 maximum=11256 available=3733 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=463",
+    "CI_BUDGET owner=38689065402374 account_id=0 operation=replace requested=11923 previous=6659 embedded=0 used=7523 peak=8478 maximum=11256 available=3733 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=8 old_capacity=8 preferred_capacity=16 chosen_capacity=9 minimum_capacity=9 retained_with_incoming=6643 relocation_upper=4560 transient=11923 used=7523 maximum=11256 strategy=empty_swap"
+  ],
+  "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget": [
+    "CI_BUDGET owner=27230092656642 account_id=0 operation=replace requested=1730 previous=986 embedded=0 used=1186 peak=1856 maximum=1856 available=670 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=473",
+    "CI_RESULT_GROWTH_REJECT rows=1 old_capacity=1 preferred_capacity=2 chosen_capacity=2 minimum_capacity=2 retained_with_incoming=986 relocation_upper=584 transient=1730 used=1186 maximum=1856 strategy=empty_swap"
+  ],
+  "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting": [
+    "CI_BUDGET owner=10909216931843 account_id=0 operation=wouldExceed requested=4836 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71",
+    "CI_STRING_BOUND characters=1500 raw_upper=1504 proxy=16 admitted=1520",
+    "CI_BUDGET owner=10909216931843 account_id=0 operation=wouldExceed requested=3224 previous=0 embedded=0 used=2981 peak=3085 maximum=5848 available=2867 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71",
+    "CI_BUDGET owner=10909216931843 account_id=0 operation=wouldExceed requested=1612 previous=0 embedded=0 used=4495 peak=4607 maximum=5848 available=1353 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71",
+    "CI_PROCEDURE_PRESSURE owner=10909216931849 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2424 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5576 requested_backing=0 maximum=8000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=584 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+  ],
+  "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches": [
+    "CI_PROCEDURE_PRESSURE owner=43705587204355 phase=source_result_overlap source_rows=192 source_capacity=192 source_row_width=208 source_backing=39936 external_source=4800 source_retained=74488 result_rows=142 result_capacity=300 result_row_width=80 result_and_output=183167 requested_backing=0 maximum=262144 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=80672 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties": [
+    "CI_BUDGET owner=18124761989121 account_id=0 operation=replace requested=513 previous=0 embedded=0 used=3734 peak=3902 maximum=3936 available=202 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=1331"
+  ],
+  "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget": [
+    "CI_BUDGET owner=43344809951238 account_id=0 operation=wouldExceed requested=1522 previous=208 embedded=0 used=1234 peak=1234 maximum=2447 available=1213 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454",
+    "CI_BUDGET owner=43344809951238 account_id=0 operation=wouldExceed requested=1434 previous=120 embedded=0 used=1138 peak=1234 maximum=2447 available=1309 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454",
+    "CI_BUDGET owner=43344809951252 account_id=43344809951251 operation=replace requested=112 previous=0 embedded=0 used=2504 peak=2504 maximum=2599 available=95 parent_charge=2504 parent_maximum=2599 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84",
+    "CI_STRING_BOUND characters=1300 raw_upper=1312 proxy=16 admitted=1328",
+    "CI_BUDGET owner=43344809951265 account_id=43344809951255 operation=replace requested=1328 previous=0 embedded=0 used=9768 peak=9768 maximum=10240 available=472 parent_charge=9768 parent_maximum=10240 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84",
+    "CI_TRACE_TRUNCATED summary_kind=successful process_limit=20"
+  ],
+  "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound": [
+    "CI_BUDGET owner=42760694398978 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=56 available=56 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+    "CI_COUNT_UNWIND phase=source_scan"
+  ],
+  "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations": [
+    "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504"
+  ]
+}

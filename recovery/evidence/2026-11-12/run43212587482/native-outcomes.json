@@ -1,0 +1,63 @@
+{
+  "windows": {
+    "supervisor": [
+      "2026-11-12T11:52:06.7987530Z CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=114 truncated=False"
+    ],
+    "terminal": [
+      "2026-11-12T13:25:08.9236282Z CI_EVIDENCE directory=unit exit=1 output_bytes=2223974 truncated=False",
+      "2026-11-12T13:31:27.3141943Z CI_EVIDENCE directory=stress exit=0 output_bytes=2404 truncated=False"
+    ],
+    "rss_samples": [],
+    "upload_error": []
+  },
+  "asan": {
+    "supervisor": [
+      "2026-11-12T11:52:10.7740450Z CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=168 truncated=False"
+    ],
+    "terminal": [
+      "2026-11-12T12:34:19.4300430Z CI_EVIDENCE directory=asan-cold-rss-control exit=1 output_bytes=1030 truncated=False",
+      "2026-11-12T12:34:27.6110740Z CI_EVIDENCE directory=asan-cold-rss exit=1 output_bytes=27892 truncated=False",
+      "2026-11-12T12:34:34.2593460Z CI_EVIDENCE directory=asan-rss-warmed-statistics exit=1 output_bytes=32727 truncated=False",
+      "2026-11-12T13:05:48.0935570Z CI_EVIDENCE directory=asan-gate exit=0 output_bytes=247509 truncated=False"
+    ],
+    "rss_samples": [
+      "2026-11-12T12:34:26.8573300Z CI_RSS_REJECT limit=67108864 baseline=464175104 current=531415040 asan_available=1 live=10477529 heap=90324992",
+      "2026-11-12T12:34:33.6691410Z CI_RSS_REJECT limit=67108864 baseline=464699392 current=531906560 asan_available=1 live=10477561 heap=90324992"
+    ],
+    "upload_error": []
+  },
+  "ubuntu": {
+    "supervisor": [
+      "2026-11-12T11:51:02.1610432Z CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=99 truncated=False"
+    ],
+    "terminal": [
+      "2026-11-12T13:02:00.6857710Z CI_EVIDENCE directory=unit exit=0 output_bytes=3892 truncated=False",
+      "2026-11-12T13:06:44.4184462Z CI_EVIDENCE directory=stress exit=0 output_bytes=822 truncated=False"
+    ],
+    "rss_samples": [],
+    "upload_error": [
+      "2026-11-12T13:18:36.0730629Z error - 2026-11-12 13:18:36,072 -- Upload queued for processing failed: {\"message\":\"This repository is deactivated. To resume uploading to it, please activate the repository in the Codecov UI: https://app.codecov.io/github/nexepic/zyx/config/general\"}"
+    ]
+  },
+  "mac": {
+    "supervisor": [
+      "2026-11-12T11:52:20.9939560Z CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=168 truncated=False"
+    ],
+    "terminal": [
+      "2026-11-12T13:05:37.4741730Z CI_EVIDENCE directory=unit exit=0 output_bytes=3913 truncated=False",
+      "2026-11-12T13:09:52.7841070Z CI_EVIDENCE directory=stress exit=0 output_bytes=752 truncated=False"
+    ],
+    "rss_samples": [],
+    "upload_error": []
+  },
+  "tsan": {
+    "supervisor": [
+      "2026-11-12T11:52:12.7069310Z CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=168 truncated=False"
+    ],
+    "terminal": [
+      "2026-11-12T12:24:05.8230150Z CI_EVIDENCE directory=tsan-gate exit=0 output_bytes=934 truncated=False"
+    ],
+    "rss_samples": [],
+    "upload_error": []
+  }
+}

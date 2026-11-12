@@ -1,0 +1,21 @@
+{
+  "source_commit": "607161d51ad24e1f3ae4e941021011ffb34ec544",
+  "target": 41,
+  "reported_passed": 41,
+  "reported_failed": 0,
+  "binary_sha256": "f675d387853726a98dbdb3b706dd1937b67b7f2b061ef3441d7df635da682ef7",
+  "launcher": {
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=RelocatableBTreePageCodecTest.*:HybridPropertyPoolTailReuseTest.*:HybridPropertyMatureShapeCostsTest.*"
+    ],
+    "completed_at_unix_seconds": 1794510341.516912,
+    "exit_code": 0,
+    "jobs": 1,
+    "launcher_pid": 42544,
+    "run_id": "ci241-targeted-final",
+    "started_at_unix_seconds": 1794510033.1520395,
+    "working_directory": "/workspace/zyx"
+  },
+  "xml_note": "jobs=1 direct launcher does not consume ZYX_TEST_XML_DIR; counts and launcher are retained from the complete console. Final jobs=2 run will supply per-identity XML."
+}
