@@ -1207,6 +1207,9 @@ TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingConsumesBackingWhenAnothe
  {
   graph::utils::OwnedAllocationScope scope(memory);
   auto page = BTreePage::createWithEntries(owner, header, entries);
+  const std::vector<std::byte> removedKey(100U, std::byte{'z'});
+  page.insert({removedKey, 3U}); page.erase(removedKey);
+  const auto fragmentedFree = page.slottedPage().stats().contiguous_free_bytes;
   const auto before = memory->live;
   auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
   memory->deny_page = true;
@@ -1214,6 +1217,7 @@ TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingConsumesBackingWhenAnothe
   EXPECT_EQ(page.header().generation, owner.generation); EXPECT_EQ(memory->live, before);
   auto rebound = std::move(page).rebindPrivateOwner(replacement);
   EXPECT_EQ(memory->page_allocations, 1U); EXPECT_EQ(memory->live, before);
+  EXPECT_GT(rebound.slottedPage().stats().contiguous_free_bytes, fragmentedFree);
   EXPECT_EQ(rebound.entries(), entries); EXPECT_EQ(rebound.header().left_sibling, header.left_sibling);
   EXPECT_EQ(rebound.header().right_sibling, header.right_sibling);
   EXPECT_EQ(rebound.slottedPage().memoryOwner(), memory);

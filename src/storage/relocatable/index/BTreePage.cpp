@@ -955,6 +955,9 @@ namespace graph::storage {
         validateLayout();
         rebound.generation = owner.generation;
         const auto bytes = BTreePageHeaderCodec::encode(rebound);
+        // Existing bounded in-place compaction uses no heap allocation and
+        // preserves the free-space behavior of immutable rebinding.
+        page_.compact();
         page_.rebindOwner(owner);
         page_.overwrite({rebound.page_id, 0U, 1U}, bytes);
         return std::move(*this);

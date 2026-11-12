@@ -178,7 +178,7 @@ namespace graph::storage {
 		[[nodiscard]] BTreePage rebindOwner(const PageOwnerHeader &owner) const;
         // Consume an exclusively owned, unpublished image. Authenticate it
         // before updating fixed owner/header bytes; retain its backing/authority
-        // and packed layout instead of allocating another complete page.
+        // and compact existing slots instead of allocating another complete page.
         [[nodiscard]] BTreePage rebindPrivateOwner(const PageOwnerHeader &owner) &&;
 		void insert(BTreePageEntry entry);
 		void erase(std::span<const std::byte> key);
