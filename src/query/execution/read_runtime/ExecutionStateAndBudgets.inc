@@ -464,7 +464,25 @@
                     requestedCapacity = minimumCapacity;
                     transientBytes = growthPeak(requestedCapacity);
                 }
-                try { state.shared.final_result_reservation.set(transientBytes); }
+                const auto admitGrowth = [&] {
+                    const auto exactGrowth = [&] {
+                        requestedCapacity = minimumCapacity;
+                        transientBytes = growthPeak(requestedCapacity);
+                        state.shared.final_result_reservation.set(transientBytes);
+                    };
+                    try { state.shared.final_result_reservation.set(transientBytes); }
+                    catch (const MaterializedByteLimitExceeded &) {
+                        if (requestedCapacity == minimumCapacity) throw;
+                        exactGrowth();
+                    } catch (const detail::ResourceAdmissionDenied &) {
+                        if (requestedCapacity == minimumCapacity) throw;
+                        exactGrowth();
+                    }
+                };
+                // The local headroom probe does not include parent QUERY or
+                // PROCESS pressure. A rejected admission leaves its owner
+                // unchanged, so retry only quota denials at the exact size.
+                try { admitGrowth(); }
                 catch (...) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
                     debug::CiBudgetTrace trace(&result, "result_growth");

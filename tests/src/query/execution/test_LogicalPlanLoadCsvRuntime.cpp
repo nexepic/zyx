@@ -660,6 +660,42 @@ namespace graph::query::execution {
         }
         FAIL() << "bounded scalar result never became admissible";
     }
+    TEST_F(LogicalPlanLoadCsvRuntimeTest, ParentPressureUsesNecessaryResultCapacityAndRefundsEveryRetry) {
+        using namespace detail;
+        CsvOnlyBackend backend;
+        LogicalPlanReadRuntime runtime(backend);
+        std::string values;
+        for (size_t index = 1U; index <= 33U; ++index) {
+            if (!values.empty()) values += ',';
+            values += std::to_string(index);
+        }
+        const auto plan = parse("UNWIND [" + values + "] AS x RETURN x");
+        auto constrained = bounds();
+        constrained.maximum_rows = constrained.maximum_distinct_rows = 64U;
+        constrained.maximum_materialized_bytes = 1048576U;
+        for (size_t limit = 8192U; limit <= 131072U; limit += 128U) {
+            auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(limit));
+            auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(limit));
+            auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, limit);
+            auto queryContext = context(); queryContext.resource_account = account;
+            bool succeeded = false;
+            try {
+                const auto result = runtime.executeToQueryResult(*plan.root, constrained, queryContext);
+                ASSERT_EQ(result.rowCount(), 33U);
+                EXPECT_LT(result.getRows().capacity(), 64U);
+                EXPECT_GT(account->used(), 0U);
+                for (size_t index = 0U; index < 33U; ++index)
+                    EXPECT_EQ(result.getRows()[index].at("x").asPrimitive(), PropertyValue(int64_t(index + 1U)));
+                succeeded = true;
+            } catch (const std::runtime_error &error) {
+                ASSERT_TRUE(dynamic_cast<const ResourceAdmissionDenied *>(&error) ||
+                    std::string(error.what()).find("byte bound") != std::string::npos) << error.what();
+            }
+            EXPECT_EQ(account->used(), 0U);
+            if (succeeded) return;
+        }
+        FAIL() << "parent-limited scalar result never became admissible";
+    }
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, OutputBatchSharesCsvSourceBudgetWhileReadingAhead) {
 		CsvOnlyBackend backend;
 		LogicalPlanReadRuntime runtime(backend);

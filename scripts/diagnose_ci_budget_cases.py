@@ -28,6 +28,7 @@ WINDOWS = [
     'QueryResultResourcesTest.SwapGrowthAvoidsThrowingMoveCopiesAndRollsBackDestinationFailure',
     'QueryResultResourcesTest.ChargedAndUnchargedRowGrowthKeepIndependentHeapPayloadAddresses',
     'LogicalPlanLoadCsvRuntimeTest.TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads',
+    'LogicalPlanLoadCsvRuntimeTest.ParentPressureUsesNecessaryResultCapacityAndRefundsEveryRetry',
     'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',
     'CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge',
     'CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues',
