@@ -49,7 +49,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueRangeReuseValidatesRawAndCompress
    const auto result = store.readRangeFromManifestCached(snapshot, manifest, offset, 32, cache,
     [&](size_t bytes) { admitted = bytes; });
    EXPECT_EQ(result, slice(input, offset, 32));
-   EXPECT_EQ(admitted, result.capacity() + cache.retainedBytes());
+   EXPECT_EQ(admitted, graph::utils::detail::standardVectorHeapBufferBytes(result) + cache.retainedBytes());
    EXPECT_LE(cache.retainedBytes(), RSS_LARGE_VALUE_EXTENT_128K_BYTES);
   }
   const auto trace = graph::debug::PerfTrace::snapshotAndReset();

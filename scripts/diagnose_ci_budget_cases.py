@@ -21,6 +21,7 @@ WINDOWS = [
         'HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases',
     )),
     'BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack',
+    'RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce',
     'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',
     'CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge',
     'CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues',
