@@ -1,0 +1,68 @@
+{
+  "source_commit": "2e8e377a10156021d60580a6695009db8f09957f",
+  "code_commit": "2e8e377a10156021d60580a6695009db8f09957f",
+  "binary_sha256": "96a8edfc6bc25c5fce019d2b8fc54681dfd64e0b69e7b70562e1ec098144a976",
+  "discovered": 11124,
+  "enabled": 11104,
+  "disabled": [
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash",
+    "DISABLED_DriverAbiAgentMemoryScaleTest.FullBgeRetentionDoesNotLogBlobChainCorruption",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.StreamedIngestRebaseFinalFenceFailureRecoversBothPublications",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestScaleTest.ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedManifestCountDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest.AuthenticatedCrossRunOrderingDivergenceAfterRebasePoisonsSessionAndPreservesExternalGraph",
+    "LogicalPlanCertifiedBatchHandoffTest.DISABLED_BoundedSamePathCountFusionProbe",
+    "DISABLED_RelocatableStorageBackendScaleTest.StreamedBulkEdgePublishesAdjacencyAcrossLeavesAndIndexPools",
+    "DISABLED_NativeBulkEdgeAdjacencyRunBuilderScaleTest.SplitsOneLargeInMemorySortRunIntoSegmentBoundedFragments",
+    "DISABLED_NativeBulkEdgePrivateRunSetScaleTest.BuildsAndReplaysExactAndOverFanoutHierarchies",
+    "DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest.TraversesPrivateInternalNodesAndFailsClosedOnPayloadCorruption",
+    "ScanReadProofTest.DISABLED_PersistentCountFusionProbe",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentFixture",
+    "ScanReadProofTest.DISABLED_BorrowedGroupPersistentWork",
+    "PreadHelperTest.DISABLED_PerformanceComparison"
+  ],
+  "executed": 11104,
+  "distinct": 11104,
+  "failures": [],
+  "skips": [],
+  "missing": [],
+  "extra": [],
+  "duplicates": {},
+  "stress_counts": {
+    "RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace": 1,
+    "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce": 1,
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection": 1,
+    "RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories": 1,
+    "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages": 1,
+    "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication": 1
+  },
+  "shard_times_seconds": [
+    1042.855,
+    1205.199,
+    1086.474,
+    1118.927
+  ],
+  "launcher": {
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite"
+    ],
+    "completed_at_unix_seconds": 1794520753.9538324,
+    "exit_code": 0,
+    "jobs": 4,
+    "launcher_pid": 65923,
+    "run_id": "compact-values-full-final",
+    "started_at_unix_seconds": 1794519548.524027,
+    "working_directory": "/workspace/zyx"
+  },
+  "coverage": {
+    "regions_percent": 93.77,
+    "functions_percent": 98.1,
+    "lines_percent": 95.79,
+    "branches_percent": 86.85
+  }
+}

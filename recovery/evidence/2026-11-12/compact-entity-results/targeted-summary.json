@@ -13,7 +13,7 @@
   "owned300_account_peak": 262104,
   "owned300_maximum": 262144,
   "native_windows_and_macos_verification": "pending",
-  "full_regression": "pending",
+  "full_regression": "passed: 11104 enabled, 20 disabled, no failure/skip/missing/duplicate",
   "denial_fixture_focus": 2,
   "final_binary_sha256": "96a8edfc6bc25c5fce019d2b8fc54681dfd64e0b69e7b70562e1ec098144a976",
   "first_full_executed": 11104,

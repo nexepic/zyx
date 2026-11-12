@@ -1,0 +1,13 @@
+{
+  "head": "2e8e377a10156021d60580a6695009db8f09957f",
+  "restored_head": "2e8e377a10156021d60580a6695009db8f09957f",
+  "bundle_bytes": 303731486,
+  "bundle_sha256": "3f29f7e802d99a81ea656db209efbcdace37836cbd5c845d33eb8eb7d386b04d",
+  "reachable_objects": 44415,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 21,
+  "validation": "Checkpoint 2e8e377a1: 509 targeted, 3 diagnostic and 2 strict DISTINCT fixture cases, 80 Python passed; first full 11103/11104 with one corrected denial fixture; final full running; native Windows/macOS pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}
