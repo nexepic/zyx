@@ -173,6 +173,8 @@ def test_failure_observation_scan_and_scalar_count_are_bounded():
 def test_successful_numeric_metrics_survive_console_cap_without_payloads(tmp_path):
     xml = ('<testsuites><testsuite><testcase classname="Suite" name="Case"><properties>'
            '<property name="escaped_result_account_bytes" value="251464"/>'
+           '<property name="growth_success_bound" value="8192"/>'
+           '<property name="growth_result_capacity" value="33"/>'
            '<property name="retained_result_bytes" value="private-secret"/>'
            '<property name="private-metric" value="123"/>'
            '</properties></testcase></testsuite></testsuites>')
@@ -181,7 +183,9 @@ def test_successful_numeric_metrics_survive_console_cap_without_payloads(tmp_pat
     p, r = invoke(tmp_path, program)
     assert p.returncode == 0 and r['console_truncated']
     assert r['numeric_case_metrics'] == [{'class': 'Suite', 'name': 'Case',
-        'metric': 'escaped_result_account_bytes', 'value': '251464'}]
+        'metric': 'escaped_result_account_bytes', 'value': '251464'},
+        {'class': 'Suite', 'name': 'Case', 'metric': 'growth_success_bound', 'value': '8192'},
+        {'class': 'Suite', 'name': 'Case', 'metric': 'growth_result_capacity', 'value': '33'}]
     assert b'CI_CASE_METRIC ' in p.stdout and b'251464' in p.stdout
     assert b'private-secret' not in p.stdout and b'private-metric' not in p.stdout
 

@@ -650,6 +650,7 @@ namespace graph::query::execution {
                 for (size_t index = 0U; index < 33U; ++index)
                     EXPECT_EQ(result.getRows()[index].at("x").asPrimitive(), PropertyValue(int64_t(index + 1U)));
                 RecordProperty("growth_success_bound", limit);
+                RecordProperty("growth_result_capacity", result.getRows().capacity());
                 return;
             } catch (const std::runtime_error &error) {
                 // Only resource pressure may move this boundary; semantic

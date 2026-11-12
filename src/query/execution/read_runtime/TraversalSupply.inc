@@ -213,6 +213,22 @@
 		[[nodiscard]] std::optional<bool> tryVisitBatchedVariableLengthCount(const logical::LogicalAggregate &aggregate,
 																			 ExecutionState &state,
 																			 const InternalVisitor &visitor) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            struct FailureStage {
+                const void *owner;
+                const char *phase = "eligibility";
+                int exceptions = std::uncaught_exceptions();
+                ~FailureStage() {
+                    if (std::uncaught_exceptions() <= exceptions) return;
+                    debug::CiBudgetTrace trace(owner, "variable_count_failure");
+                    if (trace.allow()) {
+                        std::fprintf(stderr, "CI_COUNT_UNWIND phase=%s\n", phase);
+                        std::fflush(stderr);
+                    }
+                    trace.discard();
+                }
+            } failureStage{&state};
+#endif
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
@@ -326,7 +342,13 @@
 			std::vector<FrontierPath> frontier;
 			size_t frontierBytes = 0U;
 			uint64_t resultCount = 0U;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            failureStage.phase = "source_scan";
+#endif
 			static_cast<void>(visitOperator(sourceScan, state, [&](LogicalPlanReadRow row) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                failureStage.phase = "source_row";
+#endif
 				checkGuard(state);
 				const LogicalPlanReadValue &binding = requireBinding(row, traversal.getSourceVar());
 				const uint64_t sourceId = nodeBindingId(binding, state);
@@ -356,6 +378,9 @@
 					}
 				}
 				FrontierPath path;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                failureStage.phase = "frontier_seed";
+#endif
 				path.current_node_id = sourceId;
 				path.visited_edge_ids.reserve(1U);
 				// Relationship identity, rather than Node identity, constrains a trail.
@@ -373,8 +398,14 @@
 				if (frontierBytes > state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                failureStage.phase = "source_scan";
+#endif
 				return true;
 			}));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            failureStage.phase = "frontier_expansion";
+#endif
 			std::ranges::sort(frontier, {}, &FrontierPath::current_node_id);
 			if (std::ranges::adjacent_find(frontier, {}, &FrontierPath::current_node_id) != frontier.end()) {
 				throw std::runtime_error("logical-plan variable-length source scan returned a duplicate Node");

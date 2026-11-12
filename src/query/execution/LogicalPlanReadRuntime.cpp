@@ -1,4 +1,5 @@
 #include "graph/storage/LogicalGraphNodeScan.hpp"
+#include <exception>
 #include "graph/utils/AdmissionPmrContainers.hpp"
 #ifndef ZYX_EXPERIMENTAL_STREAMING_COUNT
 #define ZYX_EXPERIMENTAL_STREAMING_COUNT 0

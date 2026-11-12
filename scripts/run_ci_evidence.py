@@ -24,6 +24,7 @@ NUMERIC_CASE_METRICS = frozenset((
     'largest_local_budget_peak_bytes', 'escaped_result_account_bytes',
     'retained_object_lower_bound_bytes', 'retained_result_bytes',
     'restart_key_allocations',
+    'growth_success_bound', 'growth_result_capacity',
 ))
 
 
