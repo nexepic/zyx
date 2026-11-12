@@ -1,0 +1,1026 @@
+{
+  "run": 43167411880,
+  "sha": "7c90d296f30e69b95b562c1f392bcbea7f4c7a23",
+  "state": "Windows job still running; snapshot includes bounded unit console prefix only",
+  "isolated_diagnostic": {
+    "started": 122,
+    "completed": 122,
+    "failed": 29,
+    "names": [
+      "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact"
+    ]
+  },
+  "failed_xml": [
+    {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+      "line": "578",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+      "line": "1592",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1622"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1627"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1622"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1627"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": true
+      },
+      "failures": 12
+    },
+    {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+      "line": "28",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "88"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "91"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "92"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "97"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "6"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 5
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "419",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "498",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1448",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1536",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1053",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "62",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "80"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "81"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "83"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "80"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": true
+      },
+      "failures": 9
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1228",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1298",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1332",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1391",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1451",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_Batching.cpp",
+      "line": "1756",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "671",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "747",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "497",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "631",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "702",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "766",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+          "line": "779"
+        },
+        {
+          "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+          "line": "780"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "10"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 3
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanUnionRuntimeTest",
+      "name": "SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnionRuntime.cpp",
+      "line": "364",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanReadRuntimeTest",
+      "name": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+      "line": "1824",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanReadRuntimeTest",
+      "name": "SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+      "line": "1904",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalPlanVarLengthRuntimeTest",
+      "name": "ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp",
+      "line": "544",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanVarLengthRuntime.cpp",
+          "line": "561"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_TopK.cpp",
+      "line": "376",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+      "line": "209",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "resource_admission"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "HybridPropertyPoolTailReuseTest",
+      "name": "ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyPoolTailReuse.cpp",
+      "line": "8",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyPoolTailReuse.cpp",
+          "line": "40"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "tests.xml",
+      "class": "HybridPropertyMatureShapeCostsTest",
+      "name": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp",
+      "line": "127",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyShapeCosts.cpp",
+          "line": "172"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  ],
+  "budget_rejections": [
+    {
+      "case": "NativeReadSessionTokenBudgetTest.CachedNameCopyUsesSourceAdmissionAndKeepsItsOriginalSessionOwner",
+      "line": "CI_BUDGET owner=25254407700481 account_id=0 operation=replace requested=8271 previous=0 embedded=0 used=0 peak=0 maximum=1024 available=1024 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PropertyDecodeWorkspace.hpp site_line=40"
+    },
+    {
+      "case": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "line": "CI_BUDGET owner=22728966930433 account_id=0 operation=replace requested=104 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "line": "CI_BUDGET owner=33947421507585 account_id=0 operation=replace requested=104 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "ConsumedPrefixCompactionTest.AllocatorRejectionLeavesSourceAndRetryIntact",
+      "line": "CI_BUDGET owner=34136400068609 account_id=0 operation=replace requested=8 previous=0 embedded=0 used=16 peak=16 maximum=23 available=7 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "ConsumedPrefixCompactionTest.HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases",
+      "line": "CI_BUDGET owner=8830452760579 account_id=8830452760578 operation=parent requested=8 previous=0 embedded=0 used=16 peak=16 maximum=24 available=8 parent_charge=16 parent_maximum=24 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "line": "CI_BUDGET owner=36301063585814 account_id=0 operation=replace requested=4428 previous=2428 embedded=0 used=2980 peak=3432 maximum=3720 available=740 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935123 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935123 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935123 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935124 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935124 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935124 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935125 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935125 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935125 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935128 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935128 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935128 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935129 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935129 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935129 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935130 account_id=0 operation=replace requested=1024 previous=1008 embedded=0 used=1840 peak=1840 maximum=1840 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935130 account_id=0 operation=wouldExceed requested=2028 previous=1014 embedded=0 used=1830 peak=1840 maximum=1840 available=10 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "line": "CI_BUDGET owner=32315333935130 account_id=0 operation=wouldExceed requested=1151 previous=1014 embedded=0 used=1782 peak=1840 maximum=1840 available=58 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "line": "CI_BUDGET owner=8847632629780 account_id=0 operation=replace requested=2720 previous=2704 embedded=0 used=3936 peak=3936 maximum=3936 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "line": "CI_BUDGET owner=8847632629780 account_id=0 operation=wouldExceed requested=3266 previous=252 embedded=0 used=964 peak=3936 maximum=3936 available=2972 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PlanInspectionAndBatching.inc site_line=1339"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "line": "CI_BUDGET owner=19224273616915 account_id=0 operation=wouldExceed requested=3360 previous=346 embedded=0 used=4618 peak=4618 maximum=5840 available=1222 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PlanInspectionAndBatching.inc site_line=1339"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "line": "CI_BUDGET owner=19224273616915 account_id=0 operation=wouldExceed requested=3360 previous=346 embedded=0 used=4618 peak=4618 maximum=5840 available=1222 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PlanInspectionAndBatching.inc site_line=1339"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "line": "CI_BUDGET owner=19224273616915 account_id=0 operation=wouldExceed requested=3360 previous=346 embedded=0 used=4618 peak=4618 maximum=5840 available=1222 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PlanInspectionAndBatching.inc site_line=1339"
+    },
+    {
+      "case": "LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads",
+      "line": "CI_BUDGET owner=11871289606146 account_id=11871289606145 operation=parent requested=112 previous=0 embedded=0 used=259007 peak=259007 maximum=259199 available=192 parent_charge=259007 parent_maximum=259199 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget",
+      "line": "CI_BUDGET owner=3556232921099 account_id=0 operation=replace requested=3976 previous=0 embedded=0 used=0 peak=0 maximum=1918 available=1918 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=97"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+      "line": "CI_BUDGET owner=8744553414680 account_id=0 operation=wouldExceed requested=1310 previous=296 embedded=0 used=1779 peak=1779 maximum=2791 available=1012 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+      "line": "CI_BUDGET owner=8744553414681 account_id=8744553414675 operation=replace requested=1024 previous=0 embedded=0 used=2592 peak=2592 maximum=2999 available=407 parent_charge=2592 parent_maximum=2999 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "line": "CI_BUDGET owner=40252433498115 account_id=0 operation=wouldExceed requested=10104 previous=90 embedded=0 used=651 peak=651 maximum=4824 available=4173 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=VectorOutputAndTopK.inc site_line=85"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry",
+      "line": "CI_BUDGET owner=42142219108357 account_id=0 operation=wouldExceed requested=5706 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry",
+      "line": "CI_BUDGET owner=42142219108357 account_id=0 operation=wouldExceed requested=3804 previous=0 embedded=0 used=2663 peak=3527 maximum=5848 available=3185 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "line": "CI_BUDGET owner=6047313952771 account_id=0 operation=wouldExceed requested=4836 previous=0 embedded=0 used=1467 peak=1467 maximum=5848 available=4381 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "line": "CI_BUDGET owner=6047313952771 account_id=0 operation=wouldExceed requested=3224 previous=0 embedded=0 used=2981 peak=3085 maximum=5848 available=2867 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "line": "CI_BUDGET owner=6047313952771 account_id=0 operation=wouldExceed requested=1612 previous=0 embedded=0 used=4495 peak=4607 maximum=5848 available=1353 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=71"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+      "line": "CI_BUDGET owner=12352325943301 account_id=0 operation=wouldExceed requested=3338 previous=2324 embedded=0 used=3807 peak=3807 maximum=4740 available=933 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+      "line": "CI_BUDGET owner=12352325943306 account_id=0 operation=wouldExceed requested=296 previous=0 embedded=0 used=4531 peak=4531 maximum=4740 available=209 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=449"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+      "line": "CI_BUDGET owner=12352325943306 account_id=0 operation=wouldExceed requested=208 previous=0 embedded=0 used=4535 peak=4653 maximum=4740 available=205 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=449"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "line": "CI_BUDGET owner=26182120636421 account_id=0 operation=wouldExceed requested=4194 previous=0 embedded=0 used=1467 peak=1467 maximum=4792 available=3325 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=230"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "line": "CI_BUDGET owner=26182120636421 account_id=0 operation=wouldExceed requested=2796 previous=0 embedded=0 used=2515 peak=2875 maximum=4792 available=2277 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=230"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "line": "CI_BUDGET owner=26182120636421 account_id=0 operation=wouldExceed requested=1398 previous=0 embedded=0 used=3563 peak=3931 maximum=4792 available=1229 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=230"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+      "line": "CI_BUDGET owner=3607772528641 account_id=0 operation=wouldExceed requested=648 previous=0 embedded=0 used=3439 peak=3439 maximum=3880 available=441 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=449"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+      "line": "CI_BUDGET owner=3607772528641 account_id=0 operation=wouldExceed requested=420 previous=402 embedded=0 used=3865 peak=3865 maximum=3880 available=15 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+      "line": "CI_BUDGET owner=3607772528670 account_id=0 operation=wouldExceed requested=648 previous=0 embedded=0 used=3439 peak=3439 maximum=3880 available=441 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=449"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+      "line": "CI_BUDGET owner=3607772528670 account_id=0 operation=wouldExceed requested=420 previous=402 embedded=0 used=3865 peak=3865 maximum=3880 available=15 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298689 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298689 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298690 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298690 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298691 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298691 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298692 account_id=0 operation=wouldExceed requested=2024 previous=1012 embedded=0 used=1828 peak=1828 maximum=1840 available=12 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=318"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "line": "CI_BUDGET owner=6133213298692 account_id=0 operation=wouldExceed requested=1151 previous=1012 embedded=0 used=1780 peak=1828 maximum=1840 available=60 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=NodeSupplyAndSorting.inc site_line=340"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "line": "CI_BUDGET owner=41540923686914 account_id=0 operation=replace requested=8695 previous=4471 embedded=0 used=7743 peak=8706 maximum=9600 available=1857 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "line": "CI_BUDGET owner=36352603193347 account_id=0 operation=replace requested=7148 previous=2540 embedded=0 used=3836 peak=5572 maximum=7608 available=3772 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "line": "CI_BUDGET owner=40716289966081 account_id=0 operation=replace requested=513 previous=0 embedded=0 used=3734 peak=3902 maximum=3936 available=202 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=1331"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "line": "CI_BUDGET owner=26010321944578 account_id=0 operation=replace requested=7316 previous=4084 embedded=0 used=5316 peak=6339 maximum=7232 available=1916 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+      "line": "CI_BUDGET owner=40699110096897 account_id=0 operation=replace requested=1056 previous=530 embedded=0 used=530 peak=530 maximum=864 available=334 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=RowAndWindowOperators.inc site_line=196"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+      "line": "CI_BUDGET owner=40699110096900 account_id=0 operation=replace requested=1065 previous=539 embedded=0 used=539 peak=539 maximum=864 available=325 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=RowAndWindowOperators.inc site_line=196"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "line": "CI_BUDGET owner=11785390260262 account_id=0 operation=wouldExceed requested=12168 previous=5040 embedded=0 used=5200 peak=5200 maximum=7776 available=2576 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=477"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "line": "CI_BUDGET owner=11785390260318 account_id=0 operation=wouldExceed requested=11758 previous=3320 embedded=0 used=6800 peak=6800 maximum=8624 available=1824 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=477"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "line": "CI_BUDGET owner=18159121727491 account_id=0 operation=replace requested=4929 previous=2177 embedded=0 used=2776 peak=3397 maximum=3736 available=960 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "line": "CI_BUDGET owner=18159121727493 account_id=0 operation=replace requested=17715 previous=6659 embedded=0 used=7523 peak=11086 maximum=11256 available=3733 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "line": "CI_BUDGET owner=9122510536706 account_id=0 operation=replace requested=533 previous=453 embedded=0 used=2021 peak=2021 maximum=2040 available=19 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "line": "CI_BUDGET owner=17867063951364 account_id=0 operation=replace requested=20738 previous=8002 embedded=0 used=8770 peak=14138 maximum=14880 available=6110 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanUnwindRuntimeTest.RangeAdmitsListGrowthBeforeAllocation",
+      "line": "CI_BUDGET owner=42279658061826 account_id=0 operation=wouldExceed requested=1420 previous=0 embedded=0 used=352 peak=352 maximum=736 available=384 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=625"
+    },
+    {
+      "case": "LogicalPlanUnwindRuntimeTest.ProjectRetainsEarlierListWhileEvaluatingLaterRange",
+      "line": "CI_BUDGET owner=32813550141442 account_id=0 operation=wouldExceed requested=2956 previous=1540 embedded=0 used=13563 peak=13563 maximum=14016 available=453 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=625"
+    },
+    {
+      "case": "LogicalPlanUnwindRuntimeTest.FunctionRetainsEarlierArgumentDuringLaterRange",
+      "line": "CI_BUDGET owner=9844065042434 account_id=0 operation=wouldExceed requested=5900 previous=3076 embedded=0 used=12467 peak=12596 maximum=14016 available=1549 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=625"
+    },
+    {
+      "case": "LogicalPlanUnwindRuntimeTest.BinaryExpressionRetainsLeftValueDuringRightEvaluation",
+      "line": "CI_BUDGET owner=39668317945858 account_id=0 operation=wouldExceed requested=2956 previous=1540 embedded=0 used=13219 peak=13219 maximum=14016 available=797 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=625"
+    },
+    {
+      "case": "LogicalPlanUnwindRuntimeTest.InExpressionRetainsActualValueDuringCandidateEvaluation",
+      "line": "CI_BUDGET owner=13881334300674 account_id=0 operation=wouldExceed requested=5900 previous=3076 embedded=0 used=12383 peak=12420 maximum=14016 available=1633 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=625"
+    },
+    {
+      "case": "LogicalPlanUnwindRuntimeTest.SimpleCaseRetainsComparisonValueDuringWhenEvaluation",
+      "line": "CI_BUDGET owner=10703058501634 account_id=0 operation=wouldExceed requested=5900 previous=3076 embedded=0 used=12291 peak=12420 maximum=14016 available=1725 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ScalarFunctions.inc site_line=625"
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "line": "CI_BUDGET owner=27539330301954 account_id=0 operation=replace requested=269 previous=0 embedded=0 used=525 peak=709 maximum=736 available=211 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=RowAndWindowOperators.inc site_line=86"
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "line": "CI_BUDGET owner=27539330301956 account_id=0 operation=replace requested=2122 previous=970 embedded=0 used=1154 peak=1154 maximum=1236 available=82 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "line": "CI_BUDGET owner=36971078483970 account_id=0 operation=replace requested=2154 previous=986 embedded=0 used=1186 peak=1856 maximum=1856 available=670 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=458"
+    },
+    {
+      "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "line": "CI_BUDGET owner=23003844837378 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=56 available=56 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.ProjectionRejectsBeforeScanningAndRefundsItsPartialConstruction",
+      "line": "CI_BUDGET owner=6081673691137 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.DeniedLazyCsrPublishesNothingAndRefundsBeforeTheSameProjectionRetries",
+      "line": "CI_BUDGET owner=30958124269569 account_id=0 operation=replace requested=472 previous=0 embedded=0 used=1048575 peak=1048575 maximum=1048576 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.DeniedProjectionCopyPreservesTheSourceAndItsCompleteAdjacency",
+      "line": "CI_BUDGET owner=6528350289921 account_id=0 operation=replace requested=48 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "line": "CI_BUDGET owner=25477745999873 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "line": "CI_BUDGET owner=25477745999873 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "line": "CI_BUDGET owner=25477745999873 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "line": "CI_BUDGET owner=25477745999873 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "line": "CI_BUDGET owner=25477745999873 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "line": "CI_BUDGET owner=25477745999873 account_id=0 operation=replace requested=112 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "line": "CI_BUDGET owner=28174985461761 account_id=0 operation=wouldExceed requested=1704 previous=0 embedded=0 used=9307 peak=9307 maximum=10296 available=989 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=449"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "line": "CI_BUDGET owner=28174985461761 account_id=0 operation=wouldExceed requested=930 previous=912 embedded=0 used=10291 peak=10291 maximum=10296 available=5 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "line": "CI_BUDGET owner=35373350649862 account_id=0 operation=wouldExceed requested=1522 previous=208 embedded=0 used=1234 peak=1234 maximum=2447 available=1213 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "line": "CI_BUDGET owner=35373350649862 account_id=0 operation=wouldExceed requested=1434 previous=120 embedded=0 used=1138 peak=1234 maximum=2447 available=1309 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "line": "CI_BUDGET owner=35373350649876 account_id=35373350649875 operation=replace requested=112 previous=0 embedded=0 used=2504 peak=2504 maximum=2599 available=95 parent_charge=2504 parent_maximum=2599 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "line": "CI_BUDGET owner=35373350649889 account_id=35373350649879 operation=replace requested=1328 previous=0 embedded=0 used=9768 peak=9768 maximum=10240 available=472 parent_charge=9768 parent_maximum=10240 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "line": "CI_BUDGET owner=8108898254872 account_id=8108898254870 operation=parent requested=1024 previous=0 embedded=0 used=10128 peak=13792 maximum=67107000 available=67096872 parent_charge=10128 parent_maximum=32768 owned_parent_charge=0 site_file=ExecutionStateAndBudgets.inc site_line=508"
+    },
+    {
+      "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "line": "CI_BUDGET owner=28192165330945 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=1048572 peak=1048572 maximum=1048576 available=4 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation",
+      "line": "CI_BUDGET owner=39084202393602 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=544 peak=544 maximum=1024 available=480 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges",
+      "line": "CI_BUDGET owner=21148418965506 account_id=0 operation=replace requested=4032 previous=0 embedded=0 used=456 peak=456 maximum=1024 available=568 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "line": "CI_BUDGET owner=14963666059265 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=1048572 peak=1048572 maximum=1048576 available=4 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    },
+    {
+      "case": "PropertySubblockMapMutationTest.RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes",
+      "line": "CI_BUDGET owner=22110491639809 account_id=0 operation=replace requested=16 previous=0 embedded=0 used=0 peak=0 maximum=1 available=1 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=169"
+    },
+    {
+      "case": "ProcedurePayloadAdmissionTest.ReusingBucketsDoesNotBypassNodeAdmissionAndAllowsRetryAfterRefund",
+      "line": "CI_BUDGET owner=31490700214273 account_id=0 operation=replace requested=32 previous=0 embedded=0 used=1048576 peak=1048576 maximum=1048576 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=MaterializedByteBudget.hpp site_line=84"
+    }
+  ],
+  "limits": "No native unit terminal result in this snapshot; isolated failures overlap unit cases and are not added"
+}

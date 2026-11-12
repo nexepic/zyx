@@ -1,0 +1,596 @@
+{
+  "cases": [
+    {
+      "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "observed_family": "budget/ownership attribution incomplete",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "4428",
+          "previous": "2428",
+          "used": "2980",
+          "maximum": "0",
+          "available": "740",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "observed_family": "budget/ownership attribution incomplete",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "1024",
+          "previous": "1008",
+          "used": "1840",
+          "maximum": "0",
+          "available": "0",
+          "site_file": "BudgetMemoryResource.hpp",
+          "site_line": "20"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "2028",
+          "previous": "1014",
+          "used": "1830",
+          "maximum": "0",
+          "available": "10",
+          "site_file": "NodeSupplyAndSorting.inc",
+          "site_line": "318"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "1151",
+          "previous": "1014",
+          "used": "1782",
+          "maximum": "0",
+          "available": "58",
+          "site_file": "NodeSupplyAndSorting.inc",
+          "site_line": "340"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "observed_family": "budget/ownership attribution incomplete",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "2720",
+          "previous": "2704",
+          "used": "3936",
+          "maximum": "0",
+          "available": "0",
+          "site_file": "BudgetMemoryResource.hpp",
+          "site_line": "20"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "3266",
+          "previous": "252",
+          "used": "964",
+          "maximum": "0",
+          "available": "2972",
+          "site_file": "PlanInspectionAndBatching.inc",
+          "site_line": "1339"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "observed_family": "procedure source/result/output retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "wouldExceed",
+          "requested": "10104",
+          "previous": "90",
+          "used": "651",
+          "maximum": "0",
+          "available": "4173",
+          "site_file": "VectorOutputAndTopK.inc",
+          "site_line": "85"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "observed_family": "procedure source/result/output retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "observed_family": "procedure source/result/output retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "wouldExceed",
+          "requested": "4836",
+          "previous": "0",
+          "used": "1467",
+          "maximum": "0",
+          "available": "4381",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "71"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "3224",
+          "previous": "0",
+          "used": "2981",
+          "maximum": "0",
+          "available": "2867",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "71"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "1612",
+          "previous": "0",
+          "used": "4495",
+          "maximum": "0",
+          "available": "1353",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "71"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "observed_family": "procedure source/result/output retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "wouldExceed",
+          "requested": "4194",
+          "previous": "0",
+          "used": "1467",
+          "maximum": "0",
+          "available": "3325",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "230"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "2796",
+          "previous": "0",
+          "used": "2515",
+          "maximum": "0",
+          "available": "2277",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "230"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "1398",
+          "previous": "0",
+          "used": "3563",
+          "maximum": "0",
+          "available": "1229",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "230"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "observed_family": "procedure source/result/output retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "wouldExceed",
+          "requested": "2024",
+          "previous": "1012",
+          "used": "1828",
+          "maximum": "0",
+          "available": "12",
+          "site_file": "NodeSupplyAndSorting.inc",
+          "site_line": "318"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "1151",
+          "previous": "1012",
+          "used": "1780",
+          "maximum": "0",
+          "available": "60",
+          "site_file": "NodeSupplyAndSorting.inc",
+          "site_line": "340"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "8695",
+          "previous": "4471",
+          "used": "7743",
+          "maximum": "0",
+          "available": "1857",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "7148",
+          "previous": "2540",
+          "used": "3836",
+          "maximum": "0",
+          "available": "3772",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "513",
+          "previous": "0",
+          "used": "3734",
+          "maximum": "0",
+          "available": "202",
+          "site_file": "EntityValuesAndProperties.inc",
+          "site_line": "1331"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "7316",
+          "previous": "4084",
+          "used": "5316",
+          "maximum": "0",
+          "available": "1916",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "wouldExceed",
+          "requested": "12168",
+          "previous": "5040",
+          "used": "5200",
+          "maximum": "0",
+          "available": "2576",
+          "site_file": "EntityValuesAndProperties.inc",
+          "site_line": "477"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "11758",
+          "previous": "3320",
+          "used": "6800",
+          "maximum": "0",
+          "available": "1824",
+          "site_file": "EntityValuesAndProperties.inc",
+          "site_line": "477"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "4929",
+          "previous": "2177",
+          "used": "2776",
+          "maximum": "0",
+          "available": "960",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        },
+        {
+          "operation": "replace",
+          "requested": "17715",
+          "previous": "6659",
+          "used": "7523",
+          "maximum": "0",
+          "available": "3733",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "533",
+          "previous": "453",
+          "used": "2021",
+          "maximum": "0",
+          "available": "19",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "20738",
+          "previous": "8002",
+          "used": "8770",
+          "maximum": "0",
+          "available": "6110",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "269",
+          "previous": "0",
+          "used": "525",
+          "maximum": "0",
+          "available": "211",
+          "site_file": "RowAndWindowOperators.inc",
+          "site_line": "86"
+        },
+        {
+          "operation": "replace",
+          "requested": "2122",
+          "previous": "970",
+          "used": "1154",
+          "maximum": "0",
+          "available": "82",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "2154",
+          "previous": "986",
+          "used": "1186",
+          "maximum": "0",
+          "available": "670",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "458"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "observed_family": "earlier shared-budget error instead of expected count-frontier-specific error",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "112",
+          "previous": "0",
+          "used": "0",
+          "maximum": "0",
+          "available": "56",
+          "site_file": "BudgetMemoryResource.hpp",
+          "site_line": "20"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "observed_family": "procedure source/result/output retention",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "wouldExceed",
+          "requested": "1522",
+          "previous": "208",
+          "used": "1234",
+          "maximum": "0",
+          "available": "1213",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "454"
+        },
+        {
+          "operation": "wouldExceed",
+          "requested": "1434",
+          "previous": "120",
+          "used": "1138",
+          "maximum": "0",
+          "available": "1309",
+          "site_file": "PrefetchAndResults.inc",
+          "site_line": "454"
+        },
+        {
+          "operation": "replace",
+          "requested": "112",
+          "previous": "0",
+          "used": "2504",
+          "maximum": "2599",
+          "available": "95",
+          "site_file": "MaterializedByteBudget.hpp",
+          "site_line": "84"
+        },
+        {
+          "operation": "replace",
+          "requested": "1328",
+          "previous": "0",
+          "used": "9768",
+          "maximum": "10240",
+          "available": "472",
+          "site_file": "MaterializedByteBudget.hpp",
+          "site_line": "84"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "observed_family": "parent query account1024 requested versus752 remaining",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "parent",
+          "requested": "1024",
+          "previous": "0",
+          "used": "10128",
+          "maximum": "32768",
+          "available": "67096872",
+          "site_file": "ExecutionStateAndBudgets.inc",
+          "site_line": "508"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "observed_family": "4032-byte page allocation with2926 available under1MiB",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "16",
+          "previous": "0",
+          "used": "1048572",
+          "maximum": "0",
+          "available": "4",
+          "site_file": "MaterializedByteBudget.hpp",
+          "site_line": "84"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    },
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "observed_family": "4032-byte page allocation with2926 available under1MiB",
+      "native_7c90_diagnostic": "failed",
+      "distinct_bounded_rejections": [
+        {
+          "operation": "replace",
+          "requested": "16",
+          "previous": "0",
+          "used": "1048572",
+          "maximum": "0",
+          "available": "4",
+          "site_file": "MaterializedByteBudget.hpp",
+          "site_line": "84"
+        }
+      ],
+      "root_cause": "Not established solely by rejection callsite; preserve complete live allocation charges"
+    }
+  ],
+  "count": 29,
+  "unit_terminal_counts": {
+    "started": 11086,
+    "completed": 11086,
+    "failed": 29,
+    "same_identities_as_diagnostic": true
+  }
+}

@@ -1,0 +1,221 @@
+{
+  "run": 43167411880,
+  "formal_gate_totals": {"asan_passed": 711, "asan_failed": 0, "tsan_passed": 27, "tsan_failed": 0},
+  "journal_scope": "Journals may describe individual subprocess/suite segments; do not use the last journal as the formal gate total.",
+  "sha": "7c90d296f30e69b95b562c1f392bcbea7f4c7a23",
+  "jobs": {
+    "asan": {
+      "evidence": [
+        "CI_EVIDENCE directory=common-tools exit=0 output_bytes=5119 truncated=False",
+        "CI_EVIDENCE directory=diagnostic-tests exit=1 output_bytes=2147 truncated=False",
+        "CI_EVIDENCE directory=conan-profile exit=0 output_bytes=585 truncated=False",
+        "CI_EVIDENCE directory=conan-dependencies exit=0 output_bytes=217614 truncated=False",
+        "CI_EVIDENCE directory=configure exit=0 output_bytes=872 truncated=False",
+        "CI_EVIDENCE directory=build exit=0 output_bytes=827801 truncated=False",
+        "CI_EVIDENCE directory=discovery exit=0 output_bytes=580996 truncated=False",
+        "CI_EVIDENCE directory=asan-publication exit=0 output_bytes=686 truncated=False",
+        "CI_EVIDENCE directory=asan-cold-rss-control exit=1 output_bytes=1030 truncated=False",
+        "CI_EVIDENCE directory=asan-cold-rss exit=1 output_bytes=27892 truncated=False",
+        "CI_EVIDENCE directory=asan-rss-warmed-statistics exit=1 output_bytes=32727 truncated=False",
+        "CI_EVIDENCE directory=budget-00dfcc9de747e030 exit=0 output_bytes=6940 truncated=False",
+        "CI_EVIDENCE directory=budget-e66d2c0435bd42c6 exit=0 output_bytes=6899 truncated=False",
+        "CI_EVIDENCE directory=budget-a948301df2fdaa1c exit=0 output_bytes=4727 truncated=False",
+        "CI_EVIDENCE directory=budget-e617073fa7c627be exit=0 output_bytes=1357 truncated=False",
+        "CI_EVIDENCE directory=budget-ad63418f1279c851 exit=0 output_bytes=1650 truncated=False",
+        "CI_EVIDENCE directory=asan-budget-cases exit=0 output_bytes=25408 truncated=False",
+        "CI_EVIDENCE directory=asan-gate exit=0 output_bytes=246863 truncated=False"
+      ],
+      "terminal_journals": [
+        {
+          "started": 1,
+          "completed": 1,
+          "failed": 0,
+          "last_started": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+          "last_completed": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+          "last_started_observed_seconds": 1.0336401249999199,
+          "last_completed_observed_seconds": 2.1924995419999505,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        },
+        {
+          "started": 3,
+          "completed": 3,
+          "failed": 0,
+          "last_started": "ResultPropertyMapAdmissionTest.GuardedCopyCanGrowAnAdoptedMapBeyondItsSourceLayout",
+          "last_completed": "ResultPropertyMapAdmissionTest.GuardedCopyCanGrowAnAdoptedMapBeyondItsSourceLayout",
+          "last_started_observed_seconds": 0.8540760409998711,
+          "last_completed_observed_seconds": 0.8543346659998861,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        },
+        {
+          "started": 5,
+          "completed": 5,
+          "failed": 0,
+          "last_started": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+          "last_completed": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+          "last_started_observed_seconds": 0.797624457999973,
+          "last_completed_observed_seconds": 0.7978674999999384,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        },
+        {
+          "started": 11,
+          "completed": 11,
+          "failed": 0,
+          "last_started": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+          "last_completed": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+          "last_started_observed_seconds": 13.386912250000023,
+          "last_completed_observed_seconds": 13.387149541000099,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        }
+      ],
+      "rss_rejections": [
+        "2026-11-12T06:50:57.9597580Z CI_RSS_REJECT limit=67108864 baseline=461488128 current=528859136 asan_available=1 live=10475665 heap=90652672",
+        "2026-11-12T06:51:06.3536420Z CI_RSS_REJECT limit=67108864 baseline=461979648 current=529350656 asan_available=1 live=10475697 heap=90652672"
+      ],
+      "gtest_summaries": []
+    },
+    "ubuntu": {
+      "evidence": [
+        "CI_EVIDENCE directory=common-tools exit=0 output_bytes=5805 truncated=False",
+        "CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=99 truncated=False",
+        "CI_EVIDENCE directory=apt-repository exit=0 output_bytes=52 truncated=False",
+        "CI_EVIDENCE directory=apt-update exit=0 output_bytes=1949 truncated=False",
+        "CI_EVIDENCE directory=apt-install exit=0 output_bytes=3022 truncated=False",
+        "CI_EVIDENCE directory=conan-profile exit=0 output_bytes=616 truncated=False",
+        "CI_EVIDENCE directory=conan-dependencies exit=0 output_bytes=111897 truncated=False",
+        "CI_EVIDENCE directory=configure exit=0 output_bytes=882 truncated=False",
+        "CI_EVIDENCE directory=build exit=0 output_bytes=1881983 truncated=False",
+        "CI_EVIDENCE directory=static-timer-allocations exit=0 output_bytes=124 truncated=False",
+        "CI_EVIDENCE directory=discovery exit=0 output_bytes=580996 truncated=False",
+        "CI_EVIDENCE directory=unit exit=0 output_bytes=2453 truncated=False",
+        "CI_EVIDENCE directory=stress exit=0 output_bytes=538 truncated=False",
+        "CI_EVIDENCE directory=lifecycle exit=0 output_bytes=2258 truncated=False",
+        "CI_EVIDENCE directory=recovery-maintenance exit=0 output_bytes=2984 truncated=False",
+        "CI_EVIDENCE directory=calibration-vector-build exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=calibration-vector-query exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=calibration-large-value exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=calibration-bulk-edge exit=0 output_bytes=2672 truncated=False"
+      ],
+      "terminal_journals": [],
+      "rss_rejections": [],
+      "gtest_summaries": []
+    },
+    "mac": {
+      "evidence": [
+        "CI_EVIDENCE directory=common-tools exit=0 output_bytes=5120 truncated=False",
+        "CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=168 truncated=False",
+        "CI_EVIDENCE directory=string-probe-build exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=string-allocations exit=0 output_bytes=2391 truncated=False",
+        "CI_EVIDENCE directory=conan-profile exit=0 output_bytes=585 truncated=False",
+        "CI_EVIDENCE directory=conan-dependencies exit=0 output_bytes=216905 truncated=False",
+        "CI_EVIDENCE directory=configure exit=0 output_bytes=856 truncated=False",
+        "CI_EVIDENCE directory=build exit=0 output_bytes=825642 truncated=False",
+        "CI_EVIDENCE directory=static-timer-allocations exit=0 output_bytes=124 truncated=False",
+        "CI_EVIDENCE directory=discovery exit=0 output_bytes=580996 truncated=False",
+        "CI_EVIDENCE directory=budget-4664592ab53f1087 exit=0 output_bytes=8320 truncated=False",
+        "CI_EVIDENCE directory=budget-7fc3a1573ee24ed1 exit=0 output_bytes=6087 truncated=False",
+        "CI_EVIDENCE directory=budget-a948301df2fdaa1c exit=0 output_bytes=4725 truncated=False",
+        "CI_EVIDENCE directory=budget-3257bf1e1a62b30e exit=0 output_bytes=1658 truncated=False",
+        "CI_EVIDENCE directory=budget-b8e448993dd12166 exit=0 output_bytes=2855 truncated=False",
+        "CI_EVIDENCE directory=budget-ed97de03794599a7 exit=0 output_bytes=1889 truncated=False",
+        "CI_EVIDENCE directory=budget-df57c22a1c600527 exit=0 output_bytes=3972 truncated=False",
+        "CI_EVIDENCE directory=budget-b060438d3b717630 exit=0 output_bytes=4035 truncated=False",
+        "CI_EVIDENCE directory=budget-2abe6e8ec58ea092 exit=0 output_bytes=5531 truncated=False",
+        "CI_EVIDENCE directory=budget-794248e2b7ae06f2 exit=0 output_bytes=3023 truncated=False",
+        "CI_EVIDENCE directory=budget-0532e5a06b1d0bc3 exit=0 output_bytes=5141 truncated=False",
+        "CI_EVIDENCE directory=budget-11bc832efcacae29 exit=0 output_bytes=7060 truncated=False",
+        "CI_EVIDENCE directory=macos-budget-cases exit=0 output_bytes=65361 truncated=False",
+        "CI_EVIDENCE directory=macos-conversion-quota-stack exit=0 output_bytes=2291 truncated=False",
+        "CI_EVIDENCE directory=unit exit=0 output_bytes=2742 truncated=False",
+        "CI_EVIDENCE directory=stress exit=0 output_bytes=539 truncated=False",
+        "CI_EVIDENCE directory=lifecycle exit=0 output_bytes=2244 truncated=False",
+        "CI_EVIDENCE directory=recovery-maintenance exit=0 output_bytes=2991 truncated=False",
+        "CI_EVIDENCE directory=calibration-vector-build exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=calibration-vector-query exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=calibration-large-value exit=0 output_bytes=0 truncated=False",
+        "CI_EVIDENCE directory=calibration-bulk-edge exit=0 output_bytes=2742 truncated=False"
+      ],
+      "terminal_journals": [
+        {
+          "started": 1,
+          "completed": 1,
+          "failed": 0,
+          "last_started": "LogicalVectorPropertyBatchTest.GdsDijkstraPipelineAccountsOwnedResultsAfterPathRelease",
+          "last_completed": "LogicalVectorPropertyBatchTest.GdsDijkstraPipelineAccountsOwnedResultsAfterPathRelease",
+          "last_started_observed_seconds": 0.21622079099984148,
+          "last_completed_observed_seconds": 0.2180117909999808,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        },
+        {
+          "started": 1,
+          "completed": 1,
+          "failed": 0,
+          "last_started": "LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow",
+          "last_completed": "LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterReadsAProjectedAliasBeforeWindow",
+          "last_started_observed_seconds": 0.2198987090000628,
+          "last_completed_observed_seconds": 0.26548174999993535,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        },
+        {
+          "started": 1,
+          "completed": 1,
+          "failed": 0,
+          "last_started": "LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget",
+          "last_completed": "LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget",
+          "last_started_observed_seconds": 0.2336054580000564,
+          "last_completed_observed_seconds": 0.24984283300000243,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        },
+        {
+          "started": 12,
+          "completed": 12,
+          "failed": 0,
+          "last_started": "LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget",
+          "last_completed": "LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget",
+          "last_started_observed_seconds": 233.24392291699985,
+          "last_completed_observed_seconds": 233.260174333,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        }
+      ],
+      "rss_rejections": [],
+      "gtest_summaries": []
+    },
+    "tsan": {
+      "evidence": [
+        "CI_EVIDENCE directory=common-tools exit=0 output_bytes=5122 truncated=False",
+        "CI_EVIDENCE directory=diagnostic-tests exit=0 output_bytes=168 truncated=False",
+        "CI_EVIDENCE directory=conan-profile exit=0 output_bytes=585 truncated=False",
+        "CI_EVIDENCE directory=conan-dependencies exit=0 output_bytes=217456 truncated=False",
+        "CI_EVIDENCE directory=configure exit=0 output_bytes=860 truncated=False",
+        "CI_EVIDENCE directory=build exit=0 output_bytes=828017 truncated=False",
+        "CI_EVIDENCE directory=tsan-gate exit=0 output_bytes=934 truncated=False"
+      ],
+      "terminal_journals": [],
+      "rss_rejections": [],
+      "gtest_summaries": []
+    }
+  }
+}
