@@ -22,6 +22,8 @@ WINDOWS = [
     )),
     'BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack',
     'RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce',
+    'RelocatableBTreePageCodecTest.PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied',
+    'RelocatableBTreePageCodecTest.PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry',
     'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',
     'CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge',
     'CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues',

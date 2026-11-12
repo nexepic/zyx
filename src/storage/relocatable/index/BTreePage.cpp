@@ -942,6 +942,24 @@ namespace graph::storage {
 		return destination;
 	}
 
+
+    BTreePage BTreePage::rebindPrivateOwner(const PageOwnerHeader &owner) && {
+        auto rebound = header();
+        if (owner.kind != PageOwnerKind::POK_INDEX || owner.owner_id != rebound.index_id ||
+            owner.page_id != rebound.page_id || owner.flags != 0U || !owner.generation.isValid() || !owner.committed_lsn.isValid())
+            throwBTreePageError(FormatError::FERR_INVALID_STATE,
+                "relocatable B+Tree page relocation owner does not preserve its logical identity");
+        SlottedPage::validateOwner(owner);
+        // All decoding/admission precedes mutation. Only the fixed-size typed
+        // header and SlottedPage's existing owner/checksum fields then change.
+        validateLayout();
+        rebound.generation = owner.generation;
+        const auto bytes = BTreePageHeaderCodec::encode(rebound);
+        page_.rebindOwner(owner);
+        page_.overwrite({rebound.page_id, 0U, 1U}, bytes);
+        return std::move(*this);
+    }
+
 	void BTreePage::writeHeader(BTreePageHeader updated) {
 		const SlottedSlotReference reference{page_.pageId(), 0, 1};
 		page_.overwrite(reference, BTreePageHeaderCodec::encode(updated));

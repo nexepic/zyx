@@ -1175,3 +1175,76 @@ TEST(RelocatableBTreePageCodecTest, FixedKeyDecodeRetainsWholeLeafOrderingRestar
     bad = bytes; bad[stream + 6U] = std::byte{0};
     EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
 }
+
+namespace {
+class PrivateRebindBudget final : public graph::utils::UnmanagedAllocationResource {
+public:
+ size_t live = 0U, page_allocations = 0U;
+ bool deny_page = false, deny_all = false;
+ void reserveUnmanaged(size_t bytes) override { if (deny_all) throw std::bad_alloc(); live += bytes; }
+ void releaseUnmanaged(size_t bytes) noexcept override { live -= bytes; }
+private:
+ void *do_allocate(size_t bytes, size_t alignment) override {
+  if (deny_all || (deny_page && bytes == RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES)) throw std::bad_alloc();
+  void *p = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+  live += bytes; if (bytes == RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) ++page_allocations;
+  return p;
+ }
+ void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+  std::pmr::new_delete_resource()->deallocate(p, bytes, alignment); live -= bytes;
+ }
+ bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+
+TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied) {
+ auto memory = std::make_shared<PrivateRebindBudget>();
+ const PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header; header.index_id = owner.owner_id; header.page_id = owner.page_id;
+ header.generation = owner.generation; header.left_sibling = PageId(50); header.right_sibling = PageId(52);
+ const std::vector<BTreePageEntry> entries{{{std::byte{'a'}}, 1U}, {{std::byte{'b'}}, 2U}};
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  auto page = BTreePage::createWithEntries(owner, header, entries);
+  const auto before = memory->live;
+  auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
+  memory->deny_page = true;
+  EXPECT_THROW(static_cast<void>(page.rebindOwner(replacement)), std::bad_alloc);
+  EXPECT_EQ(page.header().generation, owner.generation); EXPECT_EQ(memory->live, before);
+  auto rebound = std::move(page).rebindPrivateOwner(replacement);
+  EXPECT_EQ(memory->page_allocations, 1U); EXPECT_EQ(memory->live, before);
+  EXPECT_EQ(rebound.entries(), entries); EXPECT_EQ(rebound.header().left_sibling, header.left_sibling);
+  EXPECT_EQ(rebound.header().right_sibling, header.right_sibling);
+  EXPECT_EQ(rebound.slottedPage().memoryOwner(), memory);
+  memory->deny_page = false;
+  const auto encoded = rebound.serialize(); const auto opened = BTreePage::open(replacement, encoded);
+  EXPECT_EQ(opened.entries(), entries); EXPECT_EQ(opened.header().generation, replacement.generation);
+  EXPECT_EQ(opened.slottedPage().ownerCommittedLsn(), replacement.committed_lsn);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry) {
+ auto memory = std::make_shared<PrivateRebindBudget>();
+ const PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header; header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  auto page = BTreePage::create(owner, header); const auto original = page.serialize();
+  auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
+  auto invalid = replacement; invalid.owner_id = 18U;
+  expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(invalid)); }, FormatError::FERR_INVALID_STATE);
+  EXPECT_EQ(page.serialize(), original);
+  invalid = replacement; invalid.flags = 1U;
+  expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(invalid)); }, FormatError::FERR_INVALID_STATE);
+  EXPECT_EQ(page.serialize(), original);
+  const auto before = memory->live; memory->deny_all = true;
+  EXPECT_THROW(static_cast<void>(std::move(page).rebindPrivateOwner(replacement)), std::bad_alloc);
+  memory->deny_all = false; EXPECT_EQ(memory->live, before); EXPECT_EQ(page.serialize(), original);
+  auto rebound = std::move(page).rebindPrivateOwner(replacement);
+  EXPECT_TRUE(rebound.entries().empty()); EXPECT_EQ(rebound.header().generation, replacement.generation);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}

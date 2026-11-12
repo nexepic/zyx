@@ -176,6 +176,10 @@ namespace graph::storage {
 		// the stable Page ID, tree links, and entries. B+Tree slot IDs are page-
 		// local implementation details, so rebuilding also safely compacts holes.
 		[[nodiscard]] BTreePage rebindOwner(const PageOwnerHeader &owner) const;
+        // Consume an exclusively owned, unpublished image. Authenticate it
+        // before updating fixed owner/header bytes; retain its backing/authority
+        // and packed layout instead of allocating another complete page.
+        [[nodiscard]] BTreePage rebindPrivateOwner(const PageOwnerHeader &owner) &&;
 		void insert(BTreePageEntry entry);
 		void erase(std::span<const std::byte> key);
 		[[nodiscard]] std::vector<std::byte> serialize() const;
