@@ -501,10 +501,15 @@ TEST_F(RelocatableStorageBackendTest, NativeDistinctOutputBudgetDenialCleansSpil
     graph::query::QueryContext context;
     context.resource_account = std::make_shared<ResourceAccount>(backend->queryResourceDomain(), ResourceClass::RCK_QUERY, reads.bounds.maximum_materialized_bytes);
     bool denied = false;
-    try { static_cast<void>(engine.execute("UNWIND range(1,24000) AS x RETURN DISTINCT x % 12000 AS value", context)); }
+    // Each retained result owns its key. Keep this denial independent of the
+    // public value/STL geometry: key characters alone exceed the same 8 MiB.
+    const std::string alias(reads.bounds.maximum_materialized_bytes / 12000U + 1U, 'v');
+    backend->resetIoStats();
+    try { static_cast<void>(engine.execute("UNWIND range(1,24000) AS x RETURN DISTINCT x % 12000 AS `" + alias + "`", context)); }
     catch (const MaterializedByteLimitExceeded &) { denied = true; }
     catch (const ResourceAdmissionDenied &) { denied = true; }
     EXPECT_TRUE(denied);
+    EXPECT_GT(backend->ioStats().data.write_calls, 0U);
     EXPECT_EQ(context.resource_account->used(), 0U);
     EXPECT_EQ(disk->usage().bytes, before);
     EXPECT_FALSE(backend->hasIndeterminateWriteOutcome());

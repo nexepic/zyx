@@ -5,7 +5,11 @@
       "CI_RESULT_REJECTION"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=2817 available=1039 maximum=4016"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
@@ -13,7 +17,11 @@
       "CI_PROCEDURE_PRESSURE"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_PROCEDURE_PRESSURE owner=22247930593288 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2736 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5624 requested_backing=0 maximum=8192 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=584 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
@@ -21,7 +29,12 @@
       "budget_admission_boundary_without_more_specific_tag"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_BUDGET owner=30236569763860 account_id=0 operation=replace requested=2720 previous=2704 embedded=0 used=3936 peak=3936 maximum=3936 available=0 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=BudgetMemoryResource.hpp site_line=20",
+      "CI_BUDGET owner=30236569763860 account_id=0 operation=wouldExceed requested=3266 previous=252 embedded=0 used=964 peak=3936 maximum=3936 available=2972 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PlanInspectionAndBatching.inc site_line=1339"
+    ],
+    "native_validation_required": "Inspect the tight single-cell retained replacement (2720 vs previous2704 at used=max3936) and resumable read grants; output geometry alone does not identify a refundable source grant."
   },
   {
     "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
@@ -29,7 +42,11 @@
       "CI_UNMANAGED_REJECT"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_UNMANAGED_REJECT requested=16 previous=0 site_file=OwnedStdVector.hpp site_line=56 site_function=__cdecl graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(OwnedStdVector<T> &&) [T = std::byte]"
+    ],
+    "native_validation_required": "Confirm the earlier direct BTree key construction removes the observed 16-byte moved-from byte-vector proxy request. Its complete native origin stack was not captured; this entity/gather change is separate."
   },
   {
     "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
@@ -37,7 +54,11 @@
       "CI_SORT_REJECTION"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_SORT_REJECTION line=704 rows=4 retained=18076 key_slots=352 used=30953 available=3543"
+    ],
+    "native_validation_required": "Measure the four retained sort rows and 352-byte key slots at the pre-output sort admission; preserve input ownership and key charges until transfer."
   },
   {
     "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
@@ -45,7 +66,11 @@
       "CI_UNMANAGED_REJECT"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_UNMANAGED_REJECT requested=16 previous=0 site_file=OwnedStdVector.hpp site_line=56 site_function=__cdecl graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(OwnedStdVector<T> &&) [T = std::byte]"
+    ],
+    "native_validation_required": "Confirm the earlier direct BTree key construction removes the observed 16-byte moved-from byte-vector proxy request. Its complete native origin stack was not captured; this entity/gather change is separate."
   },
   {
     "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
@@ -53,7 +78,11 @@
       "CI_RESULT_GROWTH_REJECT"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_GROWTH_REJECT rows=0 old_capacity=0 preferred_capacity=1 chosen_capacity=1 minimum_capacity=1 retained_with_incoming=453 relocation_upper=0 transient=533 used=2021 maximum=2040 strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
@@ -61,7 +90,11 @@
       "CI_RESULT_GROWTH_REJECT"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_GROWTH_REJECT rows=4 old_capacity=4 preferred_capacity=8 chosen_capacity=5 minimum_capacity=5 retained_with_incoming=7505 relocation_upper=2288 transient=10193 used=9273 maximum=9600 strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
@@ -69,7 +102,11 @@
       "CI_RESULT_REJECTION"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
@@ -77,7 +114,11 @@
       "CI_PROCEDURE_PRESSURE"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_PROCEDURE_PRESSURE owner=19086834663443 phase=source_result_overlap source_rows=3 source_capacity=3 source_row_width=208 source_backing=624 external_source=48 source_retained=5584 result_rows=0 result_capacity=3 result_row_width=80 result_and_output=3584 requested_backing=0 maximum=9000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
@@ -85,7 +126,11 @@
       "budget_admission_boundary_without_more_specific_tag"
     ],
     "scope": "unconfirmed_indirect_effect",
-    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate."
+    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate.",
+    "native_observed_boundary": [
+      "CI_RESOURCE account_id=28673201668118 class=0 lease=10128 requested=11152 available=752 account=32016/32768 database=68451600/268435456 database_class=32016/201326592 process=68451600/536870912 process_class=32016/536870912"
+    ],
+    "native_validation_required": "Verify the parent QUERY account at 32016/32768 and the attempted 1024-byte property grant; identify simultaneously retained source owners before considering credit settlement."
   },
   {
     "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
@@ -93,7 +138,11 @@
       "CI_RESULT_GROWTH_REJECT"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_GROWTH_REJECT rows=1 old_capacity=1 preferred_capacity=2 chosen_capacity=2 minimum_capacity=2 retained_with_incoming=2428 relocation_upper=584 transient=3172 used=2980 maximum=3720 strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
@@ -101,7 +150,11 @@
       "CI_RESULT_REJECTION"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=0 used=1776 available=1120 maximum=3056"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
@@ -109,7 +162,12 @@
       "other_observation_no_precise_origin"
     ],
     "scope": "unconfirmed_indirect_effect",
-    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate."
+    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate.",
+    "native_observed_boundary": [
+      "CI_STRING_BOUND characters=118 raw_upper=128 proxy=16 admitted=144",
+      "CI_STRING_BOUND characters=2000 raw_upper=2016 proxy=16 admitted=2032"
+    ],
+    "native_validation_required": "Existing trace shows string admissions but no rejected origin; distinguish CSV retained-header/aggregate source from final result allocation with bounded origin diagnostics."
   },
   {
     "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
@@ -117,7 +175,11 @@
       "CI_RESULT_REJECTION"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_REJECTION requested=10435 source_row=10344 result_rows=0 used=10184 available=8592 maximum=19896"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
@@ -125,7 +187,11 @@
       "CI_RESULT_GROWTH_REJECT"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_GROWTH_REJECT rows=1 old_capacity=1 preferred_capacity=2 chosen_capacity=2 minimum_capacity=2 retained_with_incoming=970 relocation_upper=584 transient=1714 used=1154 maximum=1236 strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
@@ -133,7 +199,11 @@
       "CI_NODE_RETAINED_REJECT"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_NODE_RETAINED_REJECT rows=1 columns=1 row_structural=624 admitted_source=1014 returned_columns=1151 column_outer=32 column_inner=88 column_keys=7 column_cells=1024 used=1782 available=58"
+    ],
+    "native_validation_required": "Measure returned column buffers and overlap with the retained read row at the single-row boundary; source admission/column charging remains distinct from public output padding."
   },
   {
     "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
@@ -141,7 +211,11 @@
       "CI_NODE_RETAINED_REJECT"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_NODE_RETAINED_REJECT rows=1 columns=1 row_structural=624 admitted_source=1012 returned_columns=1151 column_outer=32 column_inner=88 column_keys=7 column_cells=1024 used=1780 available=60"
+    ],
+    "native_validation_required": "Measure returned column buffers and overlap with the retained read row at the single-row boundary; source admission/column charging remains distinct from public output padding."
   },
   {
     "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
@@ -149,7 +223,11 @@
       "CI_PROCEDURE_PRESSURE"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_PROCEDURE_PRESSURE owner=36799279792138 phase=source_result_overlap source_rows=1 source_capacity=1 source_row_width=208 source_backing=208 external_source=16 source_retained=640 result_rows=0 result_capacity=1 result_row_width=80 result_and_output=4984 requested_backing=0 maximum=5000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=0 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
@@ -157,7 +235,12 @@
       "CI_RESULT_GROWTH_REJECT"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_GROWTH_REJECT rows=2 old_capacity=2 preferred_capacity=4 chosen_capacity=3 minimum_capacity=3 retained_with_incoming=2161 relocation_upper=1152 transient=3553 used=2776 maximum=3736 strategy=empty_swap",
+      "CI_RESULT_GROWTH_REJECT rows=8 old_capacity=8 preferred_capacity=16 chosen_capacity=9 minimum_capacity=9 retained_with_incoming=6643 relocation_upper=4560 transient=11923 used=7523 maximum=11256 strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
@@ -165,7 +248,11 @@
       "CI_RESULT_GROWTH_REJECT"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_GROWTH_REJECT rows=1 old_capacity=1 preferred_capacity=2 chosen_capacity=2 minimum_capacity=2 retained_with_incoming=986 relocation_upper=584 transient=1730 used=1186 maximum=1856 strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
@@ -173,7 +260,11 @@
       "CI_PROCEDURE_PRESSURE"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_PROCEDURE_PRESSURE owner=10909216931849 phase=source_result_overlap source_rows=2 source_capacity=2 source_row_width=208 source_backing=416 external_source=48 source_retained=2424 result_rows=1 result_capacity=3 result_row_width=80 result_and_output=5576 requested_backing=0 maximum=8000 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=584 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
@@ -181,7 +272,11 @@
       "CI_PROCEDURE_PRESSURE"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_PROCEDURE_PRESSURE owner=43705587204355 phase=source_result_overlap source_rows=192 source_capacity=192 source_row_width=208 source_backing=39936 external_source=4800 source_retained=74488 result_rows=142 result_capacity=300 result_row_width=80 result_and_output=183167 requested_backing=0 maximum=262144 row_payload_credits=0 credits_saturated=0 result_resource_credit=0 allocation_owner=0 owner_used=0 owner_maximum=0 parent_headroom=0 headroom_valid=0 result_relocation_upper=80672 relocation_valid=1 row_nothrow_move=1 empty_row_heap=0 row_layout_valid=1 result_row_nothrow_move=0 result_growth_needed=0 result_growth_strategy=empty_swap"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
@@ -189,7 +284,11 @@
       "budget_admission_boundary_without_more_specific_tag"
     ],
     "scope": "unconfirmed_indirect_effect",
-    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate."
+    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate.",
+    "native_observed_boundary": [
+      "CI_BUDGET owner=18124761989121 account_id=0 operation=replace requested=513 previous=0 embedded=0 used=3734 peak=3902 maximum=3936 available=202 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=EntityValuesAndProperties.inc site_line=1331"
+    ],
+    "native_validation_required": "Capture the rejected scoped-property copy origin and retained scope owners; there is no established public-result rejection in the available trace."
   },
   {
     "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
@@ -197,7 +296,12 @@
       "budget_admission_boundary_without_more_specific_tag"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_BUDGET owner=43344809951238 account_id=0 operation=wouldExceed requested=1522 previous=208 embedded=0 used=1234 peak=1234 maximum=2447 available=1213 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454",
+      "CI_BUDGET owner=43344809951238 account_id=0 operation=wouldExceed requested=1434 previous=120 embedded=0 used=1138 peak=1234 maximum=2447 available=1309 parent_charge=0 parent_maximum=0 owned_parent_charge=0 site_file=PrefetchAndResults.inc site_line=454"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   },
   {
     "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
@@ -205,7 +309,11 @@
       "CI_COUNT_UNWIND"
     ],
     "scope": "different_failure_boundary_not_claimed_fixed",
-    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding.",
+    "native_observed_boundary": [
+      "CI_COUNT_UNWIND phase=source_scan"
+    ],
+    "native_validation_required": "Capture the count source-scan/frontier allocation and its source lifetime; the observed phase is before public output materialization."
   },
   {
     "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
@@ -213,6 +321,10 @@
       "CI_RESULT_REJECTION"
     ],
     "scope": "public_result_geometry_affected_native_resolution_unverified",
-    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit.",
+    "native_observed_boundary": [
+      "CI_RESULT_REJECTION requested=1233 source_row=624 result_rows=1 used=3537 available=807 maximum=4504"
+    ],
+    "native_validation_required": "Run the identical case after the compact representation and bounded-publication changes; compare its first failing boundary and actual allocator geometry. Linux passing does not establish Windows resolution."
   }
 ]

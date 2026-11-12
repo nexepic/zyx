@@ -1,0 +1,13 @@
+{
+  "head": "197e29ea6849016bcbfd1cf4b6883058ac26e410",
+  "restored_head": "197e29ea6849016bcbfd1cf4b6883058ac26e410",
+  "bundle_bytes": 303296751,
+  "bundle_sha256": "54eea80c68f32ff9518eed42b4427b558aa2d5c5bf6d12b3a15483340381d5ba",
+  "reachable_objects": 44388,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 20,
+  "validation": "Source checkpoint 197e29ea6: 509 targeted C++ cases, 3 final diagnostic cases and 80 Python tests passed; unfiltered full regression pending; Windows/macOS native validation pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}
