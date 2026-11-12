@@ -551,16 +551,17 @@
 		}
 
 		[[nodiscard]] PropertyValue copyReservedPropertyValue(const PropertyValue &source,
-				ExecutionState &state, MaterializedByteReservation &reservation) {
+				ExecutionState &state, MaterializedByteReservation &reservation,
+                std::source_location site = std::source_location::current()) {
 			const auto checkpoint = [&] { if (state.shared.context != nullptr) state.shared.context->checkGuardNow(); };
 			const size_t previous = reservation.bytes();
 			constexpr const char *message = "logical-plan copied Property payload size overflowed";
-			reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(source, checkpoint), message));
+			reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(source, checkpoint), message), site);
 			try {
 				PropertyValue copy = state.shared.materialized_budget.transfersReservations()
                     ? graph::property_copy::copyPropertyValueGuarded(source, checkpoint)
                     : detail::copyPropertyValueGuarded(source, checkpoint);
-				reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(copy, checkpoint), message));
+				reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(copy, checkpoint), message), site);
 				return copy;
 			} catch (...) {
 				reservation.set(previous);
