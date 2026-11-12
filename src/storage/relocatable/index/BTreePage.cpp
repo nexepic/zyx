@@ -253,11 +253,12 @@ namespace graph::storage {
 			return offsets;
 		}
 
-		[[nodiscard]] std::optional<BTreePageEntry> decodeOne(std::span<const std::byte> stream, size_t &offset,
-															  std::span<const std::byte> previous, bool restart,
-															  bool includesValue) {
+		template<class Destination>
+		bool decodeOneTo(std::span<const std::byte> stream, size_t &offset,
+				std::span<const std::byte> previous, bool restart, bool includesValue,
+				Destination &&destination) {
 			if (offset == stream.size()) {
-				return std::nullopt;
+				return false;
 			}
 			const uint64_t shared = readVarint(stream, offset);
 			const uint64_t suffixBytes = readVarint(stream, offset);
@@ -272,14 +273,23 @@ namespace graph::storage {
 			}
 			// Reserve the complete reconstructed key once. Growing a shared-prefix
 			// vector during suffix insertion otherwise retains nearly double capacity.
-			utils::OwnedStdVector<std::byte> key;
+			auto &entry = destination();
+			auto &key = entry.key;
             key.resize(static_cast<size_t>(shared + suffixBytes));
             std::copy_n(previous.begin(), static_cast<size_t>(shared), key.begin());
             std::copy_n(stream.begin() + static_cast<std::ptrdiff_t>(offset), static_cast<size_t>(suffixBytes),
                 key.begin() + static_cast<std::ptrdiff_t>(shared));
 			offset += static_cast<size_t>(suffixBytes);
-			const uint64_t value = includesValue ? readVarint(stream, offset) : 0U;
-			return BTreePageEntry{std::move(key), value};
+			entry.value_or_child = includesValue ? readVarint(stream, offset) : 0U;
+			return true;
+		}
+
+		[[nodiscard]] std::optional<BTreePageEntry> decodeOne(std::span<const std::byte> stream, size_t &offset,
+				std::span<const std::byte> previous, bool restart, bool includesValue) {
+			std::optional<BTreePageEntry> entry;
+			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
+					[&]() -> BTreePageEntry & { return entry.emplace(); })) return std::nullopt;
+			return entry;
 		}
 
 	} // namespace
@@ -579,20 +589,25 @@ namespace graph::storage {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree restart offset does not point to an entry");
 			}
-			auto entry = decodeOne(stream, offset, previous, restart, includesValue);
-			if (!entry.has_value()) {
+			// Construct keys in their reserved final slots: moving an owned vector
+			// needs a second, genuinely allocated empty-container proxy on MSVC.
+			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
+					[&]() -> BTreePageEntry & {
+						entries.resize(static_cast<size_t>(index) + 1U);
+						return entries.back();
+					})) {
 				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"relocatable packed B+Tree entry stream ended early");
 			}
-			if (!entries.empty() && !lessKey(entries.back().key, entry->key)) {
+			auto &entry = entries.back();
+			if (index != 0U && !lessKey(entries[index - 1U].key, entry.key)) {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree entries are not strictly ordered");
 			}
-			if (kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry->value_or_child).isValid()) {
+			if (kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry.value_or_child).isValid()) {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed internal B+Tree entry has an invalid child Page ID");
 			}
-			entries.push_back(std::move(*entry));
 			// The reserved output owns this prefix until the next entry is decoded.
 			previous = entries.back().key;
 		}

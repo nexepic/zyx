@@ -22,6 +22,7 @@ WINDOWS = [
     )),
     'BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack',
     'RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce',
+    'RelocatableBTreePageCodecTest.DecodingBorrowsTheRetainedPredecessorInsteadOfCopyingItsKey',
     'RelocatableBTreePageCodecTest.PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied',
     'RelocatableBTreePageCodecTest.PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry',
     'RelocatableBTreePageCodecTest.PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation',

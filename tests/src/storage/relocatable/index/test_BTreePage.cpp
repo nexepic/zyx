@@ -50,9 +50,12 @@ TEST(RelocatableBTreePageCodecTest, DecodingBorrowsTheRetainedPredecessorInstead
     class KeyAllocations final : public graph::utils::UnmanagedAllocationResource {
     public:
         size_t key_allocations = 0U;
+        size_t proxy_allocations = 0U;
         size_t live = 0U;
         void reserveUnmanaged(size_t bytes) override {
             if (bytes == 257U) ++key_allocations;
+            if (bytes != 0U && bytes == graph::utils::detail::standardContainerProxyBytes())
+                ++proxy_allocations;
             live += bytes;
         }
         void releaseUnmanaged(size_t bytes) noexcept override { live -= bytes; }
@@ -76,6 +79,9 @@ TEST(RelocatableBTreePageCodecTest, DecodingBorrowsTheRetainedPredecessorInstead
         ASSERT_EQ(decoded.size(), 1U);
         EXPECT_EQ(decoded.front(), input);
         EXPECT_EQ(memory->key_allocations, 1U);
+        // Offsets, entries and the final key each own a proxy on MSVC.
+        // Allow one non-elided return, but no temporary key/entry moves.
+        EXPECT_LE(memory->proxy_allocations, 4U);
         std::fill(encoded.begin(), encoded.end(), std::byte{});
         EXPECT_EQ(decoded.front(), input);
         EXPECT_GT(memory->live, 0U);
