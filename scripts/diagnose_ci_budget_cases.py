@@ -24,6 +24,7 @@ WINDOWS = [
     'RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce',
     'RelocatableBTreePageCodecTest.PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied',
     'RelocatableBTreePageCodecTest.PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry',
+    'RelocatableBTreePageCodecTest.PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation',
     'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',
     'CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge',
     'CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues',

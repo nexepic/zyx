@@ -1,0 +1,42 @@
+{
+  "run": 43050609360,
+  "formal_passed": 711,
+  "formal_failed": 0,
+  "steps": {
+    "asan-cold-rss-control": {
+      "exit": 1,
+      "output_bytes": 1030,
+      "truncated": false
+    },
+    "asan-cold-rss": {
+      "exit": 1,
+      "output_bytes": 27892,
+      "truncated": false
+    },
+    "asan-rss-warmed-statistics": {
+      "exit": 1,
+      "output_bytes": 32727,
+      "truncated": false
+    },
+    "asan-gate": {
+      "exit": 0,
+      "output_bytes": 241810,
+      "truncated": false
+    }
+  },
+  "cold_and_warmed_rejections": [
+    {
+      "limit": 67108864,
+      "baseline": 461062144,
+      "current": 528498688,
+      "growth": 67436544
+    },
+    {
+      "limit": 67108864,
+      "baseline": 461455360,
+      "current": 528908288,
+      "growth": 67452928
+    }
+  ],
+  "root_cause": "not established; retained counters are not disjoint and are not added"
+}

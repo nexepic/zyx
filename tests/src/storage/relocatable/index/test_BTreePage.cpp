@@ -1238,17 +1238,44 @@ TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingRejectsBeforeMutationAndA
   graph::utils::OwnedAllocationScope scope(memory);
   auto page = BTreePage::create(owner, header); const auto original = page.serialize();
   auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
-  auto invalid = replacement; invalid.owner_id = 18U;
-  expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(invalid)); }, FormatError::FERR_INVALID_STATE);
-  EXPECT_EQ(page.serialize(), original);
-  invalid = replacement; invalid.flags = 1U;
-  expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(invalid)); }, FormatError::FERR_INVALID_STATE);
-  EXPECT_EQ(page.serialize(), original);
+  for (unsigned field = 0U; field < 6U; ++field) {
+   SCOPED_TRACE(field);
+   auto invalid = replacement;
+   if (field == 0U) invalid.owner_id = 18U;
+   if (field == 1U) invalid.page_id = PageId(52);
+   if (field == 2U) invalid.kind = PageOwnerKind::POK_NONE;
+   if (field == 3U) invalid.generation = {};
+   if (field == 4U) invalid.committed_lsn = {};
+   if (field == 5U) invalid.flags = 1U;
+   expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(invalid)); }, FormatError::FERR_INVALID_STATE);
+   EXPECT_EQ(page.serialize(), original);
+  }
   const auto before = memory->live; memory->deny_all = true;
   EXPECT_THROW(static_cast<void>(std::move(page).rebindPrivateOwner(replacement)), std::bad_alloc);
   memory->deny_all = false; EXPECT_EQ(memory->live, before); EXPECT_EQ(page.serialize(), original);
   auto rebound = std::move(page).rebindPrivateOwner(replacement);
   EXPECT_TRUE(rebound.entries().empty()); EXPECT_EQ(rebound.header().generation, replacement.generation);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation) {
+ auto memory = std::make_shared<PrivateRebindBudget>();
+ const PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header; header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  auto page = BTreePage::create(owner, header);
+  // A valid outer SlottedPage checksum must not authenticate a mismatched
+  // typed entry count. Inject through the outer page only for this regression.
+  auto forged = page.header(); forged.entry_count = 1U;
+  auto &slots = const_cast<SlottedPage &>(page.slottedPage());
+  slots.overwrite({owner.page_id, 0U, 1U}, BTreePageHeaderCodec::encode(forged));
+  const auto before = slots.serialize();
+  auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
+  expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(replacement)); }, FormatError::FERR_INVALID_HEADER);
+  EXPECT_EQ(slots.serialize(), before); EXPECT_EQ(slots.pageGeneration(), owner.generation);
  }
  EXPECT_EQ(memory->live, 0U);
 }

@@ -22,24 +22,37 @@ public:
 };
 }
 
-TEST(AdmissionCallsiteTest, RejectsWithoutMutationAndReportsTheExternalReservationCall) {
+namespace {
+int probeCallsite() {
     using namespace graph::query::execution;
     TraceEnvironment environment;
     MaterializedByteBudget budget(8U);
     MaterializedByteReservation reservation(&budget);
     reservation.set(3U);
     testing::internal::CaptureStderr();
+    bool rejected = false;
     const auto line = __LINE__ + 1U;
-    EXPECT_THROW(reservation.set(9U), MaterializedByteLimitExceeded);
+    try { reservation.set(9U); } catch (const MaterializedByteLimitExceeded &) { rejected = true; } catch (...) {}
     const auto output = testing::internal::GetCapturedStderr();
-    EXPECT_NE(output.find("site_file=test_AdmissionCallsite.cpp site_line=" + std::to_string(line)), std::string::npos);
-    EXPECT_EQ(reservation.bytes(), 3U); EXPECT_EQ(budget.used(), 3U);
+    if (!rejected || output.find("site_file=test_AdmissionCallsite.cpp site_line=" + std::to_string(line)) == std::string::npos ||
+        reservation.bytes() != 3U || budget.used() != 3U) return 1;
     testing::internal::CaptureStderr();
     const auto checkLine = __LINE__ + 1U;
-    EXPECT_TRUE(reservation.wouldExceed(9U));
+    const bool denied = reservation.wouldExceed(9U);
     const auto checked = testing::internal::GetCapturedStderr();
-    EXPECT_NE(checked.find("site_file=test_AdmissionCallsite.cpp site_line=" + std::to_string(checkLine)), std::string::npos);
-    EXPECT_EQ(budget.used(), 3U);
-    reservation.reset(); EXPECT_EQ(budget.used(), 0U);
+    if (!denied || checked.find("site_file=test_AdmissionCallsite.cpp site_line=" + std::to_string(checkLine)) == std::string::npos ||
+        budget.used() != 3U) return 2;
+    reservation.reset();
+    return budget.used() == 0U ? 0 : 3;
+}
+}
+
+TEST(AdmissionCallsiteTest, RejectsWithoutMutationAndReportsTheExternalReservationCall) {
+    // A re-executed child preserves the process-wide production output cap,
+    // even when the parent test runner has already exhausted its trace budget.
+    const auto previous = GTEST_FLAG_GET(death_test_style);
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    EXPECT_EXIT(std::exit(probeCallsite()), testing::ExitedWithCode(0), "");
+    GTEST_FLAG_SET(death_test_style, previous);
 }
 #endif

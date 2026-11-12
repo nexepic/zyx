@@ -1,0 +1,187 @@
+{
+  "cases": [
+    {
+      "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "observed_family": "procedure source/result/output retention",
+      "status": "real overlap evidence retained; no fee removed",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "observed_family": "procedure source/result/output retention",
+      "status": "real overlap evidence retained; no fee removed",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "observed_family": "procedure source/result/output retention",
+      "status": "real overlap evidence retained; no fee removed",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "observed_family": "procedure source/result/output retention",
+      "status": "real overlap evidence retained; no fee removed",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "observed_family": "procedure source/result/output retention",
+      "status": "real overlap evidence retained; no fee removed",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "observed_family": "procedure source/result/output retention",
+      "status": "real overlap evidence retained; no fee removed",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "observed_family": "shared read/consumer/output or sort/CSV retention",
+      "status": "individual boundary still requires native attribution; precise callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "observed_family": "earlier shared-budget error instead of expected count-frontier-specific error",
+      "status": "unresolved; frontier assertion retained",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "observed_family": "budget/ownership attribution incomplete",
+      "status": "unresolved; no limit change",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "observed_family": "budget/ownership attribution incomplete",
+      "status": "unresolved; no limit change",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "observed_family": "budget/ownership attribution incomplete",
+      "status": "unresolved; no limit change",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "observed_family": "parent query account1024 requested versus752 remaining",
+      "status": "higher caller unconfirmed; debugger invocation terminated0xC0000005 before complete stack; new bounded callsites added",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce",
+      "observed_family": "complete returned-vector allocation fee",
+      "status": "assertion corrected to include proxy/prefix; native rerun pending",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "observed_family": "4032-byte page allocation with2926 available under1MiB",
+      "status": "private-backing reuse candidate; conversion stack confirms immutable rebind in tail case only; native rerun pending",
+      "native_verified_after_changes": false
+    },
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "observed_family": "4032-byte page allocation with2926 available under1MiB",
+      "status": "private-backing reuse candidate; conversion stack confirms immutable rebind in tail case only; native rerun pending",
+      "native_verified_after_changes": false
+    }
+  ],
+  "unit_unique": 30,
+  "diagnostic118_failed29_overlap": true,
+  "native_post_change_pass_claims": 0
+}

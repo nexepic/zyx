@@ -1,0 +1,10 @@
+{
+  "any": {
+    "exit": 0,
+    "output": "Reading package lists...\n"
+  },
+  "invalid-test": {
+    "exit": 100,
+    "output": "Reading package lists...\nE: Unknown update error mode invalid-test\n"
+  }
+}
