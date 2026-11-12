@@ -210,22 +210,29 @@
 		// is deliberately expressed in terms of logical operator shape rather than a
 		// Cypher string: it removes one B+Tree root descent per intermediate source
 		// while preserving path multiplicity and all query resource bounds.
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        thread_local const char *variableCountFailurePhase = "none";
+#endif
 		[[nodiscard]] std::optional<bool> tryVisitBatchedVariableLengthCount(const logical::LogicalAggregate &aggregate,
 																			 ExecutionState &state,
 																			 const InternalVisitor &visitor) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
             struct FailureStage {
                 const void *owner;
-                const char *phase = "eligibility";
+                const char *previous;
                 int exceptions = std::uncaught_exceptions();
+                explicit FailureStage(const void *value) noexcept
+                    : owner(value), previous(std::exchange(variableCountFailurePhase, "eligibility")) {}
                 ~FailureStage() {
-                    if (std::uncaught_exceptions() <= exceptions) return;
-                    debug::CiBudgetTrace trace(owner, "variable_count_failure");
-                    if (trace.allow()) {
-                        std::fprintf(stderr, "CI_COUNT_UNWIND phase=%s\n", phase);
-                        std::fflush(stderr);
+                    if (std::uncaught_exceptions() > exceptions) {
+                        debug::CiBudgetTrace trace(owner, "variable_count_failure");
+                        if (trace.allow()) {
+                            std::fprintf(stderr, "CI_COUNT_UNWIND phase=%s\n", variableCountFailurePhase);
+                            std::fflush(stderr);
+                        }
+                        trace.discard();
                     }
-                    trace.discard();
+                    variableCountFailurePhase = previous;
                 }
             } failureStage{&state};
 #endif
@@ -343,11 +350,11 @@
 			size_t frontierBytes = 0U;
 			uint64_t resultCount = 0U;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-            failureStage.phase = "source_scan";
+            variableCountFailurePhase = "source_scan";
 #endif
 			static_cast<void>(visitOperator(sourceScan, state, [&](LogicalPlanReadRow row) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-                failureStage.phase = "source_row";
+                variableCountFailurePhase = "source_row";
 #endif
 				checkGuard(state);
 				const LogicalPlanReadValue &binding = requireBinding(row, traversal.getSourceVar());
@@ -379,7 +386,7 @@
 				}
 				FrontierPath path;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-                failureStage.phase = "frontier_seed";
+                variableCountFailurePhase = "frontier_seed";
 #endif
 				path.current_node_id = sourceId;
 				path.visited_edge_ids.reserve(1U);
@@ -399,12 +406,12 @@
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-                failureStage.phase = "source_scan";
+                variableCountFailurePhase = "source_scan";
 #endif
 				return true;
 			}));
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-            failureStage.phase = "frontier_expansion";
+            variableCountFailurePhase = "frontier_expansion";
 #endif
 			std::ranges::sort(frontier, {}, &FrontierPath::current_node_id);
 			if (std::ranges::adjacent_find(frontier, {}, &FrontierPath::current_node_id) != frontier.end()) {
