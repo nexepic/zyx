@@ -1,0 +1,16 @@
+{
+  "exit_code": 124,
+  "interrupted": false,
+  "shards": [
+    {
+      "index": 0,
+      "pid": 3321,
+      "raw_exit_code": 143
+    },
+    {
+      "index": 1,
+      "pid": 3322,
+      "raw_exit_code": -15
+    }
+  ]
+}

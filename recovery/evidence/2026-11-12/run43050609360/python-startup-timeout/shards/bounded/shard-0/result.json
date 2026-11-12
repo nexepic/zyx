@@ -1,0 +1,41 @@
+{
+  "command": [
+    "/tmp/pytest-of-agent/pytest-0/test_tier_evidence_survives_fa1/fake-gtest",
+    "--gtest_filter=*-RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace:RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce:RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection:RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories:RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages:RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication"
+  ],
+  "checkout_sha": "413c70cf9a106125f21f969ce9ec1607ec2821a7",
+  "event_sha": null,
+  "started_at": 1794451790.66107,
+  "state": "interrupted",
+  "timeout_seconds": 2.0,
+  "exit_code": -15,
+  "diagnostic_options": {},
+  "effective_timeout_seconds": 2.0,
+  "case_journal": {
+    "started": 0,
+    "completed": 0,
+    "failed": 0,
+    "last_started": null,
+    "last_completed": null,
+    "last_started_observed_seconds": null,
+    "last_completed_observed_seconds": null,
+    "failed_names": [],
+    "failed_names_truncated": false,
+    "oversized_lines": 0,
+    "counts_are_observed_not_discovery": true
+  },
+  "case_journal_write_errors": 0,
+  "completed_at": 1794451791.071622,
+  "output_bytes": 0,
+  "retained_prefix_bytes": 0,
+  "retained_tail_bytes": 0,
+  "output_truncated": false,
+  "console_truncated": false,
+  "xml_present": false,
+  "xml_documents": [],
+  "failed_case_count": 0,
+  "failed_cases": [],
+  "numeric_case_metrics": [],
+  "numeric_case_metrics_truncated": false,
+  "failed_cases_truncated": false
+}
