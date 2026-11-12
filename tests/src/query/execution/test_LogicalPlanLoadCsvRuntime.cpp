@@ -651,7 +651,11 @@ namespace graph::query::execution {
                     EXPECT_EQ(result.getRows()[index].at("x").asPrimitive(), PropertyValue(int64_t(index + 1U)));
                 RecordProperty("growth_success_bound", limit);
                 return;
-            } catch (const std::runtime_error &) { /* A smaller live peak must still be rejected. */ }
+            } catch (const std::runtime_error &error) {
+                // Only resource pressure may move this boundary; semantic
+                // errors must not disappear behind the calibration loop.
+                ASSERT_NE(std::string(error.what()).find("byte bound"), std::string::npos) << error.what();
+            }
         }
         FAIL() << "bounded scalar result never became admissible";
     }

@@ -507,19 +507,28 @@
 			state.shared.final_result_bytes = nextBytes;
 		}
 
+        struct PropertyColumnByteParts { size_t outer = 0U, inner = 0U, keys = 0U, cells = 0U; };
 		[[nodiscard]] size_t propertyColumnBytes(const std::vector<std::vector<PropertyValue>> &columns,
-												 std::span<const std::string_view> keys, const char *message, const QueryContext *context) {
+												 std::span<const std::string_view> keys, const char *message, const QueryContext *context,
+                PropertyColumnByteParts *parts = nullptr) {
 			if (context != nullptr) context->checkGuardNow();
 			size_t bytes = checkedSizeMul(columns.capacity(), sizeof(std::vector<PropertyValue>), message);
+            PropertyColumnByteParts measured; measured.outer = bytes;
 			for (size_t column = 0U; column < columns.size(); ++column) {
-				bytes = checkedSizeAdd(bytes, checkedSizeMul(columns[column].capacity(), sizeof(PropertyValue), message), message);
+                const auto inner = checkedSizeMul(columns[column].capacity(), sizeof(PropertyValue), message);
+				bytes = checkedSizeAdd(bytes, inner, message);
+                measured.inner = checkedSizeAdd(measured.inner, inner, message);
 				if (column < keys.size()) {
 					bytes = checkedSizeAdd(bytes, keys[column].size(), message);
+                    measured.keys = checkedSizeAdd(measured.keys, keys[column].size(), message);
 				}
 				for (const PropertyValue &value: columns[column]) {
-					bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(value, [&] { if (context != nullptr) context->checkGuardNow(); }), message);
+                    const auto cell = detail::retainedPropertyValueBytes(value, [&] { if (context != nullptr) context->checkGuardNow(); });
+					bytes = checkedSizeAdd(bytes, cell, message);
+                    measured.cells = checkedSizeAdd(measured.cells, cell, message);
 				}
 			}
+            if (parts) *parts = measured;
 			return bytes;
 		}
 

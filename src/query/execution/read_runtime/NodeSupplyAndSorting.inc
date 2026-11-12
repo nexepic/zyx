@@ -335,10 +335,23 @@
 										"logical graph backend changed sorted Node Property result cardinality");
 							}
 						}
+                        PropertyColumnByteParts columnParts;
 						const size_t retained =
-								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.shared.context);
-						if (columnBytes.wouldExceed(retained))
+								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.shared.context, &columnParts);
+						if (columnBytes.wouldExceed(retained)) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                            debug::CiBudgetTrace trace(&columnBytes, "node_retained_columns");
+                            if (trace.allow()) {
+                                std::fprintf(stderr, "CI_NODE_RETAINED_REJECT rows=%zu columns=%zu row_structural=%zu admitted_source=%zu returned_columns=%zu column_outer=%zu column_inner=%zu column_keys=%zu column_cells=%zu used=%zu available=%zu\n",
+                                    end - begin, propertyKeys.size(), structuralBytes, columnBytes.bytes(), retained,
+                                    columnParts.outer, columnParts.inner, columnParts.keys, columnParts.cells,
+                                    state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                                std::fflush(stderr);
+                            }
+                            trace.discard();
+#endif
 							throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
+                        }
 						columnBytes.set(retained);
 						std::optional<detail::BoundNodeColumnPredicates> boundPredicates;
 						try {

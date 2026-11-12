@@ -81,6 +81,7 @@ template<class Row>
 void reserveResultRowsBySwap(std::vector<Row> &rows, size_t capacity) {
     static_assert(std::is_nothrow_swappable_v<Row>);
     if (capacity <= rows.capacity()) return;
+    if (rows.empty()) { rows.reserve(capacity); return; }
     std::vector<Row> replacement;
     replacement.reserve(capacity);
     replacement.resize(rows.size());
@@ -96,6 +97,7 @@ void reserveResultRowsBySwap(std::vector<Row> &rows, size_t capacity) {
 // payloads are transferred, never copied or discounted while still alive.
 template<class Row>
 size_t resultRowsRelocationHeapUpper([[maybe_unused]] const std::vector<Row> &rows) {
+    if (rows.empty()) return 0U;
     size_t bytes = utils::detail::standardContainerProxyBytes();
 #if defined(_MSVC_STL_VERSION)
     bytes = utils::detail::addStandardHeapBytes(bytes,

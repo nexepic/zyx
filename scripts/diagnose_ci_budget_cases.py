@@ -27,6 +27,7 @@ WINDOWS = [
     'RelocatableBTreePageCodecTest.PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation',
     'QueryResultResourcesTest.SwapGrowthAvoidsThrowingMoveCopiesAndRollsBackDestinationFailure',
     'QueryResultResourcesTest.ChargedAndUnchargedRowGrowthKeepIndependentHeapPayloadAddresses',
+    'LogicalPlanLoadCsvRuntimeTest.TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads',
     'CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap',
     'CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge',
     'CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues',
