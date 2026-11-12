@@ -177,7 +177,7 @@
 								 std::vector<uint64_t> *operatorRowCounts = nullptr,
 								 const size_t retainedSourceBytes = 0U,
 								 const bool accountOutputTransition = false,
-                std::optional<size_t> finalRowCount = std::nullopt) {
+                std::optional<size_t> finalRowCount = std::nullopt, bool firstOperatorPrefetched = false) {
 			LogicalPlanReadRuntimeBounds batchBounds = readBounds;
 			const size_t retainedBytes = checkedProcedureSizeAdd(
 					retainedSourceBytes, procedureQueryResultBytes(result));
@@ -206,11 +206,13 @@
 				switch (operation->getType()) {
 					case logical::LogicalOpType::LOP_PROJECT: {
 						const auto &projection = dynamic_cast<const logical::LogicalProject &>(*operation);
+                        if (!firstOperatorPrefetched || operationIndex != 0U) {
 						utils::OwnedStdVector<const expressions::Expression *> propertyExpressions;
 						for (const auto &item: projection.getItems()) {
 							propertyExpressions.push_back(item.expression.get());
 						}
 						prefetchProcedureProperties(rows, propertyExpressions, snapshot, batchBounds, context);
+                        }
                         for (auto &row : rows) row.reconcilePayloadCredit();
 						ProcedureDistinctRows localDistinctRows;
 						ProcedureDistinctRows *distinctRows = nullptr;
@@ -234,6 +236,10 @@
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 							BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
+                            // The old cache is destroyed by row replacement.
+                            // Settle its grants after projected temporaries die,
+                            // rather than retaining them until the whole batch.
+                            const ProcedurePayloadReconcileGuard reconcile{buffered};
 							const size_t currentSourceBytes = bufferedProcedureRowBytes(buffered);
 							if (currentSourceBytes > pendingSourceBytes) {
 								throw std::logic_error("logical procedure pending source-byte accounting underflowed");
@@ -263,6 +269,7 @@
 					}
 					case logical::LogicalOpType::LOP_FILTER: {
 						const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*operation);
+                        if (!firstOperatorPrefetched || operationIndex != 0U)
 						prefetchProcedureProperties(rows, {filter.getPredicate().get()}, snapshot, batchBounds, context);
 						size_t outputCount = 0U;
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {

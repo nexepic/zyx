@@ -1831,7 +1831,12 @@ TEST(LogicalPlanReadRuntimeTest, PaginationFlushesUnderBytePressureWithoutChangi
 	constrained.maximum_materialized_bytes = 1000U;
 	// The two retained QueryResult rows now share the cap with both pagination
 	// buffers and the output batch; the former 1000-byte allowance omits them.
-	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained)), std::runtime_error);
+    // Two compact scalar results can now genuinely fit. Keep the original
+    // positive window below, but require six retained maps for this denial
+    // fixture: their live inline pairs/row headers alone exceed 1000 bytes
+    // on supported native STLs, independently of obsolete entity padding.
+    QueryPlan denied = parser.parseToLogical("UNWIND [1,2,3,4,5,6,7,8] AS value RETURN value SKIP 2 LIMIT 6");
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*denied.root, constrained)), std::runtime_error);
 	constrained.maximum_materialized_bytes = 1500U;
 	const auto result = runtime.executeToQueryResult(*plan.root, constrained);
 	ASSERT_EQ(result.rowCount(), 2U);

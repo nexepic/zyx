@@ -23,11 +23,11 @@ inline void traceLayout() noexcept {
     using namespace graph::query;
     using namespace graph::query::execution;
     std::fprintf(stderr,
-        "CI_LAYOUT pointer=%zu string=%zu property_value=%zu property_map=%zu read_value=%zu read_row=%zu result_value=%zu result_row=%zu result_pair=%zu result_pair_alignment=%zu owning_byte_vector=%zu\n",
+        "CI_LAYOUT pointer=%zu string=%zu property_value=%zu property_map=%zu read_value=%zu read_row=%zu result_value=%zu result_row=%zu result_pair=%zu result_pair_alignment=%zu owning_byte_vector=%zu physical_node=%zu physical_edge=%zu\n",
         sizeof(void *), sizeof(std::string), sizeof(PropertyValue), sizeof(PropertyValue::MapType),
         sizeof(LogicalPlanReadValue), sizeof(LogicalPlanReadRow), sizeof(ResultValue),
         sizeof(QueryResult::Row), sizeof(QueryResult::Row::value_type), alignof(QueryResult::Row::value_type),
-        sizeof(graph::utils::OwnedVector<std::byte>));
+        sizeof(graph::utils::OwnedVector<std::byte>), sizeof(graph::Node), sizeof(graph::Edge));
     // A layout-compatible inert mapped slot isolates hash node/bucket/proxy
     // requests from dynamic value allocations. PMR sees the actual allocator
     // requests; the separate default-map model includes no artificial owner.
@@ -72,6 +72,19 @@ inline void traceLayout() noexcept {
                 std::fprintf(stderr,
                     "CI_RESULT_STRUCTURAL_FLOOR rows=%zu columns=1 map_requests=%zu array_raw=%zu lower_bound=%zu maximum=%zu fits=%d value_heap_excluded=1\n",
                     rows, requests.live, array, floor, maximum, floor <= maximum);
+                const std::vector<std::string> columns{"value"};
+                const size_t metadata = graph::query::detail::resultStringsHeapBytes(columns) +
+                    2U * graph::utils::detail::standardContainerProxyBytes();
+                const size_t keyHeap = graph::utils::detail::dynamicStringBufferBytes(reference.begin()->first);
+                for (const auto [retainedRows, quota] : {std::pair<size_t, size_t>{300U, maximum},
+                        {4U, 2304U}, {2U, 1500U}}) {
+                    const size_t backing = graph::utils::detail::standardAllocatorRequestBytes(
+                        retainedRows * sizeof(QueryResult::Row), alignof(QueryResult::Row));
+                    const size_t retained = metadata + backing + retainedRows * (requests.live + keyHeap);
+                    std::fprintf(stderr,
+                        "CI_RETAINED_SCALAR_FLOOR rows=%zu columns=1 map_requests=%zu key_heap=%zu metadata=%zu array_request=%zu lower_bound=%zu maximum=%zu fits=%d value_heap_excluded=1\n",
+                        retainedRows, requests.live, keyHeap, metadata, backing, retained, quota, retained <= quota);
+                }
             }
         }
         std::fprintf(stderr, "CI_MAP_LAYOUT_FINAL live=%zu\n", requests.live);

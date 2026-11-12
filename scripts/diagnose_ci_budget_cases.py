@@ -49,6 +49,8 @@ WINDOWS = [
         'SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder',
         'BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing',
         'CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches',
+        'CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota',
+        'ConsumedHitsReleaseBeforeHydrationAndSourceErrorsNeverReplay',
         'MetadataJointRetentionRejectsLowBudgetAndCanRetry',
         'RejectsOversizedSearchHitBufferBeforeReadingNodes',
         'MetadataSemanticErrorsPrecedeJointPressureSplitting',

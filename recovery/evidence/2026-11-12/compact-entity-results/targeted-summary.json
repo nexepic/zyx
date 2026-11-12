@@ -1,0 +1,17 @@
+{
+  "targeted": 509,
+  "targeted_failed": 0,
+  "final_focus": 3,
+  "python": 80,
+  "source_size_code_files": 2817,
+  "source_size_above_limit": 0,
+  "binary_sha256": "d042f7815c4c9eaeef23fb4b0b8048e39f326a35a887aa97540ad182e0faa230",
+  "owned300_properties": {
+    "escaped_result_account_bytes": "105332",
+    "released_hit_source_bytes": "4800"
+  },
+  "owned300_account_peak": 262104,
+  "owned300_maximum": 262144,
+  "native_windows_and_macos_verification": "pending",
+  "full_regression": "pending"
+}

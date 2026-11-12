@@ -120,6 +120,14 @@ namespace graph::query {
 					{PropertyValue(3), PropertyValue(2), PropertyValue(2)});
 		};
 		options.bounds.maximum_materialized_bytes = 16U * 1024U;
+        // Require denial from a real final-result lower bound, independently
+        // of unused entity padding or a particular transient copy strategy.
+        const size_t pairFloor = 9U * sizeof(QueryResult::Row::value_type);
+        const size_t bodyBytes = (options.bounds.maximum_materialized_bytes -
+            std::min(options.bounds.maximum_materialized_bytes, pairFloor)) / 3U + 1U;
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(bodyBytes, 'x'));
+
 		try {
 			static_cast<void>(execute(call()));
 			FAIL() << "direct shortestPath output ignored concurrently retained result rows";
@@ -127,6 +135,8 @@ namespace graph::query {
 			expectProcedureQuotaFailure(error);
 		}
 
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(4096U, 'x'));
 		options.bounds.maximum_materialized_bytes = 64U * 1024U;
 		const QueryResult result = execute(call());
 		ASSERT_EQ(result.getColumns(), (std::vector<std::string>{"step", "node", "path_length"}));
@@ -1027,7 +1037,17 @@ namespace graph::query {
 			backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit) + 5000U;
 		const size_t sufficientBytes = options.bounds.maximum_materialized_bytes;
 		options.bounds.maximum_materialized_bytes -= 4000U;
+        const size_t pairFloor = 6U * sizeof(QueryResult::Row::value_type);
+        const size_t deniedBodyBytes = (options.bounds.maximum_materialized_bytes -
+            std::min(options.bounds.maximum_materialized_bytes, pairFloor)) / 3U + 1U;
+        // Six live result pairs plus three independent string backings must
+        // exceed the unchanged denied quota on every supported STL.
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(deniedBodyBytes, 'x'));
+
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(1000U, 'x'));
 		options.bounds.maximum_materialized_bytes = sufficientBytes;
 		for (int retry = 0; retry < 2; ++retry) {
 			const size_t before = backend->state->node_batch_reads;
@@ -1464,7 +1484,13 @@ namespace graph::query {
 		backend->state->nodes.at(3U).labels.pop_back();
 		// Correct labels still require space together with all retained rows;
 		// splitting cannot make an insufficient final row allowance succeed.
+        // Payload alone now exceeds 6000; compact map nodes must not make
+        // this intended rejection accidentally depend on object padding.
+        for (auto &[id, node] : backend->state->nodes)
+            node.labels = {std::string(2100U, static_cast<char>('a' + id))};
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        for (auto &[id, node] : backend->state->nodes)
+            node.labels = {std::string(1500U, static_cast<char>('a' + id))};
 		options.bounds.maximum_materialized_bytes = 8000U;
 		EXPECT_EQ(execute(project).rowCount(), 3U);
 	}
@@ -1753,4 +1779,88 @@ namespace graph::query {
         }
         EXPECT_EQ(funded->used(), 0U);
     }
+} // namespace graph::query
+
+namespace graph::query {
+TEST_F(LogicalVectorPropertyBatchTest, ConsumedHitsReleaseBeforeHydrationAndSourceErrorsNeverReplay) {
+    using namespace execution::detail;
+    backend->state->search_result.hits = {{1U, 0.5F}};
+    backend->state->enable_property_admission = true;
+    logical::LogicalProject project(search(),
+        {{std::make_shared<expressions::VariableReferenceExpression>("node", "rank"), "rank"}});
+    options.bounds.maximum_materialized_bytes = 8192U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 8192U);
+    QueryContext context; context.resource_account = account;
+    size_t released = 0U, reads = 0U;
+    debug::PerfTrace::ScopedObserver observe(&released,
+        [](void *p, std::string_view key, int64_t bytes, bool duration) noexcept {
+            if (!duration && key == "logical_procedure.vector_source_bytes_released" && bytes > 0)
+                *static_cast<size_t *>(p) += static_cast<size_t>(bytes);
+        });
+    backend->state->before_property_admission = [&] {
+        ++reads;
+        EXPECT_GE(released, sizeof(storage::LogicalGraphVectorSearchHit));
+        throw std::domain_error("source hydration failed after hit release");
+    };
+    try { static_cast<void>(execute(project, context)); FAIL() << "source failure must propagate"; }
+    catch (const std::domain_error &error) { EXPECT_STREQ(error.what(), "source hydration failed after hit release"); }
+    EXPECT_EQ(reads, 1U);
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(backend->state->search_result.hits.size(), 1U);
+    backend->state->before_property_admission = {};
+    {
+        const auto result = execute(project, context);
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows()[0].at("rank").asPrimitive(), PropertyValue(10));
+        EXPECT_GT(account->used(), 0U);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(database->usage().total, 0U);
+}
+
+TEST_F(LogicalVectorPropertyBatchTest, CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota) {
+    using namespace execution::detail;
+    backend->state->nodes.clear(); backend->state->search_result.hits.clear();
+    for (uint64_t id = 1U; id <= 300U; ++id) {
+        storage::LogicalGraphNode node;
+        node.node_id = id; node.properties = {{"rank" + std::to_string(id), PropertyValue(static_cast<int64_t>(id))}};
+        backend->state->nodes.emplace(id, std::move(node));
+        backend->state->search_result.hits.push_back({301U - id, static_cast<float>(id)});
+    }
+    std::vector<std::unique_ptr<expressions::Expression>> arguments;
+    arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("node"));
+    auto keys = std::make_shared<expressions::FunctionCallExpression>("keys", std::move(arguments));
+    logical::LogicalProject project(search(300), {{keys, "keys"}});
+    options.bounds.maximum_materialized_bytes = 256U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8U * 1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 256U * 1024U);
+    QueryContext context; context.resource_account = account;
+    size_t released = 0U;
+    debug::PerfTrace::ScopedObserver observe(&released,
+        [](void *p, std::string_view key, int64_t bytes, bool duration) noexcept {
+            if (!duration && key == "logical_procedure.vector_source_bytes_released" && bytes > 0)
+                *static_cast<size_t *>(p) += static_cast<size_t>(bytes);
+        });
+    {
+        const auto result = execute(project, context);
+        ASSERT_EQ(result.rowCount(), 300U);
+        for (size_t index = 0U; index < result.rowCount(); ++index)
+            EXPECT_EQ(result.getRows()[index].at("keys").asPrimitive(),
+                PropertyValue(std::vector<PropertyValue>{PropertyValue("rank" + std::to_string(300U - index))}));
+        EXPECT_LE(result.getRows().capacity(), 300U);
+        EXPECT_GE(released, 300U * sizeof(storage::LogicalGraphVectorSearchHit));
+        EXPECT_GT(account->used(), 0U);
+        EXPECT_LE(account->used(), 256U * 1024U);
+        RecordProperty("escaped_result_account_bytes", account->used());
+        RecordProperty("released_hit_source_bytes", released);
+        EXPECT_EQ(backend->state->search_result.hits.size(), 300U);
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(database->usage().total, 0U);
+}
+
 } // namespace graph::query
