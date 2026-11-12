@@ -580,6 +580,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanPatternExpressionRuntime_Budget.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_GuardedIdGather.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BudgetMemoryResource.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_AdmissionCallsite.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanDistinctAllocator.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_GuardedPropertyCopy.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanSchemaRuntime.cpp"
