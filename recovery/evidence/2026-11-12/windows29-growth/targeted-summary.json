@@ -1,0 +1,21 @@
+{
+  "source_commit": "df0dbb296a6d7575045d3fc911b03ef04a98c2fd",
+  "executed": 356,
+  "distinct": 356,
+  "failures": 0,
+  "skips": 0,
+  "parent_exact_retry_coverage_count": 46,
+  "metrics": [
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads",
+      "name": "growth_success_bound",
+      "value": "17792"
+    },
+    {
+      "case": "LogicalPlanLoadCsvRuntimeTest.TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads",
+      "name": "growth_result_capacity",
+      "value": "33"
+    }
+  ],
+  "binary_sha256": "06a27556eb6de878b12fe77e10467ada5bf676fd424c0bef34479b53ee78ee28"
+}
