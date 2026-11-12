@@ -1,0 +1,87 @@
+[
+  {
+    "case": "BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+    "explicit_case_end_failed_values": [
+      0,
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "PropertySubblockMapMutationTest.RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "RelocatableBTreePageCodecTest.RebindingReleasesSourceKeysBeforeValidatingTheDestination",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "RelocatableMetadataStoreTest.PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "RelocatableProcessCrashBulkEdgeStagingTest.LiveCrossProcessBulkSessionRejectsAnotherSessionAndCrashReleasesTheLeaseForRetry",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  },
+  {
+    "case": "RelocatableStorageBackendTest.WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache",
+    "explicit_case_end_failed_values": [
+      0
+    ],
+    "absence_from_failure_list_is_not_used_as_a_complete_execution_proof": false
+  }
+]
