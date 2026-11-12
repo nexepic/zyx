@@ -628,6 +628,33 @@ namespace graph::query::execution {
 		}
 	}
 
+    TEST_F(LogicalPlanLoadCsvRuntimeTest, TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads) {
+        CsvOnlyBackend backend;
+        LogicalPlanReadRuntime runtime(backend);
+        std::string values;
+        for (size_t index = 1U; index <= 33U; ++index) {
+            if (!values.empty()) values += ',';
+            values += std::to_string(index);
+        }
+        const auto plan = parse("UNWIND [" + values + "] AS x RETURN x");
+        auto constrained = bounds();
+        constrained.maximum_rows = constrained.maximum_distinct_rows = 64U;
+        // Find the real end-to-end admission boundary on each STL, rather
+        // than baking one platform's container sizes into the budget.
+        for (size_t limit = 4096U; limit <= 65536U; limit += 128U) {
+            constrained.maximum_materialized_bytes = limit;
+            try {
+                const auto result = runtime.executeToQueryResult(*plan.root, constrained);
+                ASSERT_EQ(result.rowCount(), 33U);
+                EXPECT_LT(result.getRows().capacity(), 64U);
+                for (size_t index = 0U; index < 33U; ++index)
+                    EXPECT_EQ(result.getRows()[index].at("x").asPrimitive(), PropertyValue(int64_t(index + 1U)));
+                RecordProperty("growth_success_bound", limit);
+                return;
+            } catch (const std::runtime_error &) { /* A smaller live peak must still be rejected. */ }
+        }
+        FAIL() << "bounded scalar result never became admissible";
+    }
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, OutputBatchSharesCsvSourceBudgetWhileReadingAhead) {
 		CsvOnlyBackend backend;
 		LogicalPlanReadRuntime runtime(backend);

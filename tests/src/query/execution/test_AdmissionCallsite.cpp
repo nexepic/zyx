@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <string>
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
 
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 namespace {
@@ -43,7 +44,28 @@ int probeCallsite() {
     if (!denied || checked.find("site_file=test_AdmissionCallsite.cpp site_line=" + std::to_string(checkLine)) == std::string::npos ||
         budget.used() != 3U) return 2;
     reservation.reset();
-    return budget.used() == 0U ? 0 : 3;
+    if (budget.used() != 0U) return 3;
+    auto heapBudget = std::make_shared<MaterializedByteBudget>(8U);
+    {
+        graph::utils::OwnedHeapReservation credit(heapBudget, 3U);
+        testing::internal::CaptureStderr();
+        rejected = false;
+        const auto heapLine = __LINE__ + 1U;
+        try { credit.set(9U); } catch (const MaterializedByteLimitExceeded &) { rejected = true; } catch (...) {}
+        const auto heapOutput = testing::internal::GetCapturedStderr();
+        if (!rejected || credit.bytes() != 3U || heapBudget->used() != 3U ||
+            heapOutput.find("CI_UNMANAGED_REJECT requested=6 previous=3 site_file=test_AdmissionCallsite.cpp site_line=" +
+                std::to_string(heapLine)) == std::string::npos) return 4;
+        testing::internal::CaptureStderr();
+        rejected = false;
+        const auto constructorLine = __LINE__ + 1U;
+        try { graph::utils::OwnedHeapReservation deniedCredit(heapBudget, 9U); } catch (const MaterializedByteLimitExceeded &) { rejected = true; } catch (...) {}
+        const auto constructorOutput = testing::internal::GetCapturedStderr();
+        if (!rejected || heapBudget->used() != 3U ||
+            constructorOutput.find("CI_UNMANAGED_REJECT requested=9 previous=0 site_file=test_AdmissionCallsite.cpp site_line=" +
+                std::to_string(constructorLine)) == std::string::npos) return 5;
+    }
+    return heapBudget->used() == 0U ? 0 : 6;
 }
 }
 

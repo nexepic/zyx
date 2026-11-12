@@ -8,6 +8,8 @@
 #include <limits>
 #include <stdexcept>
 #include <utility>
+#include <source_location>
+#include "graph/debug/CiBudgetTrace.hpp"
 #include "graph/utils/UnmanagedAllocationResource.hpp"
 
 namespace graph::utils {
@@ -16,9 +18,10 @@ namespace graph::utils {
 // unmanaged allocations; native budget resources implement the explicit API.
 class OwnedHeapReservation {
 public:
-    explicit OwnedHeapReservation(std::shared_ptr<std::pmr::memory_resource> owner = {}, size_t bytes = 0U)
+    explicit OwnedHeapReservation(std::shared_ptr<std::pmr::memory_resource> owner = {}, size_t bytes = 0U,
+        std::source_location site = std::source_location::current())
         : owner_(std::move(owner)), authority_(dynamic_cast<UnmanagedAllocationResource *>(owner_.get())) {
-        set(bytes);
+        set(bytes, site);
     }
     ~OwnedHeapReservation() { if (authority_ && bytes_ != 0U) authority_->releaseUnmanaged(bytes_); }
     OwnedHeapReservation(const OwnedHeapReservation &) = delete;
@@ -27,11 +30,30 @@ public:
         : owner_(std::move(other.owner_)), authority_(std::exchange(other.authority_, nullptr)),
           bytes_(std::exchange(other.bytes_, 0U)), valid_(std::exchange(other.valid_, false)) {}
     OwnedHeapReservation &operator=(OwnedHeapReservation &&) = delete;
-    void set(size_t bytes) {
+    void set(size_t bytes, std::source_location site = std::source_location::current()) {
         if (!valid_) throw std::logic_error("cannot resize a moved heap reservation");
         if (bytes == bytes_) return;
         if (authority_) {
-            if (bytes > bytes_) authority_->reserveUnmanaged(bytes - bytes_);
+            if (bytes > bytes_) {
+                try { authority_->reserveUnmanaged(bytes - bytes_); }
+                catch (...) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    debug::CiBudgetTrace trace(this, "unmanaged_heap");
+                    if (trace.allow()) {
+                        const char *file = site.file_name();
+                        for (const char *cursor = file; *cursor; ++cursor)
+                            if (*cursor == '/' || *cursor == '\\') file = cursor + 1;
+                        std::fprintf(stderr, "CI_UNMANAGED_REJECT requested=%zu previous=%zu site_file=%.128s site_line=%u site_function=%.192s\n",
+                            bytes - bytes_, bytes_, file, site.line(), site.function_name());
+                        std::fflush(stderr);
+                    }
+                    trace.discard();
+#else
+                    (void)site;
+#endif
+                    throw;
+                }
+            }
             else authority_->releaseUnmanaged(bytes_ - bytes);
         }
         bytes_ = bytes;

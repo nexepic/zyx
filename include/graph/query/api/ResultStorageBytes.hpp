@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "graph/query/api/ResultValue.hpp"
@@ -73,20 +74,34 @@ size_t resultRowCopyHeapUpper(const Row &row) {
     }
     return bytes;
 }
-// Reallocating a row vector can deep-copy hash maps when their move
-// constructor may throw. Admit the entire simultaneous copy before reserve.
+// Preserve map payloads even on STLs whose map move constructor can throw.
+// Complete every allocating step before swapping any original row, so a
+// failed destination construction leaves the complete source untouched.
 template<class Row>
-size_t resultRowsRelocationHeapUpper(const std::vector<Row> &rows) {
-    size_t bytes = 0U;
-    if constexpr (!std::is_nothrow_move_constructible_v<Row>) {
-        for (const auto &row : rows)
-            bytes = utils::detail::addStandardHeapBytes(bytes, resultRowCopyHeapUpper(row));
-    } else {
-#if defined(_MSVC_STL_VERSION)
-        bytes = execution::detail::multiplyPropertyBufferBytes(rows.size(),
-            utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(0U));
-#endif
+void reserveResultRowsBySwap(std::vector<Row> &rows, size_t capacity) {
+    static_assert(std::is_nothrow_swappable_v<Row>);
+    if (capacity <= rows.capacity()) return;
+    std::vector<Row> replacement;
+    replacement.reserve(capacity);
+    replacement.resize(rows.size());
+    for (size_t index = 0U; index < rows.size(); ++index) {
+        using std::swap;
+        swap(replacement[index], rows[index]);
     }
+    rows.swap(replacement);
+}
+
+// The swap relocation above retains both arrays, a temporary vector proxy,
+// and every destination empty map until the old array is destroyed. Its
+// payloads are transferred, never copied or discounted while still alive.
+template<class Row>
+size_t resultRowsRelocationHeapUpper([[maybe_unused]] const std::vector<Row> &rows) {
+    size_t bytes = utils::detail::standardContainerProxyBytes();
+#if defined(_MSVC_STL_VERSION)
+    bytes = utils::detail::addStandardHeapBytes(bytes,
+        execution::detail::multiplyPropertyBufferBytes(rows.size(),
+            utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(0U)));
+#endif
     return bytes;
 }
 template<typename Row>

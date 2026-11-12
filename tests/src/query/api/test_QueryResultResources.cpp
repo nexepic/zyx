@@ -235,5 +235,62 @@ TEST(QueryResultResourcesTest, MoveUnderFullAccountEitherTransfersOrRejectsBefor
     EXPECT_EQ(account->used(), 0U);
 }
 
+struct ThrowingMoveRow {
+    inline static int defaultsUntilFailure = -1;
+    inline static int copies = 0;
+    std::unique_ptr<int> payload;
+    ThrowingMoveRow() {
+        if (defaultsUntilFailure == 0) throw std::bad_alloc();
+        if (defaultsUntilFailure > 0) --defaultsUntilFailure;
+        payload = std::make_unique<int>(0);
+    }
+    explicit ThrowingMoveRow(int value) : payload(std::make_unique<int>(value)) {}
+    ThrowingMoveRow(const ThrowingMoveRow &) { ++copies; throw std::runtime_error("payload copy forbidden"); }
+    ThrowingMoveRow(ThrowingMoveRow &&other) noexcept(false) : payload(std::move(other.payload)) {}
+    friend void swap(ThrowingMoveRow &left, ThrowingMoveRow &right) noexcept { left.payload.swap(right.payload); }
+};
+
+TEST(QueryResultResourcesTest, SwapGrowthAvoidsThrowingMoveCopiesAndRollsBackDestinationFailure) {
+    std::vector<ThrowingMoveRow> rows;
+    rows.reserve(2U); rows.emplace_back(7); rows.emplace_back(9);
+    const auto first = rows[0].payload.get(), second = rows[1].payload.get();
+    EXPECT_THROW(rows.reserve(8U), std::runtime_error);
+    EXPECT_GT(ThrowingMoveRow::copies, 0);
+    ThrowingMoveRow::copies = 0;
+    ThrowingMoveRow::defaultsUntilFailure = 1;
+    EXPECT_THROW(detail::reserveResultRowsBySwap(rows, 8U), std::bad_alloc);
+    EXPECT_EQ(rows.capacity(), 2U);
+    ASSERT_EQ(rows.size(), 2U);
+    EXPECT_EQ(rows[0].payload.get(), first); EXPECT_EQ(rows[1].payload.get(), second);
+    ThrowingMoveRow::defaultsUntilFailure = -1;
+    detail::reserveResultRowsBySwap(rows, 8U);
+    EXPECT_GE(rows.capacity(), 8U);
+    EXPECT_EQ(rows[0].payload.get(), first); EXPECT_EQ(rows[1].payload.get(), second);
+    EXPECT_EQ(*rows[0].payload, 7); EXPECT_EQ(*rows[1].payload, 9);
+    EXPECT_EQ(ThrowingMoveRow::copies, 0);
+}
+
+TEST(QueryResultResourcesTest, ChargedAndUnchargedRowGrowthKeepIndependentHeapPayloadAddresses) {
+    for (bool charged : {false, true}) {
+        auto account = resultAccount(200000U);
+        {
+            QueryResult result = charged ? QueryResult{ResourceLease(account)} : QueryResult{};
+            result.addRow({{"payload", PropertyValue(std::string(32768U, 'x'))}});
+            const auto *value = &result.getRows().front().at("payload");
+            const auto before = account->used();
+            const auto oldBuffer = execution::detail::standardVectorHeapBufferBytes(result.getRows());
+            result.reserveRows(16U);
+            EXPECT_EQ(&result.getRows().front().at("payload"), value);
+            EXPECT_EQ(std::get<std::string>(value->asPrimitive().getVariant()), std::string(32768U, 'x'));
+            if (charged) {
+                const auto newBuffer = execution::detail::standardVectorHeapBufferBytes(result.getRows());
+                EXPECT_EQ(account->used(), before - oldBuffer + newBuffer);
+                EXPECT_EQ(result.retainedResourceBytes(), account->used());
+            }
+        }
+        EXPECT_EQ(account->used(), 0U);
+    }
+}
+
 } // namespace
 } // namespace graph::query

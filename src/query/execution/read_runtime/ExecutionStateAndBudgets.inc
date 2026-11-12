@@ -447,15 +447,38 @@
 						currentCapacity == 0U
 								? minimumCapacity
 								: checkedSizeMul(currentCapacity, 2U, "logical-plan result row capacity overflowed");
-				const size_t requestedCapacity = std::max(minimumCapacity, doubledCapacity);
-				const size_t requestedGrowthBytes = detail::standardAllocatorRequestBytes(
-					checkedSizeMul(requestedCapacity, sizeof(QueryResult::Row),
-						"logical-plan result row capacity overflowed"), alignof(QueryResult::Row));
+                size_t requestedCapacity = std::max(minimumCapacity, doubledCapacity);
                 const size_t relocationBytes = graph::query::detail::resultRowsRelocationHeapUpper(result.getRows());
-				const size_t transientBytes = checkedSizeAdd(nextBytes,
-                    checkedSizeAdd(requestedGrowthBytes, relocationBytes, "logical-plan result relocation peak overflowed"),
-                    "logical-plan result growth peak overflowed");
-				state.shared.final_result_reservation.set(transientBytes);
+                const auto growthPeak = [&](size_t capacity) {
+                    const size_t backing = detail::standardAllocatorRequestBytes(
+                        checkedSizeMul(capacity, sizeof(QueryResult::Row),
+                            "logical-plan result row capacity overflowed"), alignof(QueryResult::Row));
+                    return checkedSizeAdd(nextBytes,
+                        checkedSizeAdd(backing, relocationBytes, "logical-plan result relocation peak overflowed"),
+                        "logical-plan result growth peak overflowed");
+                };
+                size_t transientBytes = growthPeak(requestedCapacity);
+                // Spare capacity is optional. Keep both live arrays and empty
+                // map handoffs admitted even when only exact growth fits.
+                if (requestedCapacity > minimumCapacity && state.shared.final_result_reservation.wouldExceed(transientBytes)) {
+                    requestedCapacity = minimumCapacity;
+                    transientBytes = growthPeak(requestedCapacity);
+                }
+                try { state.shared.final_result_reservation.set(transientBytes); }
+                catch (...) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    debug::CiBudgetTrace trace(&result, "result_growth");
+                    if (trace.allow()) {
+                        std::fprintf(stderr, "CI_RESULT_GROWTH_REJECT rows=%zu old_capacity=%zu preferred_capacity=%zu chosen_capacity=%zu minimum_capacity=%zu retained_with_incoming=%zu relocation_upper=%zu transient=%zu used=%zu maximum=%zu strategy=empty_swap\n",
+                            result.rowCount(), currentCapacity, doubledCapacity, requestedCapacity, minimumCapacity,
+                            nextBytes, relocationBytes, transientBytes, state.shared.materialized_budget.used(),
+                            state.shared.materialized_budget.used() + state.shared.materialized_budget.available());
+                        std::fflush(stderr);
+                    }
+                    trace.discard();
+#endif
+                    throw;
+                }
 				try {
 					result.reserveRows(requestedCapacity);
 				} catch (...) {
