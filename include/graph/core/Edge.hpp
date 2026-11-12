@@ -119,7 +119,8 @@ namespace graph {
 		Metadata metadata;
 
 		// Fixed-size buffer for type
-		char typeBuffer[TYPE_BUFFER_SIZE] = {0};
+		// Fixed record-slot padding belongs to the storage format, not each
+		// in-memory value. Serialization writes metadata fields explicitly.
 
 		// Variable-sized structures (not included in the fixed-size structure)
 		std::unordered_map<std::string, PropertyValue> properties;

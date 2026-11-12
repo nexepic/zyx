@@ -1,0 +1,4 @@
+{
+  "before": "node=320 edge=320 result_value=328 result_pair=360 node_slot=256 edge_slot=256",
+  "after": "node=152 edge=136 result_value=160 result_pair=192 node_slot=256 edge_slot=256"
+}

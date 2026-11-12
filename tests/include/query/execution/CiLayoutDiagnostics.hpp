@@ -49,18 +49,30 @@ inline void traceLayout() noexcept {
         bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
     } requests;
     try {
-        {
+        for (const size_t count : {1U, 2U}) {
+            requests.allocations = requests.largest = 0U;
             ReferenceMap reference;
             std::pmr::unordered_map<std::string, Slot> actual(&requests);
-            reference.reserve(2U); actual.reserve(2U);
-            for (const char *key : {"a", "b"}) {
+            reference.reserve(count); actual.reserve(count);
+            for (size_t index = 0U; index < count; ++index) {
+                const char *key = index == 0U ? "a" : "b";
                 reference.emplace(key, Slot{}); actual.emplace(key, Slot{});
             }
             std::fprintf(stderr,
-                "CI_MAP_LAYOUT entries=2 pair=%zu alignment=%zu buckets=%zu actual_pmr_structural=%zu model_upper=%zu allocation_requests=%zu largest_request=%zu value_heap_excluded=1\n",
-                sizeof(ReferenceMap::value_type), alignof(ReferenceMap::value_type), actual.bucket_count(),
+                "CI_MAP_LAYOUT entries=%zu pair=%zu alignment=%zu buckets=%zu actual_pmr_structural=%zu model_upper=%zu allocation_requests=%zu largest_request=%zu value_heap_excluded=1\n",
+                count, sizeof(ReferenceMap::value_type), alignof(ReferenceMap::value_type), actual.bucket_count(),
                 requests.live, graph::utils::detail::standardUnorderedMapStructuralHeapBytes(reference),
                 requests.allocations, requests.largest);
+            if (count == 1U) {
+                // Only simultaneously retained final structures: exclude all
+                // key/value payloads, source frames and transient copies.
+                constexpr size_t rows = 300U, maximum = 256U * 1024U;
+                const size_t array = rows * sizeof(QueryResult::Row);
+                const size_t floor = array + rows * requests.live;
+                std::fprintf(stderr,
+                    "CI_RESULT_STRUCTURAL_FLOOR rows=%zu columns=1 map_requests=%zu array_raw=%zu lower_bound=%zu maximum=%zu fits=%d value_heap_excluded=1\n",
+                    rows, requests.live, array, floor, maximum, floor <= maximum);
+            }
         }
         std::fprintf(stderr, "CI_MAP_LAYOUT_FINAL live=%zu\n", requests.live);
     } catch (...) { std::fputs("CI_MAP_LAYOUT measurement_unavailable\n", stderr); }

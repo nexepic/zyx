@@ -1,0 +1,218 @@
+[
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+    "prior_evidence_tags": [
+      "CI_RESULT_REJECTION"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+    "prior_evidence_tags": [
+      "CI_PROCEDURE_PRESSURE"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+    "prior_evidence_tags": [
+      "budget_admission_boundary_without_more_specific_tag"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+    "prior_evidence_tags": [
+      "CI_UNMANAGED_REJECT"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+    "prior_evidence_tags": [
+      "CI_SORT_REJECTION"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+    "prior_evidence_tags": [
+      "CI_UNMANAGED_REJECT"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+    "prior_evidence_tags": [
+      "CI_RESULT_GROWTH_REJECT"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+    "prior_evidence_tags": [
+      "CI_RESULT_GROWTH_REJECT"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "prior_evidence_tags": [
+      "CI_RESULT_REJECTION"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "prior_evidence_tags": [
+      "CI_PROCEDURE_PRESSURE"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+    "prior_evidence_tags": [
+      "budget_admission_boundary_without_more_specific_tag"
+    ],
+    "scope": "unconfirmed_indirect_effect",
+    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate."
+  },
+  {
+    "case": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+    "prior_evidence_tags": [
+      "CI_RESULT_GROWTH_REJECT"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "prior_evidence_tags": [
+      "CI_RESULT_REJECTION"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+    "prior_evidence_tags": [
+      "other_observation_no_precise_origin"
+    ],
+    "scope": "unconfirmed_indirect_effect",
+    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate."
+  },
+  {
+    "case": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+    "prior_evidence_tags": [
+      "CI_RESULT_REJECTION"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+    "prior_evidence_tags": [
+      "CI_RESULT_GROWTH_REJECT"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+    "prior_evidence_tags": [
+      "CI_NODE_RETAINED_REJECT"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+    "prior_evidence_tags": [
+      "CI_NODE_RETAINED_REJECT"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+    "prior_evidence_tags": [
+      "CI_PROCEDURE_PRESSURE"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+    "prior_evidence_tags": [
+      "CI_RESULT_GROWTH_REJECT"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+    "prior_evidence_tags": [
+      "CI_RESULT_GROWTH_REJECT"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+    "prior_evidence_tags": [
+      "CI_PROCEDURE_PRESSURE"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+    "prior_evidence_tags": [
+      "CI_PROCEDURE_PRESSURE"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "prior_evidence_tags": [
+      "budget_admission_boundary_without_more_specific_tag"
+    ],
+    "scope": "unconfirmed_indirect_effect",
+    "reason": "No rejected public-result allocation was established at the failure boundary. Keep source/header/scoped-property/parent-account investigation separate."
+  },
+  {
+    "case": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+    "prior_evidence_tags": [
+      "budget_admission_boundary_without_more_specific_tag"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  },
+  {
+    "case": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+    "prior_evidence_tags": [
+      "CI_COUNT_UNWIND"
+    ],
+    "scope": "different_failure_boundary_not_claimed_fixed",
+    "reason": "Source scan, Node columns, resumable Edge cells, pre-output sort retention or byte-vector conversion allocation does not depend on the public physical Node/Edge padding."
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "prior_evidence_tags": [
+      "CI_RESULT_REJECTION"
+    ],
+    "scope": "public_result_geometry_affected_native_resolution_unverified",
+    "reason": "Rejected output copy, retained result/source overlap, final-row growth or result-account allocation depends on ResultValue/node width. Lower cost is not proof that all live allocations fit."
+  }
+]

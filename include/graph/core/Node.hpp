@@ -124,7 +124,8 @@ namespace graph {
 		// Fixed-size metadata structure
 		Metadata metadata;
 
-		char padding[PADDING_SIZE] = {0};
+		// Fixed record-slot padding belongs to the storage format, not each
+		// in-memory value. Serialization writes metadata fields explicitly.
 
 		// Variable-sized structures (not included in the 128-byte alignment)
 		std::unordered_map<std::string, PropertyValue> properties;

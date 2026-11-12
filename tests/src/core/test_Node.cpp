@@ -362,3 +362,30 @@ TEST_F(NodeTest, PropertyTransfersAndBufferDeserializationPreserveMetadata) {
 	EXPECT_EQ(decoded.getLabelIds(), (std::vector<int64_t>{7, 8}));
 	EXPECT_FALSE(decoded.isActive());
 }
+
+TEST_F(NodeTest, CompactValuePreservesTheFixedRecordSlotAndPackedWireBytes) {
+    EXPECT_LT(sizeof(graph::Node), graph::Node::getTotalSize());
+    EXPECT_EQ(graph::Node::getTotalSize(), 256U);
+    graph::Node node;
+    auto &metadata = node.getMutableMetadata();
+    metadata.id = 11; metadata.firstOutEdgeId = 12; metadata.firstInEdgeId = 13;
+    metadata.propertyEntityId = 14; metadata.labelCount = 6;
+    for (size_t i = 0; i < 6U; ++i) metadata.labelIds[i] = 21 + static_cast<int64_t>(i);
+    metadata.propertyStorageType = 2; metadata.isActive = false;
+    // Existing packed v2 bytes, independent of C++ struct padding. All supported
+    // native targets use this little-endian persisted representation.
+    std::string expected(86U, '\0');
+    expected[0] = 11; expected[8] = 12; expected[16] = 13; expected[24] = 14;
+    for (size_t i = 0; i < 6U; ++i) expected[32U + 8U*i] = static_cast<char>(21U+i);
+    expected[80] = 6; expected[81] = 2;
+    std::ostringstream output(std::ios::binary);
+    node.serialize(output);
+    EXPECT_EQ(output.str(), expected);
+    EXPECT_EQ(node.getSerializedSize(), expected.size());
+    std::istringstream input(expected, std::ios::binary);
+    const auto restored = graph::Node::deserialize(input);
+    const auto buffered = graph::Node::deserializeFromBuffer(expected.data());
+    std::ostringstream copy(std::ios::binary), bufferCopy(std::ios::binary);
+    restored.serialize(copy); buffered.serialize(bufferCopy);
+    EXPECT_EQ(copy.str(), expected); EXPECT_EQ(bufferCopy.str(), expected);
+}
