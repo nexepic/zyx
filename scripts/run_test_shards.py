@@ -242,7 +242,10 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
                         print(f"Unable to read shard log {log_path}: {error}", file=sys.stderr)
                 if failure_log_dir is not None:
                     print(f"Failed shard logs retained at: {failure_log_dir.resolve()}", file=sys.stderr)
-                exit_code = 1
+                # An inner evidence supervisor may reach the same timeout
+                # before this loop does. Preserve that status regardless of
+                # which timer wins, including mixed failure/timeout shards.
+                exit_code = 124 if any(process.returncode == 124 for _, process, _ in failed) else 1
             else:
                 print(f"All {jobs} isolated GoogleTest shards passed.")
     finally:

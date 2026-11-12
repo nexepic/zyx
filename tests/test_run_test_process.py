@@ -337,3 +337,19 @@ def test_shard_timeout_keeps_logs_outside_deleted_workdir(tmp_path):
     assert runner.run_shards([sys.executable, '-c', code], 2, .5, logs) == 124
     assert len(list(logs.glob('shard-*.log'))) == 2
     assert all('persist-before-timeout' in p.read_text() for p in logs.glob('*.log'))
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='parallel shard isolation is POSIX-only')
+@pytest.mark.parametrize('codes', [(124, 0), (0, 124), (17, 124), (124, 17)])
+def test_completed_inner_timeout_survives_shard_aggregation(tmp_path, codes):
+    runner = _load_script('run_test_shards.py')
+    logs = tmp_path / 'logs'
+    program = ("import os,sys;print('inner-status-marker',flush=True);"
+               f"sys.exit({codes!r}[int(os.environ['GTEST_SHARD_INDEX'])])")
+    # Inner evidence can finish its own timeout before the outer shard
+    # deadline. Exercise that order without racing two real timers.
+    assert runner.run_shards([sys.executable, '-c', program], 2, 10, logs) == 124
+    status = json.loads((logs / 'status.json').read_text())
+    assert status['exit_code'] == 124 and not status['interrupted']
+    assert [item['raw_exit_code'] for item in status['shards']] == list(codes)
+    assert all('inner-status-marker' in (logs / f'shard-{n}.log').read_text() for n in (0, 1))
