@@ -1,0 +1,669 @@
+{
+  "run": 43050609360,
+  "sha": "795a4c761f43ee9c78e1ed473e5122a48ebd1409",
+  "unit_unique_failures": 30,
+  "unit_journal_started_completed": 11082,
+  "unit_cases": [
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "419",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "498",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1053",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1448",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1536",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_TopK.cpp",
+      "line": "376",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "62",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "80"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "81"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "83"
+        },
+        {
+          "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "80"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": true
+      },
+      "failures": 9
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1228",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1298",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1332",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1391",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1451",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_Batching.cpp",
+      "line": "1756",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "671",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "747",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "497",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "631",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "702",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanLoadCsvRuntimeTest",
+      "name": "AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+      "line": "766",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+          "line": "779"
+        },
+        {
+          "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+          "line": "780"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "10"
+          }
+        ],
+        "truncated": false
+      },
+      "failures": 3
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanUnionRuntimeTest",
+      "name": "SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnionRuntime.cpp",
+      "line": "364",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanReadRuntimeTest",
+      "name": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+      "line": "1824",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanReadRuntimeTest",
+      "name": "SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+      "line": "1904",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "LogicalPlanVarLengthRuntimeTest",
+      "name": "ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp",
+      "line": "544",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LogicalPlanVarLengthRuntime.cpp",
+          "line": "561"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+      "line": "28",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "88"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "91"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "92"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "97"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "6"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 5
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+      "line": "578",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+      "line": "1592",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1622"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1627"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1622"
+        },
+        {
+          "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": "1627"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": true
+      },
+      "failures": 12
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+      "line": "209",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "resource_admission"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "RelocatableMetadataStoreTest",
+      "name": "LargeValueRangeReuseValidatesRawAndCompressedChunksOnce",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_LargeValueStore_RangeReuse.cpp",
+      "line": "34",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_LargeValueStore_RangeReuse.cpp",
+          "line": "52"
+        },
+        {
+          "file": "test_LargeValueStore_RangeReuse.cpp",
+          "line": "52"
+        },
+        {
+          "file": "test_LargeValueStore_RangeReuse.cpp",
+          "line": "52"
+        },
+        {
+          "file": "test_LargeValueStore_RangeReuse.cpp",
+          "line": "52"
+        }
+      ],
+      "observations": {
+        "kinds": [],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "8240"
+          },
+          {
+            "label": "Which is",
+            "value": "8224"
+          },
+          {
+            "label": "Which is",
+            "value": "8240"
+          },
+          {
+            "label": "Which is",
+            "value": "8224"
+          },
+          {
+            "label": "Which is",
+            "value": "8240"
+          },
+          {
+            "label": "Which is",
+            "value": "8224"
+          },
+          {
+            "label": "Which is",
+            "value": "8240"
+          },
+          {
+            "label": "Which is",
+            "value": "8224"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 9
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyPoolTailReuseTest",
+      "name": "ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyPoolTailReuse.cpp",
+      "line": "8",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyPoolTailReuse.cpp",
+          "line": "28"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    },
+    {
+      "xml": "xml\\shard-0.xml",
+      "class": "HybridPropertyMatureShapeCostsTest",
+      "name": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp",
+      "line": "127",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_HybridPropertyShapeCosts.cpp",
+          "line": "172"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  ],
+  "no_longer_in_failure_list": [
+    "BuildingScanMembershipTest.MetadataMaintenanceReleasesAtMostOnePoolAndPreservesPinnedRoots",
+    "HybridPropertyReadContextTest.FieldDemotionPreparesEveryFinalDirectoryAndPreservesUnrelatedBytes",
+    "HybridPropertyReadContextTest.FieldDemotionRefusesPartialOwnerDeletionAndRefundsQuotaAndCancellation",
+    "HybridPropertyReadContextTest.MixedGroupMutationsCloneSharedSourcesOnceAndPreserveAllFinalChanges",
+    "HybridPropertyReadContextTest.WholeOwnerDeletionCoordinatesColumnDemotionExistingExtensionsAndLiveOnce",
+    "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+    "PropertySubblockMapMutationTest.RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes",
+    "RelocatableBTreePageCodecTest.RebindingReleasesSourceKeysBeforeValidatingTheDestination",
+    "RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner",
+    "RelocatableMetadataStoreTest.PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers",
+    "RelocatableProcessCrashBulkEdgeStagingTest.LiveCrossProcessBulkSessionRejectsAnotherSessionAndCrashReleasesTheLeaseForRetry",
+    "RelocatableStorageBackendTest.WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache"
+  ],
+  "new_in_failure_list": [
+    "RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce"
+  ],
+  "diagnostic_failure_counts_not_added_to_unit": true,
+  "ubuntu": "dependency DNS failure; no compilation or tests",
+  "common_ubuntu_windows_root_cause": "not supported; failure stages and evidence differ"
+}
