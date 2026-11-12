@@ -20,9 +20,19 @@
     "sha256": "f4822f58f0aec09b5bbae3b299dfcc30f8433b3fc56bfa9fdada7092c09581b9"
   },
   {
+    "path": "complete-gather-structural-lower-bound.json",
+    "bytes": 1594,
+    "sha256": "bdc44c16f9682ea72cd96cbf15bb28cf8eaabd40ef331c4f0fe3d6abaaf4743e"
+  },
+  {
+    "path": "discovery.txt.gz",
+    "bytes": 157946,
+    "sha256": "133b302c1cb853cbc5677b23cdee24b22096dcacf5f7dad2aa5628342ff91fab"
+  },
+  {
     "path": "failure-classification.json",
-    "bytes": 3505,
-    "sha256": "62a5e28e45157df73f00f9a7cc2263079dec602b866e17e8bf80eb75c55e561c"
+    "bytes": 3569,
+    "sha256": "a1f91b8aa61ce92942c8696cf90e3761f457d6f481b37c8977fe5ff67a2fad60"
   },
   {
     "path": "failures.json",
@@ -33,6 +43,41 @@
     "path": "final-jobs.json",
     "bytes": 28880,
     "sha256": "f16acc94fdfeacb1df7cf41806d1e56575686aeeac9b1942d7438513b9f0533f"
+  },
+  {
+    "path": "full-ci241-full.log.gz",
+    "bytes": 19670,
+    "sha256": "f82fb1a9bb6fe0040d1077a5159fcf43ffcfff31342323dd4d991c9cd5a36dfe"
+  },
+  {
+    "path": "full-shard-0.xml.gz",
+    "bytes": 103553,
+    "sha256": "bce23b01b3c00ce386162a48bcfa239264e044c3ff6ec229c2ac8032778e7e54"
+  },
+  {
+    "path": "full-shard-1.xml.gz",
+    "bytes": 104024,
+    "sha256": "8a68c8f5a22ffaa1d8ed4b001420ff845196c0969d61ec26eeafdf563a263ca0"
+  },
+  {
+    "path": "full-shard-2.xml.gz",
+    "bytes": 102390,
+    "sha256": "3adc83a3793925bb18d0481265545a9a1111acdc947cdf2827dd5a19cc444a12"
+  },
+  {
+    "path": "full-shard-3.xml.gz",
+    "bytes": 103545,
+    "sha256": "e6b6f4d192dee742d578de332b6489e29bd467956d55cbb7e3620705ae60d8d0"
+  },
+  {
+    "path": "full-shards.json",
+    "bytes": 269,
+    "sha256": "5190e7d998c2df5855bf94de96515f0d6d4ff1546b8d713b3420e6ca1b5c7a08"
+  },
+  {
+    "path": "full-summary.json",
+    "bytes": 3806,
+    "sha256": "da777c1721feeacc338f0d610452d9d0b042bef6081bc59398e9fb599fb57fd5"
   },
   {
     "path": "mac-full.log.gz",
@@ -48,6 +93,11 @@
     "path": "per-case-diagnostics.json",
     "bytes": 42154,
     "sha256": "246b2c89d462988a4b2757b642c0b342a253af5f79e516293180975ccedbade3"
+  },
+  {
+    "path": "rss-allocator-statistics.json",
+    "bytes": 6678,
+    "sha256": "067721744f9796730fcbdafbdbe2904f570d58065bb3ed0d967f0cbe2db2b7ea"
   },
   {
     "path": "superseded-two-shard-launcher.json",

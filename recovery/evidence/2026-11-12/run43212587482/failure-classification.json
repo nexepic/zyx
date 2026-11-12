@@ -6,7 +6,7 @@
     "CI_PROCEDURE_PRESSURE"
   ],
   "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded": [
-    "other_observation_no_precise_origin"
+    "budget_admission_boundary_without_more_specific_tag"
   ],
   "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool": [
     "CI_UNMANAGED_REJECT"
@@ -30,7 +30,7 @@
     "CI_PROCEDURE_PRESSURE"
   ],
   "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose": [
-    "other_observation_no_precise_origin"
+    "budget_admission_boundary_without_more_specific_tag"
   ],
   "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties": [
     "CI_RESULT_GROWTH_REJECT"
@@ -69,10 +69,10 @@
     "CI_PROCEDURE_PRESSURE"
   ],
   "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties": [
-    "other_observation_no_precise_origin"
+    "budget_admission_boundary_without_more_specific_tag"
   ],
   "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget": [
-    "other_observation_no_precise_origin"
+    "budget_admission_boundary_without_more_specific_tag"
   ],
   "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound": [
     "CI_COUNT_UNWIND"

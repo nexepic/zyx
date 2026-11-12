@@ -1,0 +1,26 @@
+{
+  "case": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+  "required_result_rows": 300,
+  "maximum_materialized_bytes": 262144,
+  "native_layout_line": "2026-11-12T12:30:35.3087985Z CI_LAYOUT pointer=8 string=40 property_value=88 property_map=80 read_value=104 read_row=160 result_value=352 result_row=80 result_pair=392 result_pair_alignment=8 owning_byte_vector=48",
+  "native_two_entry_probe_line": "2026-11-12T12:30:35.3088934Z CI_MAP_LAYOUT entries=2 pair=392 alignment=8 buckets=8 actual_pmr_structural=1384 model_upper=1384 allocation_requests=6 largest_request=408 value_heap_excluded=1",
+  "result_row_bytes": 80,
+  "result_pair_bytes": 392,
+  "pair_alignment": 8,
+  "msvc_hash_node_bytes_inferred_from_pair_and_two_pointers": 408,
+  "minimum_nodes_per_nonempty_map_including_sentinel": 2,
+  "row_array_lower_bound": 24000,
+  "node_storage_lower_bound": 244800,
+  "final_structural_lower_bound": 268800,
+  "lower_bound_exceeds_budget_by": 6656,
+  "excluded_real_costs": [
+    "buckets",
+    "container proxies",
+    "key/value heap",
+    "column metadata",
+    "aligned allocation prefix",
+    "live source"
+  ],
+  "scope": "Model-based lower bound grounded in observed native layout and a matching independent two-entry allocator probe; not a direct one-entry native measurement. No lifetime optimization can remove live final-row structures while preserving this representation.",
+  "representation": "QueryResult::Row is std::unordered_map<std::string,ResultValue>; ResultValue::VariantType is publicly exposed by const reference."
+}

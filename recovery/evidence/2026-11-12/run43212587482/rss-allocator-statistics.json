@@ -1,0 +1,92 @@
+[
+  {
+    "phase": "before-query",
+    "line": "2026-11-12T12:34:21.6510120Z CI_RSS_PHASE phase=before-query asan_available=1 live=5726735 heap=40878080",
+    "statistics": []
+  },
+  {
+    "phase": "rejection-before-unwind",
+    "line": "2026-11-12T12:34:26.8614930Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10477529 heap=90324992",
+    "statistics": [
+      "2026-11-12T12:34:26.8618260Z Stats: 51M malloced (9M for red zones) by 267543 calls",
+      "2026-11-12T12:34:26.8618720Z Stats: 0M realloced by 0 calls",
+      "2026-11-12T12:34:26.8620070Z Stats: 41M freed by 197536 calls",
+      "2026-11-12T12:34:26.8719610Z Stats: 0M really freed by 0 calls",
+      "2026-11-12T12:34:26.8758100Z Stats: 86M (86M-0M) mmaped; 350 maps, 0 unmaps",
+      "2026-11-12T12:34:26.8836210Z Stats: malloc large: 96",
+      "2026-11-12T12:34:26.8836780Z Stats: StackDepot: 220537 ids; 44M allocated",
+      "2026-11-12T12:34:26.8837710Z Stats: SizeClassAllocator64: 52M mapped (4608425984M rss) in 269227 allocations; remains 269227",
+      "2026-11-12T12:34:26.8975650Z Stats: LargeMmapAllocator: allocated 96 times, remains 96 (23424 K) max 22 M; by size logs: 17:85; 18:4; 19:4; 20:3; ",
+      "2026-11-12T12:34:26.8977670Z Quarantine limits: global: 256Mb; thread local: 1024Kb",
+      "2026-11-12T12:34:26.8979920Z Global quarantine stats: batches: 214; bytes: 44935741 (user: 43182653); chunks: 197270 (capacity: 218494); 90% chunks used; 4% memory overhead"
+    ]
+  },
+  {
+    "phase": "after-backend-destruction",
+    "line": "2026-11-12T12:34:27.4278200Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=6350400 heap=95305728",
+    "statistics": [
+      "2026-11-12T12:34:27.4587930Z Stats: 55M malloced (9M for red zones) by 271215 calls",
+      "2026-11-12T12:34:27.4606550Z Stats: 0M realloced by 0 calls",
+      "2026-11-12T12:34:27.4606970Z Stats: 49M freed by 205048 calls",
+      "2026-11-12T12:34:27.4607530Z Stats: 0M really freed by 0 calls",
+      "2026-11-12T12:34:27.4608360Z Stats: 90M (90M-0M) mmaped; 378 maps, 0 unmaps",
+      "2026-11-12T12:34:27.4613060Z Stats: malloc large: 120",
+      "2026-11-12T12:34:27.4613860Z Stats: StackDepot: 222806 ids; 44M allocated",
+      "2026-11-12T12:34:27.4615370Z Stats: SizeClassAllocator64: 53M mapped (4608425984M rss) in 272811 allocations; remains 272811",
+      "2026-11-12T12:34:27.4927970Z Stats: LargeMmapAllocator: allocated 120 times, remains 120 (27264 K) max 26 M; by size logs: 17:109; 18:4; 19:4; 20:3; ",
+      "2026-11-12T12:34:27.4928560Z Quarantine limits: global: 256Mb; thread local: 1024Kb",
+      "2026-11-12T12:34:27.4929170Z Global quarantine stats: batches: 225; bytes: 52473993 (user: 50630793); chunks: 204565 (capacity: 229725); 89% chunks used; 3% memory overhead"
+    ]
+  },
+  {
+    "phase": "before-query",
+    "line": "2026-11-12T12:34:29.1020750Z CI_RSS_PHASE phase=before-query asan_available=1 live=5726767 heap=40878080",
+    "statistics": [
+      "2026-11-12T12:34:29.1044410Z Stats: 16M malloced (5M for red zones) by 165020 calls",
+      "2026-11-12T12:34:29.1044820Z Stats: 0M realloced by 0 calls",
+      "2026-11-12T12:34:29.1045130Z Stats: 10M freed by 110427 calls",
+      "2026-11-12T12:34:29.1045470Z Stats: 0M really freed by 0 calls",
+      "2026-11-12T12:34:29.1045850Z Stats: 38M (38M-0M) mmaped; 158 maps, 0 unmaps",
+      "2026-11-12T12:34:29.1047450Z Stats: malloc large: 3",
+      "2026-11-12T12:34:29.1047800Z Stats: StackDepot: 208170 ids; 44M allocated",
+      "2026-11-12T12:34:29.1048300Z Stats: SizeClassAllocator64: 29M mapped (3677683712M rss) in 166650 allocations; remains 166650",
+      "2026-11-12T12:34:29.1087120Z Stats: LargeMmapAllocator: allocated 3 times, remains 3 (480 K) max 0 M; by size logs: 17:3; ",
+      "2026-11-12T12:34:29.1087620Z Quarantine limits: global: 256Mb; thread local: 1024Kb",
+      "2026-11-12T12:34:29.1088230Z Global quarantine stats: batches: 114; bytes: 11601547 (user: 10667659); chunks: 109777 (capacity: 116394); 94% chunks used; 8% memory overhead"
+    ]
+  },
+  {
+    "phase": "rejection-before-unwind",
+    "line": "2026-11-12T12:34:33.6694590Z CI_RSS_PHASE phase=rejection-before-unwind asan_available=1 live=10477561 heap=90324992",
+    "statistics": [
+      "2026-11-12T12:34:33.6698450Z Stats: 51M malloced (9M for red zones) by 267543 calls",
+      "2026-11-12T12:34:33.6698870Z Stats: 0M realloced by 0 calls",
+      "2026-11-12T12:34:33.6699250Z Stats: 41M freed by 197536 calls",
+      "2026-11-12T12:34:33.6699610Z Stats: 0M really freed by 0 calls",
+      "2026-11-12T12:34:33.6700080Z Stats: 86M (86M-0M) mmaped; 350 maps, 0 unmaps",
+      "2026-11-12T12:34:33.6702640Z Stats: malloc large: 96",
+      "2026-11-12T12:34:33.6703100Z Stats: StackDepot: 220537 ids; 44M allocated",
+      "2026-11-12T12:34:33.6703730Z Stats: SizeClassAllocator64: 52M mapped (4608425984M rss) in 269227 allocations; remains 269227",
+      "2026-11-12T12:34:33.6753880Z Stats: LargeMmapAllocator: allocated 96 times, remains 96 (23424 K) max 22 M; by size logs: 17:85; 18:4; 19:4; 20:3; ",
+      "2026-11-12T12:34:33.6754520Z Quarantine limits: global: 256Mb; thread local: 1024Kb",
+      "2026-11-12T12:34:33.6755170Z Global quarantine stats: batches: 214; bytes: 44935813 (user: 43182725); chunks: 197270 (capacity: 218494); 90% chunks used; 4% memory overhead"
+    ]
+  },
+  {
+    "phase": "after-backend-destruction",
+    "line": "2026-11-12T12:34:34.0609620Z CI_RSS_PHASE phase=after-backend-destruction asan_available=1 live=6350432 heap=95305728",
+    "statistics": [
+      "2026-11-12T12:34:34.0923930Z Stats: 55M malloced (9M for red zones) by 271215 calls",
+      "2026-11-12T12:34:34.1026630Z Stats: 0M realloced by 0 calls",
+      "2026-11-12T12:34:34.1127970Z Stats: 49M freed by 205048 calls",
+      "2026-11-12T12:34:34.1158890Z Stats: 0M really freed by 0 calls",
+      "2026-11-12T12:34:34.1160000Z Stats: 90M (90M-0M) mmaped; 378 maps, 0 unmaps",
+      "2026-11-12T12:34:34.1162360Z Stats: malloc large: 120",
+      "2026-11-12T12:34:34.1162830Z Stats: StackDepot: 222806 ids; 44M allocated",
+      "2026-11-12T12:34:34.1163450Z Stats: SizeClassAllocator64: 53M mapped (4608425984M rss) in 272811 allocations; remains 272811",
+      "2026-11-12T12:34:34.1523730Z Stats: LargeMmapAllocator: allocated 120 times, remains 120 (27264 K) max 26 M; by size logs: 17:109; 18:4; 19:4; 20:3; ",
+      "2026-11-12T12:34:34.1524410Z Quarantine limits: global: 256Mb; thread local: 1024Kb",
+      "2026-11-12T12:34:34.1525220Z Global quarantine stats: batches: 225; bytes: 52474065 (user: 50630865); chunks: 204565 (capacity: 229725); 89% chunks used; 3% memory overhead"
+    ]
+  }
+]
