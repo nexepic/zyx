@@ -1147,13 +1147,20 @@ namespace graph::query::execution {
                   catch (const detail::ResourceAdmissionDenied &) {
                     if (count == 1U) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-                        debug::CiBudgetTrace trace(&output, "vector_preparation");
-                        if (trace.allow()) {
+                        // Reserve a separate bounded channel: general quota tracing may already be exhausted.
+                static std::atomic<unsigned> phaseReports{0U};
+                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                    const auto report = phaseReports.fetch_add(1U, std::memory_order_relaxed);
+                        if (report < 16U) {
                             std::fprintf(stderr, "CI_VECTOR_PREPARATION_REJECT phase=%s offset=%zu count=%zu end=%zu result_rows=%zu\n",
                                 preparationPhase, offset, count, end, output.rowCount());
                             std::fflush(stderr);
                         }
-                        trace.discard();
+                        else if (report == 16U) {
+                        std::fputs("CI_VECTOR_PREPARATION_REJECT_TRUNCATED process_limit=16\n", stderr);
+                        std::fflush(stderr);
+                    }
+                }
 #endif
                         throw;
                     }

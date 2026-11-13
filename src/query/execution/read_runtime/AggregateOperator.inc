@@ -171,14 +171,21 @@
                             }
                             if (requestedStorageBytes > available) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-                                debug::CiBudgetTrace trace(&groups, "aggregate_growth");
-                                if (trace.allow()) {
+                                // Reserve a separate bounded channel: general quota tracing may already be exhausted.
+                static std::atomic<unsigned> phaseReports{0U};
+                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                    const auto report = phaseReports.fetch_add(1U, std::memory_order_relaxed);
+                                if (report < 16U) {
                                     std::fprintf(stderr, "CI_AGGREGATE_GROWTH_REJECT groups=%zu capacity=%zu group_width=%zu minimum_capacity=%zu requested_bytes=%zu available_with_parent=%zu used=%zu\n",
                                         groups.size(), groups.capacity(), sizeof(AggregateGroup), minimumCapacity,
                                         requestedStorageBytes, available, state.shared.materialized_budget.used());
                                     std::fflush(stderr);
                                 }
-                                trace.discard();
+                                else if (report == 16U) {
+                        std::fputs("CI_AGGREGATE_GROWTH_REJECT_TRUNCATED process_limit=16\n", stderr);
+                        std::fflush(stderr);
+                    }
+                }
 #endif
 								throw std::runtime_error("logical-plan Aggregate group vector growth exceeded its "
 														 "materialized byte bound");
