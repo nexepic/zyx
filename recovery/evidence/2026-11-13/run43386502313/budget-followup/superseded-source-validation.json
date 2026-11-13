@@ -1,0 +1,6 @@
+{
+  "source_commit": "422bee46aeca16dfb858aff337e7d08c67d36a5c",
+  "binary_sha256": "d03d688ae4a406d41cb4a246e9deac97a8efe4de18d065658eb3e6480307c6a6",
+  "capture": "Final unfiltered run started after its rebuild; no other builder active",
+  "command": "ZYX_TEST_SHARDS=4 ZYX_TEST_XML_DIR=/workspace/ci243-budget-final-xml ZYX_TEST_RUN_ID=ci243-budget-final ./scripts/run_tests.sh --quick"
+}

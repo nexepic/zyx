@@ -1,0 +1,39 @@
+{
+  "windows": {
+    "patterns": 137,
+    "matched": 137,
+    "missing": [],
+    "build243_failed_cases_covered": [
+      "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+      "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota",
+      "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+    ]
+  },
+  "macos": {
+    "patterns": 19,
+    "matched": 19,
+    "missing": []
+  },
+  "asan": {
+    "patterns": 5,
+    "matched": 11,
+    "missing": []
+  },
+  "discovered": 11131
+}

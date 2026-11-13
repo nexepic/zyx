@@ -1,0 +1,6 @@
+{
+  "source_commit": "9147d73ad0883924ef8f1a3dc6471c38ac3f5db4",
+  "binary_sha256": "f778723967a7614d1ff56bad03b7055e7b2db2602212000db87a19fafc27bfff",
+  "capture": "Repeat unfiltered run starts with no build work; preserves45ms timeout and adds diagnostic call label",
+  "command": "ZYX_TEST_KEEP_COVERAGE_ARTIFACTS=true ZYX_TEST_SHARDS=4 ZYX_TEST_XML_DIR=/workspace/ci243-budget-repeat-xml ZYX_TEST_RUN_ID=ci243-budget-repeat ./scripts/run_tests.sh --quick"
+}

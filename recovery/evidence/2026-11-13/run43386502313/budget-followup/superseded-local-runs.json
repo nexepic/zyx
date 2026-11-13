@@ -1,0 +1,72 @@
+{
+  "ci243-budget-full": {
+    "interrupted": true,
+    "wrapper_exit_observed_in_tool_result": 130,
+    "shards": [
+      {
+        "index": 0,
+        "pid": 95248,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      },
+      {
+        "index": 1,
+        "pid": 95249,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      },
+      {
+        "index": 2,
+        "pid": 95250,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      },
+      {
+        "index": 3,
+        "pid": 95251,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      }
+    ],
+    "status_json": "Removed by later wrapper cleanup; console evidence retained"
+  },
+  "ci243-budget-final": {
+    "interrupted": true,
+    "wrapper_exit_observed_in_tool_result": 130,
+    "shards": [
+      {
+        "index": 0,
+        "pid": 103335,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      },
+      {
+        "index": 1,
+        "pid": 103336,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      },
+      {
+        "index": 2,
+        "pid": 103337,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      },
+      {
+        "index": 3,
+        "pid": 103338,
+        "raw_exit_code": -15,
+        "journal_available": false,
+        "status_details_available": false
+      }
+    ],
+    "status_json": "Removed by later wrapper cleanup; console evidence retained"
+  }
+}

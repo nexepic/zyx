@@ -1,0 +1,229 @@
+{
+  "invalid_allocator_rss": "4608425984M rss: excluded as invalid; no attribution from this field",
+  "runs": [
+    {
+      "mach": [
+        {
+          "phase": "before-query",
+          "resident": 465403904,
+          "internal": 119422976,
+          "external": 345980928,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 123452672
+        },
+        {
+          "phase": "sort-before-first-spill",
+          "resident": 493551616,
+          "internal": 137527296,
+          "external": 356024320,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 142165568
+        },
+        {
+          "phase": "sort-after-first-spill",
+          "resident": 498614272,
+          "internal": 141819904,
+          "external": 356794368,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 146540416
+        },
+        {
+          "phase": "sort-before-merge",
+          "resident": 507822080,
+          "internal": 150978560,
+          "external": 356843520,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 155781312
+        },
+        {
+          "phase": "sort-merge-level-begin",
+          "resident": 507871232,
+          "internal": 151011328,
+          "external": 356859904,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 155814080
+        },
+        {
+          "phase": "sort-merge-level-end",
+          "resident": 522584064,
+          "internal": 165281792,
+          "external": 357302272,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 170084544
+        },
+        {
+          "phase": "sort-merge-level-begin",
+          "resident": 522584064,
+          "internal": 165281792,
+          "external": 357302272,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 170084544
+        },
+        {
+          "phase": "rejection-before-unwind",
+          "resident": 533004288,
+          "internal": 175702016,
+          "external": 357302272,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 180504768
+        },
+        {
+          "phase": "sort-merge-level-failure",
+          "resident": 533725184,
+          "internal": 176226304,
+          "external": 357498880,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 181029056
+        },
+        {
+          "phase": "after-backend-destruction",
+          "resident": 543195136,
+          "internal": 185057280,
+          "external": 358137856,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 189860032
+        }
+      ],
+      "guards": [
+        {
+          "limit": 67108864,
+          "baseline": 465436672,
+          "current": 533004288,
+          "asan_available": 1,
+          "live": 10987353,
+          "heap": 90980352,
+          "growth": 67567616
+        }
+      ],
+      "label": "cold traced",
+      "phase_growth": {
+        "resident": 67600384,
+        "internal": 56279040,
+        "external": 11321344,
+        "footprint": 57052096
+      }
+    },
+    {
+      "mach": [
+        {
+          "phase": "before-query",
+          "resident": 465289216,
+          "internal": 119308288,
+          "external": 345980928,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 123354432
+        },
+        {
+          "phase": "sort-before-first-spill",
+          "resident": 494010368,
+          "internal": 137986048,
+          "external": 356024320,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 142640768
+        },
+        {
+          "phase": "sort-after-first-spill",
+          "resident": 499073024,
+          "internal": 142278656,
+          "external": 356794368,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 147015616
+        },
+        {
+          "phase": "sort-before-merge",
+          "resident": 508297216,
+          "internal": 151453696,
+          "external": 356843520,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 156272896
+        },
+        {
+          "phase": "sort-merge-level-begin",
+          "resident": 508346368,
+          "internal": 151486464,
+          "external": 356859904,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 156305664
+        },
+        {
+          "phase": "sort-merge-level-end",
+          "resident": 523059200,
+          "internal": 165756928,
+          "external": 357302272,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 170576128
+        },
+        {
+          "phase": "sort-merge-level-begin",
+          "resident": 523059200,
+          "internal": 165756928,
+          "external": 357302272,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 170576128
+        },
+        {
+          "phase": "rejection-before-unwind",
+          "resident": 533479424,
+          "internal": 176177152,
+          "external": 357302272,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 180996352
+        },
+        {
+          "phase": "sort-merge-level-failure",
+          "resident": 533708800,
+          "internal": 176209920,
+          "external": 357498880,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 181029120
+        },
+        {
+          "phase": "after-backend-destruction",
+          "resident": 543162368,
+          "internal": 185024512,
+          "external": 358137856,
+          "reusable": 0,
+          "compressed": 0,
+          "footprint": 189843712
+        }
+      ],
+      "guards": [
+        {
+          "limit": 67108864,
+          "baseline": 465846272,
+          "current": 533479424,
+          "asan_available": 1,
+          "live": 10987385,
+          "heap": 90980352,
+          "growth": 67633152
+        }
+      ],
+      "label": "warmed statistics",
+      "phase_growth": {
+        "resident": 68190208,
+        "internal": 56868864,
+        "external": 11321344,
+        "footprint": 57641920
+      }
+    }
+  ]
+}

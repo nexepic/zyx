@@ -1,0 +1,34 @@
+{
+  "exit_code": 1,
+  "shards": [
+    {
+      "index": 0,
+      "pid": 109714,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    },
+    {
+      "index": 1,
+      "pid": 109715,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    },
+    {
+      "index": 2,
+      "pid": 109716,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    },
+    {
+      "index": 3,
+      "pid": 109717,
+      "raw_exit_code": 1,
+      "journal_available": false,
+      "status_details_available": false
+    }
+  ],
+  "source": "Saved stdout; wrapper cleanup removed transient runner JSON"
+}

@@ -1,0 +1,15 @@
+{
+  "executed": 11111,
+  "distinct": 11111,
+  "failures": [
+    {
+      "name": "RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures",
+      "messages": [
+        "unknown file\nC++ exception with description \"Query exceeded timeout of 45ms\" thrown in the test body.\n"
+      ]
+    }
+  ],
+  "skips": [],
+  "duplicates": {},
+  "coverage": "Not generated: wrapper stopped after failure; earlier coverage is not valid for this run"
+}

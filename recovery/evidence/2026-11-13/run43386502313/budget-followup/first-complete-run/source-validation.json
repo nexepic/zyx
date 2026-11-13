@@ -1,0 +1,6 @@
+{
+  "source_commit": "4bd61eb3ac7e4f5a944c479974bdddc870a9ed5e",
+  "binary_sha256": "9d8f35518fabf86e6d0193ddc42c74a62a6b36250f439c87bccced1ca74f4cf4",
+  "capture": "Final unfiltered verified run started with unchanged binary after 32-case aggregate/CSV targeted run",
+  "command": "ZYX_TEST_SHARDS=4 ZYX_TEST_XML_DIR=/workspace/ci243-budget-verified-xml ZYX_TEST_RUN_ID=ci243-budget-verified ./scripts/run_tests.sh --quick"
+}

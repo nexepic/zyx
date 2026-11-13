@@ -1,0 +1,12 @@
+{
+  "tests": 85,
+  "failures": 0,
+  "xml_verified": true,
+  "bounded_growth_success_cap": 4192,
+  "diagnostic_lines": {
+    "CI_PROCEDURE_FAILURE_PHASE phase=": 0,
+    "CI_VECTOR_PREPARATION_REJECT phase=": 0,
+    "CI_AGGREGATE_GROWTH_REJECT groups=": 16,
+    "CI_AGGREGATE_GROWTH_REJECT_TRUNCATED": 1
+  }
+}
