@@ -128,6 +128,9 @@ namespace graph::storage {
 		[[nodiscard]] static utils::OwnedStdVector<BTreePageEntry>
 		decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+        // Complete validation retaining two charged key buffers, not all entries.
+        static void validate(BTreeNodeKind kind, std::span<const std::byte> bytes,
+            BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		// Checks only the fixed payload envelope and restart table. Page-local point
 		// lookups use this before probing one restart group; full entry validation
 		// remains the responsibility of decode() and integrity scans.

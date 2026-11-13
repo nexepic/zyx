@@ -1285,3 +1285,53 @@ TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingAuthenticatesPackedConten
  }
  EXPECT_EQ(memory->live, 0U);
 }
+
+TEST(RelocatableBTreePageCodecTest, StreamingValidationRetainsOnlyTwoChargedKeysAndRefundsFailure) {
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 64U; ++i)
+        entries.push_back({{std::byte{'k'}, static_cast<std::byte>(i)}, i + 1U});
+    const auto bytes = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries);
+    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(512U);
+    graph::utils::OwnedAllocationScope scope(budget);
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, bytes)),
+        graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(budget->used(), 0U);
+    EXPECT_NO_THROW(PackedBTreePageCodec::validate(BTreeNodeKind::BPN_LEAF, bytes));
+    EXPECT_EQ(budget->used(), 0U);
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    {
+        graph::utils::OwnedAllocationScope denied(tiny);
+        EXPECT_THROW(PackedBTreePageCodec::validate(BTreeNodeKind::BPN_LEAF, bytes),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(tiny->used(), 0U);
+    EXPECT_NO_THROW(PackedBTreePageCodec::validate(BTreeNodeKind::BPN_LEAF, bytes));
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, StreamingValidationMatchesOwningDecodeForCorruptedEntries) {
+    for (const auto kind : {BTreeNodeKind::BPN_LEAF, BTreeNodeKind::BPN_INTERNAL}) {
+        std::vector<BTreePageEntry> entries;
+        for (unsigned i = 0; i < 20U; ++i)
+            entries.push_back({{std::byte{'k'}, static_cast<std::byte>(i)}, i + 1U});
+        const auto bytes = PackedBTreePageCodec::encode(kind, entries);
+        const auto error = [&](const auto &input, bool streaming) -> std::optional<FormatError> {
+            try {
+                if (streaming) PackedBTreePageCodec::validate(kind, input);
+                else static_cast<void>(PackedBTreePageCodec::decode(kind, input));
+                return std::nullopt;
+            } catch (const FormatException &exception) { return exception.error(); }
+        };
+        EXPECT_EQ(error(bytes, true), std::nullopt);
+        for (size_t offset = 0; offset < bytes.size(); ++offset) {
+            SCOPED_TRACE(offset);
+            auto corrupt = bytes;
+            corrupt[offset] ^= std::byte{0xff};
+            EXPECT_EQ(error(corrupt, true), error(corrupt, false));
+        }
+        for (size_t length = 0; length < bytes.size(); ++length) {
+            const auto truncated = std::span<const std::byte>(bytes).first(length);
+            EXPECT_EQ(error(truncated, true), error(truncated, false));
+        }
+    }
+}

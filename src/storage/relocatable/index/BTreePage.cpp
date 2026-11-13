@@ -618,6 +618,50 @@ namespace graph::storage {
 		return entries;
 	}
 
+	void PackedBTreePageCodec::validate(BTreeNodeKind kind, std::span<const std::byte> bytes,
+															 BTreeLeafValueLayout leafValueLayout) {
+		debug::PerfTrace::addValue("native_btree.read.packed_page_decodes", 1);
+		validateValueLayout(kind, leafValueLayout);
+		const bool includesValue = storesValue(kind, leafValueLayout);
+		const PackedHeader header = decodePackedHeader(bytes);
+		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
+		std::array<BTreePageEntry, 2U> entries;
+		std::span<const std::byte> previous;
+		const std::span<const std::byte> stream = bytes.subspan(header.stream_offset, header.stream_bytes);
+		size_t offset = 0U;
+		for (uint32_t index = 0U; index < header.entry_count; ++index) {
+			const bool restart = (index % header.restart_interval) == 0U;
+			if (restart && offset != offsets[index / header.restart_interval]) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+									"relocatable packed B+Tree restart offset does not point to an entry");
+			}
+			// Alternate two charged key buffers; retain only the predecessor,
+			// while authenticating every entry before any owner mutation.
+			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
+					[&]() -> BTreePageEntry & {
+						return entries[index % 2U];
+					})) {
+				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
+									"relocatable packed B+Tree entry stream ended early");
+			}
+			auto &entry = entries[index % 2U];
+			if (index != 0U && !lessKey(entries[(index + 1U) % 2U].key, entry.key)) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+									"relocatable packed B+Tree entries are not strictly ordered");
+			}
+			if (kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry.value_or_child).isValid()) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+									"relocatable packed internal B+Tree entry has an invalid child Page ID");
+			}
+			// This buffer is not reused until its successor has been checked.
+			previous = entry.key;
+		}
+		if (offset != stream.size()) {
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+								"relocatable packed B+Tree entry stream has trailing bytes");
+		}
+	}
+
 	std::span<const std::byte> BTreeFixedKey::key() const {
 		if (!width || width > bytes.size())
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER, "fixed B+Tree key has an invalid width");
@@ -967,7 +1011,10 @@ namespace graph::storage {
         SlottedPage::validateOwner(owner);
         // All decoding/admission precedes mutation. Only the fixed-size typed
         // header and SlottedPage's existing owner/checksum fields then change.
-        validateLayout();
+        const auto payload = validatePackedEnvelope();
+        withIndexRecord(page_, payload, [&](auto bytes) {
+            PackedBTreePageCodec::validate(rebound.kind, bytes, rebound.leaf_value_layout);
+        });
         rebound.generation = owner.generation;
         const auto bytes = BTreePageHeaderCodec::encode(rebound);
         // Existing bounded in-place compaction uses no heap allocation and
