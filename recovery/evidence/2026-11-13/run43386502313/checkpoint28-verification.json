@@ -1,0 +1,13 @@
+{
+  "head": "c9529e76bd15225555b2ec1b8e8f35cbc3aa96ce",
+  "restored_head": "c9529e76bd15225555b2ec1b8e8f35cbc3aa96ce",
+  "bundle_bytes": 309649978,
+  "bundle_sha256": "14578ec590327227793fc0566c77d222467761fae5ccc8e259b407b0df1bd1c4",
+  "reachable_objects": 44611,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 28,
+  "validation": "Build243 checkpoint: crash harness resolves Windows loaded image and preserves native launch errors;55 Linux crash cases pass; full regression running;19 Windows budgets and RSS unclosed",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}

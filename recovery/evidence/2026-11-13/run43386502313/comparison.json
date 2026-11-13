@@ -23,5 +23,33 @@
   "no_longer_unit_failed": [
     "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
     "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow"
-  ]
+  ],
+  "run": 43386502313,
+  "tested_sha": "d411fcd7f6f8c068dd17b95547544d7746aa9a87",
+  "windows_unit_counts": {
+    "completed": 11097,
+    "passed": 11077,
+    "failed": 19,
+    "skipped": 1,
+    "unclassified": 0
+  },
+  "windows_independent_counts": {
+    "completed": 132,
+    "passed": 113,
+    "failed": 19
+  },
+  "windows_lifecycle_counts": {
+    "completed": 605,
+    "passed": 600,
+    "failed": 5,
+    "overlap_unit_failed": 3,
+    "additional_launch_failures": 2
+  },
+  "mac_unit_observed_passed": 11101,
+  "asan_gate_passed": 711,
+  "tsan_gate_passed": 27,
+  "cold_rss_growth": 67567616,
+  "warmed_rss_growth": 67633152,
+  "rss_limit": 67108864,
+  "mac_conversion_diagnostic_exit": 124
 }
