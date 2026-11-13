@@ -10,6 +10,7 @@ from pathlib import Path
 WINDOWS = [
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry',
+    'RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures',
     'ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput',
     'ExternalQuerySortTest.ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner',
     *('ConsumedPrefixCompactionTest.' + name for name in (
@@ -156,6 +157,7 @@ WINDOWS = [
 MACOS = [
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry',
+    'RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures',
     'ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput',
     'ExternalQuerySortTest.ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner',
     'LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget',

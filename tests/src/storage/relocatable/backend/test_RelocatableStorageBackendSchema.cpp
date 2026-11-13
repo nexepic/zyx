@@ -442,8 +442,16 @@ TEST_F(RelocatableStorageBackendSchemaTest, ExecutesNativeDbmsConfigurationAndSt
 	auto backend = std::make_shared<RelocatableStorageBackend>(options());
 	backend->open();
 	graph::query::QueryEngine engine(backend, backend);
+    const auto execute = [&](const std::string &query, auto &&...args) {
+        try {
+            return engine.execute(query, std::forward<decltype(args)>(args)...);
+        } catch (const graph::query::QueryTimeoutException &error) {
+            ADD_FAILURE() << "Configuration procedure timed out: " << query << "; " << error.what();
+            throw;
+        }
+    };
 
-	const graph::query::QueryResult set = engine.execute("CALL dbms.setConfig('query.timeout_ms', 45)");
+	const graph::query::QueryResult set = execute("CALL dbms.setConfig('query.timeout_ms', 45)");
 	ASSERT_EQ(set.getColumns(), (std::vector<std::string>{"key", "value", "status"}));
 	ASSERT_EQ(set.rowCount(), 1U);
 	EXPECT_EQ(set.getRows().front().at("key").asPrimitive(), graph::PropertyValue("query.timeout_ms"));
@@ -451,16 +459,16 @@ TEST_F(RelocatableStorageBackendSchemaTest, ExecutesNativeDbmsConfigurationAndSt
 	EXPECT_EQ(set.getRows().front().at("status").asPrimitive(), graph::PropertyValue("OK"));
 
 	const graph::query::QueryResult projected =
-			engine.execute("CALL dbms.getConfig('query.timeout_ms') YIELD key, value RETURN value");
+			execute("CALL dbms.getConfig('query.timeout_ms') YIELD key, value RETURN value");
 	ASSERT_EQ(projected.getColumns(), (std::vector<std::string>{"value"}));
 	ASSERT_EQ(projected.rowCount(), 1U);
 	EXPECT_EQ(projected.getRows().front().at("value").asPrimitive(), graph::PropertyValue(int64_t{45}));
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.getConfig('missing.key')")), std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.setConfig('missing.key', 1)")), std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.setConfig('query.timeout_ms', true)")),
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.getConfig('missing.key')")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.setConfig('missing.key', 1)")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.setConfig('query.timeout_ms', true)")),
 				 std::invalid_argument);
 
-	const graph::query::QueryResult listed = engine.execute("CALL dbms.listConfig()");
+	const graph::query::QueryResult listed = execute("CALL dbms.listConfig()");
 	ASSERT_EQ(listed.getColumns(), (std::vector<std::string>{"key", "value"}));
 	ASSERT_EQ(listed.rowCount(), 6U);
 	EXPECT_EQ(listed.getRows()[0U].at("key").asPrimitive(), graph::PropertyValue("query.max_memory_mb"));
@@ -474,16 +482,16 @@ TEST_F(RelocatableStorageBackendSchemaTest, ExecutesNativeDbmsConfigurationAndSt
 	EXPECT_EQ(listed.getRows()[4U].at("key").asPrimitive(), graph::PropertyValue("query.timeout_ms"));
 	EXPECT_EQ(listed.getRows()[5U].at("key").asPrimitive(), graph::PropertyValue("stats.enabled"));
 	EXPECT_EQ(listed.getRows()[5U].at("value").asPrimitive(), graph::PropertyValue(true));
-	const graph::query::QueryResult statistics = engine.execute("CALL dbms.showStats()");
+	const graph::query::QueryResult statistics = execute("CALL dbms.showStats()");
 	ASSERT_EQ(statistics.getColumns(), (std::vector<std::string>{"category", "metric", "value"}));
 	EXPECT_FALSE(statistics.isEmpty());
-	const graph::query::QueryResult reset = engine.execute("CALL dbms.resetStats()");
+	const graph::query::QueryResult reset = execute("CALL dbms.resetStats()");
 	ASSERT_EQ(reset.getColumns(), (std::vector<std::string>{"result"}));
 	EXPECT_EQ(reset.getRows().front().at("result").asPrimitive(), graph::PropertyValue("Statistics reset"));
 
 	graph::query::QueryContext readOnly;
 	readOnly.execMode = graph::query::ExecMode::EM_READ_ONLY;
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.setConfig('query.timeout_ms', 60)", readOnly)),
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.setConfig('query.timeout_ms', 60)", readOnly)),
 				 std::runtime_error);
 	backend->close();
 }
