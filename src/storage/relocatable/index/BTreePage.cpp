@@ -625,7 +625,7 @@ namespace graph::storage {
 		const bool includesValue = storesValue(kind, leafValueLayout);
 		const PackedHeader header = decodePackedHeader(bytes);
 		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
-		std::array<BTreePageEntry, 2U> entries;
+		std::array<std::optional<BTreePageEntry>, 2U> entries;
 		std::span<const std::byte> previous;
 		const std::span<const std::byte> stream = bytes.subspan(header.stream_offset, header.stream_bytes);
 		size_t offset = 0U;
@@ -639,13 +639,15 @@ namespace graph::storage {
 			// while authenticating every entry before any owner mutation.
 			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
 					[&]() -> BTreePageEntry & {
-						return entries[index % 2U];
+						auto &slot = entries[index % 2U];
+                        if (!slot) slot.emplace();
+                        return *slot;
 					})) {
 				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"relocatable packed B+Tree entry stream ended early");
 			}
-			auto &entry = entries[index % 2U];
-			if (index != 0U && !lessKey(entries[(index + 1U) % 2U].key, entry.key)) {
+			auto &entry = *entries[index % 2U];
+			if (index != 0U && !lessKey(entries[(index + 1U) % 2U]->key, entry.key)) {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree entries are not strictly ordered");
 			}

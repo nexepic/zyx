@@ -164,7 +164,7 @@
 												   "logical-plan Aggregate group vector size overflowed");
                             const size_t available = state.shared.materialized_budget.availableWithParent();
                             if (requestedStorageBytes > available && requestedCapacity > minimumCapacity) {
-                                requestedCapacity = std::max(minimumCapacity, available / sizeof(AggregateGroup));
+                                requestedCapacity = minimumCapacity;
                                 requestedStorageBytes = checkedSizeMul(requestedCapacity, sizeof(AggregateGroup),
                                     "logical-plan Aggregate group vector size overflowed");
                                 debug::PerfTrace::addValue("logical_plan.aggregate.bounded_capacity_growth", 1);
