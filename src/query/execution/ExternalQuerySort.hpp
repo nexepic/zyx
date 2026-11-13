@@ -70,6 +70,15 @@ public:
             if(recordBytes>buffer_target_-(std::min)(buffer_target_,rows_.bytes()) ||
                     required>budget_.availableWithParent()) flush();
         }
+        if (workspace_.bytes() && rows_.empty() && rows_.values().capacity()) {
+            // This check belongs after a possible flush: reusing its buffer
+            // must not strand a wider incoming row or a competing live owner.
+            // Reclaim before moving input if a bounded record has no room.
+            const size_t incoming = charge.bytes() ? 0U : size_(record);
+            const size_t available = budget_.availableWithParent();
+            if (incoming > available || MAX_RECORD_BYTES * 64U > available - incoming)
+                rows_.clear();
+        }
 		if(charge.bytes())rows_.appendCharged(std::move(record),std::move(charge));else rows_.append(std::move(record));
 	}
 	bool finish(const Visitor &visitor) {
@@ -80,6 +89,9 @@ public:
 			return true;
 		}
 		if(!rows_.empty())flush();
+        // No input run will use this capacity again. Release it before merge
+        // and owning output compete for the same unchanged hard allowance.
+        rows_.clear();
         tracePhase("sort-before-merge");
 		for(size_t level=0;runs_.size()>1U;++level){
 			if(level==12U)throw std::runtime_error("external Sort exceeded its merge-depth bound");
@@ -158,13 +170,20 @@ private:
 		explicit Run(std::pmr::memory_resource *resource):handles(resource){}
 		utils::AdmissionPmrVector<uint64_t> handles;uint64_t rows=0U;
 	};
+    struct WriterBuffers { std::vector<std::byte> block, encoded; };
+    WriterBuffers &writerBuffers() {
+        // Construct only after the spill workspace is admitted. One writer is
+        // active at a time, and these private buffers die before its lease.
+        if (!writer_buffers_) writer_buffers_.emplace();
+        return *writer_buffers_;
+    }
 	static constexpr uint64_t BLOCK_MAGIC=UINT64_C(0x3154525358595A);
 	static void put(std::vector<std::byte> &bytes,uint64_t value,size_t width){for(size_t i=0;i<width;++i)bytes.push_back(static_cast<std::byte>((value>>(8*i))&255U));}
 	static uint64_t get(std::span<const std::byte> bytes,size_t &offset,size_t width){if(offset>bytes.size() || width>bytes.size()-offset)throw std::invalid_argument("external Sort block is truncated");uint64_t value=0;for(size_t i=0;i<width;++i)value|=uint64_t(std::to_integer<unsigned>(bytes[offset+i]))<<(8*i);offset+=width;return value;}
 	struct Writer {
-		ExternalQuerySort &sort;Run run;std::vector<std::byte> block, encoded;
+		ExternalQuerySort &sort;Run run;std::vector<std::byte> &block, &encoded;
         uint32_t count=0;
-		explicit Writer(ExternalQuerySort &owner):sort(owner),run(&owner.memory_){block.reserve(storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES);start();}
+		explicit Writer(ExternalQuerySort &owner):sort(owner),run(&owner.memory_),block(owner.writerBuffers().block),encoded(owner.writerBuffers().encoded){block.reserve(storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES);start();}
 		void start(){block.clear();put(block,BLOCK_MAGIC,8);put(block,0,4);put(block,0,4);count=0;}
 		void flush(){if(!count)return;for(size_t i=0;i<4;++i)block[8+i]=static_cast<std::byte>((count>>(8*i))&255U);
 			// Reserve route capacity before publishing private bytes.
@@ -218,7 +237,12 @@ private:
 	}
 	void ensureScratch(){if(scratch_)return;tracePhase("sort-before-first-spill");workspace_.set(WORKSPACE_BYTES);publication_checkpoint_();scratch_=provider_.openQueryScratchSession(maximum_disk_,maximum_fragments_,account_);if(!scratch_)throw std::runtime_error("external Sort cannot spill to a physically read-only file");}
 	void flush(){if(!spillable_)throw std::runtime_error("external Sort has no qualified spill codec for its input");ensureScratch();sortRows();Writer writer(*this);
-		for(const auto &record:rows_.values())writer.append(record);auto run=writer.finish();if(runs_.size()==4096U)throw std::runtime_error("external Sort exceeded its run bound");runs_.push_back(std::move(run));rows_.clear();if(runs_.size()==1U)tracePhase("sort-after-first-spill");}
+		for(const auto &record:rows_.values())writer.append(record);auto run=writer.finish();if(runs_.size()==4096U)throw std::runtime_error("external Sort exceeded its run bound");runs_.push_back(std::move(run));
+        // Payloads die before their grants are reconciled. The PMR array stays
+        // live and fully charged, avoiding repeated geometric allocations for
+        // subsequent runs without pretending that retained capacity is free.
+        rows_.values().clear();rows_.recalculateBytes();
+        if(runs_.size()==1U)tracePhase("sort-after-first-spill");}
 	Run merge(Run &left,Run &right){Cursor a(*this,left),b(*this,right);Writer writer(*this);
 		while(a.current || b.current){checkpoint_();if(!b.current || (a.current && precedes(*a.current,*b.current))){writer.append(*a.current);a.advance();}else{writer.append(*b.current);b.advance();}}
 		auto result=writer.finish();
@@ -231,6 +255,7 @@ private:
 	storage::LogicalQueryScratchProvider &provider_;MaterializedByteBudget &budget_;size_t maximum_rows_,buffer_target_,total_=0;
 	MaterializedByteReservation workspace_;BudgetMemoryResource memory_;utils::AdmissionPmrVector<uint8_t> ascending_;
 	SizeFunction size_;std::function<void()> checkpoint_,publication_checkpoint_;size_t maximum_disk_,maximum_fragments_;std::shared_ptr<ResourceAccount> account_;utils::AdmissionPmrVector<Run> runs_;BoundedBatch<Record> rows_;
+    std::optional<WriterBuffers> writer_buffers_;
 	std::unique_ptr<storage::LogicalQueryScratchSession> scratch_;bool spillable_=true,finished_=false;
 };
 }
