@@ -187,9 +187,12 @@
                                     }
                                 }
 #endif
-								throw std::runtime_error("logical-plan Aggregate group vector growth exceeded its "
+								if (requestedStorageBytes > state.shared.materialized_budget.available())
+                                    throw std::runtime_error("logical-plan Aggregate group vector growth exceeded its "
 														 "materialized byte bound");
 							}
+                            // Parent headroom is advisory: preserve the allocator's typed
+                            // parent rejection instead of translating it to a local error.
                             // The allocator admits the complete new buffer while the old
                             // one remains live, then refunds the old allocation on release.
                             groups.reserve(requestedCapacity);

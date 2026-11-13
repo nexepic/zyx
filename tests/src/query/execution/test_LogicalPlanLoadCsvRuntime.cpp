@@ -1115,4 +1115,40 @@ TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateBoundedCapacityGrowthPreservesGro
     EXPECT_TRUE(successfulFallback);
 }
 
+TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry) {
+    using namespace detail;
+    CsvOnlyBackend backend;
+    LogicalPlanReadRuntime runtime(backend);
+    const auto plan = parse("UNWIND [1,2,3,4,5,6,7,8,9,10] AS value RETURN value, count(*) AS count");
+    auto constrained = bounds();
+    constrained.maximum_materialized_bytes = 1048576U;
+    bool succeeded = false, fallbackDenied = false;
+    for (size_t cap = 1536U; cap <= 8192U && !succeeded; cap += 32U) {
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(cap));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(cap));
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, cap);
+        auto queryContext = context();
+        queryContext.resource_account = account;
+        size_t fallback = 0U, delivered = 0U;
+        debug::PerfTrace::ScopedObserver observe(&fallback,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.aggregate.bounded_capacity_growth" && value > 0)
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
+        try {
+            static_cast<void>(runtime.execute(*plan.root, constrained,
+                [&](const LogicalPlanReadRow &) { ++delivered; return true; }, queryContext));
+            EXPECT_EQ(delivered, 10U);
+            succeeded = true;
+        } catch (const ResourceAdmissionDenied &) {
+            fallbackDenied = fallbackDenied || fallback != 0U;
+        } catch (const std::exception &error) {
+            FAIL() << "Parent admission error lost its type: " << error.what();
+        }
+        EXPECT_EQ(account->used(), 0U);
+    }
+    EXPECT_TRUE(fallbackDenied);
+    EXPECT_TRUE(succeeded);
+}
+
 } // namespace graph::query::execution
