@@ -1,0 +1,25 @@
+{
+  "source_commit": "457a9c5637bb453f22f4e1e81c4436adbf2f4a1a",
+  "binary_sha256": "e5a77a1346f1bf23e6e6d2eeb293236c7a3c4ba03614951e16dfc1beeac7bbcb",
+  "discovered": 11127,
+  "enabled": 11107,
+  "targeted_passed": 557,
+  "python_passed": 82,
+  "selectors": {
+    "windows": {
+      "patterns": 132,
+      "matched_distinct": 132,
+      "unmatched": []
+    },
+    "macos": {
+      "patterns": 16,
+      "matched_distinct": 16,
+      "unmatched": []
+    },
+    "asan": {
+      "patterns": 5,
+      "matched_distinct": 11,
+      "unmatched": []
+    }
+  }
+}

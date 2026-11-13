@@ -1,0 +1,13 @@
+{
+  "head": "457a9c5637bb453f22f4e1e81c4436adbf2f4a1a",
+  "restored_head": "457a9c5637bb453f22f4e1e81c4436adbf2f4a1a",
+  "bundle_bytes": 306643295,
+  "bundle_sha256": "724d9d35569175f765e0335d633a77f9e5228914a25a220e3e6c2cabb394c898",
+  "reachable_objects": 44531,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 25,
+  "validation": "Source checkpoint; 557 targeted C++ passed; complete unfiltered Linux regression running; native Windows/macOS pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}

@@ -1,0 +1,6 @@
+{
+  "exit_code": 0,
+  "profiler_enabled_after_before_query": true,
+  "seconds": 8.571019805996912,
+  "scope": "Linux cumulative allocation request sampling after query start; not live bytes, RSS attribution or native macOS validation"
+}

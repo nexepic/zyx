@@ -1,0 +1,45 @@
+{
+  "scope": "Isolated Linux glibc cumulative allocation requests after before-query marker; not live bytes or native RSS attribution",
+  "native_rss_root_cause_closed": false,
+  "gate_or_threshold_changes": false,
+  "overflow_buckets": 0,
+  "binaries": {
+    "before": {
+      "sha256": "b97ec8f0889b6f87f6e5f594b9a18193586cf3ef3370d45d0d3372ec0747911a",
+      "bytes": 903634496
+    },
+    "after": {
+      "sha256": "e5a77a1346f1bf23e6e6d2eeb293236c7a3c4ba03614951e16dfc1beeac7bbcb",
+      "bytes": 904104672
+    },
+    "profiler": {
+      "sha256": "03d60699619424ff09e2b9ffd1280bb8db3bd473dddc6d04f77ff120299fc1ea",
+      "bytes": 16992
+    }
+  },
+  "groups": {
+    "row_array": {
+      "before": {
+        "requests": 41,
+        "requested_bytes": 7863744
+      },
+      "after": {
+        "requests": 14,
+        "requested_bytes": 3145536
+      },
+      "requested_bytes_saved": 4718208
+    },
+    "writer_block": {
+      "before": {
+        "requests": 5,
+        "requested_bytes": 655040
+      },
+      "after": {
+        "requests": 1,
+        "requested_bytes": 131008
+      },
+      "requested_bytes_saved": 524032
+    }
+  },
+  "binary_provenance": "Before copied prior ExternalQuerySort changes: RSS source matches tested f1ce8 but whole binary includes earlier Build242 candidates; after copied frozen457a9c563 tree. Native Linux test passes in both. Shared profiler source rebuilt from identical logic; files retained, binaries outside git."
+}

@@ -1,0 +1,1060 @@
+{
+  "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "HybridPropertyMatureShapeCostsTest",
+        "name": "EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp",
+        "line": "127",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyShapeCosts.cpp",
+            "line": "172"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp:172",
+      "              Expected: run(conversion) doesn't throw an exception.",
+      "                Actual: it throws class graph::query::execution::MaterializedByteLimitExceeded with description \"shared materialization exceeded its byte bound\".",
+      "              Google Test trace:",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyShapeCosts.cpp(148): 3",
+      "              [STDOUT]",
+      "              NATIVE_MATURE_WORKSPACE group=1 cumulative_peak=712232 limit=1048576 used_after=0 storage_read_bytes=2727936 storage_write_bytes=812928",
+      "              NATIVE_MATURE_WORKSPACE group=2 cumulative_peak=1043768 limit=1048576 used_after=0 storage_read_bytes=73356800 storage_write_bytes=379712",
+      "              NATIVE_MATURE_WORKSPACE group=3 cumulative_peak=1048572 limit=1048576 used_after=0 storage_read_bytes=71016448 storage_write_bytes=0",
+      "",
+      "[100% |   1/  1] FAIL HybridPropertyMatureShapeCostsTest (1 failures, 5153 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 5153 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"HybridPropertyMatureShapeCostsTest\", \"name\": \"EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\storage\\\\relocatable\\\\property\\\\test_HybridPropertyShapeCosts.cpp\", \"line\": \"127\", \"identity_truncated\": false, \"assertion_locations\": [{\"file\": \"test_HybridPropertyShapeCosts.cpp\", \"line\": \"172\"}], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact\", \"last_completed\": \"HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 5.329000000000178, \"failed_names\": [\"HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-3257bf1e1a62b30e exit=1 output_bytes=3928 truncated=False",
+      "CI_BUDGET_CASE END HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact exit=1"
+    ]
+  },
+  "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "HybridPropertyPoolTailReuseTest",
+        "name": "ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyPoolTailReuse.cpp",
+        "line": "8",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_HybridPropertyPoolTailReuse.cpp",
+            "line": "40"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X ConversionFillsPartialNativePoolBeforeSpanningAnotherPool FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\property\\test_HybridPropertyPoolTailReuse.cpp:40",
+      "              Expected: run(conversion) doesn't throw an exception.",
+      "                Actual: it throws class graph::query::execution::MaterializedByteLimitExceeded with description \"shared materialization exceeded its byte bound\".",
+      "",
+      "[100% |   1/  1] FAIL HybridPropertyPoolTailReuseTest (1 failures, 4958 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 4958 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"HybridPropertyPoolTailReuseTest\", \"name\": \"ConversionFillsPartialNativePoolBeforeSpanningAnotherPool\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\storage\\\\relocatable\\\\property\\\\test_HybridPropertyPoolTailReuse.cpp\", \"line\": \"8\", \"identity_truncated\": false, \"assertion_locations\": [{\"file\": \"test_HybridPropertyPoolTailReuse.cpp\", \"line\": \"40\"}], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool\", \"last_completed\": \"HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool\", \"last_started_observed_seconds\": 0.20299999999997453, \"last_completed_observed_seconds\": 5.125, \"failed_names\": [\"HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-e7a9bd7b679f27ab exit=1 output_bytes=3288 truncated=False",
+      "CI_BUDGET_CASE END HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool exit=1"
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1298",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X FilterBetweenSortsTransfersSelectedRowReservations FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 2 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 2 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanDirectEdgeRuntimeTest\", \"name\": \"FilterBetweenSortsTransfersSelectedRowReservations\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanDirectEdgeRuntime.cpp\", \"line\": \"1298\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations\", \"last_completed\": \"LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.17200000000002547, \"failed_names\": [\"LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-67ac5c116abee59e exit=1 output_bytes=4451 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations exit=1"
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+        "line": "671",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X NestedGraphScopesReadOnlyTheirSelectedEntityProperties FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 35 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 35 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanDirectEdgeRuntimeTest\", \"name\": \"NestedGraphScopesReadOnlyTheirSelectedEntityProperties\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp\", \"line\": \"671\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties\", \"last_completed\": \"LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.20299999999997453, \"failed_names\": [\"LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-f82d89c4a184df8e exit=1 output_bytes=2893 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties exit=1"
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1228",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X NestedSortPrefetchesOuterPropertyAndTransfersRows FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 3 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 3 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanDirectEdgeRuntimeTest\", \"name\": \"NestedSortPrefetchesOuterPropertyAndTransfersRows\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanDirectEdgeRuntime.cpp\", \"line\": \"1228\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows\", \"last_completed\": \"LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.18800000000010186, \"failed_names\": [\"LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-2c95b9d65e632eff exit=1 output_bytes=3604 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows exit=1"
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "62",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "80"
+          },
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "81"
+          },
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "83"
+          },
+          {
+            "file": "test_LogicalPlanDirectEdgeRuntime.cpp",
+            "line": "80"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": true
+        },
+        "failures": 9
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:80",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:81",
+      "              Expected equality of these values:",
+      "                ids",
+      "                  Which is: {}",
+      "                stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})",
+      "                  Which is: { 3, 1, 2 }",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:83",
+      "              Expected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:80",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:81",
+      "              Expected equality of these values:",
+      "                ids",
+      "                  Which is: {}",
+      "                stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})",
+      "                  Which is: { 3 }",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:80",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) { ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at(\"id\")).getVariant())); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:81",
+      "              Expected equality of these values:",
+      "                ids",
+      "                  Which is: {}",
+      "                stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2})",
+      "                  Which is: { 3, 1, 2 }",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp:83",
+      "              Expected: (graph.node_property_column_batch_reads) > (1U), actual: 1 vs 1",
+      "              <unknown>:-1",
+      "              C++ exception with description \"logical-plan Node Property batch exceeded its byte bound\" thrown in the test body.",
+      ""
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1332",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X ProjectBetweenSortsTransfersProjectedRowReservations FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 2 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 2 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanDirectEdgeRuntimeTest\", \"name\": \"ProjectBetweenSortsTransfersProjectedRowReservations\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanDirectEdgeRuntime.cpp\", \"line\": \"1332\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations\", \"last_completed\": \"LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.17200000000002547, \"failed_names\": [\"LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-bd8d418799ca60e6 exit=1 output_bytes=3610 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations exit=1"
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1451",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 2 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 2 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanDirectEdgeRuntimeTest\", \"name\": \"SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanDirectEdgeRuntime.cpp\", \"line\": \"1451\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge\", \"last_completed\": \"LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.17200000000002547, \"failed_names\": [\"LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-4c179838a9d8aec9 exit=1 output_bytes=3524 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge exit=1"
+    ]
+  },
+  "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanDirectEdgeRuntimeTest",
+        "name": "SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+        "line": "1391",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X SortPreservesProjectedFilteredRowsWithoutOuterPrefetch FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanDirectEdgeRuntimeTest (1 failures, 2 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 2 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanDirectEdgeRuntimeTest\", \"name\": \"SortPreservesProjectedFilteredRowsWithoutOuterPrefetch\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanDirectEdgeRuntime.cpp\", \"line\": \"1391\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch\", \"last_completed\": \"LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.17200000000002547, \"failed_names\": [\"LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-843bd9d619cdbee3 exit=1 output_bytes=3982 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch exit=1"
+    ]
+  },
+  "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "834",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+            "line": "847"
+          },
+          {
+            "file": "test_LogicalPlanLoadCsvRuntime.cpp",
+            "line": "848"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [
+            {
+              "label": "Which is",
+              "value": "0"
+            },
+            {
+              "label": "Which is",
+              "value": "10"
+            }
+          ],
+          "truncated": false
+        },
+        "failures": 2
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X AggregateAndCsvRetainedHeadersShareTheExecutionBudget FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp:847",
+      "              Expected: static_cast<void>(runtime.execute(*independent.root, constrained, [&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Aggregate group vector growth exceeded its materialized byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp:848",
+      "              Expected equality of these values:",
+      "                delivered",
+      "                  Which is: 0",
+      "                10U",
+      "                  Which is: 10",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanLoadCsvRuntimeTest (1 failures, 41 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 41 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanLoadCsvRuntimeTest\", \"name\": \"AggregateAndCsvRetainedHeadersShareTheExecutionBudget\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanLoadCsvRuntime.cpp\", \"line\": \"834\", \"identity_truncated\": false, \"assertion_locations\": [{\"file\": \"test_LogicalPlanLoadCsvRuntime.cpp\", \"line\": \"847\"}, {\"file\": \"test_LogicalPlanLoadCsvRuntime.cpp\", \"line\": \"848\"}], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [{\"label\": \"Which is\", \"value\": \"0\"}, {\"label\": \"Which is\", \"value\": \"10\"}], \"truncated\": false}, \"failures\": 2}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget\", \"last_completed\": \"LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.20299999999997453, \"failed_names\": [\"LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-b99e0e4714833d43 exit=1 output_bytes=4059 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget exit=1"
+    ]
+  },
+  "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "770",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X NestedSortTransfersRowsWithoutDuplicatingSharedCharges FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanLoadCsvRuntimeTest (1 failures, 27 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 27 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanLoadCsvRuntimeTest\", \"name\": \"NestedSortTransfersRowsWithoutDuplicatingSharedCharges\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanLoadCsvRuntime.cpp\", \"line\": \"770\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges\", \"last_completed\": \"LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.20299999999997453, \"failed_names\": [\"LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-6e9ef192b323f4f3 exit=1 output_bytes=3245 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges exit=1"
+    ]
+  },
+  "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanLoadCsvRuntimeTest",
+        "name": "PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanLoadCsvRuntime.cpp",
+        "line": "497",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X PreflightsListAndMapSlotsBeforeConstructingWideCsvRows FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanLoadCsvRuntimeTest (1 failures, 244 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 244 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanLoadCsvRuntimeTest\", \"name\": \"PreflightsListAndMapSlotsBeforeConstructingWideCsvRows\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanLoadCsvRuntime.cpp\", \"line\": \"497\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows\", \"last_completed\": \"LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows\", \"last_started_observed_seconds\": 0.1570000000001528, \"last_completed_observed_seconds\": 0.4070000000001528, \"failed_names\": [\"LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-3ceb9c9aa6a8d609 exit=1 output_bytes=19730 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows exit=1"
+    ]
+  },
+  "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanReadRuntimeTest",
+        "name": "PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnwindRuntime.cpp",
+        "line": "1824",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X PaginationFlushesUnderBytePressureWithoutChangingTheWindow FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanReadRuntimeTest (1 failures, 24 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 24 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanReadRuntimeTest\", \"name\": \"PaginationFlushesUnderBytePressureWithoutChangingTheWindow\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanUnwindRuntime.cpp\", \"line\": \"1824\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow\", \"last_completed\": \"LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow\", \"last_started_observed_seconds\": 0.18800000000010186, \"last_completed_observed_seconds\": 0.20400000000017826, \"failed_names\": [\"LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-b2833f3872bb83ec exit=1 output_bytes=3652 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow exit=1"
+    ]
+  },
+  "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanUnionRuntimeTest",
+        "name": "SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanUnionRuntime.cpp",
+        "line": "364",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X SortTransfersLargeRowsToDirectLimitAndSkipBuffers FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"shared materialization exceeded its byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanUnionRuntimeTest (1 failures, 9 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 9 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanUnionRuntimeTest\", \"name\": \"SortTransfersLargeRowsToDirectLimitAndSkipBuffers\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanUnionRuntime.cpp\", \"line\": \"364\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers\", \"last_completed\": \"LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers\", \"last_started_observed_seconds\": 0.17099999999982174, \"last_completed_observed_seconds\": 0.17099999999982174, \"failed_names\": [\"LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-f37ce330ed64a1bd exit=1 output_bytes=3989 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers exit=1"
+    ]
+  },
+  "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalPlanVarLengthRuntimeTest",
+        "name": "ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp",
+        "line": "544",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_LogicalPlanVarLengthRuntime.cpp",
+            "line": "561"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X ChargesInitialCountFrontierCapacityToMaterializedByteBound FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanVarLengthRuntime.cpp:561",
+      "              Expected equality of these values:",
+      "                error.what()",
+      "                  Which is: \"shared materialization exceeded its byte bound\"",
+      "                \"logical-plan variable-length count exceeded its materialized byte bound\"",
+      "",
+      "[100% |   1/  1] FAIL LogicalPlanVarLengthRuntimeTest (1 failures, 149 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 149 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalPlanVarLengthRuntimeTest\", \"name\": \"ChargesInitialCountFrontierCapacityToMaterializedByteBound\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\execution\\\\test_LogicalPlanVarLengthRuntime.cpp\", \"line\": \"544\", \"identity_truncated\": false, \"assertion_locations\": [{\"file\": \"test_LogicalPlanVarLengthRuntime.cpp\", \"line\": \"561\"}], \"observations\": {\"kinds\": [\"byte_bound\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound\", \"last_completed\": \"LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound\", \"last_started_observed_seconds\": 0.31300000000010186, \"last_completed_observed_seconds\": 0.31300000000010186, \"failed_names\": [\"LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-810712600e293f9c exit=1 output_bytes=3574 truncated=False",
+      "CI_BUDGET_CASE END LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound exit=1"
+    ]
+  },
+  "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "429",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 2 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalVectorPropertyBatchTest\", \"name\": \"BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\api\\\\test_LogicalVectorProcedureBatch_Materialization.cpp\", \"line\": \"429\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing\", \"last_completed\": \"LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.17200000000002547, \"failed_names\": [\"LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-7c5db6e00683821e exit=1 output_bytes=3862 truncated=False",
+      "CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing exit=1"
+    ]
+  },
+  "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "1562",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"logical procedure source and retained result exceeded their byte bound\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 2 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 2 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalVectorPropertyBatchTest\", \"name\": \"CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\api\\\\test_LogicalVectorProcedureBatch_Materialization.cpp\", \"line\": \"1562\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication\", \"last_completed\": \"LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.17200000000002547, \"failed_names\": [\"LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-adc6576f6ac7613a exit=1 output_bytes=4854 truncated=False",
+      "CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication exit=1"
+    ]
+  },
+  "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "LogicalVectorPropertyBatchTest",
+        "name": "CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+        "line": "1823",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "resource_admission"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"hierarchical resource admission denied\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL LogicalVectorPropertyBatchTest (1 failures, 100 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 100 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"LogicalVectorPropertyBatchTest\", \"name\": \"CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\query\\\\api\\\\test_LogicalVectorProcedureBatch_Materialization.cpp\", \"line\": \"1823\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"resource_admission\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota\", \"last_completed\": \"LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.2660000000000764, \"failed_names\": [\"LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-3db263ff5546dce7 exit=1 output_bytes=11545 truncated=False",
+      "CI_BUDGET_CASE END LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota exit=1"
+    ]
+  },
+  "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableQueryResources.cpp",
+        "line": "209",
+        "identity_truncated": false,
+        "assertion_locations": [],
+        "observations": {
+          "kinds": [
+            "resource_admission"
+          ],
+          "scalars": [],
+          "truncated": false
+        },
+        "failures": 1
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose FAILED",
+      "              <unknown>:-1",
+      "              C++ exception with description \"hierarchical resource admission denied\" thrown in the test body.",
+      "",
+      "[100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 292 ms)",
+      "",
+      "================================================================================",
+      "  TESTS FAILED!",
+      "",
+      "  Passed: 0",
+      "  Failed: 1",
+      "  Time  : 292 ms",
+      "================================================================================",
+      "",
+      "CI_FAILED_CASE {\"xml\": \"tests.xml\", \"class\": \"RelocatableStorageBackendTest\", \"name\": \"CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose\", \"file\": \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\storage\\\\relocatable\\\\backend\\\\test_RelocatableQueryResources.cpp\", \"line\": \"209\", \"identity_truncated\": false, \"assertion_locations\": [], \"observations\": {\"kinds\": [\"resource_admission\"], \"scalars\": [], \"truncated\": false}, \"failures\": 1}",
+      "CI_FAILED_CASE_SUMMARY total=1 emitted=1 truncated=False",
+      "CI_CASE_JOURNAL {\"started\": 1, \"completed\": 1, \"failed\": 1, \"last_started\": \"RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose\", \"last_completed\": \"RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose\", \"last_started_observed_seconds\": 0.17200000000002547, \"last_completed_observed_seconds\": 0.46900000000005093, \"failed_names\": [\"RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose\"], \"failed_names_truncated\": false, \"oversized_lines\": 0, \"counts_are_observed_not_discovery\": true}",
+      "CI_EVIDENCE directory=budget-a948301df2fdaa1c exit=1 output_bytes=11583 truncated=False",
+      "CI_BUDGET_CASE END RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose exit=1"
+    ]
+  },
+  "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+        "line": "1592",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1622"
+          },
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1627"
+          },
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1622"
+          },
+          {
+            "file": "test_RelocatableLogicalGraphReadSnapshot.cpp",
+            "line": "1627"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [],
+          "truncated": true
+        },
+        "failures": 12
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1622",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { results.push_back(std::get<PropertyValue>(row.values.at(\"id\"))); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1627",
+      "              Expected equality of these values:",
+      "                results",
+      "                  Which is: {}",
+      "                expected",
+      "                  Which is: { 88-byte object <01-00 00-00 00-00 00-00 CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD 02-CD CD-CD CD-CD CD-CD>, 88-byte object <03-00 00-00 00-00 00-00 CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD 02-CD CD-CD CD-CD CD-CD> }",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1622",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { results.push_back(std::get<PropertyValue>(row.values.at(\"id\"))); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1627",
+      "              Expected equality of these values:",
+      "                results",
+      "                  Which is: {}",
+      "                expected",
+      "                  Which is: { 88-byte object <01-00 00-00 00-00 00-00 CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD 02-CD CD-CD CD-CD CD-CD> }",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1622",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { results.push_back(std::get<PropertyValue>(row.values.at(\"id\"))); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1627",
+      "              Expected equality of these values:",
+      "                results",
+      "                  Which is: {}",
+      "                expected",
+      "                  Which is: { 88-byte object <01-00 00-00 00-00 00-00 CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD 02-CD CD-CD CD-CD CD-CD>, 88-byte object <03-00 00-00 00-00 00-00 CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD CD-CD 02-CD CD-CD CD-CD CD-CD> }",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1622",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { results.push_back(std::get<PropertyValue>(row.values.at(\"id\"))); return !stop; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Node Property batch exceeded its byte bound\".",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp:1627",
+      "              Expected equality of these values:",
+      "                results",
+      "                  Which is: {}"
+    ]
+  },
+  "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded": {
+    "exit": 1,
+    "assertions": [
+      {
+        "xml": "tests.xml",
+        "class": "RelocatableStorageBackendTest",
+        "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+        "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+        "line": "28",
+        "identity_truncated": false,
+        "assertion_locations": [
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "88"
+          },
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "91"
+          },
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "92"
+          },
+          {
+            "file": "test_RelocatableEdgeCellAdmission.cpp",
+            "line": "97"
+          }
+        ],
+        "observations": {
+          "kinds": [
+            "byte_bound"
+          ],
+          "scalars": [
+            {
+              "label": "Which is",
+              "value": "0"
+            },
+            {
+              "label": "Which is",
+              "value": "6"
+            }
+          ],
+          "truncated": true
+        },
+        "failures": 5
+      }
+    ],
+    "failure_excerpt": [
+      "[  0% |   0/  1] X NativeEdgeCellsKeepTightAndRetryReadsBounded FAILED",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp:88",
+      "              Expected: static_cast<void>(runtime.execute(*plan.root, bounds, [&](const execution::LogicalPlanReadRow &row) { ++delivered; const auto &value = std::get<std::string>(std::get<PropertyValue>(row.values.at(\"payload\")).getVariant()); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare(\"value.size()\", \"3000U\", value.size(), 3000U))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\storage\\\\relocatable\\\\backend\\\\test_RelocatableEdgeCellAdmission.cpp\", 82, gtest_ar.failure_message()) = ::testing::Message(); if (!value.empty() && value.front() >= 'a' && value.front() <= 'f') { ++seen[static_cast<size_t>(value.front() - 'a')]; switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar_ = ::testing::AssertionResult(std::ranges::all_of(value, [&](char character) { return character == value.front(); }))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\storage\\\\relocatable\\\\backend\\\\test_RelocatableEdgeCellAdmission.cpp\", 85, ::testing::internal::GetBoolAssertionFailureMessage( gtest_ar_, \"std::ranges::all_of(value, [&](char character) { return character == value.front(); })\", \"false\", \"true\") .c_str()) = ::testing::Message(); } else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, \"D:\\\\a\\\\zyx\\\\zyx\\\\tests\\\\src\\\\storage\\\\relocatable\\\\backend\\\\test_RelocatableEdgeCellAdmission.cpp\", 86, \"Failed\") = ::testing::Message() << \"unexpected payload\"; return true; })) doesn't throw an exception.",
+      "                Actual: it throws class std::runtime_error with description \"logical-plan Property batch exceeded its byte bound\".",
+      "              Google Test trace:",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp(68): 4096",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp:91",
+      "              Expected equality of these values:",
+      "                delivered",
+      "                  Which is: 0",
+      "                6U",
+      "                  Which is: 6",
+      "              Google Test trace:",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp(68): 4096",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp:92",
+      "              Expected equality of these values:",
+      "                seen",
+      "                  Which is: { 0, 0, 0, 0, 0, 0 }",
+      "                (std::array<size_t, 6U>{1U, 1U, 1U, 1U, 1U, 1U})",
+      "                  Which is: { 1, 1, 1, 1, 1, 1 }",
+      "              Google Test trace:",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp(68): 4096",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp:97",
+      "              Expected: (trace.at(\"logical_plan.property_source.admitted_bytes\").totalValue) >= (18000), actual: 196 vs 18000",
+      "              Google Test trace:",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp(68): 4096",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp:98",
+      "              Value of: trace.contains(\"native_graph.read.selected_values_decoded\")",
+      "                Actual: false",
+      "              Expected: true",
+      "              Google Test trace:",
+      "              D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellTest process PID 6116 is still running (30s elapsed; timeout 4000s).",
+      "Admission.cpp(68): 4096",
+      "",
+      "[100% |   1/  1] FAIL RelocatableStorageBackendTest (1 failures, 239 ms)"
+    ]
+  }
+}
