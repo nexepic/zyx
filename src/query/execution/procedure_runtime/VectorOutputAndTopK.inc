@@ -178,6 +178,8 @@
 								 const size_t retainedSourceBytes = 0U,
 								 const bool accountOutputTransition = false,
                 std::optional<size_t> finalRowCount = std::nullopt, bool firstOperatorPrefetched = false) {
+            const char *allocationPhase = "batch_state";
+            try {
 			LogicalPlanReadRuntimeBounds batchBounds = readBounds;
 			const size_t retainedBytes = checkedProcedureSizeAdd(
 					retainedSourceBytes, procedureQueryResultBytes(result));
@@ -234,6 +236,7 @@
 						}
 						size_t retainedOutputBytes = 0U;
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+							allocationPhase = "project_row";
 							BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
                             // The old cache is destroyed by row replacement.
@@ -269,8 +272,9 @@
 					}
 					case logical::LogicalOpType::LOP_FILTER: {
 						const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*operation);
-                        if (!firstOperatorPrefetched || operationIndex != 0U)
+                        if (!firstOperatorPrefetched || operationIndex != 0U) {
 						prefetchProcedureProperties(rows, {filter.getPredicate().get()}, snapshot, batchBounds, context);
+                        }
 						size_t outputCount = 0U;
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 							context.checkGuard();
@@ -417,6 +421,7 @@
 						throw std::logic_error("logical Vector procedure runtime received an unsupported operation");
 				}
 			}
+            allocationPhase = "hydrate_output";
 			materializeProcedureNodeOutputs(rows, result.getColumns(), snapshot, batchBounds, context);
             for (auto &row : rows) row.reconcilePayloadCredit();
 			validateBufferedProcedureBytes(rows, batchBounds.maximum_materialized_bytes);
@@ -424,6 +429,7 @@
                 reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes, finalRowCount);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+                allocationPhase = "publish_output";
 				context.checkGuard();
                 if (accountOutputTransition)
                     compactConsumedProcedureRows(result, rows, rowIndex,
@@ -454,6 +460,14 @@
 				}
 			}
 			return continueInput;
+            } catch (const detail::ResourceAdmissionDenied &) {
+                try {
+                    reportProcedurePublicationPressure(result, rows, allocationPhase, retainedSourceBytes,
+                        publicationSourceBytes(rows, 0U), procedureQueryResultBytes(result), 0U,
+                        readBounds.maximum_materialized_bytes);
+                } catch (...) { /* Diagnostics must preserve the original quota error. */ }
+                throw;
+            }
 		}
 
 		[[nodiscard]] QueryResult

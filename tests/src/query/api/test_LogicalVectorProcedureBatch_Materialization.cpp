@@ -164,11 +164,19 @@ namespace graph::query {
 			return logical::LogicalCallProcedure("gds.shortestPath.dijkstra.stream",
 					{PropertyValue("bounded_path"), PropertyValue(3), PropertyValue(2)});
 		};
-		const auto executeGds = [&](const size_t maximumBytes) {
+		const auto executeGds = [&](const size_t maximumBytes, bool wideOutput = false) {
 			auto bounds = options.bounds;
 			bounds.maximum_materialized_bytes = maximumBytes;
 			bounds.maximum_adjacency_page_records = 1U;
-			return runtime.execute(call(), bounds, options.maximum_vector_mapping_entries,
+            std::unique_ptr<logical::LogicalOperator> plan = std::make_unique<logical::LogicalCallProcedure>(call());
+            if (wideOutput) {
+                // Three independently owned output keys alone exceed 16 KiB,
+                // even on libc++ after unused entity padding was removed.
+                auto id = std::make_shared<expressions::VariableReferenceExpression>("nodeId");
+                plan = std::make_unique<logical::LogicalProject>(std::move(plan),
+                    std::vector<logical::LogicalProjectItem>{{id, std::string(16U * 1024U / 3U + 1U, 'n')}});
+            }
+			return runtime.execute(*plan, bounds, options.maximum_vector_mapping_entries,
 					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
@@ -177,7 +185,7 @@ namespace graph::query {
 
 		EXPECT_THROW(static_cast<void>(executeGds(80U)), std::runtime_error);
 		try {
-			static_cast<void>(executeGds(16U * 1024U));
+			static_cast<void>(executeGds(16U * 1024U, true));
 			FAIL() << "the buffered Node rows and retained Dijkstra QueryResult exceeded their shared budget";
 		} catch (const std::runtime_error &error) {
 			expectProcedureQuotaFailure(error);
@@ -1511,7 +1519,13 @@ namespace graph::query {
 			2U * sizeof(execution::LogicalPlanReadValue) + sizeof(storage::EntityRef) + sizeof(double);
 		options.bounds.maximum_materialized_bytes = 3U * rowBase + 3283U +
 			backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
+        // Keep the denial independent of platform container geometry. Every
+        // individual value fits, but the three escaped strings cannot fit.
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(options.bounds.maximum_materialized_bytes / 3U + 1U, 'x'));
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(1000U, 'x'));
 		options.bounds.maximum_materialized_bytes = 3U * rowBase + 8000U +
 			backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
 		const auto beforeSuccess = backend->state->property_column_ids.size();
@@ -1779,6 +1793,53 @@ namespace graph::query {
         }
         EXPECT_EQ(funded->used(), 0U);
     }
+TEST_F(LogicalVectorPropertyBatchTest, OwnedProjectionHandoffKeepsRoomUnderVaryingParentHeadroom) {
+    using namespace execution::detail;
+    backend->state->nodes.clear(); backend->state->search_result.hits.clear();
+    for (uint64_t id = 1U; id <= 40U; ++id) {
+        storage::LogicalGraphNode node;
+        node.node_id = id;
+        for (size_t field = 0U; field < 8U; ++field)
+            node.properties.push_back({"rank" + std::to_string(field) + std::string(128U, 'k') + std::to_string(id),
+                PropertyValue(static_cast<int64_t>(id))});
+        backend->state->nodes.emplace(id, std::move(node));
+        backend->state->search_result.hits.push_back({41U - id, static_cast<float>(id)});
+    }
+    std::vector<std::unique_ptr<expressions::Expression>> arguments;
+    arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("node"));
+    auto keys = std::make_shared<expressions::FunctionCallExpression>("keys", std::move(arguments));
+    logical::LogicalProject project(search(40), {{keys, "keys"}});
+    options.bounds.maximum_materialized_bytes = 256U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8U * 1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
+    const auto run = [&](size_t cap) {
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, cap);
+        QueryContext context; context.resource_account = account;
+        size_t retained = 0U;
+        {
+            const auto result = execute(project, context);
+            EXPECT_EQ(result.rowCount(), 40U);
+            for (size_t index = 0U; index < result.rowCount(); ++index) {
+                std::vector<PropertyValue> expected;
+                for (size_t field = 0U; field < 8U; ++field)
+                    expected.emplace_back("rank" + std::to_string(field) + std::string(128U, 'k') + std::to_string(40U - index));
+                EXPECT_EQ(result.getRows()[index].at("keys").asPrimitive(), PropertyValue(std::move(expected)));
+            }
+            retained = account->used();
+            EXPECT_GT(retained, 0U); EXPECT_LE(retained, cap);
+        }
+        EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
+        return retained;
+    };
+    const auto retained = run(256U * 1024U);
+    // Enough for the measured complete result plus several single-row
+    // workspaces. Vary the remainder so a batch cannot rely on lucky slack.
+    for (size_t extra = 16384U; extra < 24576U; extra += 257U) {
+        SCOPED_TRACE(extra);
+        EXPECT_NO_THROW(static_cast<void>(run(retained + extra)));
+    }
+}
+
 } // namespace graph::query
 
 namespace graph::query {

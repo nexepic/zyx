@@ -1118,6 +1118,17 @@ namespace graph::query::execution {
                                 handoff = checkedProcedureSizeAdd(handoff,
                                     utils::detail::standardFreshStringHeapUpper(item.alias.size()));
                             }
+                            // Expressions can construct an independent value beside
+                            // the source before the binding node is inserted (keys(),
+                            // for example, owns its list and string storage). Leave
+                            // room for one complete independent source payload as
+                            // well as the projected frame, instead of counting only
+                            // headers. This is a batching preference, not a refund;
+                            // every real allocation still admits independently.
+                            handoff = checkedProcedureSizeAdd(handoff,
+                                detail::procedurePayloadHeapUpper<true>(prepared.front().row));
+                            handoff = checkedProcedureSizeAdd(handoff,
+                                detail::procedurePayloadHeapUpper<true>(prepared.front().node_properties));
                             const auto owner = utils::sharedAllocationOwner();
                             const auto *budget = dynamic_cast<const MaterializedByteBudget *>(owner.get());
                             if (budget && handoff > budget->availableWithParent())

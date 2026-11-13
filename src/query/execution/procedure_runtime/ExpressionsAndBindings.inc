@@ -765,7 +765,7 @@
 				// entries in place. Output aliases never enter the source scope.
 				const size_t retainedBytes = retainedProjectionBytes();
 				if (retainedBytes >= readBounds.maximum_materialized_bytes) {
-					throw std::runtime_error("logical procedure Project exceeded its shared materialized byte bound before expression");
+					throw detail::ProcedureByteBoundExceeded("logical procedure Project exceeded its shared materialized byte bound before expression");
 				}
 				LogicalPlanReadRuntimeBounds expressionBounds = readBounds;
 				expressionBounds.maximum_materialized_bytes -= retainedBytes;
@@ -775,7 +775,7 @@
 					throw std::logic_error("logical Vector procedure projection has duplicate output aliases");
 				}
 				if (retainedProjectionBytes() > readBounds.maximum_materialized_bytes) {
-					throw std::runtime_error("logical procedure Project exceeded its shared materialized byte bound after expression");
+					throw detail::ProcedureByteBoundExceeded("logical procedure Project exceeded its shared materialized byte bound after expression");
 				}
 			}
 			// Scalar-only output cannot use the identity cache in a later layer.
