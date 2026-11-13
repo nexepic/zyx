@@ -12,6 +12,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,7 +34,20 @@ namespace graph::test {
 		if (argv0 == nullptr || *argv0 == '\0') {
 			throw std::invalid_argument("test executable path is empty");
 		}
-		testExecutable = std::filesystem::absolute(argv0);
+#ifdef _WIN32
+        // argv[0] can omit .exe (or use a PATH alias). CreateProcessW with an
+        // explicit application name must receive the actual executable image.
+        std::vector<wchar_t> image(32768U);
+        const DWORD length = GetModuleFileNameW(nullptr, image.data(), static_cast<DWORD>(image.size()));
+        if (length == 0U)
+            throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
+                                    "cannot resolve test executable image");
+        if (length >= image.size())
+            throw std::runtime_error("test executable image path exceeds its bounded buffer");
+        testExecutable = std::filesystem::path(std::wstring(image.data(), length));
+#else
+        testExecutable = std::filesystem::absolute(argv0);
+#endif
 	}
 
 	const std::filesystem::path &testExecutablePath() {

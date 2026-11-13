@@ -238,7 +238,8 @@ namespace graph::test {
 			startup.cb = sizeof(startup);
 			if (!CreateProcessW(executable.c_str(), mutableCommand.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr,
 								&startup, &process_)) {
-				throw std::runtime_error("crash-test parent cannot launch child process");
+				throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
+                                        "crash-test parent cannot launch child process");
 			}
 			running_ = true;
 		}
