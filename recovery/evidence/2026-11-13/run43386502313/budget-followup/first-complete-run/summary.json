@@ -11,5 +11,9 @@
   ],
   "skips": [],
   "duplicates": {},
-  "coverage": "Not generated: wrapper stopped after failure; earlier coverage is not valid for this run"
+  "coverage": "Not generated: wrapper stopped after failure; earlier coverage is not valid for this run",
+  "missing": [],
+  "extra": [],
+  "disabled": 20,
+  "enabled": 11111
 }

@@ -29,7 +29,7 @@ The prior report's statement that the Hybrid originating caller was unavailable 
 
 ## RSS and access limits / RSS 与访问限制
 
-All three optional RSS cases failed in243, although formal ASan711/711 passed. Cold growth67567616 and warmed growth67633152 exceed67108864. Both traced runs reach merge level1 and35471 cumulative decoded rows. ASan live bytes near10.99MB vs heap90.98MB and warmed quarantine growth from11.61MB to44.25MB indicate retained allocator overhead/churn contributes, but do not identify the dominant allocation call site or establish a complete root cause. Current telemetry gives merge phase, scratch read/write traffic, live/heap/free, Mach residency and bounded allocator statistics. It cannot guarantee next CI identifies every allocation owner. No quarantine, guard, timeout or budget was weakened.
+All three optional RSS cases failed in243, although formal ASan711/711 passed. Cold growth67567616 and warmed growth67633152 exceed67108864. Both traced runs reach merge level1 and35471 cumulative decoded rows. ASan live bytes near10.99MB vs heap90.98MB and warmed quarantine growth from11.61MB to44.25MB show allocator-state growth alongside RSS growth, but do not attribute resident growth to a particular allocation site or establish a complete root cause. Current telemetry gives merge phase, scratch read/write traffic, live/heap/free, Mach residency and bounded allocator statistics. It cannot guarantee next CI identifies every allocation owner. No quarantine, guard, timeout or budget was weakened.
 
 Supported connector download of Windows artifact14025644103 returned a file reference. The single subsequent byte-transfer attempt failed with `URLError: Tunnel connection failed: 403 Forbidden`. Zero bytes were verified; expected SHA256 `056437480730acf3d8dfe7668c9276976bf3bfc1b8eda29000852284d33b7275` remains unverified. No retry or alternate route bypassed this denial. Stage10 artifact14025898026 was not fetched. Existing complete decoded job logs remain available locally and in prior independent backups.
 
@@ -45,7 +45,7 @@ Two earlier local full runs were deliberately interrupted: the first to include 
 
 本轮已落实聚合必要容量回退、私有 BTree 页的双键缓冲完整验证，以及不受通用日志限额抑制的有界阶段诊断。既有预算、安全门禁和原生失败清单均保留。Windows19项及macOS RSS尚未闭环；下一轮CI不能保证全部通过或一次定位全部根因。
 
-Independent Library checkpoint33 retains the preceding production-fix source4bd61eb3a and was verified by fresh bare restore, identical HEAD/all reachable objects and fsck. Backup receipts are kept separately in Library; saved external bytes have not been reverse-downloaded after403. No push, CI dispatch/cancel, main change or Codecov account change occurred.
+Independent Library checkpoint34 retains fa2ab3ea0, including the production fixes, RSS audit and first complete regression failure and was verified by fresh bare restore, identical HEAD/all reachable objects and fsck. Backup receipts are kept separately in Library; saved external bytes have not been reverse-downloaded after403. No push, CI dispatch/cancel, main change or Codecov account change occurred.
 
 ## RSS phase audit / RSS 分阶段核查
 
@@ -70,6 +70,14 @@ allocator 的异常 RSS 数字不可信，已排除。guard 拒绝时的 current
 
 The first completed unfiltered run on4bd61eb3a executes11111 enabled cases exactly once, with11110 passed and one failure: RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures throws QueryTimeoutException at the existing45ms deadline. All four XML files and the failure console are retained under first-complete-run. Coverage was not generated after that failure and is not represented as final coverage.
 
-The unchanged case subsequently passes20 repeated executions in isolation. This supports timing sensitivity but does not establish its root cause or erase the original failure. A diagnostic-only wrapper now names the precise configuration procedure on timeout and rethrows the same exception; it also prevents an unrelated timeout from satisfying the broad read-only runtime_error assertion. The45ms configuration and production guard remain unchanged. The labelled targeted case passes; a complete unfiltered repeat is pending.
+The unchanged case subsequently passes20 repeated executions in isolation. This supports timing sensitivity but does not establish its root cause or erase the original failure. A diagnostic-only wrapper now names the precise configuration procedure on timeout and rethrows the same exception; it also prevents an unrelated timeout from satisfying the broad read-only runtime_error assertion. The45ms configuration and production guard remain unchanged. The labelled targeted case passes; the complete unfiltered repeat passes, as recorded below.
 
 首轮完整回归的1项45ms超时失败被保留，隔离重复20次通过不能替代完整回归，也不能证明根因已关闭。补充仅标记超时调用并原样抛出异常，没有提高或停用期限。
+
+## Final complete repeat / 最终完整重跑
+
+The unfiltered repeat on source9147d73ad executes11111 enabled cases exactly once, with0 failures, skips, missing, extra or duplicate cases. All six stress identities run once;20 disabled cases are not passes. The binary hash matches the capture at the start of this run, and src/include/tests/scripts match the frozen source commit. Coverage: regions_percent=93.75, functions_percent=98.1, lines_percent=95.76, branches_percent=86.86. Region/branch coverage remains below the95% target.
+
+The original45ms timeout remains a timing-sensitive unresolved observation, despite20 isolated passes and a passing full repeat. No timeout/budget threshold was increased. Windows19 failures, the two Windows launcher cases and native RSS diagnostics still require native verification; no claim is made that this Linux repeat closes them.
+
+最终重跑11111项全部通过且恰好执行一次；首轮45ms超时仍保留为未闭环风险，未被补跑结果抹去。全部原生平台结论仍按实际CI证据区分。
