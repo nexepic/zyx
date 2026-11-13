@@ -468,12 +468,12 @@
                 static std::atomic<unsigned> phaseReports{0U};
                 if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
                     const auto report = phaseReports.fetch_add(1U, std::memory_order_relaxed);
-                if (report < 16U) {
-                    std::fprintf(stderr, "CI_PROCEDURE_FAILURE_PHASE phase=%s source_rows=%zu result_rows=%zu\n",
+                    if (report < 16U) {
+                        std::fprintf(stderr, "CI_PROCEDURE_FAILURE_PHASE phase=%s source_rows=%zu result_rows=%zu\n",
                         allocationPhase, rows.size(), result.rowCount());
-                    std::fflush(stderr);
-                }
-                else if (report == 16U) {
+                        std::fflush(stderr);
+                    }
+                    else if (report == 16U) {
                         std::fputs("CI_PROCEDURE_FAILURE_PHASE_TRUNCATED process_limit=16\n", stderr);
                         std::fflush(stderr);
                     }
