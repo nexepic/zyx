@@ -1,0 +1,13 @@
+{
+  "head": "3125e1827e564835825432c05a974a8bde452262",
+  "restored_head": "3125e1827e564835825432c05a974a8bde452262",
+  "bundle_bytes": 306559315,
+  "bundle_sha256": "dc29e3aa439ca07406e783bc8f1b95fffcf0d842bc5331e3af051d94c1694bd5",
+  "reachable_objects": 44450,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 23,
+  "validation": "Build242 evidence checkpoint3125e1827: five full decoded logs; 21 overlapping Windows failures, seven former passes, new owned300 failure; Mac shard completeness and artifact proxy403 explicitly unresolved; further fixes pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}
