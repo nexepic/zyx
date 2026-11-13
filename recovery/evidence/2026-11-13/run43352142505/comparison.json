@@ -1,0 +1,54 @@
+{
+  "run": 43352142505,
+  "tested_sha": "f1ce8e8d8440b44bd462faffd93e506f08606427",
+  "windows_independent": 129,
+  "windows_independent_failed": [
+    "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+    "HybridPropertyPoolTailReuseTest.ConversionFillsPartialNativePoolBeforeSpanningAnotherPool",
+    "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+    "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+    "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+    "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+    "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+    "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+    "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+    "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+    "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+    "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+    "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota",
+    "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+    "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+    "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+  ],
+  "former_failures_now_passed": [
+    "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+    "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+    "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+    "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+    "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+    "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+    "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties"
+  ],
+  "new_failed": [
+    "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota"
+  ],
+  "windows_journal_started": 11094,
+  "windows_journal_completed": 11094,
+  "windows_journal_failed": 21,
+  "mac_known_failed": [
+    "LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget",
+    "LogicalVectorPropertyBatchTest.ScalarHeapProjectionSharesRetainedResultBudget"
+  ],
+  "mac_completeness": "Only failed shard0 5549 completed cases shown; successful shard1 XML/journal not obtained. Outer journal is not the complete test count.",
+  "asan_gate": "timeout124; requested3600, deadline effective2503; last running case not emitted (ZYX_CI_CASE_TRACE absent)",
+  "rss_diagnostics": "control,cold,warmed all exit1 rss_guard; not a green diagnostic pass",
+  "artifact_blocker": "GitHub connector obtained macOS artifact14009305258 reference; environment HTTPS proxy tunnel returned403, no workaround/retry.",
+  "ubuntu": "unit, stress,lifecycle,recovery,maintenance,calibration steps successful; endurance0/P0 disabled not executed; Codecov repository deactivated",
+  "tsan": "gate exit0",
+  "supervisor_self_tests": "all five jobs actual exit0"
+}
