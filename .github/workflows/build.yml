@@ -125,6 +125,22 @@ jobs:
               --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied'
         shell: bash
 
+      - name: Report actual step outcomes
+        if: always()
+        env:
+          CI_STEP_RESULTS: ${{ toJSON(steps) }}
+        shell: bash
+        run: |
+          python - <<'PYOUTCOME'
+          import json, os
+          steps = json.loads(os.environ['CI_STEP_RESULTS'])
+          print('CI_STEP_OUTCOMES ' + json.dumps(steps, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n| Step | Raw outcome | Conclusion |\n|---|---|---|\n')
+              for name, step in steps.items():
+                  out.write(f"| {name} | {step.get('outcome', 'unknown')} | {step.get('conclusion', 'unknown')} |\n")
+          PYOUTCOME
+
       - name: Collect diagnostic build metadata
         if: always()
         continue-on-error: true
@@ -206,7 +222,19 @@ jobs:
         run: python scripts/run_ci_evidence.py --name discovery --timeout 120 -- ./build-asan-ubsan/zyx_test_suite --gtest_list_tests
         shell: bash
 
+      - name: Run native storage ASan+UBSan gates
+        id: asan_gate
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-gate --timeout 3600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='ScopedScalarReadValueTest.*:ResultPropertyMapAdmissionTest.*:NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
+        shell: bash
+
       - name: Diagnose concurrent publication with ASan+UBSan
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
         continue-on-error: true
         run: |
           ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
@@ -219,8 +247,10 @@ jobs:
 
       # A separate cold process distinguishes observer overhead from the query.
       # It retains the same RSS limit and sanitizer settings; the traced run and
-      # mandatory complete sanitizer gate below remain unchanged.
+      # mandatory complete sanitizer gate retain their original checks.
       - name: Diagnose cold RSS without budget or RSS observers
+        id: rss_control
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
         continue-on-error: true
         run: |
           unset ZYX_CI_BUDGET_TRACE ZYX_CI_RSS_TRACE ZYX_CI_LAYOUT_TRACE
@@ -233,6 +263,8 @@ jobs:
         shell: bash
 
       - name: Diagnose RSS-guarded spill with default ASan+UBSan checks
+        id: rss_cold
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
         continue-on-error: true
         env:
           ZYX_CI_RSS_TRACE: '1'
@@ -247,6 +279,8 @@ jobs:
         shell: bash
 
       - name: Compare sanitizer allocator statistics with a warmed reporting baseline
+        id: rss_warmed
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
         continue-on-error: true
         env:
           ZYX_CI_RSS_TRACE: '1'
@@ -262,6 +296,8 @@ jobs:
       # Independent processes reset diagnostic caps for every known failed case.
       # These additional runs never replace the complete sanitizer gate.
       - name: Diagnose sanitizer admission cases
+        id: asan_cases
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
         continue-on-error: true
         env:
           ZYX_CI_RSS_TRACE: '1'
@@ -271,15 +307,21 @@ jobs:
         run: python scripts/run_ci_evidence.py --name asan-budget-cases --timeout 1500 -- python scripts/diagnose_ci_budget_cases.py --binary build-asan-ubsan/zyx_test_suite --platform asan
         shell: bash
 
-      - name: Run native storage ASan+UBSan gates
+      - name: Report actual step outcomes
+        if: always()
         env:
-          ZYX_CI_RSS_TRACE: '1'
-          ZYX_CI_BUDGET_TRACE: '1'
-        run: |
-          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
-            python scripts/run_ci_evidence.py --name asan-gate --timeout 3600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
-              --gtest_filter='ScopedScalarReadValueTest.*:ResultPropertyMapAdmissionTest.*:NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
+          CI_STEP_RESULTS: ${{ toJSON(steps) }}
         shell: bash
+        run: |
+          python - <<'PYOUTCOME'
+          import json, os
+          steps = json.loads(os.environ['CI_STEP_RESULTS'])
+          print('CI_STEP_OUTCOMES ' + json.dumps(steps, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n| Step | Raw outcome | Conclusion |\n|---|---|---|\n')
+              for name, step in steps.items():
+                  out.write(f"| {name} | {step.get('outcome', 'unknown')} | {step.get('conclusion', 'unknown')} |\n")
+          PYOUTCOME
 
       - name: Collect diagnostic build metadata
         if: always()
@@ -568,6 +610,8 @@ jobs:
       # Keep the storage-format cutover visible as an explicit cross-platform
       # gate instead of relying on its tests being buried in the full suite.
       - name: Run native format lifecycle gates
+        id: lifecycle
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-%p.profraw"
           set -o pipefail
@@ -577,6 +621,8 @@ jobs:
       # These deterministic lifecycle tests are repeated to catch state that
       # leaks across reopen, snapshot, compaction, and maintenance cycles.
       - name: Repeat Stage 10 recovery and maintenance gates
+        id: recovery_maintenance
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-recovery-%p.profraw"
           set -o pipefail
@@ -599,6 +645,8 @@ jobs:
       # refines its bounded candidate set, so it also requires exact Recall@1.
       # Its permissive resource limits are not a production baseline.
       - name: Run native storage calibration smoke pipeline
+        id: calibration
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           cmake --build buildDir --target zyx_vector_build_calibrate zyx_vector_calibrate zyx_large_value_calibrate zyx_bulk_edge_calibrate
           calibration_dir="$ZYX_STAGE10_EVIDENCE_DIR"
@@ -713,6 +761,22 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: true
 
+
+      - name: Report actual step outcomes
+        if: always()
+        env:
+          CI_STEP_RESULTS: ${{ toJSON(steps) }}
+        shell: bash
+        run: |
+          python - <<'PYOUTCOME'
+          import json, os
+          steps = json.loads(os.environ['CI_STEP_RESULTS'])
+          print('CI_STEP_OUTCOMES ' + json.dumps(steps, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n| Step | Raw outcome | Conclusion |\n|---|---|---|\n')
+              for name, step in steps.items():
+                  out.write(f"| {name} | {step.get('outcome', 'unknown')} | {step.get('conclusion', 'unknown')} |\n")
+          PYOUTCOME
 
       - name: Collect diagnostic build metadata
         if: always()
