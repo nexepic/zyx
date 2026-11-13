@@ -24,6 +24,7 @@
 
 #include "CypherParserImpl.hpp"
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
+#include "query/execution/RetainedResultBudgetTest.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
@@ -779,6 +780,23 @@ namespace graph::query::execution {
         constrained.maximum_materialized_bytes = 2304U;
 		EXPECT_LT(constrained.maximum_materialized_bytes,
 				8U * (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>()));
+        std::array<char,4U> streamed{};size_t delivered=0U;
+        EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root,constrained,[&](const LogicalPlanReadRow &row) {
+            const auto &text=std::get<std::string>(std::get<PropertyValue>(row.values.at("value")).getVariant());
+            EXPECT_EQ(text.size(),1U);EXPECT_LT(delivered,streamed.size());
+            if(delivered>=streamed.size() || text.empty())return false;
+            streamed[delivered++]=text.front();return true;
+        },context())));
+        EXPECT_EQ(delivered,4U);EXPECT_EQ(streamed,(std::array<char,4U>{'a','b','c','d'}));
+        const std::array<PropertyValue,4U> expected{PropertyValue("a"),PropertyValue("b"),PropertyValue("c"),PropertyValue("d")};
+        const auto completeBytes=test_support::scalarResultRequests(expected);
+        RecordProperty("complete_result_storage_requests",completeBytes);
+        if(completeBytes>constrained.maximum_materialized_bytes) {
+            auto owned=context();owned.resource_account=test_support::resultAccount(constrained.maximum_materialized_bytes);
+            EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root,constrained,owned)),std::runtime_error);
+            EXPECT_EQ(owned.resource_account->used(),0U);
+            return;
+        }
 		const auto result = runtime.executeToQueryResult(*plan.root, constrained, context());
 		ASSERT_EQ(result.rowCount(), 4U);
 		for (size_t index = 0U; index < result.rowCount(); ++index) {

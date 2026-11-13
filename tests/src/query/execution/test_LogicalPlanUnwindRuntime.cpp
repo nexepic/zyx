@@ -23,6 +23,7 @@
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "query/execution/LogicalPlanUnwindRuntimeTestFixture.hpp"
+#include "query/execution/RetainedResultBudgetTest.hpp"
 #include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
@@ -1838,6 +1839,22 @@ TEST(LogicalPlanReadRuntimeTest, PaginationFlushesUnderBytePressureWithoutChangi
     QueryPlan denied = parser.parseToLogical("UNWIND [1,2,3,4,5,6,7,8] AS value RETURN value SKIP 2 LIMIT 6");
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*denied.root, constrained)), std::runtime_error);
 	constrained.maximum_materialized_bytes = 1500U;
+    std::array<int64_t,2U> streamed{};size_t delivered=0U;
+    EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root,constrained,[&](const LogicalPlanReadRow &row) {
+        EXPECT_LT(delivered,streamed.size());if(delivered>=streamed.size())return false;
+        streamed[delivered++]=std::get<int64_t>(std::get<PropertyValue>(row.values.at("value")).getVariant());return true;
+    })));
+    EXPECT_EQ(delivered,2U);EXPECT_EQ(streamed,(std::array<int64_t,2U>{7,8}));
+    const std::array<PropertyValue,2U> expected{PropertyValue(7),PropertyValue(8)};
+    const auto completeBytes=test_support::scalarResultRequests(expected);
+    RecordProperty("complete_result_storage_requests",completeBytes);
+    if(completeBytes>constrained.maximum_materialized_bytes) {
+        graph::query::QueryContext owned;
+        owned.resource_account=test_support::resultAccount(constrained.maximum_materialized_bytes);
+        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root,constrained,owned)),std::runtime_error);
+        EXPECT_EQ(owned.resource_account->used(),0U);
+        return;
+    }
 	const auto result = runtime.executeToQueryResult(*plan.root, constrained);
 	ASSERT_EQ(result.rowCount(), 2U);
 	EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue(7));
