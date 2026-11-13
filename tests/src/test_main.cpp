@@ -111,7 +111,8 @@ public:
 
     void OnTestEnd(const ::testing::TestInfo& test_info) override {
         if (std::getenv("ZYX_CI_CASE_TRACE")) {
-            std::fprintf(stderr, "CI_CASE_END %s.%s failed=%d\n", test_info.test_suite_name(), test_info.name(), int(test_info.result()->Failed()));
+            std::fprintf(stderr, "CI_CASE_END %s.%s failed=%d skipped=%d\n", test_info.test_suite_name(), test_info.name(),
+                int(test_info.result()->Failed()), int(test_info.result()->Skipped()));
             std::fflush(stderr);
         }
         std::cout.rdbuf(old_stdout_buf_);

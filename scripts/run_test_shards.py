@@ -21,7 +21,7 @@ PROCESS_REAP_TIMEOUT_SECONDS = 5.0
 
 def shard_result(index, process, log_path):
     result = {"index": index, "pid": process.pid, "raw_exit_code": process.poll(),
-              "journal_available": False}
+              "journal_available": False, "status_details_available": False}
     try:
         # Successful shard logs are retained but not replayed. Publish their
         # observed counts too; missing journals must remain unknown, not zero.
@@ -35,6 +35,10 @@ def shard_result(index, process, log_path):
             counts = {key: journal[key] for key in ('started', 'completed', 'failed')}
             if not all(type(value) is int and value >= 0 for value in counts.values()):
                 break
+            details = {key: journal.get(key) for key in ('passed', 'skipped', 'unclassified_completed')}
+            if all(type(value) is int and value >= 0 for value in details.values()):
+                counts.update(details)
+                result['status_details_available'] = True
             result.update(journal_available=True, observed_counts=counts)
             for key in ('last_started', 'last_completed'):
                 if isinstance(journal.get(key), str):

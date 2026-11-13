@@ -82,6 +82,20 @@ def test_journal_handles_split_trace_lines_without_interpreting_payloads():
     assert not journal.snapshot()['failed_names']
 
 
+def test_journal_never_classifies_skips_or_legacy_unknown_as_passes():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('ci_evidence_status', WRAPPER)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    journal = module.CaseJournal()
+    for name, status in [('Pass', 'failed=0 skipped=0'), ('Skip', 'failed=0 skipped=1'),
+                         ('Fail', 'failed=1 skipped=0'), ('Legacy', 'failed=0')]:
+        journal.feed(f'CI_CASE_BEGIN Suite.{name}\nCI_CASE_END Suite.{name} {status}\n'.encode())
+    result = journal.snapshot()
+    assert result['started'] == result['completed'] == 4
+    assert result['passed'] == result['skipped'] == result['failed'] == result['unclassified_completed'] == 1
+    assert result['skipped_names'] == ['Suite.Skip'] and result['failed_names'] == ['Suite.Fail']
+
+
 def test_optional_journal_write_failure_preserves_test_exit_and_console_evidence(tmp_path):
     program = f'''import importlib.util,sys
 from pathlib import Path

@@ -25,6 +25,8 @@ NUMERIC_CASE_METRICS = frozenset((
     'retained_object_lower_bound_bytes', 'retained_result_bytes',
     'restart_key_allocations',
     'growth_success_bound', 'growth_result_capacity',
+    'complete_result_storage_requests',
+    'sort_run_array_large_requests_short', 'sort_run_array_large_requests_long',
 ))
 
 
@@ -34,19 +36,21 @@ class CaseJournal:
         self.pending = b''
         self.discard_line = False
         self.started = self.completed = self.failed = self.oversized_lines = 0
+        self.passed = self.skipped = self.unclassified_completed = 0
         self.last_started = self.last_completed = None
         self.epoch = time.monotonic()
         self.last_started_seconds = self.last_completed_seconds = None
         self.failed_names = []
+        self.skipped_names = []
 
     def feed(self, chunk):
         lines = (self.pending + chunk).split(b'\n')
         self.pending = lines.pop()
         for line in lines:
             if not self.discard_line and len(line) <= 4096:
-                match = re.search(rb'CI_CASE_(BEGIN|END) ([A-Za-z0-9_./-]{1,512})(?: failed=([0-9]+))?(?:\r|$)', line)
+                match = re.search(rb'CI_CASE_(BEGIN|END) ([A-Za-z0-9_./-]{1,512})(?: failed=([0-9]+))?(?: skipped=([0-9]+))?(?:\r|$)', line)
                 if match:
-                    kind, name, failed = match.groups()
+                    kind, name, failed, skipped = match.groups()
                     name = name.decode('ascii')
                     if kind == b'BEGIN':
                         self.started += 1; self.last_started = name
@@ -57,6 +61,13 @@ class CaseJournal:
                         if int(failed):
                             self.failed += 1
                             if len(self.failed_names) < 256: self.failed_names.append(name)
+                        elif skipped is None:
+                            self.unclassified_completed += 1
+                        elif int(skipped):
+                            self.skipped += 1
+                            if len(self.skipped_names) < 256: self.skipped_names.append(name)
+                        else:
+                            self.passed += 1
             elif not self.discard_line:
                 self.oversized_lines += 1
             self.discard_line = False
@@ -67,10 +78,12 @@ class CaseJournal:
 
     def snapshot(self):
         return dict(started=self.started, completed=self.completed, failed=self.failed,
+                    passed=self.passed, skipped=self.skipped, unclassified_completed=self.unclassified_completed,
                     last_started=self.last_started, last_completed=self.last_completed,
                     last_started_observed_seconds=self.last_started_seconds,
                     last_completed_observed_seconds=self.last_completed_seconds,
                     failed_names=self.failed_names, failed_names_truncated=self.failed > len(self.failed_names),
+                    skipped_names=self.skipped_names, skipped_names_truncated=self.skipped > len(self.skipped_names),
                     oversized_lines=self.oversized_lines, counts_are_observed_not_discovery=True)
 
 
