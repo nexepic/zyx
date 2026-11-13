@@ -81,12 +81,11 @@
 						size_t accounted_bytes = 0U;
 					};
 					MaterializedByteReservation aggregateStateBytes(&state.shared.materialized_budget);
-					MaterializedByteReservation groupStorageBytes(&state.shared.materialized_budget);
 					detail::BudgetMemoryResource aggregateIndexMemory(state.shared.materialized_budget);
 #if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
 					detail::BudgetMemoryResource borrowedIndexMemory(state.shared.materialized_budget);
 #endif
-					std::vector<AggregateGroup> groups;
+					utils::AdmissionPmrVector<AggregateGroup> groups(&aggregateIndexMemory);
 					utils::AdmissionPmrUnorderedMap<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
 #if ZYX_BUILD_BORROWED_GROUP_KEY_PATH
 					using BorrowedIndex = utils::AdmissionPmrUnorderedMultiMap<uint64_t, std::pair<const std::pmr::string *, size_t>>;
@@ -153,28 +152,40 @@
 						if (groups.size() == groups.capacity()) {
 							const size_t minimumCapacity = checkedSizeAdd(
 									groups.size(), 1U, "logical-plan Aggregate group capacity overflowed");
-							const size_t requestedCapacity =
+							size_t requestedCapacity =
 									groups.capacity() == 0U
 											? minimumCapacity
 											: std::max(minimumCapacity,
 													   checkedSizeMul(
 															   groups.capacity(), 2U,
 															   "logical-plan Aggregate group capacity overflowed"));
-							const size_t requestedStorageBytes =
+							size_t requestedStorageBytes =
 									checkedSizeMul(requestedCapacity, sizeof(AggregateGroup),
 												   "logical-plan Aggregate group vector size overflowed");
-							if (requestedStorageBytes > state.shared.materialized_budget.available()) {
+                            const size_t available = state.shared.materialized_budget.availableWithParent();
+                            if (requestedStorageBytes > available && requestedCapacity > minimumCapacity) {
+                                requestedCapacity = std::max(minimumCapacity, available / sizeof(AggregateGroup));
+                                requestedStorageBytes = checkedSizeMul(requestedCapacity, sizeof(AggregateGroup),
+                                    "logical-plan Aggregate group vector size overflowed");
+                                debug::PerfTrace::addValue("logical_plan.aggregate.bounded_capacity_growth", 1);
+                            }
+                            if (requestedStorageBytes > available) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                debug::CiBudgetTrace trace(&groups, "aggregate_growth");
+                                if (trace.allow()) {
+                                    std::fprintf(stderr, "CI_AGGREGATE_GROWTH_REJECT groups=%zu capacity=%zu group_width=%zu minimum_capacity=%zu requested_bytes=%zu available_with_parent=%zu used=%zu\n",
+                                        groups.size(), groups.capacity(), sizeof(AggregateGroup), minimumCapacity,
+                                        requestedStorageBytes, available, state.shared.materialized_budget.used());
+                                    std::fflush(stderr);
+                                }
+                                trace.discard();
+#endif
 								throw std::runtime_error("logical-plan Aggregate group vector growth exceeded its "
 														 "materialized byte bound");
 							}
-							MaterializedByteReservation groupStorageGrowthBytes(&state.shared.materialized_budget);
-							groupStorageGrowthBytes.set(requestedStorageBytes);
-							groups.reserve(requestedCapacity);
-							const size_t actualCapacityBytes =
-									checkedSizeMul(groups.capacity(), sizeof(AggregateGroup),
-												   "logical-plan Aggregate group capacity overflowed");
-							groupStorageGrowthBytes.set(actualCapacityBytes);
-							groupStorageBytes = std::move(groupStorageGrowthBytes);
+                            // The allocator admits the complete new buffer while the old
+                            // one remains live, then refunds the old allocation on release.
+                            groups.reserve(requestedCapacity);
 						}
 						groups.push_back(std::move(group));
 						return groups.size() - 1U;
@@ -995,8 +1006,7 @@
 							// The last result no longer needs any group slots. Destroy
 							// their retained capacity before refunding it and admitting
 							// the output; even a scalar COUNT must have this headroom.
-							std::vector<AggregateGroup>{}.swap(groups);
-							groupStorageBytes.reset();
+							utils::AdmissionPmrVector<AggregateGroup>(&aggregateIndexMemory).swap(groups);
 						}
 						const size_t outputBytes = logicalReadRowBytes(row, state.shared.context) -
 								(state.shared.resident_output_batch_bytes == 0U ? 0U : sizeof(LogicalPlanReadRow));

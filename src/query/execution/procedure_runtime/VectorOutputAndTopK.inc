@@ -461,6 +461,17 @@
 			}
 			return continueInput;
             } catch (const detail::ResourceAdmissionDenied &) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                // Emit the phase before optional heap geometry: computing a
+                // diagnostic bound may itself fail under the exhausted owner.
+                debug::CiBudgetTrace phaseTrace(&result, "procedure_phase");
+                if (phaseTrace.allow()) {
+                    std::fprintf(stderr, "CI_PROCEDURE_FAILURE_PHASE phase=%s source_rows=%zu result_rows=%zu\n",
+                        allocationPhase, rows.size(), result.rowCount());
+                    std::fflush(stderr);
+                }
+                phaseTrace.discard();
+#endif
                 try {
                     reportProcedurePublicationPressure(result, rows, allocationPhase, retainedSourceBytes,
                         publicationSourceBytes(rows, 0U), procedureQueryResultBytes(result), 0U,

@@ -26,6 +26,7 @@ NUMERIC_CASE_METRICS = frozenset((
     'restart_key_allocations',
     'growth_success_bound', 'growth_result_capacity',
     'complete_result_storage_requests',
+    'bounded_growth_success_cap',
     'sort_run_array_large_requests_short', 'sort_run_array_large_requests_long',
 ))
 

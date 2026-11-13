@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 WINDOWS = [
+    'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput',
     'ExternalQuerySortTest.ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner',
     *('ConsumedPrefixCompactionTest.' + name for name in (
@@ -150,6 +151,7 @@ WINDOWS = [
     'RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner',
 ]
 MACOS = [
+    'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput',
     'ExternalQuerySortTest.ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner',
     'LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget',

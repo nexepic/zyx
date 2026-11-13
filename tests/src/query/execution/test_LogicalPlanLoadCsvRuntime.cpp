@@ -1076,4 +1076,43 @@ namespace graph::query::execution {
 			EXPECT_EQ(map.at("column" + std::to_string(index)), PropertyValue(std::string(40U, 'v')));
 	}
 
+TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure) {
+    CsvOnlyBackend backend;
+    LogicalPlanReadRuntime runtime(backend);
+    QueryPlan plan = parse("UNWIND [1,2,3,4,5,6,7,8,9,10] AS value RETURN value, count(*) AS count");
+    bool successfulFallback = false;
+    for (size_t cap = 1536U; cap <= 8192U && !successfulFallback; cap += 16U) {
+        auto constrained = bounds();
+        constrained.maximum_materialized_bytes = cap;
+        size_t fallback = 0U, delivered = 0U;
+        std::array<bool, 10U> seen{};
+        debug::PerfTrace::ScopedObserver observe(&fallback,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.aggregate.bounded_capacity_growth" && value > 0)
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
+        try {
+            static_cast<void>(runtime.execute(*plan.root, constrained, [&](const LogicalPlanReadRow &row) {
+                const auto id = std::get<int64_t>(std::get<PropertyValue>(row.values.at("value")).getVariant());
+                EXPECT_GE(id, 1);
+                EXPECT_LE(id, 10);
+                if (id < 1 || id > 10) return false;
+                EXPECT_FALSE(seen[static_cast<size_t>(id - 1)]);
+                seen[static_cast<size_t>(id - 1)] = true;
+                EXPECT_EQ(std::get<PropertyValue>(row.values.at("count")), PropertyValue(1));
+                ++delivered;
+                return true;
+            }, context()));
+            EXPECT_EQ(delivered, 10U);
+            if (fallback) {
+                successfulFallback = true;
+                RecordProperty("bounded_growth_success_cap", cap);
+            }
+        } catch (const std::runtime_error &error) {
+            EXPECT_NE(std::string_view(error.what()).find("byte bound"), std::string_view::npos) << error.what();
+        }
+    }
+    EXPECT_TRUE(successfulFallback);
+}
+
 } // namespace graph::query::execution

@@ -1076,6 +1076,7 @@ namespace graph::query::execution {
                 const QueryResult &output) -> ProcedureRows {
             for (;;) {
                 context.checkGuard();
+                [[maybe_unused]] const char *preparationPhase = "build_rows";
                 try {
                     auto prepared = makeBufferedVectorProcedureRows(
                         std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(offset, count), context);
@@ -1083,6 +1084,7 @@ namespace graph::query::execution {
                     // retry source. Larger final batches retain hits until
                     // preparation succeeds, keeping every quota retry valid.
                     if (count == 1U && offset + count == end) releaseConsumedHits();
+                    preparationPhase = "source_budget";
                     LogicalPlanReadRuntimeBounds sourceBounds = readBounds;
                     const size_t retained = checkedProcedureSizeAdd(retainedVectorSourceBytes,
                         procedureQueryResultBytes(output));
@@ -1099,6 +1101,7 @@ namespace graph::query::execution {
                         // before executing any row. Prepare it privately so
                         // owner quota pressure can shrink the batch without
                         // replaying output, DISTINCT, SKIP or LIMIT state.
+                        preparationPhase = "prefetch";
                         prefetchProcedureProperties(prepared, expressions, *snapshot, sourceBounds, context);
                         for (auto &row : prepared) row.reconcilePayloadCredit();
                         if (count > 1U && operations.front()->getType() == logical::LogicalOpType::LOP_PROJECT) {
@@ -1107,6 +1110,7 @@ namespace graph::query::execution {
                             // source. Probe a row frame, its declared bindings
                             // and operator counters; all real allocations still
                             // admit independently after this probe unwinds.
+                            preparationPhase = "handoff";
                             size_t handoff = checkedProcedureSizeAdd(sizeof(LogicalPlanReadRow),
                                 utils::detail::standardContainerProxyBytes());
                             handoff = checkedProcedureSizeAdd(handoff,
@@ -1135,11 +1139,25 @@ namespace graph::query::execution {
                                 throw ProcedureByteBoundExceeded("vector batch leaves no projection handoff headroom");
                         }
                     }
+                    preparationPhase = "release_hits";
                     if (offset + count == end && !hits.empty()) releaseConsumedHits();
                     return prepared;
                 } catch (const ProcedureByteBoundExceeded &) { if (count == 1U) throw; }
                   catch (const MaterializedByteLimitExceeded &) { if (count == 1U) throw; }
-                  catch (const detail::ResourceAdmissionDenied &) { if (count == 1U) throw; }
+                  catch (const detail::ResourceAdmissionDenied &) {
+                    if (count == 1U) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                        debug::CiBudgetTrace trace(&output, "vector_preparation");
+                        if (trace.allow()) {
+                            std::fprintf(stderr, "CI_VECTOR_PREPARATION_REJECT phase=%s offset=%zu count=%zu end=%zu result_rows=%zu\n",
+                                preparationPhase, offset, count, end, output.rowCount());
+                            std::fflush(stderr);
+                        }
+                        trace.discard();
+#endif
+                        throw;
+                    }
+                }
                 // All prepared rows and temporary source grants have unwound;
                 // semantic, cancellation, lock and allocation errors escape.
                 count = std::max<size_t>(1U, count / 2U);
