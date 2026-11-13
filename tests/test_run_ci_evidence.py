@@ -41,8 +41,9 @@ def test_timeout_preserves_partial_output_and_status(tmp_path):
     assert 'before-timeout' in (tmp_path / 'case/output.log').read_text()
 
 
-def test_timeout_journals_case_identity_without_complete_xml(tmp_path):
-    program = ("import time;print('CI_CASE_BEGIN Suite.Failed',flush=True);"
+def test_timeout_journals_case_identity_without_complete_xml(tmp_path, monkeypatch):
+    monkeypatch.delenv('ZYX_CI_CASE_TRACE', raising=False)
+    program = ("import os,time;assert os.getenv('ZYX_CI_CASE_TRACE') == '1';print('CI_CASE_BEGIN Suite.Failed',flush=True);"
                "print('CI_CASE_END Suite.Failed failed=1',flush=True);"
                "print('CI_CASE_BEGIN Suite.Unfinished',flush=True);time.sleep(60)")
     p, r = invoke(tmp_path, program, '3' if os.name == 'nt' else '.5')

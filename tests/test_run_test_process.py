@@ -353,3 +353,20 @@ def test_completed_inner_timeout_survives_shard_aggregation(tmp_path, codes):
     assert status['exit_code'] == 124 and not status['interrupted']
     assert [item['raw_exit_code'] for item in status['shards']] == list(codes)
     assert all('inner-status-marker' in (logs / f'shard-{n}.log').read_text() for n in (0, 1))
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='parallel shard isolation is POSIX-only')
+def test_successful_and_failed_shards_both_publish_observed_counts(tmp_path, capsys):
+    runner = _load_script('run_test_shards.py')
+    logs = tmp_path / 'logs'
+    program = ("import os,sys,json;i=int(os.environ['GTEST_SHARD_INDEX']);"
+               "print('CI_CASE_JOURNAL '+json.dumps(dict(started=2+i,completed=2+i,failed=i)));sys.exit(i)")
+    assert runner.run_shards([sys.executable, '-c', program], 2, 10, logs) == 1
+    summaries = [json.loads(line[len('CI_SHARD_RESULT '):]) for line in capsys.readouterr().out.splitlines()
+                 if line.startswith('CI_SHARD_RESULT ')]
+    status = json.loads((logs / 'status.json').read_text())
+    assert summaries == status['shards']
+    assert [s['raw_exit_code'] for s in summaries] == [0, 1]
+    assert all(s['journal_available'] for s in summaries)
+    assert [s['observed_counts'] for s in summaries] == [
+        dict(started=2, completed=2, failed=0), dict(started=3, completed=3, failed=1)]

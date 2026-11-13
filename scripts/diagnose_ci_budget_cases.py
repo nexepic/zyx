@@ -50,6 +50,7 @@ WINDOWS = [
         'BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing',
         'CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches',
         'CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota',
+        'OwnedProjectionHandoffKeepsRoomUnderVaryingParentHeadroom',
         'ConsumedHitsReleaseBeforeHydrationAndSourceErrorsNeverReplay',
         'MetadataJointRetentionRejectsLowBudgetAndCanRetry',
         'RejectsOversizedSearchHitBufferBeforeReadingNodes',
@@ -147,6 +148,8 @@ WINDOWS = [
     'RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner',
 ]
 MACOS = [
+    'LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget',
+    'LogicalVectorPropertyBatchTest.ScalarHeapProjectionSharesRetainedResultBudget',
     'LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads',
     'LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure',
     'RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose',

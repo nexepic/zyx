@@ -116,6 +116,9 @@ def run_evidence(command, directory, timeout, *, gtest=False):
     env.setdefault('ZYX_TEST_HEARTBEAT_SECONDS', '30')
     if gtest:
         env['GTEST_OUTPUT'] = 'xml:' + str(directory / 'tests.xml')
+        # A killed process cannot finish its XML. Keep the active case and
+        # completed identities observable for every supervised native gate.
+        env.setdefault('ZYX_CI_CASE_TRACE', '1')
         if 'LLVM_PROFILE_FILE' not in env:
             # Coverage intermediates are neither diagnostic artifacts nor source files.
             profiles = Path(env.get('RUNNER_TEMP') or tempfile.gettempdir()) / 'zyx-ci-diagnostic-profiles'

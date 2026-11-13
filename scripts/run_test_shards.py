@@ -19,6 +19,32 @@ from typing import Sequence
 PROCESS_REAP_TIMEOUT_SECONDS = 5.0
 
 
+def shard_result(index, process, log_path):
+    result = {"index": index, "pid": process.pid, "raw_exit_code": process.poll(),
+              "journal_available": False}
+    try:
+        # Successful shard logs are retained but not replayed. Publish their
+        # observed counts too; missing journals must remain unknown, not zero.
+        with log_path.open('rb') as stream:
+            stream.seek(max(0, log_path.stat().st_size - 1024 * 1024))
+            tail = stream.read(1024 * 1024)
+        for line in reversed(tail.splitlines()):
+            if not line.startswith(b'CI_CASE_JOURNAL '):
+                continue
+            journal = json.loads(line[len(b'CI_CASE_JOURNAL '):])
+            counts = {key: journal[key] for key in ('started', 'completed', 'failed')}
+            if not all(type(value) is int and value >= 0 for value in counts.values()):
+                break
+            result.update(journal_available=True, observed_counts=counts)
+            for key in ('last_started', 'last_completed'):
+                if isinstance(journal.get(key), str):
+                    result[key] = journal[key][:512]
+            break
+    except (OSError, ValueError, KeyError, TypeError):
+        pass  # Diagnostic absence cannot replace the actual test exit status.
+    return result
+
+
 def _linux_group_has_live_members(process_group_id: int) -> bool:
     """Return false only when every visible group member is a Linux zombie.
 
@@ -254,6 +280,9 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
         remaining = terminate_and_reap_processes(processes, reason="runner finalization")
         if remaining and exit_code == 0:
             exit_code = 125
+        shard_results = [shard_result(index, process, log_path) for index, process, log_path, _ in processes]
+        for result in shard_results:
+            print('CI_SHARD_RESULT ' + json.dumps(result), flush=True)
         retained = failure_log_dir
         if exit_code != 0 and retained is None:
             retained = Path(tempfile.mkdtemp(prefix="zyx-retained-shard-logs-"))
@@ -264,8 +293,7 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
                     shutil.copyfile(log_path, retained / f"shard-{index}.log")
             (retained / "status.json").write_text(json.dumps({
                 "exit_code": exit_code, "interrupted": interrupted,
-                "shards": [{"index": index, "pid": process.pid, "raw_exit_code": process.poll()}
-                           for index, process, _, _ in processes]}, indent=2) + "\n")
+                "shards": shard_results}, indent=2) + "\n")
             print(f"Shard evidence retained at: {retained.resolve()}", flush=True)
         if all(not process_tree_is_active(process) for _, process, _, _ in processes):
             shutil.rmtree(shard_root, ignore_errors=True)
