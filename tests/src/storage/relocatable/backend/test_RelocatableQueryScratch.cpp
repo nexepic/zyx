@@ -503,9 +503,11 @@ TEST_F(RelocatableStorageBackendTest, NativeDistinctOutputBudgetDenialCleansSpil
     bool denied = false;
     // Each retained result owns its key. Keep this denial independent of the
     // public value/STL geometry: key characters alone exceed the same 8 MiB.
-    const std::string alias(reads.bounds.maximum_materialized_bytes / 12000U + 1U, 'v');
+    const std::string alias(8192U, 'v');
+    const size_t unique = reads.bounds.maximum_materialized_bytes / alias.size() + 1U;
     backend->resetIoStats();
-    try { static_cast<void>(engine.execute("UNWIND range(1,24000) AS x RETURN DISTINCT x % 12000 AS `" + alias + "`", context)); }
+    try { static_cast<void>(engine.execute("UNWIND range(1," + std::to_string(2U * unique) + ") AS x RETURN DISTINCT x % " +
+        std::to_string(unique) + " AS `" + alias + "`", context)); }
     catch (const MaterializedByteLimitExceeded &) { denied = true; }
     catch (const ResourceAdmissionDenied &) { denied = true; }
     EXPECT_TRUE(denied);
