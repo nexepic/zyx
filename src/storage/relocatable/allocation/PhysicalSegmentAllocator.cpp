@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <exception>
 #include <stdexcept>
 
 #include "graph/utils/ChecksumUtils.hpp"
@@ -294,6 +295,62 @@ namespace graph::storage {
 		}
 		return PhysicalSegmentContents{entry, envelope, std::move(headerExtension), std::move(payload)};
 	}
+
+    PhysicalSegmentContents PhysicalSegmentAllocator::readPaged(const MetadataSnapshotPin &snapshot,
+                                                               SegmentId segmentId) const {
+        const CatalogEntry entry = metadata_.findCatalog(snapshot, segmentId);
+        if (entry.state != SegmentState::SGS_SEALED)
+            throwPhysicalAllocatorError(FormatError::FERR_INVALID_STATE,
+                "relocatable physical segment read requires a sealed Catalog generation");
+        if (!metadata_.isPhysicalSlotAllocated(snapshot, entry.physical_slot))
+            throwPhysicalAllocatorError(FormatError::FERR_INVALID_STATE,
+                "relocatable Catalog mapping references a free physical slot");
+        const uint64_t segmentOffset = checkedSlotOffset(data_region_offset_, entry.physical_slot);
+        SegmentEnvelope envelope;
+        std::exception_ptr envelopeError;
+        bool mappingMismatch = false;
+        std::vector<std::byte> headerExtension, payload;
+        std::array<std::byte, RSS_PAGE_SIZE> page;
+        for (size_t offset = 0U; offset < RSS_SEGMENT_SIZE; offset += page.size()) {
+            if (!entry.generation.isValid() ||
+                io_->readAtSequential(segmentOffset + offset, page.data(), page.size()) != page.size())
+                throwPhysicalAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+                    "relocatable physical segment is truncated");
+            if (offset == 0U) {
+                try { envelope = SegmentEnvelopeCodec::decode(std::span<const std::byte>(page).first(RSS_ENVELOPE_BYTES)); }
+                catch (const FormatException &) { envelopeError = std::current_exception(); }
+                if (!envelopeError) {
+                    mappingMismatch = envelope.state != SegmentState::SGS_SEALED || envelope.kind != entry.kind ||
+                        envelope.segment_id != entry.segment_id || envelope.owner_id != entry.owner_id ||
+                        envelope.generation != entry.generation || envelope.committed_lsn != entry.committed_lsn;
+                    if (!mappingMismatch) {
+                        headerExtension.resize(envelope.header_bytes - RSS_ENVELOPE_BYTES);
+                        payload.resize(envelope.payload_bytes);
+                    }
+                }
+            }
+            // Keep the original full-read precedence: a truncated tail wins
+            // over an invalid envelope/catalog mapping at the beginning.
+            if (envelopeError || mappingMismatch) continue;
+            const auto copyOverlap = [&](size_t begin, std::span<std::byte> destination) {
+                const size_t first = (std::max)(begin, offset);
+                const size_t last = (std::min)(begin + destination.size(), offset + page.size());
+                if (first < last)
+                    std::copy_n(page.begin() + static_cast<std::ptrdiff_t>(first - offset), last - first,
+                        destination.begin() + static_cast<std::ptrdiff_t>(first - begin));
+            };
+            copyOverlap(RSS_ENVELOPE_BYTES, headerExtension);
+            copyOverlap(envelope.header_bytes, payload);
+        }
+        if (envelopeError) std::rethrow_exception(envelopeError);
+        if (mappingMismatch)
+            throwPhysicalAllocatorError(FormatError::FERR_INVALID_STATE,
+                "relocatable physical segment envelope disagrees with its Catalog mapping");
+        if (payloadCrc(payload) != envelope.payload_crc)
+            throwPhysicalAllocatorError(FormatError::FERR_CHECKSUM_MISMATCH,
+                "relocatable physical segment payload checksum does not match");
+        return PhysicalSegmentContents{entry, envelope, std::move(headerExtension), std::move(payload)};
+    }
 
 	void PhysicalSegmentAllocator::validateRequests(std::span<const PhysicalSegmentAllocationRequest> requests) const {
 		if (requests.empty()) {

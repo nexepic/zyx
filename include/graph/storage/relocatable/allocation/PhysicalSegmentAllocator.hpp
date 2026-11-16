@@ -128,6 +128,9 @@ namespace graph::storage {
 		// returned bytes. Future relocation retirement will extend that pin to the
 		// physical generation as well.
 		[[nodiscard]] PhysicalSegmentContents read(const MetadataSnapshotPin &snapshot, SegmentId segmentId) const;
+        // Fixed-page staging for scratch streams. Reads the complete segment,
+        // including its tail, before exposing decoded contents or format errors.
+        [[nodiscard]] PhysicalSegmentContents readPaged(const MetadataSnapshotPin &snapshot, SegmentId segmentId) const;
 
 	private:
 		void validateRequests(std::span<const PhysicalSegmentAllocationRequest> requests) const;
