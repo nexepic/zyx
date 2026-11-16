@@ -263,7 +263,10 @@ namespace {
                     const uint64_t position = static_cast<uint64_t>(offset);
                     if (mode == 2 && position >= base && position < base + RSS_SEGMENT_SIZE &&
                             position + count > base + RSS_SEGMENT_SIZE - RSS_PAGE_SIZE)
-                        return graph::storage::testing::readWithNativeLease(fd, bytes, count - RSS_PAGE_SIZE, offset);
+                        // portable_pread rejects a zero-byte request; inject EOF
+                        // directly instead of turning truncation into an I/O error.
+                        return count == RSS_PAGE_SIZE ? pwrite_ssize_t{0} :
+                            graph::storage::testing::readWithNativeLease(fd, bytes, count - RSS_PAGE_SIZE, offset);
                     const auto result = graph::storage::testing::readWithNativeLease(fd, bytes, count, offset);
                     if (position == base && result == static_cast<pwrite_ssize_t>(count)) {
                         auto *image = static_cast<std::byte *>(bytes);
