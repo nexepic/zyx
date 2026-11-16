@@ -111,6 +111,8 @@
 			LogicalPlanReadRuntimeStats stats;
 			const LogicalPlanReadRow *injected_row = nullptr;
 			const ScopedPropertyColumns *property_columns = nullptr;
+            const LogicalPlanReadRow *admitted_property_row = nullptr;
+            size_t admitted_property_row_bytes = 0U;
 			detail::BoundExpressionInputs *bound_inputs = nullptr;
 			const logical::LogicalSort *topk_sort = nullptr;
 			size_t topk_rows = 0U;
@@ -123,6 +125,27 @@
 			ExecutionSharedState &shared;
 			ExecutionTaskState task;
 		};
+
+        // Installed only while a prefetch batch retains the fully reconciled row.
+        class ScopedAdmittedPropertyRow final {
+        public:
+            ScopedAdmittedPropertyRow(ExecutionState &state, const LogicalPlanReadRow &row, size_t bytes)
+                : state_(state), previous_(state.task.admitted_property_row),
+                  previous_bytes_(state.task.admitted_property_row_bytes) {
+                state_.task.admitted_property_row = &row;
+                state_.task.admitted_property_row_bytes = bytes;
+            }
+            ~ScopedAdmittedPropertyRow() {
+                state_.task.admitted_property_row = previous_;
+                state_.task.admitted_property_row_bytes = previous_bytes_;
+            }
+            ScopedAdmittedPropertyRow(const ScopedAdmittedPropertyRow &) = delete;
+            ScopedAdmittedPropertyRow &operator=(const ScopedAdmittedPropertyRow &) = delete;
+        private:
+            ExecutionState &state_;
+            const LogicalPlanReadRow *previous_;
+            size_t previous_bytes_;
+        };
 
 		class ScopedBoundInputs final {
 		public:

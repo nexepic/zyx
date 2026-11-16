@@ -1684,7 +1684,9 @@
 					if (selectionPredicate) {
 						for (size_t index = 0U; index < rows.size(); ++index) {
 							checkGuard(state);
-							if (!selectionPredicate(rows.values()[index], state)) {
+							ScopedAdmittedPropertyRow admittedRow(state, rows.values()[index],
+                                logicalReadRowBytes(rows.values()[index], state.shared.context));
+                            if (!selectionPredicate(rows.values()[index], state)) {
 								selection.reject(index);
 							}
 						}

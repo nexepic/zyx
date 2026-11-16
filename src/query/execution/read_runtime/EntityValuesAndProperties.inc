@@ -1110,8 +1110,13 @@
 			}
 			const auto copyResult = [&](const PropertyValue &source, bool borrowed = false, bool alreadyRetained = true) {
                 // Only a synchronous leaf-vs-parameter comparison requests
-                // this view. Its RHS cannot mutate row caches or batch columns.
-                if (borrowedResult && alreadyRetained) {
+                // this view. Batch columns or an explicitly reconciled prefetch
+                // row have a live source charge. Newly enriched row storage
+                // must not silently extend the admitted row's byte ceiling.
+                const bool admittedRow = borrowedResult && alreadyRetained &&
+                    state.task.admitted_property_row == &row &&
+                    logicalReadRowBytes(row, state.shared.context) <= state.task.admitted_property_row_bytes;
+                if (borrowedResult && alreadyRetained && (borrowed || admittedRow)) {
                     *borrowedResult = &source;
                     debug::PerfTrace::addValue("logical_plan.property.parameter_comparison_borrows", 1);
                     return PropertyValue();

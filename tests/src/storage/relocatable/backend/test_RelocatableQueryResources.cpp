@@ -1879,16 +1879,17 @@ TEST_F(RelocatableStorageBackendTest, PropertyParameterComparisonKeepsFallbacksN
             if (!duration && key == "logical_plan.property.parameter_comparison_borrows")
                 *static_cast<size_t *>(p) += static_cast<size_t>(value);
         });
-    const auto run = [&](const std::string &expression, const PropertyValue &expected) {
+    const auto run = [&](const std::string &expression, const PropertyValue &expected, bool filtered = false) {
         {
-            auto result = engine.execute("MATCH (n:BorrowCompare) RETURN " + expression + " AS answer", context);
+            auto result = engine.execute(std::string("MATCH (n:BorrowCompare) ") +
+                (filtered ? "WHERE n.payload = $wanted " : "") + "RETURN " + expression + " AS answer", context);
             ASSERT_EQ(result.rowCount(), 1U);
             EXPECT_EQ(result.getRows()[0].at("answer").asPrimitive(), expected);
             EXPECT_EQ(account->used(), result.retainedResourceBytes());
         }
         EXPECT_EQ(account->used(), 0U);
     };
-    run("n.payload = $wanted", PropertyValue(true));
+    run("n.payload = $wanted", PropertyValue(true), true);
     ASSERT_GT(borrows, 0U);
     const auto beforeGeneralRhs = borrows;
     run("n.payload = n.other", PropertyValue(true));
