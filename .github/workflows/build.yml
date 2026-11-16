@@ -540,6 +540,18 @@ jobs:
 
       # These additional, bounded diagnostics cannot replace the unit gate.
       # Each process has its own capped rejection trace; no data values are logged.
+      # Keep the ownership regression separate from the aggregate budget log:
+      # its caller-site evidence must remain visible if that console is capped
+      # or the optional debugger crashes before producing a useful stack.
+      - name: Diagnose Windows retained property and scratch ownership
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-retained-ownership --timeout 300 --gtest -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose:RelocatableStorageBackendTest.PropertyParameterComparisonKeepsFallbacksNullsAndFailedExecutionOwnership:RelocatableStorageBackendTest.QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation'
+        shell: bash
+
       - name: Diagnose bounded Windows admission stacks
         if: runner.os == 'Windows'
         continue-on-error: true
