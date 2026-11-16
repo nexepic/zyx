@@ -1,0 +1,22 @@
+{
+  "windows": {
+    "bytes": 5996284,
+    "sha256": "1a805f014857d36d453f402d6b961c82f1586c8729c34c1f3210aa3ed4988da9"
+  },
+  "asan": {
+    "bytes": 2983518,
+    "sha256": "66d4d5fb55434da5874153dcd3e86b0cbd16b65ea6d2ca21daaee61e71dbb69c"
+  },
+  "ubuntu": {
+    "bytes": 2801094,
+    "sha256": "e5c2e59936dfc38edc61c6fe8fb3306cf44d49e53d6d002185838d75df3abe4d"
+  },
+  "mac": {
+    "bytes": 2799665,
+    "sha256": "bf3de2e7e572e8748f34b37c52c0061f6bfede0a4f9eb0d9624e5ccc94935ec0"
+  },
+  "tsan": {
+    "bytes": 1427828,
+    "sha256": "b985554d82a4e51fefcb9a76d46a8068e0b9e55105c74f49648b3ae18222f615"
+  }
+}

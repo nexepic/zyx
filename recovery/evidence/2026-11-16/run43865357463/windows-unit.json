@@ -1,0 +1,34 @@
+{
+  "started": 11110,
+  "completed": 11110,
+  "failed": 13,
+  "passed": 11096,
+  "skipped": 1,
+  "unclassified_completed": 0,
+  "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+  "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+  "last_started_observed_seconds": 3789.281,
+  "last_completed_observed_seconds": 3794.031,
+  "failed_names": [
+    "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+    "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+    "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+    "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+    "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+    "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns"
+  ],
+  "failed_names_truncated": false,
+  "skipped_names": [
+    "InputxxTerminalTest.PosixPseudoTerminalCoverageIsNotApplicableOnWindows"
+  ],
+  "skipped_names_truncated": false,
+  "oversized_lines": 0,
+  "counts_are_observed_not_discovery": true
+}
