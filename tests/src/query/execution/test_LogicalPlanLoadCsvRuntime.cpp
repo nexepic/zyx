@@ -849,6 +849,17 @@ namespace graph::query::execution {
 		}
 	}
 
+    TEST_F(LogicalPlanLoadCsvRuntimeTest, MixedDistinctAndOrdinaryAggregatesRetainIndependentSets) {
+        CsvOnlyBackend backend;
+        LogicalPlanReadRuntime runtime(backend);
+        auto plan = parse("UNWIND [1,1,2,2,3] AS value RETURN count(*) AS total, count(DISTINCT value) AS unique, sum(value) AS sum");
+        const auto result = runtime.executeToQueryResult(*plan.root, bounds(), context());
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows()[0].at("total").asPrimitive(), PropertyValue(5));
+        EXPECT_EQ(result.getRows()[0].at("unique").asPrimitive(), PropertyValue(3));
+        EXPECT_EQ(result.getRows()[0].at("sum").asPrimitive(), PropertyValue(9));
+    }
+
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateAndCsvRetainedHeadersShareTheExecutionBudget) {
 		CsvOnlyBackend backend;
 		LogicalPlanReadRuntime runtime(backend);

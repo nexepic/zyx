@@ -74,6 +74,10 @@
 								functions[index] == AggregateFunctionType::AGG_COUNT && !aggregations[index].distinct;
 					}
 
+                    // Non-DISTINCT aggregates never consult these sets. Avoid
+                    // retaining a hash-set object per group and accumulator.
+                    const size_t distinctSlotCount = std::ranges::any_of(aggregations,
+                        [](const auto &item) { return item.distinct; }) ? aggregations.size() : 0U;
 					struct AggregateGroup {
 						std::vector<PropertyValue> values;
 						std::vector<std::unique_ptr<AggregateAccumulator>> accumulators;
@@ -118,8 +122,8 @@
 													"logical-plan Aggregate group size overflowed");
 						groupBytes =
 								checkedSizeAdd(groupBytes,
-											   aggregations.size() * (sizeof(std::unique_ptr<AggregateAccumulator>) +
-																	  sizeof(utils::AdmissionPmrUnorderedSet<std::pmr::string>)),
+											   aggregations.size() * sizeof(std::unique_ptr<AggregateAccumulator>) +
+                                               distinctSlotCount * sizeof(utils::AdmissionPmrUnorderedSet<std::pmr::string>),
 											   "logical-plan Aggregate group size overflowed");
 						const size_t prepaidBytes = prepaid ? std::min(prepaid->bytes(), groupBytes) : 0U;
 						if (prepaidBytes) {
@@ -128,8 +132,8 @@
 						}
 						chargeAggregateBytes(groupBytes - prepaidBytes);
 						group.accumulators.reserve(aggregations.size());
-						group.distinct_values.reserve(aggregations.size());
-						for (size_t index = 0U; index < aggregations.size(); ++index)
+						group.distinct_values.reserve(distinctSlotCount);
+						for (size_t index = 0U; index < distinctSlotCount; ++index)
 							group.distinct_values.emplace_back(&aggregateIndexMemory);
 						for (size_t index = 0U; index < aggregations.size(); ++index) {
 							std::unique_ptr<AggregateAccumulator> accumulator =
