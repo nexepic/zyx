@@ -310,7 +310,10 @@ namespace graph::storage {
         std::exception_ptr envelopeError;
         bool mappingMismatch = false;
         std::vector<std::byte> headerExtension, payload;
-        std::array<std::byte, RSS_PAGE_SIZE> page;
+        // Four pages bound stack use to 16 KiB while amortizing native calls
+        // for short payloads. Every padded byte is still read and checked for
+        // truncation before reporting an envelope or mapping error.
+        std::array<std::byte, 4U * RSS_PAGE_SIZE> page;
         for (size_t offset = 0U; offset < RSS_SEGMENT_SIZE; offset += page.size()) {
             if (!entry.generation.isValid() ||
                 io_->readAtSequential(segmentOffset + offset, page.data(), page.size()) != page.size())

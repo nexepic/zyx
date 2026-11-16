@@ -231,7 +231,7 @@ namespace {
             size_t reads = 0U, bytesRead = 0U;
             StorageIO::ScopedNativeReadHookForTesting hook([&](file_handle_t fd, void *bytes, size_t count, pwrite_off_t offset) {
                 if (static_cast<uint64_t>(offset) >= base && static_cast<uint64_t>(offset) < base + RSS_SEGMENT_SIZE) {
-                    EXPECT_EQ(count, RSS_PAGE_SIZE); ++reads; bytesRead += count;
+                    EXPECT_EQ(count, 4U * RSS_PAGE_SIZE); ++reads; bytesRead += count;
                 }
                 return graph::storage::testing::readWithNativeLease(fd, bytes, count, offset);
             });
@@ -241,7 +241,7 @@ namespace {
                 EXPECT_EQ(SegmentEnvelopeCodec::encode(actual.envelope), SegmentEnvelopeCodec::encode(expected.envelope));
                 EXPECT_EQ(actual.entry.segment_id, expected.entry.segment_id);
             }
-            EXPECT_EQ(reads, 2U * RSS_SEGMENT_SIZE / RSS_PAGE_SIZE);
+            EXPECT_EQ(reads, 2U * RSS_SEGMENT_SIZE / (4U * RSS_PAGE_SIZE));
             EXPECT_EQ(bytesRead, 2U * RSS_SEGMENT_SIZE);
         }
         EXPECT_EQ(portable_close_rw(nativeHandle), 0);
