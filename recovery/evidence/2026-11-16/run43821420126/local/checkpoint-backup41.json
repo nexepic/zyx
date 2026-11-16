@@ -1,0 +1,13 @@
+{
+  "head": "349b2843ef4237c55b69dd934566a17694147654",
+  "restored_head": "349b2843ef4237c55b69dd934566a17694147654",
+  "bundle_bytes": 317439924,
+  "bundle_sha256": "5679b3fec1c2acb0a09a82889c61d16b5f41772b0e5a4e87e728045d972d1194",
+  "reachable_objects": 45014,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 41,
+  "validation": "Build245: BTree43 and storage/procedure162 targeted, Python44 passed; unfiltered regression running",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}

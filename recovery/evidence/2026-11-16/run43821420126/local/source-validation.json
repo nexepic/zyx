@@ -9,5 +9,6 @@
     "failed": 1,
     "reason": "zero cache heap released; candidate withdrawn"
   },
-  "full_regression": "running"
+  "full_regression": "passed",
+  "executed": 11118
 }

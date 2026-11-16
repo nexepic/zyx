@@ -1,0 +1,11 @@
+{
+  "previous_failed": 18,
+  "current_failed": 15,
+  "new_failures": [],
+  "now_passed": [
+    "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+    "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+    "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota"
+  ],
+  "five_raw_log_hashes_verified": true
+}
