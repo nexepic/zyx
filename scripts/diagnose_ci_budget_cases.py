@@ -176,6 +176,22 @@ MACOS = [
     'LogicalPlanLoadCsvRuntimeTest.PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget',
 ]
 
+# Keep the current native failures visible even if the historical aggregate
+# reaches its console cap or an optional debugger times out. Same test bounds.
+WINDOWS_CURRENT = ['LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
+    'LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation',
+    'LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows',
+    'LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations',
+    'LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations',
+    'LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch',
+    'LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge',
+    'LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties',
+    'LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows',
+    'LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers',
+    'LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound',
+    'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
+    'RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns']
+
 
 ASAN = [
     'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
@@ -189,9 +205,9 @@ ASAN = [
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
-    parser.add_argument('--platform', choices=('windows', 'macos', 'asan'), required=True)
+    parser.add_argument('--platform', choices=('windows', 'windows-current', 'macos', 'asan'), required=True)
     args = parser.parse_args()
-    cases = {'windows': WINDOWS, 'macos': MACOS, 'asan': ASAN}[args.platform]
+    cases = {'windows': WINDOWS, 'windows-current': WINDOWS_CURRENT, 'macos': MACOS, 'asan': ASAN}[args.platform]
     runner = Path(__file__).with_name('run_test_process.py')
     failures = []
     child_env = os.environ.copy()
@@ -209,6 +225,8 @@ def main():
                    str(args.binary), '--gtest_filter=' + case]
         if os.environ.get('ZYX_CI_EVIDENCE_DIR'):
             token = hashlib.sha256(case.encode()).hexdigest()[:16]
+            if args.platform == 'windows-current':
+                token = 'current-' + token
             command = [sys.executable, str(Path(__file__).with_name('run_ci_evidence.py')),
                        '--name', 'budget-' + token, '--timeout', timeout, '--gtest', '--',
                        str(args.binary), '--gtest_filter=' + case]

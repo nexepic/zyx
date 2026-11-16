@@ -549,7 +549,16 @@ jobs:
         env:
           ZYX_CI_BUDGET_TRACE: '1'
         run: |
-          python scripts/run_ci_evidence.py --name windows-retained-ownership --timeout 300 --gtest -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose:RelocatableStorageBackendTest.PropertyParameterComparisonKeepsFallbacksNullsAndFailedExecutionOwnership:RelocatableStorageBackendTest.QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation'
+          python scripts/run_ci_evidence.py --name windows-retained-ownership --timeout 300 --gtest -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose:RelocatableStorageBackendTest.PropertyParameterComparisonKeepsFallbacksNullsAndFailedExecutionOwnership:RelocatableStorageBackendTest.QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation:RelocatableStorageBackendTest.TransferredScalarResultsKeepNestedValuesAndReleaseFailedPartialOutput:RelocatablePhysicalSegmentAllocatorTypedIOTest.PagedScratchReads*'
+        shell: bash
+
+      - name: Diagnose current Windows budget failures independently
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-current-budget-cases --timeout 900 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows-current
         shell: bash
 
       - name: Diagnose bounded Windows admission stacks
