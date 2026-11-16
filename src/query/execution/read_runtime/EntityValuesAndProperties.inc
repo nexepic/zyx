@@ -278,6 +278,14 @@
 			if (node.node_id == 0U) {
 				throw std::runtime_error("logical graph backend returned an invalid Node");
 			}
+			// Empty and singleton label sets need no duplicate-detection table.
+			// The admitted hash adapter can allocate buckets even for one label;
+			// avoid that real allocation rather than excluding it from accounting.
+			if (node.labels.size() <= 1U) {
+				if (!node.labels.empty() && node.labels.front().empty())
+					throw std::runtime_error("logical graph backend returned an invalid Node label set");
+				return;
+			}
 			detail::BudgetMemoryResource labelMemory(state.shared.materialized_budget);
 			utils::AdmissionPmrUnorderedSet<std::string_view> labels(&labelMemory);
 			detail::procedureVectorReserve(labels, node.labels.size());
@@ -1360,6 +1368,17 @@
 											  "logical-plan scoped binding size overflowed");
 				bytes = checkedSizeAdd(bytes, bindingPayloadBytes(value, state),
 									   "logical-plan scoped binding size overflowed");
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                static std::atomic<unsigned> scopeReports{0U};
+                if (std::getenv("ZYX_CI_BUDGET_TRACE") && scopeReports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                    std::fprintf(stderr, "CI_SCOPED_BINDING value_kind=%u name_bytes=%zu payload=%zu initial_charge=%zu row_bytes=%zu bindings=%zu property_aliases=%zu metadata_aliases=%zu used=%zu available=%zu reports_limit=20\n",
+                        std::is_same_v<Value, storage::LogicalGraphNode> ? 1U : std::is_same_v<Value, storage::LogicalGraphEdge> ? 2U : 0U,
+                        variable.size(), bindingPayloadBytes(value, state), bytes,
+                        logicalReadRowBytes(row, state.shared.context), row.values.size(), row.property_cache.size(),
+                        row.entity_metadata_cache.size(), state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                    std::fflush(stderr);
+                }
+#endif
 				binding_bytes_.set(bytes);
 				variable_.assign(variable);
 				if (const auto previous = row_.values.find(variable_); previous != row_.values.end()) {

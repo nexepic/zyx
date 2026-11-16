@@ -1425,6 +1425,17 @@
                                 }
                                 if (pendingMetadata.wouldExceed(metadataUpper)) throw PrefetchBytePressure{__LINE__};
                                 pendingMetadata.set(metadataUpper);
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                static std::atomic<unsigned> cellReports{0U};
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE") && cellReports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                                    std::fprintf(stderr, "CI_PREFETCH_CELL_OWNERS edge=%u rows=%zu selected_keys=%zu id_storage=%zu key_views=%zu ordinal_storage=%zu selection_storage=%zu source_charge=%zu destination_metadata=%zu buffered_rows=%zu used=%zu available=%zu reports_limit=20\n",
+                                        edgeCells ? 1U : 0U, last-first, selectedKeys.size(), idStorageBytes,
+                                        keys.capacity()*sizeof(std::string_view), ordinalBytes, selectionBytes,
+                                        propertyReadBytes.bytes(), pendingMetadata.bytes(), bufferedRowsBytes.bytes(),
+                                        state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
                                 const auto receiveValue = [&](size_t relative, size_t selected, std::optional<PropertyValue> value) {
                                     verifyPropertySource();
                                     if (relative >= last - first || selected >= selectedColumns.size())
