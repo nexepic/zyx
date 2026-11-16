@@ -895,6 +895,35 @@
             debug::PerfTrace::addValue("logical_plan.result.retired_source_bytes", static_cast<int64_t>(before - after));
         }
 
+        // Terminal scalar/reference output does not evaluate more expressions.
+        // Scalars own their values; reference conversion reads complete records,
+        // not row caches. Concrete shaped entities still require those caches.
+        void retireUnusedResultCaches(LogicalPlanReadRow &row, ExecutionState &state,
+                                      MaterializedByteReservation &sourceReservation) {
+            for (const auto &[name, value] : row.values) {
+                if (!std::holds_alternative<PropertyValue>(value) &&
+                    !std::holds_alternative<storage::EntityRef>(value)) return;
+            }
+            const size_t before = logicalReadRowBytes(row, state.shared.context);
+            row.property_cache.clear(); row.entity_metadata_cache.clear();
+            row.complete_entity_property_cache.clear(); row.path_cache.clear();
+            const size_t after = logicalReadRowBytes(row, state.shared.context);
+            if (after > before || before - after > sourceReservation.bytes())
+                throw std::logic_error("result cache retirement exceeded its retained charge");
+            sourceReservation.set(sourceReservation.bytes() - (before - after));
+            debug::PerfTrace::addValue("logical_plan.result.retired_cache_bytes", static_cast<int64_t>(before - after));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            static std::atomic<unsigned> reports{0U};
+            if (before != after && std::getenv("ZYX_CI_BUDGET_TRACE") &&
+                    reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                std::fprintf(stderr, "CI_RESULT_OWNERSHIP phase=caches_retired row_before=%zu row_after=%zu buffered_source_charge=%zu used=%zu available=%zu reports_limit=20\n",
+                    before, after, sourceReservation.bytes(), state.shared.materialized_budget.used(),
+                    state.shared.materialized_budget.available());
+                std::fflush(stderr);
+            }
+#endif
+        }
+
         bool appendTransferredScalarResultRow(QueryResult &result, LogicalPlanReadRow &row,
                 const std::vector<std::string> &columns, ExecutionState &state,
                 MaterializedByteReservation &sourceReservation) {
@@ -913,7 +942,7 @@
                 size_t emptyMove = 0U;
                 if (type == PropertyType::MAP)
                     emptyMove = utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(0U);
-                else if (type == PropertyType::LIST || type == PropertyType::BYTES)
+                else if (type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES)
                     emptyMove = detail::standardContainerProxyBytes();
                 // try_emplace constructs ResultValue directly: source -> its
                 // by-value PropertyValue parameter -> the variant alternative.
@@ -939,6 +968,15 @@
             outputReservation.set(materializedResultRowBytes(output, state));
             retireResultSourceRow(row, state, sourceReservation);
             debug::PerfTrace::addValue("logical_plan.result.transferred_scalar_cells", static_cast<int64_t>(columns.size()));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            static std::atomic<unsigned> reports{0U};
+            if (std::getenv("ZYX_CI_BUDGET_TRACE") && reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                std::fprintf(stderr, "CI_RESULT_OWNERSHIP phase=scalars_transferred columns=%zu output_charge=%zu buffered_source_charge=%zu move_scratch=%zu used=%zu available=%zu reports_limit=20\n",
+                    columns.size(), outputReservation.bytes(), sourceReservation.bytes(), moveScratch,
+                    state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                std::fflush(stderr);
+            }
+#endif
             appendMaterializedResultRow(result, std::move(output), state, std::move(outputReservation));
             return true;
         }
@@ -946,6 +984,7 @@
 		void appendLogicalResultRow(QueryResult &result, LogicalPlanReadRow &row,
 								const std::vector<std::string> &columns, ExecutionState &state,
                 MaterializedByteReservation &sourceReservation) {
+            retireUnusedResultCaches(row, state, sourceReservation);
             if (appendTransferredScalarResultRow(result, row, columns, state, sourceReservation)) return;
 			// Scalars and unique Entities whose complete records are already in
 			// memory have an exact logical result size before payloads are copied.

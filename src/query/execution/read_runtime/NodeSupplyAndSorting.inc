@@ -300,8 +300,12 @@
 						}
 						MaterializedByteReservation rowBytes(&state.shared.materialized_budget);
 						LogicalPlanReadRow row;
+                        // A single owning row can consume its column matrix
+                        // before allocating the entity binding. Never defer a
+                        // batch receiver's published binding/layout contract.
+                        const bool deferredBinding = !columnReceiver && end - begin == 1U;
 						const auto prepareRow = [&](const storage::EntityRef &reference) {
-							row.values.emplace(scan.getVariable(), reference);
+                            if (!deferredBinding) row.values.emplace(scan.getVariable(), reference);
 							for (const auto &key: propertyKeys)
 								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
 						};
@@ -434,14 +438,57 @@
 								prepareRow(referenceAt(index));
 								rowBytes.set(structuralBytes);
 							}
-							for (size_t column = 0U; column < propertyKeys.size(); ++column) {
-								const size_t valueBytes = detail::retainedPropertyValueBytes(columns[column][sorted], [&] { checkGuardNow(state); });
-								columnBytes.set(columnBytes.bytes() - valueBytes);
-								rowBytes.set(checkedSizeAdd(rowBytes.bytes() - 1U, valueBytes,
-															"logical-plan Node row size overflowed"));
-								row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) =
-										std::move(columns[column][sorted]);
-							}
+                            for (size_t column = 0U; column < propertyKeys.size(); ++column) {
+                                auto &source = columns[column][sorted];
+                                const size_t valueBytes = detail::retainedPropertyValueBytes(source, [&] { checkGuardNow(state); });
+                                size_t moveBytes = 1U; // source keeps a NULL cell after the transfer
+                                if (source.getType() == PropertyType::MAP)
+                                    moveBytes = checkedSizeAdd(moveBytes,
+                                        utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(0U),
+                                        "logical-plan Node move size overflowed");
+                                else if (source.getType() == PropertyType::STRING || source.getType() == PropertyType::LIST ||
+                                        source.getType() == PropertyType::BYTES)
+                                    moveBytes = checkedSizeAdd(moveBytes, detail::standardContainerProxyBytes(),
+                                        "logical-plan Node move size overflowed");
+                                MaterializedByteReservation moveScratch(&state.shared.materialized_budget);
+                                moveScratch.set(moveBytes);
+                                row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) = std::move(source);
+                                source = PropertyValue(); // destroy moved-from proxies before refund
+                                rowBytes.absorb(columnBytes.splitOff(valueBytes - 1U));
+                                rowBytes.set(logicalReadRowBytes(row, state.shared.context));
+                            }
+                            if (deferredBinding) {
+                                // Keep the borrowed key allowance until this range
+                                // ends. Release actual matrix buffers/proxies first,
+                                // accounting the temporary empty vector's proxy.
+                                MaterializedByteReservation emptyMatrix(&state.shared.materialized_budget);
+                                emptyMatrix.set(detail::standardContainerProxyBytes());
+                                std::vector<std::vector<PropertyValue>>().swap(columns);
+                                columnBytes.set(checkedSizeAdd(detail::standardVectorHeapBufferBytes(columns),
+                                    columnParts.keys, "logical-plan Node empty column size overflowed"));
+                                emptyMatrix.reset();
+                                const size_t logicalBinding = checkedSizeAdd(scan.getVariable().size(),
+                                    sizeof(LogicalPlanReadValue) + sizeof(storage::EntityRef),
+                                    "logical-plan Node binding size overflowed");
+                                const size_t physicalBinding = checkedSizeAdd(
+                                    detail::executionBindingNodeBytes<decltype(row.values)>(),
+                                    utils::detail::standardFreshStringHeapUpper(scan.getVariable().size()),
+                                    "logical-plan Node binding size overflowed");
+                                rowBytes.set(checkedSizeAdd(rowBytes.bytes(), (std::max)(logicalBinding, physicalBinding),
+                                    "logical-plan Node binding size overflowed"));
+                                row.values.emplace(scan.getVariable(), referenceAt(index));
+                                rowBytes.set(logicalReadRowBytes(row, state.shared.context));
+                                debug::PerfTrace::addValue("logical_plan.node_predicate.deferred_binding_rows", 1);
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                static std::atomic<unsigned> reports{0U};
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE") && reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                                    std::fprintf(stderr, "CI_NODE_DEFERRED_BINDING row_charge=%zu column_charge=%zu used=%zu available=%zu reports_limit=20\n",
+                                        rowBytes.bytes(), columnBytes.bytes(), state.shared.materialized_budget.used(),
+                                        state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                            }
 							if (selection.has_value() || nodeRefScanMatches(state.shared.snapshot, row, scan.getVariable(), scan, parameterPredicates,
 												   state, true)) {
 								rowBytes.reset();

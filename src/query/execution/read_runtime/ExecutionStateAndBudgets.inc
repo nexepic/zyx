@@ -553,10 +553,10 @@
 												 std::span<const std::string_view> keys, const char *message, const QueryContext *context,
                 PropertyColumnByteParts *parts = nullptr) {
 			if (context != nullptr) context->checkGuardNow();
-			size_t bytes = checkedSizeMul(columns.capacity(), sizeof(std::vector<PropertyValue>), message);
+			size_t bytes = detail::standardVectorHeapBufferBytes(columns);
             PropertyColumnByteParts measured; measured.outer = bytes;
 			for (size_t column = 0U; column < columns.size(); ++column) {
-                const auto inner = checkedSizeMul(columns[column].capacity(), sizeof(PropertyValue), message);
+                const auto inner = detail::standardVectorHeapBufferBytes(columns[column]);
 				bytes = checkedSizeAdd(bytes, inner, message);
                 measured.inner = checkedSizeAdd(measured.inner, inner, message);
 				if (column < keys.size()) {

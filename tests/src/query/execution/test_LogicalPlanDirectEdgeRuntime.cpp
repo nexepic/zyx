@@ -1,4 +1,5 @@
 #include "CypherParserImpl.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
 #include "graph/query/logical/operators/LogicalSkip.hpp"
@@ -60,6 +61,12 @@ namespace graph::query::execution {
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation) {
+        size_t deferredRows = 0U;
+        graph::debug::PerfTrace::ScopedObserver observe(&deferredRows,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.node_predicate.deferred_binding_rows")
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 		DirectEdgeGraph graph = directGraph();
 		graph.node_ref_scan_order = {3U, 1U, 2U};
 		for (auto &[id, node]: graph.nodes)
@@ -83,6 +90,7 @@ namespace graph::query::execution {
 			else EXPECT_GT(graph.node_property_column_batch_reads, 1U);
 			EXPECT_GE(graph.node_property_column_admission_reads, graph.node_property_column_batch_reads);
 		}
+        EXPECT_GT(deferredRows, 0U);
 		graph.nodes.at(1U).properties.pop_back();
 		std::vector<int64_t> ids;
 		static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) {
@@ -1226,6 +1234,12 @@ namespace graph::query::execution {
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, NestedSortPrefetchesOuterPropertyAndTransfersRows) {
+        size_t retiredCaches = 0U;
+        graph::debug::PerfTrace::ScopedObserver observe(&retiredCaches,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.result.retired_cache_bytes")
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 		DirectEdgeGraph graph = directGraph();
 		graph.enable_property_tokens = true;
 		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
@@ -1259,6 +1273,7 @@ namespace graph::query::execution {
         EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
         for (const auto &keys : graph.node_property_column_batch_keys)
             EXPECT_EQ(keys, (std::vector<std::string>{"priority"}));
+        EXPECT_GT(retiredCaches, 0U);
 		EXPECT_EQ(graph.node_property_point_reads, 0U);
 	}
 
