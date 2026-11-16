@@ -40,3 +40,27 @@ Evidence/supervisor Python regression passed45 tests via the configured environm
 Additional limits: the Edge ownership trace describes the fallback cell path; the direct-path16-byte PMR proxy request still lacks a uniquely identified concrete allocating object. Native rejection/result correlation remains necessary, and next-run diagnostics cannot guarantee closure. Sort's optional key carrier and corrected key-vector proxy/backing charges are included in actual batch/key-slot admission; native layout differences may expose later shortages even when a copied payload is eliminated. No fee is subtracted merely to recover a passing test.
 
 First complete run executed11125 enabled cases exactly once, with no missing/extra/duplicate identities, but failed one test:SortKeyQuotaFailureIsTypedAndASeparateLargerExecutionCanRetry. Its32 bare keys no longer allocate duplicated owning slots. The test now uses32 equivalent computed keys(x+0), retaining the original4096-byte denial, typed exception, larger-budget retry and result assertions. A separate positive test verifies32 repeated bare keys fit4096 bytes. No production logic or quota was changed to suppress the failure. First-run XML/logs and timing deltas are preserved. Final full regression is rerun after this test correction; earlier pending/failing states are not passes.
+
+## Final verification / 最终验证
+
+The final unfiltered run passed all11126 enabled cases exactly once across8 shards:zero failures/skips/missing/extra/duplicates, all6 stress cases once.20 disabled cases are excluded. Source714fe61ca3bbf95c6190e8db6fcb89d6f471423b; binary SHA256d20e2c50ded626053abecab5d090316c22dfa0a961342e44045813c347e67111. These final results supersede the earlier pending/failing run statuses. Coverage:{"regions_percent": 93.71, "functions_percent": 98.1, "lines_percent": 95.75, "branches_percent": 86.84}. Metrics below95% remain unmet; no threshold/exclusion changed.
+
+The corrected sort quota selection passed47/47; earlier query/physical selection360/360, final adaptive physical tests6/6, independent current-case diagnostic13/13 and evidence/supervisor Python45/45 remain separately scoped evidence, not additive totals. The LLDB diagnostic helper tests and workflow configuration validation are recorded alongside final results.
+
+Two additional bounded Windows LLDB cases now target NativeEdgeCellsKeepTightAndRetryReadsBounded and NestedGraphScopesReadOnlyTheirSelectedEntityProperties, each with max3 rejection stacks/32 frames and a300-second process bound. The same helper successfully ran on Windows in Build246; no new native execution is claimed. This supplements the fallback ownership trace with direct-allocation stacks, subject to debugger/symbol/timeout limits. Existing diagnostics and gates remain.
+
+Compiled source remained frozen throughout the final run; the subsequent workflow-only change was parsed and shell-checked separately. No push, CI trigger/cancellation, main mutation or Codecov account change occurred. All native sufficiency/RSS/performance limits above remain. Final independent bundle retention and restore verification accompany the final report commit; reverse-download remains unverified.
+
+Commits before this final evidence commit / 最终证据提交前的提交清单:
+
+- eabda614e Borrow charged scalar rows while sorting bare keys
+- 5e879fef8 Release consumed scalar bindings before publishing procedure cells
+- 835335712 Avoid trivial label hash allocation and trace unresolved owner overlaps
+- bf4294efe Amortize bounded scratch reads across four pages
+- 1b3c3d0bb Coalesce only small-payload padding to retain large-read behavior
+- 90bc6ac30 Preserve follow-up ownership and adaptive read validation evidence
+- 714fe61ca Preserve owning sort-key quota rejection and test borrowed-key admission
+- 2265c0446 Retain full-run failure and corrected sort-quota coverage evidence
+- aa9228110 Capture bounded rejection stacks for unresolved Windows owners
+
+Quota-debugger helper tests passed11/11 (56 Python tests total across three distinct files). The Windows retained-ownership diagnostic also includes the new small-payload padding test. Both modified workflow shell blocks passed bash syntax validation; YAML parsed successfully. The transient post-run exec transport disconnect recovered before final verification and did not rerun or alter the completed tests.

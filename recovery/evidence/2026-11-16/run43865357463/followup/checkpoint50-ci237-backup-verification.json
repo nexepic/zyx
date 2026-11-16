@@ -1,0 +1,13 @@
+{
+  "head": "2265c04466511c8a849d5078ca20e60308b1ed7b",
+  "restored_head": "2265c04466511c8a849d5078ca20e60308b1ed7b",
+  "bundle_bytes": 322025042,
+  "bundle_sha256": "0c4b44067e300ef883f916f3ee7e594d1f4aae9af37de2223e86a2dfb7bd3c24",
+  "reachable_objects": 45373,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 50,
+  "validation": "First full11125 one obsolete allocation expectation; corrected quota tests; final full pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}
