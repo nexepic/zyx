@@ -1580,6 +1580,11 @@ namespace graph::query {
 
 
 	TEST_F(LogicalVectorPropertyBatchTest, CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication) {
+        size_t transfers = 0U;
+        graph::debug::PerfTrace::ScopedObserver observer(&transfers,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_procedure.scalar_binding_staged") *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 		for (auto &[id, node]: backend->state->nodes) {
 			node.labels = {"Person"};
 			node.properties.back().value = PropertyValue(std::string(1000U, 'x'));
@@ -1611,6 +1616,7 @@ namespace graph::query {
 		EXPECT_EQ(backend->state->node_point_reads, 0U);
 		// A fresh execution must reuse no moved payload from the earlier query.
 		EXPECT_EQ(execute(project).rowCount(), 3U);
+        EXPECT_GT(transfers, 0U);
 	}
 
 

@@ -458,6 +458,64 @@
             graph::debug::PerfTrace::addValue("logical_procedure.output_binding_released", 1);
         }
 
+        // Transfer a terminal scalar through a stack owner so its consumed
+        // binding node is destroyed before allocating the public hash node.
+        // MAP moves have a separate empty-table cost; keep their existing path.
+        bool tryStageProcedureScalarOutput(QueryResult &result, ProcedureRows &rows,
+                size_t rowIndex, QueryResult::Row &output, const std::string &column,
+                size_t maximumBytes, size_t externalSourceBytes, bool checkLocalBound) {
+            auto &buffered = rows[rowIndex];
+            auto binding = buffered.row.values.find(column);
+            if (binding == buffered.row.values.end()) return false;
+            auto *scalar = std::get_if<PropertyValue>(&binding->second);
+            if (!scalar || scalar->getType() == PropertyType::MAP || output.contains(column) ||
+                    output.max_load_factor() != 1.0F || output.size() + 1U > output.bucket_count()) return false;
+            const auto type = scalar->getType();
+            const size_t moveProxy = type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES
+                ? detail::standardContainerProxyBytes() : 0U;
+            const auto checkOverlap = [&](size_t temporary, size_t allocation, const char *phase) {
+                if (!checkLocalBound) return;
+                const size_t source = checkedProcedureSizeAdd(publicationSourceBytes(rows, rowIndex), temporary);
+                const size_t destination = checkedProcedureSizeAdd(procedureQueryResultBytes(result),
+                    procedureQueryResultRowBytes(output));
+                const size_t total = checkedProcedureSizeAdd(externalSourceBytes,
+                    checkedProcedureSizeAdd(source, checkedProcedureSizeAdd(destination, allocation)));
+                if (total > maximumBytes) {
+                    reportProcedurePublicationPressure(result, rows, phase, externalSourceBytes,
+                        source, destination, allocation, maximumBytes);
+                    throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
+                }
+            };
+            checkOverlap(0U, 2U * moveProxy, "scalar_staging_moves");
+            detail::ProcedurePayloadAdmissionScope::admit(2U * moveProxy);
+            ResultValue staged(std::move(*scalar));
+            checkOverlap(graph::query::detail::resultValueHeapBytes(staged), 0U, "scalar_staging_overlap");
+            buffered.row.values.erase(binding); // destroys the moved-from proxy and binding/key nodes
+            const size_t stagedHeap = graph::query::detail::resultValueHeapBytes(staged);
+            if (buffered.allocation_credit.resource()) {
+                size_t retained = checkedProcedureSizeAdd(detail::procedurePayloadHeapUpper<false>(buffered.row),
+                    detail::procedurePayloadHeapUpper<false>(buffered.node_properties));
+                retained = checkedProcedureSizeAdd(retained, checkedProcedureSizeAdd(stagedHeap,
+                    procedureQueryResultRowBytes(output)));
+                retained = checkedProcedureSizeAdd(retained,
+                    2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
+                buffered.allocation_credit.set(retained);
+            }
+            using namespace utils::detail;
+            using Entry = QueryResult::Row::value_type;
+            const size_t node = checkedProcedureSizeAdd(standardAllocatorRequestBytes(standardHashNodeBytes<Entry>(), alignof(Entry)),
+                standardFreshStringHeapUpper(column.size()));
+            checkOverlap(stagedHeap, checkedProcedureSizeAdd(node, moveProxy), "scalar_staged_destination");
+            detail::ProcedurePayloadAdmissionScope::admit(moveProxy);
+            detail::procedureAdmitMapNode(output, column);
+            output.try_emplace(column, std::move(staged));
+            staged = ResultValue(); // destroy the last moved-from proxy before reconciliation
+            consumeProcedureOutputBinding(result, rows, rowIndex, output, column,
+                maximumBytes, externalSourceBytes, checkLocalBound);
+            graph::debug::PerfTrace::addValue("logical_procedure.scalar_binding_staged", 1);
+            return true;
+        }
+
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {

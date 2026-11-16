@@ -441,6 +441,8 @@
                 QueryResult::Row output;
                 detail::procedureMapReserve(output, buffered.row.values.size());
 				for (const std::string &column: result.getColumns()) {
+                    if (tryStageProcedureScalarOutput(result, rows, rowIndex, output, column,
+                            readBounds.maximum_materialized_bytes, retainedSourceBytes, accountOutputTransition)) continue;
 					const auto value = buffered.row.values.find(column);
                     detail::procedureAdmitMapNode(output, column);
 					if (value == buffered.row.values.end() || // ZYX_COV_EXCL_LINE: output variables are derived from
