@@ -1,0 +1,912 @@
+[
+  {
+    "case_directory": "budget-current-00001b36909608dd",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848461.3834558,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_completed": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_started_observed_seconds": 0.16920270000264281,
+      "last_completed_observed_seconds": 0.4527463260019431,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848461.949079,
+    "output_bytes": 11890,
+    "retained_prefix_bytes": 11890,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 679,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.284",
+          "timestamp": "2026-11-16T17:01:01.549",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848461.4550252,
+      "completed_at": 1794848461.925522,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-00dfcc9de747e030",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848460.0330453,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_completed": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_started_observed_seconds": 0.2789711610021186,
+      "last_completed_observed_seconds": 0.8203775380025036,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848461.0538452,
+    "output_bytes": 10241,
+    "retained_prefix_bytes": 10241,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 1093,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.541",
+          "timestamp": "2026-11-16T17:01:00.312",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848460.1482213,
+      "completed_at": 1794848461.0219865,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-2c95b9d65e632eff",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848453.089504,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_started_observed_seconds": 0.20402454199938802,
+      "last_completed_observed_seconds": 0.20710300099744927,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848453.4513447,
+    "output_bytes": 2427,
+    "retained_prefix_bytes": 2427,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 653,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.003",
+          "timestamp": "2026-11-16T17:00:53.293",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848453.192333,
+      "completed_at": 1794848453.410417,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-3ceb9c9aa6a8d609",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848457.8590558,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "last_started_observed_seconds": 0.584502720994351,
+      "last_completed_observed_seconds": 0.6138938229996711,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848458.680875,
+    "output_bytes": 14311,
+    "retained_prefix_bytes": 14311,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 648,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.029",
+          "timestamp": "2026-11-16T17:00:58.458",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848458.249054,
+      "completed_at": 1794848458.6305704,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-4c179838a9d8aec9",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848455.711626,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "last_started_observed_seconds": 0.2050769039997249,
+      "last_completed_observed_seconds": 0.20749748399975942,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848456.1056836,
+    "output_bytes": 1298,
+    "retained_prefix_bytes": 1298,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 658,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.002",
+          "timestamp": "2026-11-16T17:00:55.917",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848455.8792512,
+      "completed_at": 1794848455.998329,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-67ac5c116abee59e",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848453.6012728,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "last_started_observed_seconds": 0.14157192599668633,
+      "last_completed_observed_seconds": 0.15008097900135908,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848453.8773093,
+    "output_bytes": 2765,
+    "retained_prefix_bytes": 2765,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 654,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.008",
+          "timestamp": "2026-11-16T17:00:53.742",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848453.6492493,
+      "completed_at": 1794848453.8656912,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-6c9913d0f1f1a535",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848451.841802,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "last_started_observed_seconds": 0.735814997999114,
+      "last_completed_observed_seconds": 0.7528849430018454,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848452.7658713,
+    "output_bytes": 6860,
+    "retained_prefix_bytes": 6860,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 665,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.017",
+          "timestamp": "2026-11-16T17:00:52.577",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848452.4630938,
+      "completed_at": 1794848452.7314887,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-810712600e293f9c",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848459.5529175,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "last_completed": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "last_started_observed_seconds": 0.11453160000382923,
+      "last_completed_observed_seconds": 0.11856940000143368,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848459.7668426,
+    "output_bytes": 1646,
+    "retained_prefix_bytes": 1646,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 658,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.005",
+          "timestamp": "2026-11-16T17:00:59.666",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848459.5940142,
+      "completed_at": 1794848459.7586696,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-843bd9d619cdbee3",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848454.6898699,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "last_started_observed_seconds": 0.3430763639989891,
+      "last_completed_observed_seconds": 0.3538696119940141,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848455.3220313,
+    "output_bytes": 2299,
+    "retained_prefix_bytes": 2299,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 655,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.01",
+          "timestamp": "2026-11-16T17:00:55.034",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848454.848639,
+      "completed_at": 1794848455.2760053,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-adc6576f6ac7613a",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848451.2770557,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "last_completed": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "last_started_observed_seconds": 0.17038599599618465,
+      "last_completed_observed_seconds": 0.17759611299698008,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848451.6255846,
+    "output_bytes": 3995,
+    "retained_prefix_bytes": 3995,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 677,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.008",
+          "timestamp": "2026-11-16T17:00:51.446",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848451.3473983,
+      "completed_at": 1794848451.614241,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-bd8d418799ca60e6",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848454.0698576,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "last_started_observed_seconds": 0.1403476299965405,
+      "last_completed_observed_seconds": 0.14459491599700414,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848454.4012413,
+    "output_bytes": 2433,
+    "retained_prefix_bytes": 2433,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 656,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.004",
+          "timestamp": "2026-11-16T17:00:54.210",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848454.121166,
+      "completed_at": 1794848454.387842,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-f37ce330ed64a1bd",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848459.0141048,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "last_completed": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "last_started_observed_seconds": 0.12390124599914998,
+      "last_completed_observed_seconds": 0.12730723500135355,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848459.2569811,
+    "output_bytes": 2106,
+    "retained_prefix_bytes": 2106,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 637,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.003",
+          "timestamp": "2026-11-16T17:00:59.138",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848459.0815468,
+      "completed_at": 1794848459.2471576,
+      "posix_signal": null
+    }
+  },
+  {
+    "case_directory": "budget-current-f82d89c4a184df8e",
+    "command": [
+      "/workspace/zyx/buildDir/zyx_test_suite",
+      "--gtest_filter=LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties"
+    ],
+    "checkout_sha": "bf4294efe8614d066614b866d9160f1d2993f064",
+    "event_sha": null,
+    "started_at": 1794848456.9466329,
+    "state": "completed",
+    "timeout_seconds": 300.0,
+    "exit_code": 0,
+    "diagnostic_options": {
+      "ZYX_CI_BUDGET_TRACE": "1"
+    },
+    "effective_timeout_seconds": 300.0,
+    "case_journal": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_started_observed_seconds": 0.1943973269953858,
+      "last_completed_observed_seconds": 0.28939817100035725,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    "case_journal_write_errors": 0,
+    "completed_at": 1794848457.4236019,
+    "output_bytes": 5820,
+    "retained_prefix_bytes": 5820,
+    "retained_tail_bytes": 0,
+    "output_truncated": false,
+    "console_truncated": false,
+    "xml_present": true,
+    "xml_documents": [
+      {
+        "path": "tests.xml",
+        "bytes": 673,
+        "parse_state": "complete",
+        "summary": {
+          "tests": "1",
+          "failures": "0",
+          "disabled": "0",
+          "errors": "0",
+          "time": "0.096",
+          "timestamp": "2026-11-16T17:00:57.139",
+          "name": "AllTests"
+        }
+      }
+    ],
+    "failed_case_count": 0,
+    "failed_cases": [],
+    "numeric_case_metrics": [],
+    "numeric_case_metrics_truncated": false,
+    "failed_cases_truncated": false,
+    "process": {
+      "raw_exit_code": 0,
+      "started_at": 1794848457.0358622,
+      "completed_at": 1794848457.401866,
+      "posix_signal": null
+    }
+  }
+]

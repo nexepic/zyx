@@ -1,0 +1,15 @@
+labels=0
+labels=1
+allocate=112 alignment=8
+allocate=32 alignment=8
+allocate=24 alignment=8
+free=24
+free=112
+free=32
+labels=2
+allocate=112 alignment=8
+allocate=32 alignment=8
+allocate=24 alignment=8
+free=24
+free=112
+free=32

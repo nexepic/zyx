@@ -1,0 +1,11 @@
+#include <cstdio>
+#include <memory_resource>
+#include <string_view>
+#include <boost/unordered_set.hpp>
+#include "graph/utils/AdmissionPmrContainers.hpp"
+struct Resource : std::pmr::memory_resource {
+ void* do_allocate(size_t n,size_t a) override { std::printf("allocate=%zu alignment=%zu\n",n,a); return std::pmr::new_delete_resource()->allocate(n,a); }
+ void do_deallocate(void* p,size_t n,size_t a) override { std::printf("free=%zu\n",n); std::pmr::new_delete_resource()->deallocate(p,n,a); }
+ bool do_is_equal(const std::pmr::memory_resource& o) const noexcept override { return this==&o; }
+};
+int main(){Resource r; for(size_t n: {0U,1U,2U}) { std::printf("labels=%zu\n",n); boost::unordered_set<std::string_view,std::hash<std::string_view>,std::equal_to<std::string_view>,graph::utils::AdmissionHashAllocator<std::string_view>> s(&r); s.reserve(n); if(n) s.insert("Source"); }}

@@ -1,0 +1,14 @@
+{
+  "source_commit": "1b3c3d0bbf6faf258f5df93aff09ff0d4670f3b7",
+  "binary_sha256": "d49568c856f70ed9e43934ea503109259b75fefd030503dd84e0f342165a2bb1",
+  "source_size_files": 2826,
+  "source_size_violations": 0,
+  "targeted_before_padding_followup": {
+    "passed": 360,
+    "failed": 0
+  },
+  "final_paged_tests": {
+    "passed": 6,
+    "failed": 0
+  }
+}
