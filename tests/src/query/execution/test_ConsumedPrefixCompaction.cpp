@@ -6,7 +6,7 @@ using namespace graph;
 using namespace graph::query::execution;
 using graph::query::execution::detail::compactConsumedPrefix;
 namespace {
-class TrackingBudget final : public std::pmr::memory_resource {
+class TrackingBudget final : public utils::UnmanagedAllocationResource {
 public:
     explicit TrackingBudget(size_t maximum) : budget_(maximum) {}
     TrackingBudget(size_t maximum, std::shared_ptr<graph::query::execution::detail::ResourceAccount> account)
@@ -14,6 +14,12 @@ public:
     size_t used() const { return budget_.used(); }
     size_t peak() const { return peak_; }
     bool fail_next = false;
+    void reserveUnmanaged(size_t bytes) override {
+        if (std::exchange(fail_next, false)) throw std::bad_alloc();
+        budget_.reserveUnmanaged(bytes);
+        peak_ = (std::max)(peak_, budget_.used());
+    }
+    void releaseUnmanaged(size_t bytes) noexcept override { budget_.releaseUnmanaged(bytes); }
 private:
     void *do_allocate(size_t bytes, size_t alignment) override {
         if (std::exchange(fail_next, false)) throw std::bad_alloc();
@@ -239,4 +245,40 @@ TEST(ConsumedPrefixCompactionTest, SemanticPreparationFailurePropagatesWithoutCh
         EXPECT_EQ(budget->used(), 4U * sizeof(SwapOnlyRow));
     }
     EXPECT_EQ(budget->used(), 0U); EXPECT_EQ(SwapOnlyRow::moves, 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, StandardHitsChargeOverlapAndRetryWithoutChangingSource) {
+    const size_t proxy = utils::detail::standardContainerProxyBytes();
+    const size_t oldBytes = utils::detail::standardAllocatorRequestBytes(4U * sizeof(int), alignof(int)) + proxy;
+    const size_t newBytes = utils::detail::standardAllocatorRequestBytes(2U * sizeof(int), alignof(int)) + proxy;
+    auto budget = std::make_shared<TrackingBudget>(oldBytes + newBytes);
+    {
+        utils::OwnedAllocationScope scope(budget);
+        utils::OwnedStdVector<int> hits{0, 1, 2, 3};
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(hits, first, newBytes - 1U));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(hits.size(), 4U);
+        budget->fail_next = true;
+        ASSERT_FALSE(compactConsumedPrefix(hits, first, newBytes));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(hits[2], 2); EXPECT_EQ(hits[3], 3);
+        EXPECT_EQ(budget->used(), oldBytes);
+        ASSERT_TRUE(compactConsumedPrefix(hits, first, newBytes));
+        EXPECT_EQ(first, 0U); ASSERT_EQ(hits.size(), 2U);
+        EXPECT_EQ(hits[0], 2); EXPECT_EQ(hits[1], 3);
+        EXPECT_EQ(budget->used(), newBytes);
+        EXPECT_EQ(budget->peak(), oldBytes + newBytes);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, StandardHitsPreserveOrderAcrossGeometricCompactions) {
+    utils::OwnedStdVector<int> hits;
+    for (int id = 0; id < 300; ++id) hits.push_back(id);
+    size_t first = 0U, copied = 0U;
+    for (int expected = 0; expected < 300; ++expected, ++first) {
+        if (compactConsumedPrefix(hits, first, SIZE_MAX)) copied += hits.size();
+        ASSERT_LT(first, hits.size());
+        EXPECT_EQ(hits[first], expected);
+    }
+    EXPECT_GT(copied, 0U); EXPECT_LT(copied, 3U * 300U);
 }

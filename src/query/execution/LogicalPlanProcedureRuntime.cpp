@@ -1069,17 +1069,35 @@ namespace graph::query::execution {
                         static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
         };
 
+        size_t firstRetainedHit = 0U;
         const bool prepareFirstOperator = !operations.empty() &&
             (operations.front()->getType() == logical::LogicalOpType::LOP_PROJECT ||
              operations.front()->getType() == logical::LogicalOpType::LOP_FILTER);
         const auto prepareInputRows = [&](size_t offset, size_t &count, size_t end,
                 const QueryResult &output) -> ProcedureRows {
+            context.checkGuard();
+            // Completed batches cannot be replayed. Reclaim their hit records
+            // before growing output consumes the temporary copy's headroom.
+            size_t consumed = offset - firstRetainedHit;
+            const size_t retained = checkedProcedureSizeAdd(retainedVectorSourceBytes,
+                procedureQueryResultBytes(output));
+            const size_t headroom = retained < readBounds.maximum_materialized_bytes
+                ? readBounds.maximum_materialized_bytes - retained : 0U;
+            if (detail::compactConsumedPrefix(searchResult.hits, consumed, headroom)) {
+                firstRetainedHit = offset;
+                const size_t before = retainedVectorSourceBytes;
+                retainedVectorSourceBytes = checkedProcedureSizeAdd(retainedRequestBytes,
+                    detail::standardVectorHeapBufferBytes(hits));
+                graph::debug::PerfTrace::addValue("logical_procedure.vector_source_prefix_compacted", 1);
+                graph::debug::PerfTrace::addValue("logical_procedure.vector_source_bytes_released",
+                    static_cast<int64_t>(before - retainedVectorSourceBytes));
+            }
             for (;;) {
                 context.checkGuard();
                 [[maybe_unused]] const char *preparationPhase = "build_rows";
                 try {
                     auto prepared = makeBufferedVectorProcedureRows(
-                        std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(offset, count), context);
+                        std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(offset - firstRetainedHit, count), context);
                     // A final single row cannot split further, so it needs no
                     // retry source. Larger final batches retain hits until
                     // preparation succeeds, keeping every quota retry valid.
@@ -1174,15 +1192,15 @@ namespace graph::query::execution {
 
 		if (const std::optional<size_t> prefix = vectorProcedurePrefixThroughLimit(operations, hits.size());
 				prefix.has_value()) {
-			const auto hitPrefix = std::span<storage::LogicalGraphVectorSearchHit>(hits).first(*prefix);
-			validateVectorSearchHits(hitPrefix, readBounds, context);
+			const size_t selectedHitCount = *prefix;
+			validateVectorSearchHits(std::span<storage::LogicalGraphVectorSearchHit>(hits).first(selectedHitCount), readBounds, context);
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
 			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
-			for (size_t offset = 0U; offset < hitPrefix.size();) {
-                size_t count = std::min(capacity, hitPrefix.size() - offset);
-                auto rows = prepareInputRows(offset, count, hitPrefix.size(), result);
+			for (size_t offset = 0U; offset < selectedHitCount;) {
+                size_t count = std::min(capacity, selectedHitCount - offset);
+                auto rows = prepareInputRows(offset, count, selectedHitCount, result);
                 offset += count;
                 if (!appendBufferedProcedureRows(std::move(rows), *snapshot,
 						operations, readBounds, context, result, nullptr, &operatorRowCounts, retainedVectorSourceBytes, true, finalRowCount, prepareFirstOperator)) {

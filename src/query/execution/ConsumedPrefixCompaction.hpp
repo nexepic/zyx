@@ -6,8 +6,31 @@
 #include <utility>
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/utils/OwnedVector.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 
 namespace graph::query::execution::detail {
+// Call under the source's allocation scope. Plain hit records own no payload;
+// copy the live suffix privately and keep both backing allocations charged.
+template<class Hit> requires std::is_trivially_copyable_v<Hit>
+bool compactConsumedPrefix(utils::OwnedStdVector<Hit> &hits, size_t &first, size_t headroom) {
+    if (first == 0U || first >= hits.size()) return false;
+    const size_t remaining = hits.size() - first;
+    // Reclaim after a quarter is consumed while copy headroom is still
+    // available. Across successful compactions fewer than 3*N hits are copied.
+    if (first < remaining / 3U + (remaining % 3U != 0U) || hits.capacity() <= remaining) return false;
+    const size_t backing = utils::detail::standardAllocatorRequestBytes(remaining * sizeof(Hit), alignof(Hit));
+    const size_t proxy = utils::detail::standardContainerProxyBytes();
+    if (backing > headroom || proxy > headroom - backing) return false;
+    try {
+        utils::OwnedStdVector<Hit> compacted(hits.begin() + first, hits.end());
+        hits.swap(compacted);
+    } catch (const MaterializedByteLimitExceeded &) { return false; }
+      catch (const ResourceAdmissionDenied &) { return false; }
+      catch (const std::bad_alloc &) { return false; }
+    first = 0U;
+    return true;
+}
+
 // Optional compaction before constructing the next output. The caller supplies
 // headroom after charging every existing source and result owner. Old and new
 // buffers coexist until the swap; element payload ownership only moves.

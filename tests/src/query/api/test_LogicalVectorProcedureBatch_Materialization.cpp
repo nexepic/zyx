@@ -1899,11 +1899,13 @@ TEST_F(LogicalVectorPropertyBatchTest, CompleteThreeHundredRowsKeepTheUnchangedO
     auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
     auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 256U * 1024U);
     QueryContext context; context.resource_account = account;
-    size_t released = 0U;
-    debug::PerfTrace::ScopedObserver observe(&released,
+    struct Trace { size_t released = 0U, compactions = 0U; } trace;
+    debug::PerfTrace::ScopedObserver observe(&trace,
         [](void *p, std::string_view key, int64_t bytes, bool duration) noexcept {
             if (!duration && key == "logical_procedure.vector_source_bytes_released" && bytes > 0)
-                *static_cast<size_t *>(p) += static_cast<size_t>(bytes);
+                static_cast<Trace *>(p)->released += static_cast<size_t>(bytes);
+            if (!duration && key == "logical_procedure.vector_source_prefix_compacted")
+                ++static_cast<Trace *>(p)->compactions;
         });
     {
         const auto result = execute(project, context);
@@ -1912,11 +1914,12 @@ TEST_F(LogicalVectorPropertyBatchTest, CompleteThreeHundredRowsKeepTheUnchangedO
             EXPECT_EQ(result.getRows()[index].at("keys").asPrimitive(),
                 PropertyValue(std::vector<PropertyValue>{PropertyValue("rank" + std::to_string(300U - index))}));
         EXPECT_LE(result.getRows().capacity(), 300U);
-        EXPECT_GE(released, 300U * sizeof(storage::LogicalGraphVectorSearchHit));
+        EXPECT_GT(trace.compactions, 0U);
+        EXPECT_GE(trace.released, 300U * sizeof(storage::LogicalGraphVectorSearchHit));
         EXPECT_GT(account->used(), 0U);
         EXPECT_LE(account->used(), 256U * 1024U);
         RecordProperty("escaped_result_account_bytes", account->used());
-        RecordProperty("released_hit_source_bytes", released);
+        RecordProperty("released_hit_source_bytes", trace.released);
         EXPECT_EQ(backend->state->search_result.hits.size(), 300U);
         EXPECT_EQ(backend->state->node_point_reads, 0U);
     }
