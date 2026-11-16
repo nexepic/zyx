@@ -653,6 +653,8 @@
 					}
 					detail::procedureAdmitMapNode(row, column);
                     row.emplace(column, std::move(*scalar));
+                    consumeProcedureOutputBinding(result, rows, rowIndex, row, column,
+                        readBounds.maximum_materialized_bytes, 0U, true);
 				}
 				appendProcedureResultRow(result, rows, rowIndex, std::move(row),
 						readBounds.maximum_materialized_bytes);

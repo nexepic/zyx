@@ -424,6 +424,40 @@
             detail::compactConsumedPrefix(rows, rowIndex, maximumBytes - retained);
         }
 
+        // Final output bindings have no remaining expression consumers. Check
+        // the actual source/output overlap before destroying each consumed node;
+        // retaining all moved-from nodes until the last alias wastes real heap.
+        void consumeProcedureOutputBinding(const QueryResult &result, ProcedureRows &rows,
+                size_t rowIndex, const QueryResult::Row &output, const std::string &column,
+                size_t maximumBytes, size_t externalSourceBytes, bool checkLocalBound) {
+            if (checkLocalBound) {
+                const size_t source = publicationSourceBytes(rows, rowIndex);
+                const size_t destination = checkedProcedureSizeAdd(procedureQueryResultBytes(result),
+                    procedureQueryResultRowBytes(output));
+                const size_t total = checkedProcedureSizeAdd(externalSourceBytes,
+                    checkedProcedureSizeAdd(source, destination));
+                if (total > maximumBytes) {
+                    reportProcedurePublicationPressure(result, rows, "binding_output_overlap",
+                        externalSourceBytes, source, destination, 0U, maximumBytes);
+                    throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
+                }
+            }
+            auto &buffered = rows[rowIndex];
+            buffered.row.values.erase(column);
+            // Refund only destroyed storage, keeping the independent output
+            // and its later empty-map handoff admitted through publication.
+            if (buffered.allocation_credit.resource()) {
+                size_t retained = checkedProcedureSizeAdd(
+                    detail::procedurePayloadHeapUpper<false>(buffered.row),
+                    detail::procedurePayloadHeapUpper<false>(buffered.node_properties));
+                retained = checkedProcedureSizeAdd(retained, procedureQueryResultRowBytes(output));
+                retained = checkedProcedureSizeAdd(retained,
+                    checkedProcedureSizeMul(2U, detail::procedureEmptyMapHeapUpper<QueryResult::Row>()));
+                buffered.allocation_credit.set(retained);
+            }
+            graph::debug::PerfTrace::addValue("logical_procedure.output_binding_released", 1);
+        }
+
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {

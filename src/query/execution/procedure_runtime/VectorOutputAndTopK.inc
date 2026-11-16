@@ -451,6 +451,8 @@
 						throw std::logic_error(
 								"logical Vector procedure projection did not bind a declared output column");
 					}
+                    consumeProcedureOutputBinding(result, rows, rowIndex, output, column,
+                        readBounds.maximum_materialized_bytes, retainedSourceBytes, accountOutputTransition);
 				}
 				if (accountOutputTransition) {
 					appendProcedureResultRow(result, rows, rowIndex, std::move(output),

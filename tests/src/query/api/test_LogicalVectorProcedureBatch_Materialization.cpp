@@ -447,7 +447,12 @@ namespace graph::query {
 		options.bounds.maximum_materialized_bytes = 2200U;
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
 		options.bounds.maximum_materialized_bytes = 5000U;
-		for (int retry = 0; retry < 2; ++retry) {
+		size_t consumed = 0U;
+        debug::PerfTrace::ScopedObserver observe(&consumed,
+            [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+                if (!duration && key == "logical_procedure.output_binding_released") ++*static_cast<size_t *>(p);
+            });
+        for (int retry = 0; retry < 2; ++retry) {
 			const auto result = execute(project);
 			ASSERT_EQ(result.rowCount(), 1U);
 			const auto &leftBody = std::get<std::string>(result.getRows()[0].at("left").asNode().getProperties().at("body").getVariant());
@@ -461,7 +466,8 @@ namespace graph::query {
 				EXPECT_EQ(result.getRows()[0].at(alias).asNode().getProperties().at("body"), PropertyValue(std::string(1000U, 'x')));
 			}
 		}
-		EXPECT_EQ(backend->state->node_point_reads, 0U);
+		EXPECT_EQ(consumed, 4U);
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
 	}
 
 
