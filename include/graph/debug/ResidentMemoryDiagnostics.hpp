@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include "graph/debug/SanitizerAllocationSnapshot.hpp"
+#include "graph/debug/RssActivity.hpp"
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #elif defined(__linux__)
@@ -35,6 +36,7 @@ static inline void traceResidentMemory(const char *phase, [[maybe_unused]] bool 
         if (index == 24U) std::fputs("CI_RSS_TRUNCATED process_limit=24\n",stderr);
         return;
     }
+    reportRssActivity(phase, std::strcmp(phase, "before-query") == 0);
     const auto allocations = captureSanitizerAllocations();
     std::fprintf(stderr,"CI_RSS_PHASE phase=%s asan_available=%d live=%zu heap=%zu\n",phase,allocations.available,allocations.live_bytes,allocations.heap_bytes);
 #if defined(__APPLE__)

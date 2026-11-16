@@ -1,3 +1,4 @@
+#include "graph/debug/RssActivity.hpp"
 /**
  * @file RelocatableStorageBackend.cpp
  * @brief File-owning implementation of the relocatable logical read backend.
@@ -659,6 +660,9 @@ namespace graph::storage {
 				try {finish();} catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();releasePermit();}
 			}
 			uint64_t write(std::span<const std::byte> bytes) override {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_SCRATCH_WRITE);
+#endif
 				requireActive();
 				if(bytes.empty() || bytes.size()>maximumFragmentBytes() || locations_.size()>=maximum_fragments_ ||
 					RSS_SEGMENT_SIZE>maximum_bytes_-used_bytes_)
@@ -681,6 +685,9 @@ namespace graph::storage {
 				used_bytes_+=RSS_SEGMENT_SIZE;return id;
 			}
 			std::vector<std::byte> read(uint64_t id) override {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_SCRATCH_READ);
+#endif
 				requireActive();const auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch handle is stale or foreign");
 				const auto reader=store_->openOpaquePayloadReader();return reader(position->second);
 			}

@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/debug/RssActivity.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -47,6 +48,9 @@ public:
         return out;
     }
     static void encodeInto(const Record &record,size_t maximumBytes,std::vector<std::byte> &out) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_ROW_ENCODE);
+#endif
 		const size_t size=encodedSize(record);if(size>maximumBytes)throw std::runtime_error("query spill row exceeded its encoded byte bound");
 		out.clear();out.reserve(size);word(out,MAGIC,8);word(out,record.ordinal,8);word(out,record.row.values.size(),4);word(out,record.keys.size(),4);
 		// The binding tree already has canonical bytewise key order. No sort
@@ -66,6 +70,9 @@ public:
     // Scratch remains private on failure. Reuse map nodes/outer key storage,
     // remove absent fields, and release every input-byte borrow before return.
     static void decodeInto(std::span<const std::byte> bytes,size_t maximumBytes,Record &record) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_ROW_DECODE);
+#endif
 		if(bytes.size()<HEADER_BYTES || bytes.size()>maximumBytes)throw std::invalid_argument("query spill row dimensions are invalid");
 		size_t offset=0;if(read(bytes,offset,8)!=MAGIC)throw std::invalid_argument("query spill row magic/version is invalid");
 		record.ordinal=read(bytes,offset,8);const auto bindingsCount=read(bytes,offset,4),keys=read(bytes,offset,4);

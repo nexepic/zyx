@@ -108,3 +108,24 @@ def test_unfinished_owned_inferior_is_killed_and_not_reported_as_exited(monkeypa
     result = json.loads(path.read_text())
     assert killed == [True]
     assert result == {'exited': False, 'exit_code': None, 'quota_stop': False, 'cleanup_succeeded': True}
+
+
+def test_windows_symbol_mode_never_completes_cpp_types_and_caps_rejections(monkeypatch, capsys):
+    module = trace_module(monkeypatch)
+    monkeypatch.setenv('ZYX_CI_QUOTA_SYMBOL_ONLY', '1')
+    module.stack_limit = 3
+    file = SimpleNamespace(GetFilename=lambda: 'suite.exe')
+    # Deliberately no GetFunctionName/GetLineEntry/GetVariables methods.
+    frame = SimpleNamespace(IsValid=lambda: True, GetPC=lambda: 1234,
+        GetSymbol=lambda: SimpleNamespace(GetName=lambda: 'public_symbol'),
+        GetModule=lambda: SimpleNamespace(GetFileSpec=lambda: file))
+    root = SimpleNamespace(GetThread=lambda: SimpleNamespace(GetFrameAtIndex=lambda i: frame))
+    disabled = []
+    location = SimpleNamespace(GetBreakpoint=lambda: SimpleNamespace(SetEnabled=disabled.append))
+    for _ in range(5):
+        assert module.on_quota(root, location, {}) is False
+    records = [json.loads(line.split(' ', 1)[1]) for line in capsys.readouterr().out.splitlines()
+               if line.startswith('CI_QUOTA_FRAME ')]
+    assert len(records) == 3 * 32
+    assert disabled == [False]
+    assert all(r['symbol_only'] and r['function'] == 'public_symbol' and r['pc'] == 1234 for r in records)

@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 CASE = 'HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact'
 
 
-def diagnose(binary, case, xml_path, debugger):
+def diagnose(binary, case, xml_path, debugger, max_stacks=1):
     status_path = xml_path.with_name('quota-debugger.json')
     if xml_path.exists() or status_path.exists():
         print('CI_QUOTA_UNAVAILABLE reason=preexisting_evidence', flush=True)
@@ -27,6 +27,9 @@ def diagnose(binary, case, xml_path, debugger):
     environment = os.environ.copy()
     environment['GTEST_OUTPUT'] = 'xml:' + str(xml_path)
     environment['ZYX_CI_QUOTA_STATUS_PATH'] = str(status_path)
+    environment['ZYX_CI_QUOTA_STACK_LIMIT'] = str(max_stacks)
+    if os.name == 'nt':
+        environment['ZYX_CI_QUOTA_SYMBOL_ONLY'] = '1'
     status = subprocess.call(command, env=environment)
     print(f'CI_QUOTA_DEBUGGER exit={status}', flush=True)
     if status:
@@ -52,6 +55,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--case', default=CASE)
+    parser.add_argument('--max-stacks', type=int, choices=(1, 2, 3), default=1)
     args = parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_./]+', args.case):
         parser.error('one exact test name is required')
@@ -60,7 +64,7 @@ def main():
     if not debugger or not args.binary.is_file() or not output.startswith('xml:') or not output[4:]:
         print('CI_QUOTA_UNAVAILABLE reason=missing_lldb_binary_or_xml_destination', flush=True)
         return 2
-    return diagnose(args.binary, args.case, Path(output[4:]).resolve(), debugger)
+    return diagnose(args.binary, args.case, Path(output[4:]).resolve(), debugger, args.max_stacks)
 
 
 if __name__ == '__main__':
