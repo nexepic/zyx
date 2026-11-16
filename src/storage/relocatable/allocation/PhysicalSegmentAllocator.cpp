@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <stdexcept>
 
@@ -50,9 +51,8 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::vector<std::byte> buildPreparedSegment(const CatalogEntry &entry,
-																  const PhysicalSegmentAllocationRequest &request) {
-			std::vector<std::byte> bytes(RSS_SEGMENT_SIZE);
+        void writePreparedSegment(StorageIO &io, uint64_t segmentOffset, const CatalogEntry &entry,
+                                  const PhysicalSegmentAllocationRequest &request) {
 			SegmentEnvelope envelope;
 			envelope.header_bytes = request.header_bytes;
 			envelope.kind = request.kind;
@@ -64,12 +64,25 @@ namespace graph::storage {
 			envelope.payload_bytes = static_cast<uint32_t>(request.payload.size());
 			envelope.payload_crc = payloadCrc(request.payload);
 
-			const auto encodedEnvelope = SegmentEnvelopeCodec::encode(envelope);
-			std::copy(encodedEnvelope.begin(), encodedEnvelope.end(), bytes.begin());
-			std::copy(request.header_extension.begin(), request.header_extension.end(),
-					  bytes.begin() + RSS_ENVELOPE_BYTES);
-			std::copy(request.payload.begin(), request.payload.end(), bytes.begin() + request.header_bytes);
-			return bytes;
+            const auto encodedEnvelope = SegmentEnvelopeCodec::encode(envelope);
+            // The persisted image is already described by three immutable
+            // spans plus zero padding. Assemble one fixed page at a time rather
+            // than allocating another complete segment for every spill write.
+            std::array<std::byte, RSS_PAGE_SIZE> page;
+            for (size_t pageOffset = 0U; pageOffset < RSS_SEGMENT_SIZE; pageOffset += page.size()) {
+                page.fill(std::byte{0});
+                const auto copyOverlap = [&](size_t begin, std::span<const std::byte> source) {
+                    const size_t first = (std::max)(begin, pageOffset);
+                    const size_t last = (std::min)(begin + source.size(), pageOffset + page.size());
+                    if (first < last)
+                        std::copy_n(source.begin() + static_cast<std::ptrdiff_t>(first - begin), last - first,
+                            page.begin() + static_cast<std::ptrdiff_t>(first - pageOffset));
+                };
+                copyOverlap(0U, encodedEnvelope);
+                copyOverlap(RSS_ENVELOPE_BYTES, request.header_extension);
+                copyOverlap(request.header_bytes, request.payload);
+                io.writeAt({segmentOffset + pageOffset, entry.generation.value()}, page.data(), page.size());
+            }
 		}
 
 	} // namespace
@@ -318,8 +331,7 @@ namespace graph::storage {
 			const CatalogEntry &entry = entries[index];
 			const PhysicalSegmentAllocationRequest &request = requests[index];
 			const uint64_t segmentOffset = checkedSlotOffset(data_region_offset_, entry.physical_slot);
-			const std::vector<std::byte> bytes = buildPreparedSegment(entry, request);
-			writeCompleteSegment(*io_, segmentOffset, entry.generation, bytes);
+            writePreparedSegment(*io_, segmentOffset, entry, request);
 		}
 	}
 
