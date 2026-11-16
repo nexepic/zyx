@@ -1,0 +1,23 @@
+{
+  "windows_stack_cases": [
+    "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+    "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact"
+  ],
+  "max_stacks_per_case": 3,
+  "max_frames_per_stack": 32,
+  "timeout_seconds_per_case": 300,
+  "native_stack_reliability": "unverified; previous LLDB itself crashed with 0xC0000005",
+  "rss_categories": [
+    "scratch_read",
+    "scratch_write",
+    "row_decode",
+    "row_encode"
+  ],
+  "rss_scope": "warmed diagnostic only; net allocator changes, not causal RSS",
+  "unresolved_native_windows_cases": 18,
+  "prior_candidate_cases": 2,
+  "additional_candidate_cases": 2,
+  "claimed_native_fixes": 0,
+  "push": false,
+  "ci_trigger": false
+}

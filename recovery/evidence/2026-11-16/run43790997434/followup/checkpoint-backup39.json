@@ -1,0 +1,13 @@
+{
+  "head": "6302b0eb457577833460cd552510f6ec49d4a667",
+  "restored_head": "6302b0eb457577833460cd552510f6ec49d4a667",
+  "bundle_bytes": 314558886,
+  "bundle_sha256": "d9f21731a7f725d6f49a916796afd6ecdab7d387278051a3f4d361c0301f08e0",
+  "reachable_objects": 44931,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 39,
+  "validation": "Follow-up targeted and Python 83 passed; ASan activity smoke passed; complete regression running",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}

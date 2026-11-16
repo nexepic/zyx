@@ -1,0 +1,9 @@
+{
+  "source_commit": "6302b0eb457577833460cd552510f6ec49d4a667",
+  "binary_sha256": "84155a26b7e4294cc8ca4f77f96894a0e5e33a0e5e9c91014a1baf03770f7c45",
+  "targeted_passed": 106,
+  "python_passed": 83,
+  "asan_activity_smoke": "passed",
+  "full_regression": "passed",
+  "executed_exactly_once": 11116
+}
