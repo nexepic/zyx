@@ -310,13 +310,16 @@ namespace graph::storage {
         std::exception_ptr envelopeError;
         bool mappingMismatch = false;
         std::vector<std::byte> headerExtension, payload;
-        // Four pages bound stack use to 16 KiB while amortizing native calls
-        // for short payloads. Every padded byte is still read and checked for
-        // truncation before reporting an envelope or mapping error.
+        // Coalesce only padding after a complete small payload. Larger payloads
+        // keep page-sized copying; four pages still bound stack use to16KiB.
         std::array<std::byte, 4U * RSS_PAGE_SIZE> page;
-        for (size_t offset = 0U; offset < RSS_SEGMENT_SIZE; offset += page.size()) {
+        size_t chunkBytes = RSS_PAGE_SIZE;
+        for (size_t offset = 0U; offset < RSS_SEGMENT_SIZE; offset += chunkBytes) {
+            chunkBytes = offset != 0U && !envelopeError && !mappingMismatch &&
+                static_cast<size_t>(envelope.header_bytes) + envelope.payload_bytes <= RSS_PAGE_SIZE
+                ? (std::min)(page.size(), RSS_SEGMENT_SIZE - offset) : RSS_PAGE_SIZE;
             if (!entry.generation.isValid() ||
-                io_->readAtSequential(segmentOffset + offset, page.data(), page.size()) != page.size())
+                io_->readAtSequential(segmentOffset + offset, page.data(), chunkBytes) != chunkBytes)
                 throwPhysicalAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
                     "relocatable physical segment is truncated");
             if (offset == 0U) {
@@ -337,7 +340,7 @@ namespace graph::storage {
             if (envelopeError || mappingMismatch) continue;
             const auto copyOverlap = [&](size_t begin, std::span<std::byte> destination) {
                 const size_t first = (std::max)(begin, offset);
-                const size_t last = (std::min)(begin + destination.size(), offset + page.size());
+                const size_t last = (std::min)(begin + destination.size(), offset + chunkBytes);
                 if (first < last)
                     std::copy_n(page.begin() + static_cast<std::ptrdiff_t>(first - offset), last - first,
                         destination.begin() + static_cast<std::ptrdiff_t>(first - begin));
