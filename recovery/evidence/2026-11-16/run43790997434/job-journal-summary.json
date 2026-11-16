@@ -1,0 +1,132 @@
+{
+  "windows": {
+    "expected_sha_present": true,
+    "largest_case_journals": [
+      {
+        "started": 11101,
+        "completed": 11101,
+        "passed": 11082,
+        "failed": 18,
+        "skipped": 1
+      },
+      {
+        "started": 605,
+        "completed": 605,
+        "passed": 602,
+        "failed": 3,
+        "skipped": 0
+      },
+      {
+        "started": 137,
+        "completed": 137,
+        "passed": 119,
+        "failed": 18,
+        "skipped": 0
+      },
+      {
+        "started": 45,
+        "completed": 45,
+        "passed": 45,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "ubuntu": {
+    "expected_sha_present": true,
+    "largest_case_journals": [
+      {
+        "started": 605,
+        "completed": 605,
+        "passed": 605,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 45,
+        "completed": 45,
+        "passed": 45,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "mac": {
+    "expected_sha_present": true,
+    "largest_case_journals": [
+      {
+        "started": 605,
+        "completed": 605,
+        "passed": 605,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 45,
+        "completed": 45,
+        "passed": 45,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 19,
+        "completed": 19,
+        "passed": 19,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 1,
+        "completed": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "asan": {
+    "expected_sha_present": true,
+    "largest_case_journals": [
+      {
+        "started": 711,
+        "completed": 711,
+        "passed": 711,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 11,
+        "completed": 11,
+        "passed": 11,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 5,
+        "completed": 5,
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "started": 3,
+        "completed": 3,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "tsan": {
+    "expected_sha_present": true,
+    "largest_case_journals": [
+      {
+        "started": 27,
+        "completed": 27,
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  }
+}

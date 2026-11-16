@@ -1,0 +1,48 @@
+{
+  "windows": {
+    "sha256": "f57b5f92d333557c334756279e4f21ef9e281886205b043f1f4ccab37e5c8a38",
+    "bytes": 5974372,
+    "failed_case_identities": [
+      "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota",
+      "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+    ]
+  },
+  "ubuntu": {
+    "sha256": "2e2c9985ed6edcbd4f81029be7b22e4d230cb0d9901303102d8a99d63b918042",
+    "bytes": 2795439,
+    "failed_case_identities": []
+  },
+  "mac": {
+    "sha256": "1484a8bdc6dfdbae0401a4b89a64731e1da19af4fe775f63bea3f182d96aaa85",
+    "bytes": 2799872,
+    "failed_case_identities": []
+  },
+  "asan": {
+    "sha256": "a3ef8ec0c6495e481a3a27332eff8041643534d3637174daf3670293062a5cd6",
+    "bytes": 2965236,
+    "failed_case_identities": [
+      "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection"
+    ]
+  },
+  "tsan": {
+    "sha256": "0babd56c4f5731767899395d589c53cf812abf394c915bcc3dd71e69a94a73e2",
+    "bytes": 1418261,
+    "failed_case_identities": []
+  }
+}
