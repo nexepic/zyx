@@ -1904,3 +1904,43 @@ TEST_F(RelocatableStorageBackendTest, PropertyParameterComparisonKeepsFallbacksN
     engine.resetEphemeralState(); backend->close();
     EXPECT_EQ(domain->usage().total, 0U);
 }
+
+TEST_F(RelocatableStorageBackendTest, TransferredScalarResultsKeepNestedValuesAndReleaseFailedPartialOutput) {
+    using namespace execution::detail;
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    query::QueryEngine engine(backend); auto domain = backend->queryResourceDomain();
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 64U * 1024U);
+    query::QueryContext context; context.resource_account = account;
+    context.parameters.emplace("payload", PropertyValue(std::string(1000U, 'v')));
+    size_t transferred = 0U, retired = 0U;
+    auto counters = std::pair{&transferred, &retired};
+    graph::debug::PerfTrace::ScopedObserver observe(&counters,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            const auto &counts = *static_cast<const std::pair<size_t *, size_t *> *>(p);
+            if (!duration && key == "logical_plan.result.transferred_scalar_cells") *counts.first += static_cast<size_t>(value);
+            if (!duration && key == "logical_plan.result.retired_source_bytes") *counts.second += static_cast<size_t>(value);
+        });
+    const auto verify = [&] {
+        {
+            const auto result = engine.execute("UNWIND range(1,4) AS x RETURN {payload:$payload,nested:[$payload,x]} AS value", context);
+            ASSERT_EQ(result.rowCount(), 4U);
+            for (size_t i = 0; i < 4U; ++i) {
+                const auto &map = result.getRows()[i].at("value").asPrimitive().getMap();
+                EXPECT_EQ(map.at("payload"), context.parameters.at("payload"));
+                ASSERT_EQ(map.at("nested").getList().size(), 2U);
+                EXPECT_EQ(map.at("nested").getList()[0], context.parameters.at("payload"));
+                EXPECT_EQ(map.at("nested").getList()[1], PropertyValue(i + 1U));
+            }
+            EXPECT_EQ(account->used(), result.retainedResourceBytes());
+        }
+        EXPECT_EQ(account->used(), 0U);
+    };
+    verify(); ASSERT_GT(transferred, 0U); ASSERT_GT(retired, 0U);
+    const size_t beforeFailure = transferred;
+    EXPECT_THROW(static_cast<void>(engine.execute(
+        "UNWIND range(1,100) AS x RETURN {payload:CASE WHEN x < 20 THEN '' ELSE $payload END,nested:[x]} AS value", context)), ResourceAdmissionDenied);
+    EXPECT_GT(transferred, beforeFailure); // Failure follows real partial-output transfers.
+    EXPECT_EQ(account->used(), 0U);
+    verify(); engine.resetEphemeralState(); backend->close(); EXPECT_EQ(domain->usage().total, 0U);
+}

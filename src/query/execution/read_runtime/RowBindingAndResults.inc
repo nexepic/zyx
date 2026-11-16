@@ -881,8 +881,72 @@
 			return std::nullopt;
 		}
 
+        // Only the QueryResult consumer may retire its buffered input. Public
+        // row callbacks retain their original borrowing/early-stop contract.
+        void retireResultSourceRow(LogicalPlanReadRow &row, ExecutionState &state,
+                                   MaterializedByteReservation &sourceReservation) {
+            const size_t before = logicalReadRowBytes(row, state.shared.context);
+            row.values.clear(); row.property_cache.clear(); row.entity_metadata_cache.clear();
+            row.complete_entity_property_cache.clear(); row.path_cache.clear();
+            const size_t after = logicalReadRowBytes(row, state.shared.context);
+            if (after > before || before - after > sourceReservation.bytes())
+                throw std::logic_error("result source retirement exceeded its retained charge");
+            sourceReservation.set(sourceReservation.bytes() - (before - after));
+            debug::PerfTrace::addValue("logical_plan.result.retired_source_bytes", static_cast<int64_t>(before - after));
+        }
+
+        bool appendTransferredScalarResultRow(QueryResult &result, LogicalPlanReadRow &row,
+                const std::vector<std::string> &columns, ExecutionState &state,
+                MaterializedByteReservation &sourceReservation) {
+            constexpr const char *message = "logical-plan scalar result transfer overflowed";
+            size_t logicalShell = sizeof(QueryResult::Row);
+            size_t physicalShell = checkedSizeAdd(sizeof(QueryResult::Row),
+                utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(columns.size()), message);
+            size_t moveScratch = 0U;
+            for (size_t i = 0; i < columns.size(); ++i) {
+                const auto found = row.values.find(columns[i]);
+                if (found == row.values.end() || !std::holds_alternative<PropertyValue>(found->second)) return false;
+                for (size_t j = 0; j < i; ++j) if (columns[j] == columns[i]) return false;
+                logicalShell = checkedSizeAdd(logicalShell, checkedSizeAdd(columns[i].size(), sizeof(ResultValue), message), message);
+                physicalShell = checkedSizeAdd(physicalShell, utils::detail::standardFreshStringHeapUpper(columns[i].size()), message);
+                const auto type = std::get<PropertyValue>(found->second).getType();
+                size_t emptyMove = 0U;
+                if (type == PropertyType::MAP)
+                    emptyMove = utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(0U);
+                else if (type == PropertyType::LIST || type == PropertyType::BYTES)
+                    emptyMove = detail::standardContainerProxyBytes();
+                // try_emplace constructs ResultValue directly: source -> its
+                // by-value PropertyValue parameter -> the variant alternative.
+                // MSVC may allocate an empty container at each move boundary.
+                moveScratch = (std::max)(moveScratch, checkedSizeMul(2U, emptyMove, message));
+            }
+            MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
+            outputReservation.set(checkedSizeAdd(checkedSizeAdd((std::max)(logicalShell, physicalShell),
+                columns.size(), message), moveScratch, message));
+            QueryResult::Row output;
+            output.reserve(columns.size());
+            for (const auto &column : columns) {
+                checkGuardNow(state);
+                auto &property = std::get<PropertyValue>(row.values.at(column));
+                const size_t before = logicalReadRowBytes(row, state.shared.context);
+                output.try_emplace(column, std::move(property));
+                property = PropertyValue(); // destroy moved-from proxies before their credit changes
+                const size_t after = logicalReadRowBytes(row, state.shared.context);
+                if (after > before || before - after > sourceReservation.bytes())
+                    throw std::logic_error("scalar result transfer lacks its source charge");
+                outputReservation.absorb(sourceReservation.splitOff(before - after));
+            }
+            outputReservation.set(materializedResultRowBytes(output, state));
+            retireResultSourceRow(row, state, sourceReservation);
+            debug::PerfTrace::addValue("logical_plan.result.transferred_scalar_cells", static_cast<int64_t>(columns.size()));
+            appendMaterializedResultRow(result, std::move(output), state, std::move(outputReservation));
+            return true;
+        }
+
 		void appendLogicalResultRow(QueryResult &result, LogicalPlanReadRow &row,
-								const std::vector<std::string> &columns, ExecutionState &state) {
+								const std::vector<std::string> &columns, ExecutionState &state,
+                MaterializedByteReservation &sourceReservation) {
+            if (appendTransferredScalarResultRow(result, row, columns, state, sourceReservation)) return;
 			// Scalars and unique Entities whose complete records are already in
 			// memory have an exact logical result size before payloads are copied.
 			size_t predictableBytes = sizeof(QueryResult::Row);
@@ -984,6 +1048,7 @@
 				}
 				outputReservation.set(predictable ? std::max(predictableBytes, constructedBytes) : constructedBytes);
 			}
+            retireResultSourceRow(row, state, sourceReservation);
 			appendMaterializedResultRow(result, std::move(output), state, std::move(outputReservation));
 		}
 
@@ -1296,9 +1361,13 @@
 				bufferedBytes = materializedBytes;
 				for (LogicalPlanReadRow &row: rows) {
 					enforceMaterializedRowBound(row, state);
-					const bool keepGoing = preserveVisitorEarlyStop
-						? invokeOutputVisitorChecked(state, [&] { return emit(row, state); })
-						: emit(row, state);
+                    const auto emitRow = [&] {
+                        if constexpr (std::is_invocable_v<Emit &, LogicalPlanReadRow &, ExecutionState &, MaterializedByteReservation &>)
+                            return emit(row, state, bufferedReservation);
+                        else return emit(row, state);
+                    };
+                    const bool keepGoing = preserveVisitorEarlyStop
+                        ? invokeOutputVisitorChecked(state, emitRow) : emitRow();
 					if (!keepGoing) {
 						stoppedByVisitor = true;
 						rows.clear();

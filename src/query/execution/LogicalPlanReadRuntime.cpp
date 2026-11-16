@@ -688,8 +688,8 @@ namespace graph::query::execution {
 					return executeInternal(backend_, root, executionBounds, finalVisitor, nullptr, true, &finalizer,
 										   true, residentOutputBatchBytes);
 				},
-				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
-					appendLogicalResultRow(result, row, columns, state);
+				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state, MaterializedByteReservation &sourceReservation) {
+					appendLogicalResultRow(result, row, columns, state, sourceReservation);
 					return true;
 				},
 				false, false));
@@ -735,8 +735,8 @@ namespace graph::query::execution {
 					return executeInternal(backend_, root, executionBounds, finalVisitor, &context, true, &retainOutput,
 										   true, residentOutputBatchBytes);
 				},
-				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
-					appendLogicalResultRow(result, row, columns, state);
+				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state, MaterializedByteReservation &sourceReservation) {
+					appendLogicalResultRow(result, row, columns, state, sourceReservation);
 					return true;
 				},
 				false, false, &context));
