@@ -3,6 +3,8 @@
   "intermediate_build": "deliberately interrupted before tests, exit130, to restart after header edits",
   "asan_activity_smoke": "exit0; Linux ASan category accounting, not macOS RSS validation",
   "final_expanded": "236/236 passed on a3a59904c",
-  "final_unfiltered": "running",
-  "column_only_candidate": "234 passed; two new borrow-observation assertions failed; replaced by scoped admitted-row proof"
+  "final_unfiltered": "passed11120/11120",
+  "column_only_candidate": "234 passed; two new borrow-observation assertions failed; replaced by scoped admitted-row proof",
+  "python": "pytest:56 passed; prior unittest invocation discovered0 and exited5, not a pass",
+  "workflow": "YAML parse and bounded Windows three-case step assertions passed"
 }

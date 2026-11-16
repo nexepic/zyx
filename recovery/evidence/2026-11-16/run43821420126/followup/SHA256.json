@@ -1,10 +1,24 @@
 {
   "asan-activity-smoke.log.gz": "2054bbd8a78bd18a5ed78d472a15c81c1e836b2c1e5c238e65f5d9c32c4f6bae",
   "column-only-candidate-234-pass-2-observation-fail.log.gz": "010af6710e1342bd25e5a23bca66e54df65bd00eb1e685a57595f7e26c3f6f2e",
+  "discovery.txt.gz": "056cb2482df36286fda1412fe976df9c367ede98fb447282709648dd887ca702",
   "earlier-borrow-six.log.gz": "3348a48e1d0e61a8513de610d632c4f2e6db733e7847487ad54db9a9f3ca6450",
   "expanded-before-column-restriction.log.gz": "ad75ef7e24d6e6de0657878381b01e835208f6479606c17274a0687fd4ffb8ee",
   "expanded-final-236-pass.log.gz": "6d51ca89f72935c1aed5269b639521849609fccdc611d8699d39b0167ebc47bc",
+  "full-console.log.gz": "1632c6df86f51d5131b8da1af88cacbf4e3a4409d6580cd8955cd02d786c987f",
+  "full-launcher.json": "0714e134b9eea9d72004999e8f62b656448e84f0da396a7885db812680d5d5a8",
+  "full-shard-0.log.gz": "e07b06a73ca3195f5673625f2fc4815011c1da8791fbc7bf59872f1eb573c850",
+  "full-shard-0.xml.gz": "2a458ffdb52849e862d0b161907880d3bdde92f55d55b6942c9630efa3d09487",
+  "full-shard-1.log.gz": "451ea8ec9202aa41f9301231c79e5ba4fcc6bc379fac1f79abd87eb85624d4aa",
+  "full-shard-1.xml.gz": "5d53bbebf638adae6426b08995d1122f45cc8a0725b4ed8ccc7764175614d240",
+  "full-shard-2.log.gz": "0081372c2b5c1d974742919f5b121f462fbeabe2fcd767e03dd25bdb1131e1ba",
+  "full-shard-2.xml.gz": "83bef8788afc9da72bb7ff7ca69b618c1d962cd345ec782e128ec6df1ca8e469",
+  "full-shard-3.log.gz": "99f5632d42634bdbad010ca3cac69dee286cf5c73120ccd314573a2ef167ea82",
+  "full-shard-3.xml.gz": "7c9a68e1d9ed66f2f53b46c9cbaaab788bf01842554910d5ad5a3f8345bce9e3",
+  "full-summary.json": "a0eb021e3db38b0eaf468f673cfc693db2d0a4839df3db19d0dd3caef6a42b06",
   "interrupted-development-build.log.gz": "b1817f5ddbfeddc9898c05e75bd107678ef16f800f17cc8261774069cf21a3d8",
-  "source-validation.json": "3da6e8fa0ad4eca9a137714b371ba558e167c6ee22a14a76bfd819568cc5b1eb",
-  "validation-status.json": "d61ba8e92e31727126bf33846654d860a156bfde2967b17480102630a51cfaad"
+  "python-56-pass.log.gz": "efdeb6a70b3ca07c714c3f0188295d77c542535a2158d6305c797b04ded143dd",
+  "python-wrong-runner-zero-tests.log.gz": "d393d7c26b79fbfafe1737b45aa4ba0e7e4e3913cc5b0027d1297dc7da2d92e4",
+  "source-validation.json": "0bfd8face990be097651f457ed9fef062fc207e4c36b8c0556b0ca06f6b2d3a3",
+  "validation-status.json": "bdae3d43704401d214b8e03c5f7add21d0b8a63326608d9590c5d07edde9483b"
 }

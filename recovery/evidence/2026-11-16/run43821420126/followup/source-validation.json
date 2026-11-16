@@ -3,5 +3,6 @@
   "binary_sha256": "fb89a61330d7e6c2757e82c13bee8575d344cbef938bce8587bbf41efc7d524c",
   "expanded_tests": 236,
   "expanded_exit": 0,
-  "full_regression": "pending"
+  "full_regression": "passed",
+  "executed": 11120
 }
