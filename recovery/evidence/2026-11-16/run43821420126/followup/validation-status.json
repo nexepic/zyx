@@ -1,0 +1,8 @@
+{
+  "earlier_borrow_candidate": "6 passes; not final source",
+  "intermediate_build": "deliberately interrupted before tests, exit130, to restart after header edits",
+  "asan_activity_smoke": "exit0; Linux ASan category accounting, not macOS RSS validation",
+  "final_expanded": "236/236 passed on a3a59904c",
+  "final_unfiltered": "running",
+  "column_only_candidate": "234 passed; two new borrow-observation assertions failed; replaced by scoped admitted-row proof"
+}
