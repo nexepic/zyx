@@ -953,9 +953,14 @@ namespace graph::storage {
 	}
 
 	void BTreePage::validateLayout() const {
-		// packedEntries() validates the stable slots, owner identity, packed entry
-		// count, ordering, and internal child references in one canonical decode.
-		static_cast<void>(packedEntries());
+        // Authentication needs only the predecessor key, not an owning copy
+        // of every entry. Keep envelope/owner/count checks and validate the
+        // complete canonical stream before publishing or returning the page.
+        const auto payload = validatePackedEnvelope();
+        const auto current = header();
+        withIndexRecord(page_, payload, [&](auto bytes) {
+            PackedBTreePageCodec::validate(current.kind, bytes, current.leaf_value_layout);
+        });
 	}
 
 	utils::OwnedStdVector<BTreePageEntry> BTreePage::entries() const {

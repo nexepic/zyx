@@ -1335,3 +1335,27 @@ TEST(RelocatableBTreePageCodecTest, StreamingValidationMatchesOwningDecodeForCor
         }
     }
 }
+
+TEST(RelocatableBTreePageCodecTest, OpeningPageValidatesWithoutRetainingAllDecodedEntries) {
+    auto header = leafHeader(); header.entry_count = 0U;
+    PageOwnerHeader owner;
+    owner.page_id = header.page_id; owner.owner_id = header.index_id;
+    owner.kind = PageOwnerKind::POK_INDEX; owner.generation = header.generation;
+    owner.committed_lsn = LogSequenceNumber(5);
+    owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 64U; ++i)
+        entries.push_back({{std::byte{'k'}, static_cast<std::byte>(i)}, i + 1U});
+    const auto original = BTreePage::createWithEntries(owner, header, entries);
+    auto source = SlottedPage::open(owner, original.serialize());
+    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(2048U);
+    {
+        graph::utils::OwnedAllocationScope scope(budget);
+        auto opened = BTreePage::open(std::move(source));
+        EXPECT_EQ(opened.header().entry_count, 64U);
+        EXPECT_THROW(static_cast<void>(opened.entries()), graph::query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(budget->used(), 0U);
+        EXPECT_EQ(opened.find(entries.back().key)->value_or_child, 64U);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
