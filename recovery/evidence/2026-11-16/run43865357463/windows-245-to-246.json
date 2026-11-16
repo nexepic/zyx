@@ -1,0 +1,24 @@
+{
+  "previous_count": 15,
+  "current_count": 13,
+  "new_failures": [],
+  "removed_from_failure_set": [
+    "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+    "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose"
+  ],
+  "remaining": [
+    "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+    "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+    "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+    "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+    "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+    "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+    "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+    "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "64": {
+    "full_median_seconds": 0.006375205,
+    "paged_median_seconds": 0.00848198,
+    "iterations_per_sample": 300,
+    "samples_per_mode": 4
+  },
+  "65536": {
+    "full_median_seconds": 0.15872750000000002,
+    "paged_median_seconds": 0.09760035,
+    "iterations_per_sample": 300,
+    "samples_per_mode": 4
+  },
+  "126976": {
+    "full_median_seconds": 0.27802099999999996,
+    "paged_median_seconds": 0.19925199999999998,
+    "iterations_per_sample": 300,
+    "samples_per_mode": 4
+  }
+}

@@ -1,0 +1,44 @@
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <vector>
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+using namespace graph::storage;
+int main() {
+    for (size_t size : {size_t{64}, size_t{65536}, size_t{126976}}) {
+        const auto path = std::filesystem::path("/workspace/ci246-read-probe-" + std::to_string(size) + ".dat");
+        auto stream = std::make_shared<std::fstream>(path, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+        const auto fd = portable_open_rw(path.string().c_str());
+        if (!stream->is_open() || fd == INVALID_FILE_HANDLE) return 2;
+        {
+            auto io = std::make_shared<StorageIO>(stream, fd, fd);
+            Superblock super; super.database_id = DatabaseId(0x1122334455667788ULL);
+            super.generation = Generation(1); super.checkpoint_lsn = LogSequenceNumber(1);
+            auto metadata = RelocatableMetadataStore::initializeNew(io, super);
+            PhysicalSegmentAllocator allocator(io, *metadata);
+            PhysicalSegmentAllocationRequest request; request.segment_id = SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID);
+            request.kind = SegmentKind::SGK_QUERY_SCRATCH; request.owner_id = 17;
+            request.generation = Generation(1); request.payload.assign(size, std::byte{0x35});
+            if (!allocator.allocate(request, PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2))) return 3;
+            const auto pin = metadata->openSnapshot();
+            for (int round = 0; round < 4; ++round) {
+                for (int order = 0; order < 2; ++order) {
+                    const bool paged = (round + order) % 2;
+                    const auto begin = std::chrono::steady_clock::now();
+                    for (int n = 0; n < 300; ++n) {
+                        const auto result = paged ? allocator.readPaged(pin, request.segment_id) : allocator.read(pin, request.segment_id);
+                        if (result.payload != request.payload) return 4;
+                    }
+                    const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
+                    std::cout << "payload=" << size << " round=" << round << " paged=" << paged
+                              << " iterations=300 seconds=" << elapsed << '\n';
+                }
+            }
+        }
+        portable_close_rw(fd); stream->close(); std::filesystem::remove(path);
+    }
+}

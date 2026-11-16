@@ -1,0 +1,14 @@
+{
+  "source_commit": "e184396af34b03a0779a24fe378181083917f6dd",
+  "binary_sha256": "c96be99952f8e48c9ffba3d116754613fa2357646ed2f46f3eaffa6be537aca8",
+  "expanded_target": "passed443/443",
+  "current13_diagnostic_linux": "passed13/13",
+  "full_regression": "passed",
+  "executed": 11123,
+  "coverage": {
+    "regions_percent": 93.73,
+    "functions_percent": 98.1,
+    "lines_percent": 95.76,
+    "branches_percent": 86.85
+  }
+}
