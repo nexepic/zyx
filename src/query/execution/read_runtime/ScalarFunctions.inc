@@ -19,7 +19,9 @@
         }
 
 		[[nodiscard]] LogicalPlanReadValue evaluateExpression(const expressions::Expression &expression,
-															  LogicalPlanReadRow &row, ExecutionState &state) {
+															  LogicalPlanReadRow &row, ExecutionState &state,
+                const PropertyValue **borrowedProperty = nullptr,
+                std::source_location expressionSite = std::source_location::current()) {
 			using expressions::ExpressionType;
 			switch (expression.getExpressionType()) {
 				case ExpressionType::LITERAL: {
@@ -58,7 +60,7 @@
 							if (property && (property->source != *instruction->source || property->key != reference.getPropertyName()))
 								throw std::logic_error("bound property descriptor disagrees with its expression");
 							debug::PerfTrace::addValue("logical_plan.bound_expression.property_reads", 1);
-							return readProperty(state.shared.snapshot, row, reference.getVariableName(), reference.getPropertyName(), state, value);
+							return readProperty(state.shared.snapshot, row, reference.getVariableName(), reference.getPropertyName(), state, value, nullptr, borrowedProperty, expressionSite);
 						}
 					}
 					if (reference.hasProperty()) {
@@ -72,7 +74,7 @@
 							return projected->second;
 						}
 						return readProperty(state.shared.snapshot, row, reference.getVariableName(),
-											reference.getPropertyName(), state);
+											reference.getPropertyName(), state, nullptr, nullptr, borrowedProperty, expressionSite);
 					}
 					const auto &binding = requireBinding(row, reference.getVariableName());
                     detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(binding));

@@ -222,6 +222,12 @@ TEST_F(RelocatableStorageBackendTest, CoordinatedPropertyPrefetchReleasesSelecte
     query::QueryContext context;
     context.resource_account = account;
     const std::string cypher = "MATCH (n:Prefetch) WHERE n.payload = $wanted RETURN n.payload AS payload";
+    size_t borrowedComparisons = 0U;
+    graph::debug::PerfTrace::ScopedObserver observe(&borrowedComparisons,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (!duration && key == "logical_plan.property.parameter_comparison_borrows")
+                *static_cast<size_t *>(p) += static_cast<size_t>(value);
+        });
     for (const bool matches : {true, false, true}) {
         SCOPED_TRACE(matches);
         context.parameters.insert_or_assign("wanted", PropertyValue(std::string(1000U, matches ? 'a' : 'z')));
@@ -233,6 +239,7 @@ TEST_F(RelocatableStorageBackendTest, CoordinatedPropertyPrefetchReleasesSelecte
         }
         EXPECT_EQ(account->used(), 0U);
     }
+    EXPECT_GT(borrowedComparisons, 0U);
     engine.resetEphemeralState();
     backend->close();
     EXPECT_EQ(domain->usage().total, 0U);
@@ -1854,4 +1861,45 @@ TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceSmallFixture) {
     RelocatableStorageBackend reader(backendOptions()); reader.open();
     ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
     reader.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, PropertyParameterComparisonKeepsFallbacksNullsAndFailedExecutionOwnership) {
+    using namespace execution::detail;
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    const PropertyValue payload(std::string(1000U, 'p'));
+    backend->createLogicalNodes({{{"BorrowCompare"}, {{"payload", payload}, {"other", payload}}}});
+    query::QueryEngine engine(backend); auto domain = backend->queryResourceDomain();
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 64U * 1024U);
+    query::QueryContext context; context.resource_account = account;
+    context.parameters.emplace("wanted", payload);
+    size_t borrows = 0U;
+    graph::debug::PerfTrace::ScopedObserver observe(&borrows,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (!duration && key == "logical_plan.property.parameter_comparison_borrows")
+                *static_cast<size_t *>(p) += static_cast<size_t>(value);
+        });
+    const auto run = [&](const std::string &expression, const PropertyValue &expected) {
+        {
+            auto result = engine.execute("MATCH (n:BorrowCompare) RETURN " + expression + " AS answer", context);
+            ASSERT_EQ(result.rowCount(), 1U);
+            EXPECT_EQ(result.getRows()[0].at("answer").asPrimitive(), expected);
+            EXPECT_EQ(account->used(), result.retainedResourceBytes());
+        }
+        EXPECT_EQ(account->used(), 0U);
+    };
+    run("n.payload = $wanted", PropertyValue(true));
+    ASSERT_GT(borrows, 0U);
+    const auto beforeGeneralRhs = borrows;
+    run("n.payload = n.other", PropertyValue(true));
+    EXPECT_EQ(borrows, beforeGeneralRhs); // RHS evaluation may mutate caches.
+    run("n.absent = $wanted", PropertyValue());
+    context.parameters.clear();
+    EXPECT_THROW(static_cast<void>(engine.execute(
+        "MATCH (n:BorrowCompare) RETURN n.payload = $wanted AS answer", context)), std::runtime_error);
+    EXPECT_EQ(account->used(), 0U);
+    context.parameters.emplace("wanted", PropertyValue(std::string(1000U, 'q')));
+    run("n.payload = $wanted", PropertyValue(false));
+    engine.resetEphemeralState(); backend->close();
+    EXPECT_EQ(domain->usage().total, 0U);
 }

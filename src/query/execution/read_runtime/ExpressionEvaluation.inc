@@ -1,9 +1,10 @@
         [[nodiscard]] detail::ScopedScalarReadValue evaluateScalarOperand(
-                const expressions::Expression &expression, LogicalPlanReadRow &row, ExecutionState &state) {
+                const expressions::Expression &expression, LogicalPlanReadRow &row, ExecutionState &state,
+                const PropertyValue **borrowedProperty = nullptr) {
             if (expression.getExpressionType() == expressions::ExpressionType::PARAMETER)
                 return detail::ScopedScalarReadValue(requireScalarParameter(
                     dynamic_cast<const expressions::ParameterExpression &>(expression), row, state));
-            return detail::ScopedScalarReadValue([&]() { return evaluateExpression(expression, row, state); });
+            return detail::ScopedScalarReadValue([&]() { return evaluateExpression(expression, row, state, borrowedProperty); });
         }
 		[[nodiscard]] PropertyValue evaluateScalarExpression(const expressions::Expression &expression,
 															 LogicalPlanReadRow &row, ExecutionState &state,
@@ -20,9 +21,19 @@
 				case ExpressionType::BINARY_OP: {
 					const auto &binary = dynamic_cast<const expressions::BinaryOpExpression &>(expression);
                     MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
-                    const auto leftOwner = evaluateScalarOperand(*binary.getLeft(), row, state);
-                    const PropertyValue &left = leftOwner.get();
-					if (!leftOwner.borrowed()) operandBytes.set(retainedExpressionValueBytes(left, state));
+                    // Do not retain a cache view across a general RHS: it may
+                    // insert into or replace the same row's flat-map storage.
+                    // Parameter lookup is immutable and comparison returns a
+                    // fresh scalar, so this narrowly bounded borrow is safe.
+                    const auto leftType = binary.getLeft()->getExpressionType();
+                    const bool canBorrow = expressions::isComparisonOperator(binary.getOperator()) &&
+                        binary.getRight()->getExpressionType() == ExpressionType::PARAMETER &&
+                        (leftType == ExpressionType::VARIABLE_REFERENCE || leftType == ExpressionType::PROPERTY_ACCESS);
+                    const PropertyValue *borrowedProperty = nullptr;
+                    const auto leftOwner = evaluateScalarOperand(*binary.getLeft(), row, state,
+                        canBorrow ? &borrowedProperty : nullptr);
+                    const PropertyValue &left = borrowedProperty ? *borrowedProperty : leftOwner.get();
+					if (!leftOwner.borrowed() && !borrowedProperty) operandBytes.set(retainedExpressionValueBytes(left, state));
 					const BinaryOperatorType operation = binary.getOperator();
 					if (operation == BinaryOperatorType::BOP_AND || operation == BinaryOperatorType::BOP_OR) {
 						const std::optional<bool> leftBoolean = booleanOrNull(left);

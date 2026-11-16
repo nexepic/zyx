@@ -1102,11 +1102,20 @@
 		[[nodiscard]] PropertyValue readProperty(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
 												 const std::string &variable, const std::string &key,
 												 ExecutionState &state, const LogicalPlanReadValue *boundBinding = nullptr,
-                                                 MaterializedByteReservation *resultReservation = nullptr) {
+                                                 MaterializedByteReservation *resultReservation = nullptr,
+                                                 const PropertyValue **borrowedResult = nullptr,
+                                                 std::source_location expressionSite = std::source_location::current()) {
 			if (key.empty()) {
 				throw std::invalid_argument("logical-plan Property access has an empty key");
 			}
-			const auto copyResult = [&](const PropertyValue &source, bool borrowed = false) {
+			const auto copyResult = [&](const PropertyValue &source, bool borrowed = false, bool alreadyRetained = true) {
+                // Only a synchronous leaf-vs-parameter comparison requests
+                // this view. Its RHS cannot mutate row caches or batch columns.
+                if (borrowedResult && alreadyRetained) {
+                    *borrowedResult = &source;
+                    debug::PerfTrace::addValue("logical_plan.property.parameter_comparison_borrows", 1);
+                    return PropertyValue();
+                }
 				// Fixed scalar alternatives cannot allocate payload buffers. Their
 				// owning output slots remain charged by the receiving row/container.
 				switch (source.getType()) {
@@ -1121,7 +1130,25 @@
 					default: break;
 				}
 				MaterializedByteReservation copyBytes(&state.shared.materialized_budget);
-				PropertyValue copied = copyReservedPropertyValue(source, state, copyBytes);
+                PropertyValue copied = [&] {
+                    try { return copyReservedPropertyValue(source, state, copyBytes); }
+                    catch (...) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                        static thread_local unsigned reported = 0;
+                        if (reported < 32U && std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                            ++reported;
+                            const char *file = expressionSite.file_name();
+                            for (const char *c = file; *c; ++c) if (*c == '/' || *c == '\\') file = c + 1;
+                            std::fprintf(stderr, "CI_PROPERTY_COPY_FAILURE expression_file=%.128s expression_line=%u borrowed_column=%d already_retained=%d source_type=%u used=%zu available=%zu\n",
+                                file, static_cast<unsigned>(expressionSite.line()), borrowed, alreadyRetained,
+                                static_cast<unsigned>(source.getType()), state.shared.materialized_budget.used(),
+                                state.shared.materialized_budget.available());
+                            std::fflush(stderr);
+                        }
+#endif
+                        throw;
+                    }
+                }();
 				debug::PerfTrace::addValue("logical_plan.property.owned_result_copy_bytes",
 					static_cast<int64_t>(copyBytes.bytes()));
 				if (borrowed) debug::PerfTrace::addValue("logical_plan.prefetch.borrowed_value_copy_bytes",
@@ -1179,14 +1206,14 @@
 						detail::procedureMapEmplace(row.property_cache, variable, readNodeProperties(snapshot, *node, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
+				return found == cached->second.end() ? PropertyValue() : copyResult(found->second, false, false);
 			}
 			if (const storage::LogicalGraphEdge *edge = std::get_if<storage::LogicalGraphEdge>(&binding)) {
 				auto [cached, inserted] =
 						detail::procedureMapEmplace(row.property_cache, variable, readEdgeProperties(snapshot, *edge, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
+				return found == cached->second.end() ? PropertyValue() : copyResult(found->second, false, false);
 			}
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(binding);
 			validateEntityRef(reference);
@@ -1201,7 +1228,7 @@
             static_cast<void>(cacheInserted);
             const auto [cached, inserted] = detail::procedureMapInsertOrAssign(cacheOwner->second, key, std::move(value));
 			static_cast<void>(inserted);
-			return copyResult(cached->second);
+			return copyResult(cached->second, false, false);
 		}
 
 		[[nodiscard]] bool
