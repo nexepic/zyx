@@ -1,0 +1,16 @@
+{
+  "head": "1ab75c743e87d5e59a69cc324fe9c84da54e8dd2",
+  "restored_head": "1ab75c743e87d5e59a69cc324fe9c84da54e8dd2",
+  "bundle_bytes": 313956896,
+  "bundle_sha256": "814d2e73ff311098178ceab9764e00667ab97c57d32199e54d768140308984dd",
+  "reachable_objects": 44864,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 37,
+  "validation": "Build244 expanded targeted140 Python82; initial full11114 one failure retained; second full running after stricter fixture",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified",
+  "external_bundle_retention_confirmed": true,
+  "external_receipt_retention_confirmed": true,
+  "external_byte_download_verified": false
+}

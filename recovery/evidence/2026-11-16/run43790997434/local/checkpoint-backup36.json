@@ -1,0 +1,16 @@
+{
+  "head": "3924cde5e1c4daa59405fbfe80ff41807b7edc9a",
+  "restored_head": "3924cde5e1c4daa59405fbfe80ff41807b7edc9a",
+  "bundle_bytes": 313525850,
+  "bundle_sha256": "64ddbb475ae18d8e460e6a1b7c960f0bff0c6a512cf768c25789405573baf198",
+  "reachable_objects": 44834,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 36,
+  "validation": "Build244 candidates: targeted126 Python82; full regression running; Windows/macOS native closure pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified",
+  "external_bundle_retention_confirmed": true,
+  "external_receipt_retention_confirmed": true,
+  "external_byte_download_verified": false
+}

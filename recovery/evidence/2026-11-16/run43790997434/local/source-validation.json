@@ -3,5 +3,6 @@
   "binary_sha256": "13a83e8ba09721dc38a7b4d0d373679e684ff4ca5c7055bf76be8bf4ca978ce3",
   "targeted": 140,
   "python": 82,
-  "full_regression": "second run pending; first run retained with one failure"
+  "full_regression": "passed",
+  "executed_exactly_once": 11114
 }
