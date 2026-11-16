@@ -1,0 +1,18 @@
+{
+  "WINDOWS": {
+    "patterns": 137,
+    "matched": 137,
+    "unmatched_patterns": [],
+    "failed_cases_missing": []
+  },
+  "MACOS": {
+    "patterns": 19,
+    "matched": 19,
+    "unmatched_patterns": []
+  },
+  "ASAN": {
+    "patterns": 5,
+    "matched": 11,
+    "unmatched_patterns": []
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "source_commit": "dcf445b47",
+  "executed": 11114,
+  "distinct": 11114,
+  "failures": [
+    "LogicalPlanDirectEdgeRuntimeTest.AggregateObjectAdmissionRejectsBeforeScanningAndAllowsFreshExecution"
+  ],
+  "skips": [],
+  "duplicates": {}
+}

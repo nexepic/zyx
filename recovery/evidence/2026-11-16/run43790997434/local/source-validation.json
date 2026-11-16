@@ -1,7 +1,7 @@
 {
-  "source_commit": "dcf445b47327349207bcb1260e5a34d598b1d82e",
-  "binary_sha256": "f4c33b04b4a5519313d7546f65d88d0c44a42db9ea295f0011f7143178bbe29e",
-  "targeted": 126,
+  "source_commit": "a18f84ad36e5dabf2024589cfa4fbd9e08941817",
+  "binary_sha256": "13a83e8ba09721dc38a7b4d0d373679e684ff4ca5c7055bf76be8bf4ca978ce3",
+  "targeted": 140,
   "python": 82,
-  "full_regression": "running"
+  "full_regression": "second run pending; first run retained with one failure"
 }
