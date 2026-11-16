@@ -713,6 +713,9 @@ jobs:
       # This manifest records report hashes, declared labels, and the actual
       # repeat configuration. It deliberately classifies this run as CI smoke.
       - name: Collect native storage evidence manifest
+        # Preserve hashes after unit/lifecycle failures when the required
+        # calibration reports and repeated recovery transcript are complete.
+        if: ${{ !cancelled() && steps.calibration.outcome == 'success' && steps.recovery_maintenance.outcome == 'success' }}
         run: |
           collector_args=(
             --build-report "$ZYX_STAGE10_EVIDENCE_DIR/build-report.json"
