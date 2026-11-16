@@ -1,0 +1,13 @@
+{
+  "head": "90bc6ac30c4bc700f2f99ebdd9f2b9a2143bd3d8",
+  "restored_head": "90bc6ac30c4bc700f2f99ebdd9f2b9a2143bd3d8",
+  "bundle_bytes": 321584775,
+  "bundle_sha256": "f350777baa21e84f038b61c8bccafd3b12b36893fec7b5a0df38c46a5b92c672",
+  "reachable_objects": 45344,
+  "objects_equal": true,
+  "bundle_verify_exit": 0,
+  "fsck_full_exit": 0,
+  "library_bundle_version": 49,
+  "validation": "Targeted 360 plus final physical 6; current diagnostic13; full regression pending",
+  "reverse_download": "Prior403 respected; external saved bytes not downloaded/verified"
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "file": "shard-0.xml",
+    "tests": "2793",
+    "failures": "1",
+    "disabled": "11",
+    "errors": "0",
+    "time": "1504.355",
+    "timestamp": "2026-11-16T17:04:38.181",
+    "name": "AllTests",
+    "failed_cases": [
+      "LogicalPlanSortGrowthTest.SortKeyQuotaFailureIsTypedAndASeparateLargerExecutionCanRetry"
+    ]
+  },
+  {
+    "file": "shard-1.xml",
+    "tests": "2781",
+    "failures": "0",
+    "disabled": "0",
+    "errors": "0",
+    "time": "1424.57",
+    "timestamp": "2026-11-16T17:04:38.122",
+    "name": "AllTests",
+    "failed_cases": []
+  },
+  {
+    "file": "shard-2.xml",
+    "tests": "2786",
+    "failures": "0",
+    "disabled": "5",
+    "errors": "0",
+    "time": "1680.673",
+    "timestamp": "2026-11-16T17:04:38.147",
+    "name": "AllTests",
+    "failed_cases": []
+  },
+  {
+    "file": "shard-3.xml",
+    "tests": "2785",
+    "failures": "0",
+    "disabled": "4",
+    "errors": "0",
+    "time": "1439.916",
+    "timestamp": "2026-11-16T17:04:38.946",
+    "name": "AllTests",
+    "failed_cases": []
+  }
+]

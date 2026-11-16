@@ -1,0 +1,109 @@
+{
+  "executed": 11125,
+  "distinct": 11125,
+  "missing": [],
+  "extra": [],
+  "duplicates": {},
+  "largest_time_increases": [
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "current_seconds": 485.146,
+      "baseline_seconds": 368.011
+    },
+    {
+      "case": "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce",
+      "current_seconds": 205.863,
+      "baseline_seconds": 105.29
+    },
+    {
+      "case": "ScanReadProofTest.PublicMixedBatchRetainsOldPinsAcrossEntityCowPoolCapacity",
+      "current_seconds": 224.459,
+      "baseline_seconds": 147.397
+    },
+    {
+      "case": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096",
+      "current_seconds": 109.44,
+      "baseline_seconds": 47.749
+    },
+    {
+      "case": "ScanReadProofTest.CompletionLeavesManagedInsertionSummariesFreshAndActual",
+      "current_seconds": 158.899,
+      "baseline_seconds": 119.704
+    },
+    {
+      "case": "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages",
+      "current_seconds": 122.783,
+      "baseline_seconds": 89.257
+    },
+    {
+      "case": "HybridPropertyMatureShapeCostsTest.CompleteGatedCohortPublishesOnceAndKeepsEveryOldOwner",
+      "current_seconds": 59.427,
+      "baseline_seconds": 27.547
+    },
+    {
+      "case": "RelocatableStorageBackendTest.ShapedEdgeBatchSpansEntityPagesAndPreservesLogicalOrder",
+      "current_seconds": 35.313,
+      "baseline_seconds": 5.937
+    },
+    {
+      "case": "RelocatableVectorPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation",
+      "current_seconds": 39.698,
+      "baseline_seconds": 10.691
+    },
+    {
+      "case": "HybridPropertyQueryParityTest.NativeVectorBootstrapThenLastFieldEraseAndRecreateRemainAtomic",
+      "current_seconds": 32.003,
+      "baseline_seconds": 5.625
+    },
+    {
+      "case": "HybridPropertyIndexedLifecycleTest.SustainedTypeChangesStayFieldLocalWithoutAutomaticRepromotion",
+      "current_seconds": 34.868,
+      "baseline_seconds": 8.519
+    },
+    {
+      "case": "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication",
+      "current_seconds": 117.985,
+      "baseline_seconds": 93.217
+    },
+    {
+      "case": "HybridPropertyQueryParityTest.NativeVectorDeltaAndFieldPublishInOneGenerationWithPinnedOldRawAndExactReopen",
+      "current_seconds": 27.585,
+      "baseline_seconds": 3.152
+    },
+    {
+      "case": "NativeGraphWritePlannerVectorTest.ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration",
+      "current_seconds": 43.811,
+      "baseline_seconds": 21.359
+    },
+    {
+      "case": "RelocatableStorageBackendTest.StreamedAdjacencySmallInternalRootPreservesOldAndNewEdges",
+      "current_seconds": 32.36,
+      "baseline_seconds": 11.565
+    },
+    {
+      "case": "RelocatableVectorNodeMappingTest.FailsClosedAfterExhaustingTheBoundedTypedIdProbeSequence",
+      "current_seconds": 39.095,
+      "baseline_seconds": 18.417
+    },
+    {
+      "case": "HybridPropertyQueryParityTest.NativeVectorCoordinationCallbacksCannotAppendUnrelatedScalarWork",
+      "current_seconds": 23.407,
+      "baseline_seconds": 3.087
+    },
+    {
+      "case": "HybridPropertyQueryParityTest.NativeVectorSignedZeroRowNoopKeepsBothAuthoritiesAndPerformsNoPrivateIo",
+      "current_seconds": 23.594,
+      "baseline_seconds": 4.01
+    },
+    {
+      "case": "RelocatableLocationLeafCodecTest.RejectsOrExactlyRoundTripsEveryChecksumValidDirectoryTypeMutation",
+      "current_seconds": 27.119,
+      "baseline_seconds": 9.567
+    },
+    {
+      "case": "RelocatableMetadataStoreTest.RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen",
+      "current_seconds": 20.618,
+      "baseline_seconds": 3.998
+    }
+  ]
+}
