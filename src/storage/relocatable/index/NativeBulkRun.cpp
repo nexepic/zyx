@@ -681,6 +681,10 @@ namespace graph::storage {
 		return std::move(contents.payload);
 	}
 
+    MetadataSnapshotPin NativeBulkRunStore::openPayloadReadSnapshot() const {
+        return metadata_.openSnapshot();
+    }
+
 	NativeBulkRunPayloadReader NativeBulkRunStore::openOpaquePayloadReader() const {
 		auto snapshot = std::make_shared<MetadataSnapshotPin>(metadata_.openSnapshot());
 		return [this, snapshot = std::move(snapshot)](const NativeBulkRunFragmentLocation &location) {

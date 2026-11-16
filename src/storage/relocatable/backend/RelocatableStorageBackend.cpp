@@ -667,6 +667,7 @@ namespace graph::storage {
 				if(bytes.empty() || bytes.size()>maximumFragmentBytes() || locations_.size()>=maximum_fragments_ ||
 					RSS_SEGMENT_SIZE>maximum_bytes_-used_bytes_)
 					throw std::runtime_error("query scratch exceeded its fragment or disk bound");
+                reader_snapshot_.reset();
                 std::vector<std::byte> payload(bytes.begin(), bytes.end());
 				// Install bookkeeping before IO so a post-publication allocation failure
 				// cannot lose the only live cleanup route.
@@ -689,10 +690,18 @@ namespace graph::storage {
                 graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_SCRATCH_READ);
 #endif
 				requireActive();const auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch handle is stale or foreign");
-				const auto reader=store_->openOpaquePayloadReader();return reader(position->second);
+                if (!reader_snapshot_) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    graph::debug::RssActivityScope snapshotActivity(graph::debug::RssActivityKind::RAK_SCRATCH_SNAPSHOT);
+#endif
+                    reader_snapshot_.emplace(store_->openPayloadReadSnapshot());
+                    graph::debug::PerfTrace::addValue("native_query_scratch.reader_snapshots", 1);
+                }
+                return store_->readOpaquePayload(*reader_snapshot_, position->second);
 			}
 			void release(uint64_t id) override {
 				requireActive();auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch release handle is stale or foreign");
+                reader_snapshot_.reset();
                 auto cleanup = openCleanupWorkspace();
 				try {auto gate=backend_.acquireNativePublicationGate();store_->release(position->second,backend_.nextNativeBulkScratchCheckpointLsn());}
 				catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
@@ -712,6 +721,7 @@ namespace graph::storage {
                     for(size_t j=0;j<i;++j) if(handles[j]==handles[i])
                         throw std::invalid_argument("query scratch release batch contains duplicates");
                 }
+                reader_snapshot_.reset();
                 auto cleanup=openCleanupWorkspace();
                 for(size_t begin=0;begin<handles.size();) {
                     std::array<NativeBulkRunFragmentLocation,64U> batch;
@@ -729,6 +739,7 @@ namespace graph::storage {
             }
 
 			void finish() override {
+                reader_snapshot_.reset();
 				if(!refund_)return;
 				if(backend_.hasIndeterminateWriteOutcome() && !locations_.empty())throw std::logic_error("query scratch cleanup requires writable recovery");
                 auto cleanup = locations_.empty() ? nullptr : openCleanupWorkspace();
@@ -763,6 +774,9 @@ namespace graph::storage {
 			detail::QueryScratchDiskBudget::Session disk_;
             std::weak_ptr<StorageIO> io_;
             size_t cleanup_bytes_;
+            // Inline pin, not an uncharged function/shared_ptr cache. All pin
+            // ownership remains accounted by the metadata snapshot registry.
+            std::optional<MetadataSnapshotPin> reader_snapshot_;
 		};
 
 #include "backend_runtime/LogicalTransaction.inc"

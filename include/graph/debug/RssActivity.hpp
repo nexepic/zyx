@@ -8,7 +8,7 @@
 #include <limits>
 #include "graph/debug/SanitizerAllocationSnapshot.hpp"
 namespace graph::debug {
-enum class RssActivityKind { RAK_SCRATCH_READ, RAK_SCRATCH_WRITE, RAK_ROW_DECODE, RAK_ROW_ENCODE };
+enum class RssActivityKind { RAK_SCRATCH_READ, RAK_SCRATCH_WRITE, RAK_ROW_DECODE, RAK_ROW_ENCODE, RAK_SCRATCH_SNAPSHOT };
 struct RssActivityCounters {
     std::atomic<size_t> calls{0}, live_increase{0}, live_decrease{0}, heap_increase{0}, heap_decrease{0};
     static void add(std::atomic<size_t> &target, size_t amount) noexcept {
@@ -31,7 +31,7 @@ struct RssActivityCounters {
         calls = 0; live_increase = 0; live_decrease = 0; heap_increase = 0; heap_decrease = 0;
     }
 };
-inline RssActivityCounters rssActivityCounters[4];
+inline RssActivityCounters rssActivityCounters[5];
 class RssActivityScope final {
 public:
     explicit RssActivityScope(RssActivityKind kind) noexcept : kind_(kind) {
@@ -47,9 +47,9 @@ private:
 };
 inline void reportRssActivity(const char *phase, bool reset) noexcept {
     if (!std::getenv("ZYX_CI_RSS_ATTRIBUTION")) return;
-    constexpr const char *names[] = {"scratch_read", "scratch_write", "row_decode", "row_encode"};
+    constexpr const char *names[] = {"scratch_read", "scratch_write", "row_decode", "row_encode", "scratch_snapshot"};
     const bool available = captureSanitizerAllocations().available;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < 5; ++i) {
         auto &c = rssActivityCounters[i];
         if (reset) c.reset();
         std::fprintf(stderr, "CI_RSS_ACTIVITY phase=%s category=%s available=%d calls=%zu live_increase=%zu live_decrease=%zu heap_increase=%zu heap_decrease=%zu\n",
