@@ -1289,7 +1289,10 @@ namespace graph::query::execution {
 				"m" + std::to_string(index), false});
 		logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {}, std::move(items));
 		auto bounds = directBounds();
-		bounds.maximum_materialized_bytes = 12000U;
+		// Ordinary aggregates no longer allocate 128 unused DISTINCT sets.
+		// Keep this failure-injection allowance below the accumulator objects,
+		// so the test still rejects before reading its source.
+		bounds.maximum_materialized_bytes = 4096U;
 		size_t delivered = 0U;
 		try {
 			static_cast<void>(runtime.execute(aggregate, bounds, [&](const LogicalPlanReadRow &) {
@@ -1297,9 +1300,10 @@ namespace graph::query::execution {
 			}));
 			FAIL() << "aggregate objects must be admitted before allocation";
 		} catch (const std::runtime_error &error) {
-			EXPECT_NE(std::string(error.what()).find("Aggregate accumulator object exceeded its materialized byte bound"), std::string::npos);
+			EXPECT_NE(std::string(error.what()).find("Aggregate accumulator object exceeded its materialized byte bound"), std::string::npos) << error.what();
 		}
 		EXPECT_EQ(delivered, 0U);
+		EXPECT_EQ(graph.node_label_match_scans, 0U);
 		bounds.maximum_materialized_bytes = 1024U * 1024U;
 		static_cast<void>(runtime.execute(aggregate, bounds, [&](const LogicalPlanReadRow &row) {
 			++delivered; EXPECT_EQ(row.values.size(), 128U);
