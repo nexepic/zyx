@@ -33,7 +33,7 @@
 
 namespace graph::query {
 
-	namespace execution { class LogicalPlanReadRuntime; namespace detail { struct ProcedureResultHandoff; } }
+	namespace execution { class LogicalPlanReadRuntime; namespace detail { struct ProcedureResultHandoff; struct ScalarResultHandoff; } }
 
     // Borrowed fields let result construction inspect its complete shape before
     // creating any map, key, value or joined-string allocation.
@@ -251,6 +251,7 @@ namespace graph::query {
 		}
 		friend class execution::LogicalPlanReadRuntime;
         friend struct execution::detail::ProcedureResultHandoff;
+        friend struct execution::detail::ScalarResultHandoff;
 		void retainExecutionCharge(execution::detail::ResourceLease charge) {
 			if (resource_charge_) throw std::logic_error("query result already owns a resource lease");
 			resource_charge_.emplace(std::move(charge));

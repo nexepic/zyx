@@ -447,6 +447,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_RssActivity.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ProcedurePayloadAdmission.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_CellScratchVector.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ScalarResultHandoff.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_ExternalQueryKeySet.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_MaterializedReservationEmbedded.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_DynamicValueArena.cpp"

@@ -929,6 +929,23 @@
         bool appendTransferredScalarResultRow(QueryResult &result, LogicalPlanReadRow &row,
                 const std::vector<std::string> &columns, ExecutionState &state,
                 MaterializedByteReservation &sourceReservation) {
+            if (columns.size() == 1U && result.getRows().empty() && result.getRows().capacity() == 0U) {
+                const auto binding = row.values.find(columns.front());
+                const auto *property = binding == row.values.end() ? nullptr : std::get_if<PropertyValue>(&binding->second);
+                if (property && property->getType() == PropertyType::INTEGER) {
+                    checkGuardNow(state);
+                    MaterializedByteReservation stagedBytes(&state.shared.materialized_budget);
+                    stagedBytes.set(sizeof(int64_t));
+                    const int64_t staged = std::get<int64_t>(property->getVariant());
+                    retireResultSourceRow(row, state, sourceReservation);
+                    auto output = detail::ScalarResultHandoff::appendFirstInteger(result, columns.front(), staged,
+                        state.shared.materialized_budget, [&] { checkGuardNow(state); });
+                    state.shared.final_result_bytes = output.bytes();
+                    state.shared.final_result_reservation.absorb(std::move(output));
+                    debug::PerfTrace::addValue("logical_plan.result.in_place_integer_cells", 1);
+                    return true;
+                }
+            }
             constexpr const char *message = "logical-plan scalar result transfer overflowed";
             size_t logicalShell = sizeof(QueryResult::Row);
             size_t physicalShell = checkedSizeAdd(sizeof(QueryResult::Row),
