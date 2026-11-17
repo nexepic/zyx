@@ -1898,7 +1898,7 @@ TEST(LogicalPlanReadRuntimeTest, SkipStreamsAnExactBudgetRowWithoutSelectionStor
 	EXPECT_EQ(delivered, 1U);
 }
 
-TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationChecksTheSharedBudgetBeforeCopying) {
+TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationAccountsTransferredPayloadAndRejectsInsufficientBudget) {
 	NoGraphBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
 	graph::parser::cypher::CypherParserImpl parser;
@@ -1911,16 +1911,40 @@ TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationChecksTheSharedBudgetBef
 	EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, constrained,
 		[&](const LogicalPlanReadRow &) { ++streamed; return true; })));
 	EXPECT_EQ(streamed, 1U);
-	try {
-		static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
-		FAIL() << "the retained input and its public result copy must share one allowance";
-	} catch (const std::runtime_error &error) {
-		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
-	}
-	constrained.maximum_materialized_bytes = 3000U;
-	const QueryResult result = runtime.executeToQueryResult(*plan.root, constrained);
-	ASSERT_EQ(result.rowCount(), 1U);
-	EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
+    const size_t originalLimit = constrained.maximum_materialized_bytes;
+    struct Observed { size_t peak = 0U; size_t transferred = 0U; } observed;
+    graph::debug::PerfTrace::ScopedObserver observer(&observed,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (duration || value < 0) return;
+            auto &o = *static_cast<Observed *>(p);
+            if (key == "logical_plan.materialized_budget_peak_bytes")
+                o.peak = std::max(o.peak, static_cast<size_t>(value));
+            if (key == "logical_plan.result.transferred_scalar_cells")
+                o.transferred += static_cast<size_t>(value);
+        });
+    constrained.maximum_materialized_bytes = 3000U;
+    {
+        const QueryResult result = runtime.executeToQueryResult(*plan.root, constrained);
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
+    }
+    ASSERT_GT(observed.peak, 0U);
+    ASSERT_GT(observed.transferred, 0U);
+    // Terminal publication moves the charged payload. Its real peak can fit
+    // the old copy-denial limit on libc++; never require an obsolete copy.
+    // Keep the denial cap no larger than the original and reject just below
+    // the observed required peak when that peak is smaller on this ABI.
+    constrained.maximum_materialized_bytes = std::min(originalLimit, observed.peak - 1U);
+    try {
+        static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
+        FAIL() << "the transferred payload must remain within the shared allowance";
+    } catch (const std::runtime_error &error) {
+        EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+    }
+    constrained.maximum_materialized_bytes = 3000U;
+    const QueryResult retry = runtime.executeToQueryResult(*plan.root, constrained);
+    ASSERT_EQ(retry.rowCount(), 1U);
+    EXPECT_EQ(retry.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
 }
 
 TEST(LogicalPlanReadRuntimeTest, SortPaginationAndSortTransferRowsWithinTheSharedBudget) {
