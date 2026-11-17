@@ -503,6 +503,37 @@
             reclaim(state.shared.node_cache, false);
             reclaim(state.shared.edge_cache, true);
         }
+        template<class Protected>
+        void prepareResultSlotBeforeEntityCopy(QueryResult &result, ExecutionState &state,
+                size_t futureRowBytes, Protected protect) {
+            const size_t oldCapacity=result.getRows().capacity();
+            if(result.rowCount()<oldCapacity)return;
+            const size_t minimum=checkedSizeAdd(result.rowCount(),1U,"result row capacity overflowed");
+            size_t capacity=oldCapacity ? checkedSizeMul(oldCapacity,2U,"result row capacity overflowed") : minimum;
+            const size_t previous=state.shared.final_result_bytes;
+            const size_t oldBacking=detail::standardAllocatorRequestBytes(
+                checkedSizeMul(oldCapacity,sizeof(QueryResult::Row),"result backing overflowed"),alignof(QueryResult::Row));
+            const size_t relocation=graph::query::detail::resultRowsRelocationHeapUpper(result.getRows());
+            const auto backing=[&](size_t count){return detail::standardAllocatorRequestBytes(
+                checkedSizeMul(count,sizeof(QueryResult::Row),"result backing overflowed"),alignof(QueryResult::Row));};
+            const auto growthPeak=[&](size_t count){return checkedSizeAdd(previous,
+                checkedSizeAdd(backing(count),relocation,"result relocation overflowed"),"result relocation overflowed");};
+            const auto copyPeak=[&](size_t count){return checkedSizeAdd(previous-oldBacking,
+                checkedSizeAdd(backing(count),futureRowBytes,"result copy overflowed"),"result copy overflowed");};
+            auto peak=[&](size_t count){return (std::max)(growthPeak(count),copyPeak(count));};
+            if(capacity>minimum && peak(capacity)>previous &&
+                    peak(capacity)-previous>state.shared.materialized_budget.availableWithParent())capacity=minimum;
+            reclaimResultCaches(state,peak(capacity),previous,protect);
+            state.shared.final_result_reservation.set(growthPeak(capacity));
+            try { result.reserveRows(capacity); }
+            catch(...) {state.shared.final_result_reservation.set(previous);throw;}
+            const size_t retained=checkedSizeAdd(previous-oldBacking,
+                detail::standardVectorHeapBufferBytes(result.getRows())-detail::standardContainerProxyBytes(),
+                "result retained backing overflowed");
+            state.shared.final_result_reservation.set(retained);
+            state.shared.final_result_bytes=retained;
+            debug::PerfTrace::addValue("logical_plan.result.prepared_row_slots",1);
+        }
 		void appendMaterializedResultRow(QueryResult &result, QueryResult::Row &&row, ExecutionState &state,
 			MaterializedByteReservation &&rowReservation) {
 			const size_t rowBytes = materializedResultRowBytes(row, state);

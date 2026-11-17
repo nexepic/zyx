@@ -962,4 +962,48 @@ namespace graph::query::execution {
         EXPECT_TRUE(graph.node_read_ids.empty());
         EXPECT_TRUE(std::ranges::none_of(graph.node_shaped_batch_all_properties, [](bool full) { return full; }));
     }
+    TEST(LogicalPlanDirectEdgeRuntimeTest, PreparedResultAndExistingPatternBorrowRefundCancellation) {
+        using namespace graph::query::execution::detail;
+        for(const bool existingBinding : {false,true}) {
+            SCOPED_TRACE(existingBinding);
+            auto process=std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U*1024U));
+            auto database=std::make_shared<DatabaseResourceBudget>(process,ResourceLimits::uniform(1024U*1024U));
+            auto account=std::make_shared<ResourceAccount>(database,ResourceClass::RCK_QUERY,1024U*1024U);
+            auto graph=directGraph();graph.enable_property_tokens=true;
+            DirectEdgeBackend backend(graph);LogicalPlanReadRuntime runtime(backend);
+            graph::parser::cypher::CypherParserImpl parser;
+            auto plan=parser.parseToLogical(existingBinding ?
+                "MATCH (n) RETURN [(n)-[:KNOWS]->(m) | [(m)-[:KNOWS]->(n) | n.rank]] AS values" :
+                "MATCH (n) RETURN n ORDER BY id(n)");
+            const auto expected=runtime.executeToQueryResult(*plan.root,directBounds());
+            struct Cancel {bool existing;bool seen=false;} cancel{existingBinding};
+            QueryGuard guard(0,1,[&]{if(cancel.seen)throw std::domain_error("ownership boundary cancelled");return size_t{0};});
+            QueryContext context;context.guard=&guard;context.resource_account=account;
+            {
+                graph::debug::PerfTrace::ScopedObserver observe(&cancel,
+                    [](void *p,std::string_view key,int64_t,bool duration) noexcept {
+                        auto &state=*static_cast<Cancel *>(p);
+                        if(!duration && key==(state.existing ? "logical_plan.pattern.borrowed_existing_node_bindings" :
+                            "logical_plan.result.prepared_row_slots"))state.seen=true;
+                    });
+                EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root,directBounds(),context)),std::domain_error);
+            }
+            EXPECT_TRUE(cancel.seen);EXPECT_EQ(account->used(),0U);
+            context.guard=nullptr;
+            {
+                const auto actual=runtime.executeToQueryResult(*plan.root,directBounds(),context);
+                ASSERT_EQ(actual.rowCount(),expected.rowCount());
+                for(size_t i=0U;i<actual.rowCount();++i) {
+                    if(existingBinding)EXPECT_EQ(actual.getRows()[i].at("values").asPrimitive(),expected.getRows()[i].at("values").asPrimitive());
+                    else {
+                        const auto &a=actual.getRows()[i].at("n").asLogicalNode();
+                        const auto &e=expected.getRows()[i].at("n").asLogicalNode();
+                        EXPECT_EQ(a.node_id,e.node_id);EXPECT_EQ(a.labels,e.labels);EXPECT_EQ(a.properties,e.properties);
+                    }
+                }
+                EXPECT_GT(account->used(),0U);
+            }
+            EXPECT_EQ(account->used(),0U);
+        }
+    }
 } // namespace graph::query::execution

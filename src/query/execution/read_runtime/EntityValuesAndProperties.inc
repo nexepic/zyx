@@ -1485,6 +1485,21 @@
             ScopedPatternNodeBinding(LogicalPlanReadRow &row, const std::string &variable,
                     const storage::LogicalGraphNode &node, ExecutionState &state, bool propertyOnly)
                 : row_(row), state_(state), bytes_(&state.shared.materialized_budget) {
+                // A pattern target already bound to the same Node is a
+                // constraint, not a replacement binding. Keep its owner and
+                // caches intact while exposing the admitted selected record.
+                if (propertyOnly && !variable.empty()) {
+                    const auto existing=row.values.find(variable);
+                    const auto *reference=existing==row.values.end() ? nullptr :
+                        std::get_if<storage::EntityRef>(&existing->second);
+                    if(reference && !reference->is_edge && reference->entity_id==node.node_id) {
+                        validateNodeRef(*reference, "logical-plan scoped Node reference is invalid");
+                        view_={&row,&variable,&node,state.task.borrowed_pattern_node};
+                        state.task.borrowed_pattern_node=&view_;active_=true;
+                        debug::PerfTrace::addValue("logical_plan.pattern.borrowed_existing_node_bindings",1);
+                        return;
+                    }
+                }
                 if (!propertyOnly || variable.empty() || row.values.contains(variable) ||
                         row.property_cache.contains(variable) || row.entity_metadata_cache.contains(variable) ||
                         row.complete_entity_property_cache.contains(variable)) {
@@ -1498,6 +1513,7 @@
                     "scoped reference binding overflowed");
                 bytes_.set((std::max)(physical, logical));
                 row.values.try_emplace(variable, storage::EntityRef{node.node_id, false, 0U, 0U, 0U});
+                inserted_=true;
                 view_ = {&row, &variable, &node, state.task.borrowed_pattern_node};
                 state.task.borrowed_pattern_node = &view_;
                 active_ = true;
@@ -1506,7 +1522,7 @@
             ~ScopedPatternNodeBinding() {
                 if (active_) {
                     state_.task.borrowed_pattern_node = view_.previous;
-                    row_.values.erase(*view_.variable);
+                    if(inserted_)row_.values.erase(*view_.variable);
                 }
             }
             ScopedPatternNodeBinding(const ScopedPatternNodeBinding &) = delete;
@@ -1517,7 +1533,7 @@
             MaterializedByteReservation bytes_;
             std::optional<ScopedRowBinding> fallback_;
             BorrowedPatternNode view_;
-            bool active_ = false;
+            bool active_ = false, inserted_ = false;
         };
 
 		[[nodiscard]] const std::vector<PropertyValue> &
