@@ -1,0 +1,46 @@
+{
+  "scope": "separate diagnostic-enabled replays; not merged into the official full-suite coverage profile",
+  "full_suite_uncovered_added_lines": [
+    {
+      "file": "src/query/execution/ExternalQuerySort.hpp",
+      "line": 159,
+      "supplemental_hits": 14
+    },
+    {
+      "file": "src/query/execution/ExternalQuerySort.hpp",
+      "line": 160,
+      "supplemental_hits": 14
+    },
+    {
+      "file": "src/query/execution/ExternalQuerySort.hpp",
+      "line": 161,
+      "supplemental_hits": 11
+    },
+    {
+      "file": "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc",
+      "line": 539,
+      "supplemental_hits": 8
+    },
+    {
+      "file": "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc",
+      "line": 540,
+      "supplemental_hits": 8
+    },
+    {
+      "file": "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc",
+      "line": 541,
+      "supplemental_hits": 8
+    },
+    {
+      "file": "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc",
+      "line": 542,
+      "supplemental_hits": 8
+    },
+    {
+      "file": "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc",
+      "line": 543,
+      "supplemental_hits": 8
+    }
+  ],
+  "supplemental_all_observer_lines_hit": true
+}

@@ -1,0 +1,354 @@
+{
+  "base": "d251c1cd67d1a770d7c8f3c8bb99aedd370b46b9",
+  "head": "63a5daeda1542bb95584a635037c4031115e4e9b",
+  "scope": "added executable production lines, local unfiltered full-suite profile; not Codecov server patch",
+  "files": {
+    "src/query/execution/ExternalQuerySort.hpp": [
+      {
+        "line": 103,
+        "hits": 28,
+        "source": "\t\tfor(size_t level=0;runs_.size()>FINAL_FAN_IN;++level){"
+      },
+      {
+        "line": 116,
+        "hits": 18,
+        "source": "        traceMergeProgress(\"output-begin\",0U);"
+      },
+      {
+        "line": 117,
+        "hits": 18,
+        "source": "        std::array<std::optional<Cursor>,FINAL_FAN_IN> cursors;"
+      },
+      {
+        "line": 118,
+        "hits": 64,
+        "source": "        for(size_t i=0;i<runs_.size();++i)cursors[i].emplace(*this,runs_[i]);"
+      },
+      {
+        "line": 120,
+        "hits": 94924,
+        "source": "        while(true) {"
+      },
+      {
+        "line": 122,
+        "hits": 94920,
+        "source": "            Cursor *selected=nullptr;"
+      },
+      {
+        "line": 123,
+        "hits": 94920,
+        "source": "            for(auto &candidate:cursors)"
+      },
+      {
+        "line": 124,
+        "hits": 284760,
+        "source": "                if(candidate && candidate->current && (!selected || precedes(*candidate->current,*selected->current)))"
+      },
+      {
+        "line": 125,
+        "hits": 145855,
+        "source": "                    selected=&*candidate;"
+      },
+      {
+        "line": 126,
+        "hits": 94920,
+        "source": "            if(!selected)break;"
+      },
+      {
+        "line": 127,
+        "hits": 94911,
+        "source": "            Cursor &cursor=*selected;"
+      },
+      {
+        "line": 139,
+        "hits": 13,
+        "source": "\t\ttraceMergeProgress(\"output-end\",0U);"
+      },
+      {
+        "line": 140,
+        "hits": 13,
+        "source": "        scratch_->finish();tracePhase(\"sort-finished\");return true;"
+      },
+      {
+        "line": 159,
+        "hits": 0,
+        "source": "        tracePhase(std::string_view(phase)==\"output-begin\" ? \"sort-final-output-begin\" :"
+      },
+      {
+        "line": 160,
+        "hits": 0,
+        "source": "            std::string_view(phase)==\"output-end\" ? \"sort-final-output-end\" :"
+      },
+      {
+        "line": 161,
+        "hits": 0,
+        "source": "            phase[0] == 'b' ? \"sort-merge-level-begin\" :"
+      },
+      {
+        "line": 247,
+        "hits": 234538,
+        "source": "            prior->keys.clear();"
+      }
+    ],
+    "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc": [
+      {
+        "line": 508,
+        "hits": 2342,
+        "source": "                size_t futureRowBytes, size_t retiringStagingBytes, Protected protect) {"
+      },
+      {
+        "line": 528,
+        "hits": 971,
+        "source": "            const size_t latePeak=checkedSizeAdd(growthPeak(minimum),futureRowBytes,"
+      },
+      {
+        "line": 529,
+        "hits": 971,
+        "source": "                \"result late copy peak overflowed\");"
+      },
+      {
+        "line": 530,
+        "hits": 971,
+        "source": "            const size_t lateGrowth=latePeak-previous;"
+      },
+      {
+        "line": 531,
+        "hits": 971,
+        "source": "            const size_t retired=(std::min)(lateGrowth,retiringStagingBytes);"
+      },
+      {
+        "line": 532,
+        "hits": 971,
+        "source": "            const size_t cacheCredit=checkedSizeAdd(state.shared.materialized_cache_reservation.bytes(),"
+      },
+      {
+        "line": 533,
+        "hits": 971,
+        "source": "                state.shared.entity_cache_memory.used(),\"result cache probe overflowed\");"
+      },
+      {
+        "line": 534,
+        "hits": 971,
+        "source": "            const size_t lateAvailable=checkedSizeAdd(state.shared.materialized_budget.availableWithParent(),"
+      },
+      {
+        "line": 535,
+        "hits": 971,
+        "source": "                cacheCredit,\"result cache probe overflowed\");"
+      },
+      {
+        "line": 536,
+        "hits": 971,
+        "source": "#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS"
+      },
+      {
+        "line": 537,
+        "hits": 971,
+        "source": "            debug::CiBudgetTrace trace(&result,\"result_slot_order\");"
+      },
+      {
+        "line": 538,
+        "hits": 971,
+        "source": "            if(trace.allow()) {"
+      },
+      {
+        "line": 539,
+        "hits": 0,
+        "source": "                std::fprintf(stderr,\"CI_RESULT_SLOT_ORDER rows=%zu capacity=%zu incoming=%zu late_growth=%zu retiring_staging=%zu cache_credit=%zu late_available=%zu order=%s\\n\","
+      },
+      {
+        "line": 540,
+        "hits": 0,
+        "source": "                    result.rowCount(),oldCapacity,futureRowBytes,lateGrowth,retired,cacheCredit,lateAvailable,"
+      },
+      {
+        "line": 541,
+        "hits": 0,
+        "source": "                    lateGrowth-retired<=lateAvailable ? \"late\" : \"early\");"
+      },
+      {
+        "line": 542,
+        "hits": 0,
+        "source": "                std::fflush(stderr);"
+      },
+      {
+        "line": 543,
+        "hits": 0,
+        "source": "            }"
+      },
+      {
+        "line": 544,
+        "hits": 971,
+        "source": "            trace.discard();"
+      },
+      {
+        "line": 545,
+        "hits": 971,
+        "source": "#endif"
+      },
+      {
+        "line": 546,
+        "hits": 971,
+        "source": "            if(lateGrowth-retired<=lateAvailable) {"
+      },
+      {
+        "line": 547,
+        "hits": 971,
+        "source": "                debug::PerfTrace::addValue(\"logical_plan.result.deferred_row_slots\",1);"
+      },
+      {
+        "line": 548,
+        "hits": 971,
+        "source": "                return;"
+      },
+      {
+        "line": 549,
+        "hits": 971,
+        "source": "            }"
+      }
+    ],
+    "src/query/execution/read_runtime/PlanInspectionAndBatching.inc": [
+      {
+        "line": 831,
+        "hits": 53953,
+        "source": "\t\t\t\t\t\tcheckedSizeAdd(nextBytes, selectionPredicate ? SelectionVector::requiredStorageBytes(rows.size()) : 0U,"
+      }
+    ],
+    "src/query/execution/read_runtime/RowBindingAndResults.inc": [
+      {
+        "line": 1041,
+        "hits": 2345,
+        "source": "                prepareResultSlotBeforeEntityCopy(result,state,predicted,stagedBytes.bytes(),[&](bool edge,uint64_t id){"
+      }
+    ],
+    "src/storage/relocatable/maintenance/RelocatableMaintenanceLoop.cpp": [
+      {
+        "line": 55,
+        "hits": 108,
+        "source": "\t\tif (last_failure_ && metrics_.state != RelocatableMaintenanceLoopState::VMLS_STOPPED)"
+      },
+      {
+        "line": 56,
+        "hits": 3,
+        "source": "\t\t\tthrow std::logic_error(\"relocatable maintenance loop can start only from a clean stopped state\");"
+      },
+      {
+        "line": 94,
+        "hits": 44,
+        "source": "\t\tif (last_failure_)"
+      },
+      {
+        "line": 95,
+        "hits": 2,
+        "source": "\t\t\tthrow std::logic_error(\"relocatable maintenance loop can resume only from an operator pause\");"
+      },
+      {
+        "line": 145,
+        "hits": 521,
+        "source": "\t\tif ((last_failure_ && metrics_.state != RelocatableMaintenanceLoopState::VMLS_STOPPED) ||"
+      },
+      {
+        "line": 146,
+        "hits": 521,
+        "source": "\t\t\tmetrics_.state == RelocatableMaintenanceLoopState::VMLS_FAULTED ||"
+      },
+      {
+        "line": 288,
+        "hits": 26,
+        "source": "        {"
+      },
+      {
+        "line": 289,
+        "hits": 26,
+        "source": "            std::lock_guard lock(mutex_);"
+      },
+      {
+        "line": 293,
+        "hits": 26,
+        "source": "            last_failure_ = failure;"
+      },
+      {
+        "line": 294,
+        "hits": 26,
+        "source": "        }"
+      },
+      {
+        "line": 295,
+        "hits": 26,
+        "source": "        if (failure_handler_) {"
+      },
+      {
+        "line": 296,
+        "hits": 14,
+        "source": "            try {"
+      },
+      {
+        "line": 297,
+        "hits": 14,
+        "source": "                failure_handler_(failure); // outside the mutex: observers may inspect metrics"
+      },
+      {
+        "line": 298,
+        "hits": 14,
+        "source": "            } catch (...) {"
+      },
+      {
+        "line": 300,
+        "hits": 2,
+        "source": "            }"
+      },
+      {
+        "line": 301,
+        "hits": 14,
+        "source": "        }"
+      },
+      {
+        "line": 302,
+        "hits": 26,
+        "source": "        std::lock_guard lock(mutex_);"
+      },
+      {
+        "line": 303,
+        "hits": 26,
+        "source": "        --metrics_.in_flight_tasks;"
+      },
+      {
+        "line": 304,
+        "hits": 26,
+        "source": "        if (task.deduplication_key != 0U) active_deduplication_keys_.erase(task.deduplication_key);"
+      },
+      {
+        "line": 305,
+        "hits": 26,
+        "source": "        outstanding_rewrite_bytes_ -= task.maximum_rewrite_bytes;"
+      },
+      {
+        "line": 306,
+        "hits": 26,
+        "source": "        saturatingAdd(metrics_.failed_tasks, 1U);"
+      },
+      {
+        "line": 307,
+        "hits": 26,
+        "source": "        metrics_.outstanding_rewrite_bytes = outstanding_rewrite_bytes_;"
+      },
+      {
+        "line": 308,
+        "hits": 26,
+        "source": "        if (!stop_requested_) metrics_.state = RelocatableMaintenanceLoopState::VMLS_FAULTED;"
+      },
+      {
+        "line": 309,
+        "hits": 26,
+        "source": "        idle_condition_.notify_all();"
+      },
+      {
+        "line": 310,
+        "hits": 26,
+        "source": "    }"
+      }
+    ]
+  },
+  "added_executable_lines": 67,
+  "covered_added_executable_lines": 59
+}

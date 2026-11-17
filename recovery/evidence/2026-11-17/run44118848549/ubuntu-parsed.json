@@ -1,0 +1,214 @@
+{
+  "journals": [
+    {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_started_observed_seconds": 0.06495530100005453,
+      "last_completed_observed_seconds": 0.06626698800005215,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    {
+      "started": 609,
+      "completed": 609,
+      "failed": 0,
+      "passed": 609,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+      "last_completed": "RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+      "last_started_observed_seconds": 331.62594078799975,
+      "last_completed_observed_seconds": 331.8140057259998,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    },
+    {
+      "started": 45,
+      "completed": 45,
+      "failed": 0,
+      "passed": 45,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableSegmentRelocationSchedulerTest.RejectsInvalidExecutorsRequestsAndResults",
+      "last_completed": "RelocatableSegmentRelocationSchedulerTest.RejectsInvalidExecutorsRequestsAndResults",
+      "last_started_observed_seconds": 3.2058529930000077,
+      "last_completed_observed_seconds": 3.2066178860000036,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  ],
+  "shards": [
+    {
+      "index": 0,
+      "pid": 44794,
+      "raw_exit_code": 0,
+      "journal_available": true,
+      "status_details_available": true,
+      "observed_counts": {
+        "started": 5568,
+        "completed": 5568,
+        "failed": 0,
+        "passed": 5568,
+        "skipped": 0,
+        "unclassified_completed": 0
+      },
+      "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096",
+      "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096"
+    },
+    {
+      "index": 1,
+      "pid": 44795,
+      "raw_exit_code": 0,
+      "journal_available": true,
+      "status_details_available": true,
+      "observed_counts": {
+        "started": 5568,
+        "completed": 5568,
+        "failed": 0,
+        "passed": 5568,
+        "skipped": 0,
+        "unclassified_completed": 0
+      },
+      "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+      "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse"
+    },
+    {
+      "index": 0,
+      "pid": 49979,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    },
+    {
+      "index": 1,
+      "pid": 49980,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    }
+  ],
+  "failed_cases": [],
+  "malformed_json_lines": [],
+  "rss": [],
+  "outcomes": {
+    "calibration": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "diagnostic_tests": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "lifecycle": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "linux_result_owner_diagnostic": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "macos_budget_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "macos_quota_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "recovery_maintenance": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "timer_allocation_diagnostic": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "unit_tests": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    },
+    "windows_budget_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_current_cases_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_final_shape_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_ingest_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_ownership_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_plan_cache_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_projection_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_read_session_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_slots_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_stack_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    },
+    "windows_string_diagnostic": {
+      "conclusion": "skipped",
+      "outcome": "skipped",
+      "outputs": {}
+    }
+  },
+  "native_source_observed": true
+}

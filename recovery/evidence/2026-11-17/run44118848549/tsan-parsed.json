@@ -1,0 +1,34 @@
+{
+  "journals": [
+    {
+      "started": 27,
+      "completed": 27,
+      "failed": 0,
+      "passed": 27,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied",
+      "last_completed": "RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied",
+      "last_started_observed_seconds": 17.201263583000127,
+      "last_completed_observed_seconds": 17.29387050000014,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  ],
+  "shards": [],
+  "failed_cases": [],
+  "malformed_json_lines": [],
+  "rss": [],
+  "outcomes": {
+    "diagnostic_tests": {
+      "conclusion": "success",
+      "outcome": "success",
+      "outputs": {}
+    }
+  },
+  "native_source_observed": true
+}

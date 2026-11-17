@@ -1,0 +1,60 @@
+{
+  "unit": {
+    "started": 11132,
+    "completed": 11132,
+    "failed": 4,
+    "passed": 11127,
+    "skipped": 1,
+    "unclassified_completed": 0,
+    "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+    "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+    "last_started_observed_seconds": 3650.906,
+    "last_completed_observed_seconds": 3655.718,
+    "failed_names": [
+      "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+    ],
+    "failed_names_truncated": false,
+    "skipped_names": [
+      "InputxxTerminalTest.PosixPseudoTerminalCoverageIsNotApplicableOnWindows"
+    ],
+    "skipped_names_truncated": false,
+    "oversized_lines": 0,
+    "counts_are_observed_not_discovery": true
+  },
+  "lifecycle": {
+    "started": 609,
+    "completed": 609,
+    "failed": 1,
+    "passed": 608,
+    "skipped": 0,
+    "unclassified_completed": 0,
+    "last_started": "RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+    "last_completed": "RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+    "last_started_observed_seconds": 900.2660000000005,
+    "last_completed_observed_seconds": 900.9379999999992,
+    "failed_names": [
+      "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+    ],
+    "failed_names_truncated": false,
+    "skipped_names": [],
+    "skipped_names_truncated": false,
+    "oversized_lines": 0,
+    "counts_are_observed_not_discovery": true
+  },
+  "resolved_vs249": [
+    "LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties"
+  ],
+  "new_vs249": [
+    "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations"
+  ],
+  "remaining": [
+    "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+  ],
+  "counts_not_additive": true
+}

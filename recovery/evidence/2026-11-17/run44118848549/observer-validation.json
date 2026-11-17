@@ -1,0 +1,22 @@
+[
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "exit": 0,
+    "trace_validated": true
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "exit": 0,
+    "trace_validated": true
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "exit": 0,
+    "trace_validated": true
+  },
+  {
+    "case": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+    "exit": 0,
+    "trace_validated": true
+  }
+]

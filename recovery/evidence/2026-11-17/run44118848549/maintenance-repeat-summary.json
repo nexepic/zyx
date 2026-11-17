@@ -1,0 +1,9 @@
+{
+  "repetitions_per_case": {
+    "RelocatableStorageBackendSchemaTest.LargeValueMaintenanceJournalResetCandidateDiskFullRequiresReopenAndCanResume": 100,
+    "RelocatableMaintenanceLoopTest.PublishesFaultOnlyAfterTheFailureHandlerAndRetainsAdmissionUntilThen": 100
+  },
+  "executions": 200,
+  "failures": 0,
+  "skips": 0
+}

@@ -1,0 +1,9 @@
+{
+  "statuses": [
+    {
+      "context": "codecov/patch",
+      "state": "success",
+      "target_url": "https://app.codecov.io/gh/nexepic/zyx/commit/d251c1cd67d1a770d7c8f3c8bb99aedd370b46b9"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "WINDOWS": {
+    "selectors": 158,
+    "cases": 158,
+    "missing": [],
+    "duplicates": 0
+  },
+  "WINDOWS_CURRENT": {
+    "selectors": 34,
+    "cases": 34,
+    "missing": [],
+    "duplicates": 0
+  },
+  "MACOS": {
+    "selectors": 36,
+    "cases": 36,
+    "missing": [],
+    "duplicates": 0
+  },
+  "ASAN": {
+    "selectors": 22,
+    "cases": 28,
+    "missing": [],
+    "duplicates": 0
+  },
+  "TSAN_GATE": {
+    "selectors": [
+      "RelocatableCompactionWorkloadTest.*",
+      "RelocatableCompactionCoordinatorTest.*",
+      "RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance",
+      "RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied",
+      "RelocatableMaintenanceLoopTest.*"
+    ],
+    "cases": 41
+  }
+}

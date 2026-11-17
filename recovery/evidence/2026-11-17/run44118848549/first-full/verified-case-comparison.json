@@ -1,0 +1,9 @@
+{
+  "first_cases": 11145,
+  "final_cases": 11146,
+  "added_case": [
+    "RelocatableMaintenanceLoopTest.PublishesFaultOnlyAfterTheFailureHandlerAndRetainsAdmissionUntilThen"
+  ],
+  "removed_cases": [],
+  "first_duplicates": false
+}
