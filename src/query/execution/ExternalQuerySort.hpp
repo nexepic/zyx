@@ -1,5 +1,6 @@
 #pragma once
 #include "graph/utils/AdmissionPmrContainers.hpp"
+#include <array>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -25,7 +26,13 @@ public:
 	using Visitor=std::function<bool(Record,MaterializedByteReservation)>;
 	static constexpr size_t MAX_RECORD_BYTES=4096U;
 	static constexpr size_t WORKSPACE_BYTES=6U*storage::RSS_SEGMENT_SIZE+6U*MAX_RECORD_BYTES*64U;
-	static constexpr size_t MINIMUM_QUERY_BYTES=4U*1024U*1024U;
+	// Three current records and three prior-key records fit the six
+    // decoded-image allowances. Three input blocks plus the retained writer
+    // block/encoding buffer fit the six segment allowances.
+    static constexpr size_t FINAL_FAN_IN=3U;
+    static_assert(WORKSPACE_BYTES >= 2U*FINAL_FAN_IN*MAX_RECORD_BYTES*64U +
+        (FINAL_FAN_IN+2U)*storage::RSS_SEGMENT_SIZE);
+    static constexpr size_t MINIMUM_QUERY_BYTES=4U*1024U*1024U;
 	ExternalQuerySort(storage::LogicalQueryScratchProvider &provider,MaterializedByteBudget &budget,
 		size_t maximumRows,size_t maximumBytes,std::span<const uint8_t> ascending,SizeFunction size,
 		std::function<void()> checkpoint,size_t maximumDiskBytes=128U*1024U*1024U,size_t maximumFragments=1024U,std::function<void()> publicationCheckpoint={},std::shared_ptr<ResourceAccount> account={})
@@ -93,7 +100,7 @@ public:
         // and owning output compete for the same unchanged hard allowance.
         rows_.clear();
         tracePhase("sort-before-merge");
-		for(size_t level=0;runs_.size()>2U;++level){
+		for(size_t level=0;runs_.size()>FINAL_FAN_IN;++level){
 			if(level==12U)throw std::runtime_error("external Sort exceeded its merge-depth bound");
             traceMergeProgress("begin", level);
 			try {
@@ -104,17 +111,20 @@ public:
             traceMergeProgress("end", level);
 		}
         tracePhase("sort-before-output");
-        // The final two runs can feed the consumer directly. Rewriting their
-        // complete merge would add a full scratch write/read/decode pass.
-        // Both cursors remain inside the same admitted merge workspace.
-        Cursor first(*this,runs_.front());
-        std::optional<Cursor> second;
-        if(runs_.size()==2U)second.emplace(*this,runs_[1]);
+        // Stream at most three runs inside the unchanged admitted workspace.
+        // No intermediate run is needed merely to reduce three inputs to two.
+        traceMergeProgress("output-begin",0U);
+        std::array<std::optional<Cursor>,FINAL_FAN_IN> cursors;
+        for(size_t i=0;i<runs_.size();++i)cursors[i].emplace(*this,runs_[i]);
         std::optional<uint64_t> previousOrdinal;
-        while(first.current || (second && second->current)) {
+        while(true) {
             checkpoint_();
-            Cursor &cursor=(!second || !second->current ||
-                (first.current && precedes(*first.current,*second->current))) ? first : *second;
+            Cursor *selected=nullptr;
+            for(auto &candidate:cursors)
+                if(candidate && candidate->current && (!selected || precedes(*candidate->current,*selected->current)))
+                    selected=&*candidate;
+            if(!selected)break;
+            Cursor &cursor=*selected;
             // Each cursor validates its own ordering. The merge preserves that
             // ordering, but equal adjacent ordinals can also cross run bounds.
             if(previousOrdinal && *previousOrdinal==cursor.current->ordinal)
@@ -126,7 +136,8 @@ public:
             if(!visitor(std::move(record),std::move(charge))){scratch_->finish();return false;}
             workspace_.set(WORKSPACE_BYTES);cursor.advance();
         }
-		scratch_->finish();tracePhase("sort-finished");return true;
+		traceMergeProgress("output-end",0U);
+        scratch_->finish();tracePhase("sort-finished");return true;
 	}
 	[[nodiscard]] bool spilled() const {return scratch_!=nullptr;}
 private:
@@ -145,7 +156,9 @@ private:
             phase, level, runs_.size(), total_, decoded_records_, read_fragments_, read_payload_bytes_,
             written_fragments_, written_payload_bytes_, budget_.used());
         std::fflush(stderr);
-        tracePhase(phase[0] == 'b' ? "sort-merge-level-begin" :
+        tracePhase(std::string_view(phase)=="output-begin" ? "sort-final-output-begin" :
+            std::string_view(phase)=="output-end" ? "sort-final-output-end" :
+            phase[0] == 'b' ? "sort-merge-level-begin" :
             phase[0] == 'f' ? "sort-merge-level-failure" : "sort-merge-level-end");
 #else
         static_cast<void>(phase); static_cast<void>(level);
@@ -228,6 +241,10 @@ private:
 				throw std::invalid_argument("external Sort decoded record failed its layout/ownership bound");
 			if(prior && (sort.precedes(*current,*prior) || prior->ordinal==current->ordinal))throw std::invalid_argument("external Sort run is unordered or has duplicate adjacent ordinals");
 			if (!prior) prior.emplace();
+            // Ordering has been checked. Drop old dynamic key payloads before
+            // copying the next keys so three-way output never needs a seventh
+            // decoded-image allowance during key assignment.
+            prior->keys.clear();
             prior->keys=current->keys;prior->ordinal=current->ordinal;++seen;
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
             ++sort.decoded_records_;
