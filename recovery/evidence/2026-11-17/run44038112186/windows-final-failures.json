@@ -1,0 +1,22 @@
+{
+  "unit": [
+    "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "RelocatableStorageBackendTest.OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe",
+    "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+    "RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+    "RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues"
+  ],
+  "lifecycle": [
+    "RelocatableStorageBackendTest.OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe",
+    "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+    "RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+    "RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues"
+  ],
+  "new_vs_247": [],
+  "resolved_vs_247": []
+}

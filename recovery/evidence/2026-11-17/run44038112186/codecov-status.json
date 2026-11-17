@@ -1,0 +1,18 @@
+{
+  "sha": "90d49616f5cbc0e8545eb80b69f9c8a89f9d5cb6",
+  "state": "failure",
+  "statuses": [
+    {
+      "url": "https://api.github.com/repos/nexepic/zyx/statuses/90d49616f5cbc0e8545eb80b69f9c8a89f9d5cb6",
+      "avatar_url": "https://avatars.githubusercontent.com/in/254?v=4",
+      "id": 59115466551,
+      "node_id": "SC_kwDOOSA-D88AAAANw45vNw",
+      "state": "failure",
+      "description": "50.00% of diff hit (target 86.80%)",
+      "target_url": "https://app.codecov.io/gh/nexepic/zyx/commit/90d49616f5cbc0e8545eb80b69f9c8a89f9d5cb6",
+      "context": "codecov/patch",
+      "created_at": "2026-11-17T08:01:46Z",
+      "updated_at": "2026-11-17T08:01:46Z"
+    }
+  ]
+}
