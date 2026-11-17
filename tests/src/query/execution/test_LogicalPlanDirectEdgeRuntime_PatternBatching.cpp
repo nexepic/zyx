@@ -983,8 +983,8 @@ namespace graph::query::execution {
                 graph::debug::PerfTrace::ScopedObserver observe(&cancel,
                     [](void *p,std::string_view key,int64_t,bool duration) noexcept {
                         auto &state=*static_cast<Cancel *>(p);
-                        if(!duration && key==(state.existing ? "logical_plan.pattern.borrowed_existing_node_bindings" :
-                            "logical_plan.result.prepared_row_slots"))state.seen=true;
+                        if(!duration && (state.existing ? key=="logical_plan.pattern.borrowed_existing_node_bindings" :
+                            (key=="logical_plan.result.prepared_row_slots" || key=="logical_plan.result.deferred_row_slots")))state.seen=true;
                     });
                 EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root,directBounds(),context)),std::domain_error);
             }
@@ -1005,5 +1005,48 @@ namespace graph::query::execution {
             }
             EXPECT_EQ(account->used(),0U);
         }
+    }
+    TEST(LogicalPlanDirectEdgeRuntimeTest, TerminalReferenceSchedulingPreservesBudgetDenialsAndSuccessfulRetry) {
+        using namespace graph::query::execution::detail;
+        auto process=std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U*1024U));
+        auto database=std::make_shared<DatabaseResourceBudget>(process,ResourceLimits::uniform(1024U*1024U));
+        auto account=std::make_shared<ResourceAccount>(database,ResourceClass::RCK_QUERY,1024U*1024U);
+        QueryContext context;context.resource_account=account;
+        graph::parser::cypher::CypherParserImpl parser;
+        auto plan=parser.parseToLogical("MATCH (n) RETURN n ORDER BY id(n)");
+        bool succeeded=false;size_t declined=0U;
+        for(size_t cap=4096U;cap<=32768U && !succeeded;cap+=64U) {
+            auto graph=directGraph();graph.enable_property_tokens=true;
+            for(uint64_t id=4U;id<=17U;++id) {
+                auto node=graph.nodes.at(1U);node.node_id=id;graph.nodes.emplace(id,std::move(node));
+            }
+            DirectEdgeBackend backend(graph);LogicalPlanReadRuntime runtime(backend);
+            auto bounds=directBounds();bounds.maximum_rows=64U;bounds.maximum_node_records=64U;
+            bounds.maximum_materialized_bytes=cap;
+            size_t scheduled=0U;
+            {
+                graph::debug::PerfTrace::ScopedObserver observe(&scheduled,[](void *p,std::string_view key,int64_t value,bool duration) noexcept {
+                    if(!duration && (key=="logical_plan.result.prepared_row_slots" || key=="logical_plan.result.deferred_row_slots"))*static_cast<size_t *>(p)+=size_t(value);
+                });
+                try {
+                    const auto result=runtime.executeToQueryResult(*plan.root,bounds,context);
+                    ASSERT_EQ(result.rowCount(),17U);
+                    for(size_t i=0;i<17U;++i) {
+                        const auto &node=result.getRows()[i].at("n").asLogicalNode();
+                        EXPECT_EQ(node.node_id,i+1U);
+                        const auto &expected=graph.nodes.at(i+1U).properties;
+                        ASSERT_EQ(node.properties.size(),expected.size());
+                        for(const auto &[key,value]:expected)EXPECT_EQ(node.properties.at(key),value);
+                        EXPECT_EQ(node.labels,graph.nodes.at(i+1U).labels);
+                    }
+                    EXPECT_GT(scheduled,0U);succeeded=true;
+                } catch(const std::runtime_error &error) {
+                    if(std::string_view(error.what()).find("bound")==std::string_view::npos)throw;
+                    ++declined;
+                }
+            }
+            EXPECT_EQ(account->used(),0U);
+        }
+        EXPECT_GT(declined,0U);EXPECT_TRUE(succeeded);
     }
 } // namespace graph::query::execution

@@ -1038,7 +1038,7 @@
                 // Grow the result array before the incoming owning copy exists.
                 // On MSVC this funds all destination empty maps while both
                 // arrays are live, without overlapping the copied row payload.
-                prepareResultSlotBeforeEntityCopy(result,state,predicted,[&](bool edge,uint64_t id){
+                prepareResultSlotBeforeEntityCopy(result,state,predicted,stagedBytes.bytes(),[&](bool edge,uint64_t id){
                     return edge==reference.is_edge && id==reference.entity_id;
                 });
                 outputBytes.set(predicted);

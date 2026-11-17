@@ -505,7 +505,7 @@
         }
         template<class Protected>
         void prepareResultSlotBeforeEntityCopy(QueryResult &result, ExecutionState &state,
-                size_t futureRowBytes, Protected protect) {
+                size_t futureRowBytes, size_t retiringStagingBytes, Protected protect) {
             const size_t oldCapacity=result.getRows().capacity();
             if(result.rowCount()<oldCapacity)return;
             const size_t minimum=checkedSizeAdd(result.rowCount(),1U,"result row capacity overflowed");
@@ -520,6 +520,33 @@
                 checkedSizeAdd(backing(count),relocation,"result relocation overflowed"),"result relocation overflowed");};
             const auto copyPeak=[&](size_t count){return checkedSizeAdd(previous-oldBacking,
                 checkedSizeAdd(backing(count),futureRowBytes,"result copy overflowed"),"result copy overflowed");};
+            // Prefer the usual copy-then-grow order whenever it can fit after
+            // retiring optional entity caches. Growing first can strand the
+            // current source or leave caches occupying the next read's space.
+            // This is only a scheduling probe: actual late growth still admits
+            // every live owner and may reject if cache storage cannot be freed.
+            const size_t latePeak=checkedSizeAdd(growthPeak(minimum),futureRowBytes,
+                "result late copy peak overflowed");
+            const size_t lateGrowth=latePeak-previous;
+            const size_t retired=(std::min)(lateGrowth,retiringStagingBytes);
+            const size_t cacheCredit=checkedSizeAdd(state.shared.materialized_cache_reservation.bytes(),
+                state.shared.entity_cache_memory.used(),"result cache probe overflowed");
+            const size_t lateAvailable=checkedSizeAdd(state.shared.materialized_budget.availableWithParent(),
+                cacheCredit,"result cache probe overflowed");
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            debug::CiBudgetTrace trace(&result,"result_slot_order");
+            if(trace.allow()) {
+                std::fprintf(stderr,"CI_RESULT_SLOT_ORDER rows=%zu capacity=%zu incoming=%zu late_growth=%zu retiring_staging=%zu cache_credit=%zu late_available=%zu order=%s\n",
+                    result.rowCount(),oldCapacity,futureRowBytes,lateGrowth,retired,cacheCredit,lateAvailable,
+                    lateGrowth-retired<=lateAvailable ? "late" : "early");
+                std::fflush(stderr);
+            }
+            trace.discard();
+#endif
+            if(lateGrowth-retired<=lateAvailable) {
+                debug::PerfTrace::addValue("logical_plan.result.deferred_row_slots",1);
+                return;
+            }
             auto peak=[&](size_t count){return (std::max)(growthPeak(count),copyPeak(count));};
             if(capacity>minimum && peak(capacity)>previous &&
                     peak(capacity)-previous>state.shared.materialized_budget.availableWithParent())capacity=minimum;

@@ -828,7 +828,7 @@
 				nextBytes = checkedSizeAdd(nextBytes, requestedPayloadBytes,
 										   "logical-plan prefetch cache size overflowed");
 				const size_t withSelection =
-						checkedSizeAdd(nextBytes, SelectionVector::requiredStorageBytes(rows.size()),
+						checkedSizeAdd(nextBytes, selectionPredicate ? SelectionVector::requiredStorageBytes(rows.size()) : 0U,
 									   "logical-plan prefetch selection size overflowed");
 				if (nextBytes > state.shared.bounds.maximum_materialized_bytes ||
 					bufferedRowsBytes.wouldExceed(withSelection)) {
