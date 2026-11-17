@@ -1,0 +1,232 @@
+[
+  {
+    "case": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "xml": "tests.xml",
+    "class": "LogicalVectorPropertyBatchTest",
+    "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+    "line": "1582",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "xml": "tests.xml",
+    "class": "LogicalPlanDirectEdgeRuntimeTest",
+    "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+    "line": "1236",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "xml": "tests.xml",
+    "class": "LogicalPlanDirectEdgeRuntimeTest",
+    "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+    "line": "1313",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+    "xml": "tests.xml",
+    "class": "LogicalPlanDirectEdgeRuntimeTest",
+    "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+    "line": "1347",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "xml": "tests.xml",
+    "class": "LogicalPlanDirectEdgeRuntimeTest",
+    "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+    "line": "671",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+    "xml": "tests.xml",
+    "class": "RelocatableStorageBackendTest",
+    "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+    "line": "28",
+    "identity_truncated": false,
+    "assertion_locations": [
+      {
+        "file": "test_RelocatableEdgeCellAdmission.cpp",
+        "line": "88"
+      },
+      {
+        "file": "test_RelocatableEdgeCellAdmission.cpp",
+        "line": "91"
+      },
+      {
+        "file": "test_RelocatableEdgeCellAdmission.cpp",
+        "line": "92"
+      },
+      {
+        "file": "test_RelocatableEdgeCellAdmission.cpp",
+        "line": "97"
+      }
+    ],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [
+        {
+          "label": "Which is",
+          "value": "0"
+        },
+        {
+          "label": "Which is",
+          "value": "6"
+        }
+      ],
+      "truncated": true
+    },
+    "failures": 5
+  },
+  {
+    "case": "LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+    "xml": "xml\\shard-0.xml",
+    "class": "LogicalGraphReadExecutorIndexLookupContractsTest",
+    "name": "UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+    "line": "492",
+    "identity_truncated": false,
+    "assertion_locations": [
+      {
+        "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+        "line": "529"
+      },
+      {
+        "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+        "line": "530"
+      },
+      {
+        "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+        "line": "532"
+      },
+      {
+        "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+        "line": "529"
+      }
+    ],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [
+        {
+          "label": "Which is",
+          "value": "0"
+        },
+        {
+          "label": "Which is",
+          "value": "4"
+        }
+      ],
+      "truncated": true
+    },
+    "failures": 9
+  },
+  {
+    "case": "RelocatableStorageBackendTest.OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe",
+    "xml": "xml\\shard-0.xml",
+    "class": "RelocatableStorageBackendTest",
+    "name": "OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableBoundProgramAdmission.cpp",
+    "line": "14",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+    "xml": "xml\\shard-0.xml",
+    "class": "RelocatableStorageBackendTest",
+    "name": "CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+    "line": "445",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  },
+  {
+    "case": "RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues",
+    "xml": "xml\\shard-0.xml",
+    "class": "RelocatableStorageBackendTest",
+    "name": "CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues",
+    "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableLogicalGraphReadSnapshot.cpp",
+    "line": "488",
+    "identity_truncated": false,
+    "assertion_locations": [],
+    "observations": {
+      "kinds": [
+        "byte_bound"
+      ],
+      "scalars": [],
+      "truncated": false
+    },
+    "failures": 1
+  }
+]
