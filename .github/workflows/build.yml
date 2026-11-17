@@ -784,6 +784,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.lcov
+          disable_search: true
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
