@@ -7,6 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Exercise the final merge and ownership transitions independently on each platform.
+BUILD249_OWNERSHIP = [
+    'ExternalQuerySortTest.FinalTwoRunsStreamWithoutRewritingAndPreserveStableOrder',
+    'ExternalQuerySortTest.FinalMergeRejectsCrossRunDuplicateOrdinalAndRefundsVisitorFailure',
+    'LogicalPlanDirectEdgeRuntimeTest.PreparedResultAndExistingPatternBorrowRefundCancellation',
+    'RelocatableStorageBackendTest.SingleNamedPropertyCellKeepsTokenAdmissionAndRetrySemantics',
+]
+
 BUILD247_ADDITIONAL_WINDOWS = [
     'LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation',
     'RelocatableStorageBackendTest.OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe',
@@ -27,6 +35,7 @@ BUILD248_OWNERSHIP = [
 ]
 
 WINDOWS = [
+    *BUILD249_OWNERSHIP,
     *BUILD248_OWNERSHIP,
     *BUILD247_ADDITIONAL_WINDOWS,
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
@@ -176,6 +185,7 @@ WINDOWS = [
     'RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner',
 ]
 MACOS = [
+    *BUILD249_OWNERSHIP,
     *BUILD248_OWNERSHIP,
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry',
@@ -200,7 +210,7 @@ MACOS = [
 
 # Keep the current native failures visible even if the historical aggregate
 # reaches its console cap or an optional debugger times out. Same test bounds.
-WINDOWS_CURRENT = [*BUILD248_OWNERSHIP, *BUILD247_ADDITIONAL_WINDOWS,
+WINDOWS_CURRENT = [*BUILD249_OWNERSHIP, *BUILD248_OWNERSHIP, *BUILD247_ADDITIONAL_WINDOWS,
     'LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
     'LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation',
     'LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows',
@@ -217,6 +227,7 @@ WINDOWS_CURRENT = [*BUILD248_OWNERSHIP, *BUILD247_ADDITIONAL_WINDOWS,
 
 
 ASAN = [
+    *BUILD249_OWNERSHIP,
     *BUILD248_OWNERSHIP,
     'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
     'RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded',
