@@ -26,7 +26,11 @@ def on_quota(frame, _location, _internal):
             current = thread.GetFrameAtIndex(index)
             if not current.IsValid():
                 break
-            print('CI_QUOTA_PC ' + json.dumps({'index': index, 'pc': current.GetPC()}), flush=True)
+            print('CI_QUOTA_PC ' + json.dumps({
+                'index': index, 'pc': current.GetPC(),
+                'file_address': current.GetPCAddress().GetFileAddress(),
+                'module': (current.GetModule().GetFileSpec().GetFilename() or '')[:128],
+            }), flush=True)
     for index in range(32):
         current = thread.GetFrameAtIndex(index)
         if not current.IsValid():

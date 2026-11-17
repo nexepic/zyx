@@ -44,11 +44,13 @@ def test_raw_stack_is_flushed_before_a_failing_pdb_symbol_lookup(monkeypatch, ca
     def broken_symbol():
         records = [json.loads(line.split(' ', 1)[1]) for line in capsys.readouterr().out.splitlines()
                    if line.startswith('CI_QUOTA_PC ')]
-        assert records == [{'index': i, 'pc': 4096 + i} for i in range(32)]
+        assert records == [{'index': i, 'pc': 4096 + i, 'file_address': i, 'module': 'suite.exe'} for i in range(32)]
         raise RuntimeError('PDB symbol lookup failed')
     def frame_at(i):
         return SimpleNamespace(IsValid=lambda: True, GetPC=lambda: 4096 + i,
-                               GetSymbol=broken_symbol)
+                               GetSymbol=broken_symbol,
+                               GetPCAddress=lambda: SimpleNamespace(GetFileAddress=lambda: i),
+                               GetModule=lambda: SimpleNamespace(GetFileSpec=lambda: SimpleNamespace(GetFilename=lambda: 'suite.exe')))
     root = SimpleNamespace(GetThread=lambda: SimpleNamespace(GetFrameAtIndex=frame_at))
     with pytest.raises(RuntimeError, match='PDB symbol lookup failed'):
         module.on_quota(root, None, {})
@@ -133,6 +135,7 @@ def test_windows_symbol_mode_never_completes_cpp_types_and_caps_rejections(monke
     file = SimpleNamespace(GetFilename=lambda: 'suite.exe')
     # Deliberately no GetFunctionName/GetLineEntry/GetVariables methods.
     frame = SimpleNamespace(IsValid=lambda: True, GetPC=lambda: 1234,
+        GetPCAddress=lambda: SimpleNamespace(GetFileAddress=lambda: 234),
         GetSymbol=lambda: SimpleNamespace(GetName=lambda: 'public_symbol'),
         GetModule=lambda: SimpleNamespace(GetFileSpec=lambda: file))
     root = SimpleNamespace(GetThread=lambda: SimpleNamespace(GetFrameAtIndex=lambda i: frame))
