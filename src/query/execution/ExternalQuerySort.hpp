@@ -93,7 +93,7 @@ public:
         // and owning output compete for the same unchanged hard allowance.
         rows_.clear();
         tracePhase("sort-before-merge");
-		for(size_t level=0;runs_.size()>1U;++level){
+		for(size_t level=0;runs_.size()>2U;++level){
 			if(level==12U)throw std::runtime_error("external Sort exceeded its merge-depth bound");
             traceMergeProgress("begin", level);
 			try {
@@ -104,13 +104,28 @@ public:
             traceMergeProgress("end", level);
 		}
         tracePhase("sort-before-output");
-		Cursor cursor(*this,runs_.front());
-		while(cursor.current){checkpoint_();auto record=QuerySpillRowCodec::takeOutputRow(*cursor.current);
-			const auto bytes=size_(record);if(bytes>workspace_.bytes())throw std::runtime_error("external Sort decoded output exceeded workspace");
-			auto charge=workspace_.splitOff(bytes);
-			if(!visitor(std::move(record),std::move(charge))){scratch_->finish();return false;}
-			workspace_.set(WORKSPACE_BYTES);cursor.advance();
-		}
+        // The final two runs can feed the consumer directly. Rewriting their
+        // complete merge would add a full scratch write/read/decode pass.
+        // Both cursors remain inside the same admitted merge workspace.
+        Cursor first(*this,runs_.front());
+        std::optional<Cursor> second;
+        if(runs_.size()==2U)second.emplace(*this,runs_[1]);
+        std::optional<uint64_t> previousOrdinal;
+        while(first.current || (second && second->current)) {
+            checkpoint_();
+            Cursor &cursor=(!second || !second->current ||
+                (first.current && precedes(*first.current,*second->current))) ? first : *second;
+            // Each cursor validates its own ordering. The merge preserves that
+            // ordering, but equal adjacent ordinals can also cross run bounds.
+            if(previousOrdinal && *previousOrdinal==cursor.current->ordinal)
+                throw std::invalid_argument("external Sort run is unordered or has duplicate adjacent ordinals");
+            previousOrdinal=cursor.current->ordinal;
+            auto record=QuerySpillRowCodec::takeOutputRow(*cursor.current);
+            const auto bytes=size_(record);if(bytes>workspace_.bytes())throw std::runtime_error("external Sort decoded output exceeded workspace");
+            auto charge=workspace_.splitOff(bytes);
+            if(!visitor(std::move(record),std::move(charge))){scratch_->finish();return false;}
+            workspace_.set(WORKSPACE_BYTES);cursor.advance();
+        }
 		scratch_->finish();tracePhase("sort-finished");return true;
 	}
 	[[nodiscard]] bool spilled() const {return scratch_!=nullptr;}
