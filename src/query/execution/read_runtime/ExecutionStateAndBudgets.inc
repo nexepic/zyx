@@ -107,7 +107,15 @@
 			std::optional<detail::BoundExecutionProgram> bound_program{};
 		};
 
+        struct BorrowedPatternNode {
+            const LogicalPlanReadRow *row = nullptr;
+            const std::string *variable = nullptr;
+            const storage::LogicalGraphNode *node = nullptr;
+            const BorrowedPatternNode *previous = nullptr;
+        };
+
 		struct ExecutionTaskState {
+            const BorrowedPatternNode *borrowed_pattern_node = nullptr;
 			LogicalPlanReadRuntimeStats stats;
 			const LogicalPlanReadRow *injected_row = nullptr;
 			const ScopedPropertyColumns *property_columns = nullptr;

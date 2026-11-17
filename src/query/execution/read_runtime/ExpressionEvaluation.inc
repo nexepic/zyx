@@ -1,3 +1,34 @@
+        // Conservative eligibility: unsupported operations keep the owning
+        // binding path, including full entities, functions and metadata reads.
+        bool patternUsesOnlyProperties(const expressions::Expression *expression, std::string_view variable) {
+            if (!expression) return true;
+            using E = expressions::ExpressionType;
+            switch (expression->getExpressionType()) {
+                case E::LITERAL: case E::PARAMETER: case E::PROPERTY_ACCESS: return true;
+                case E::BINARY_OP: {
+                    const auto &binary = static_cast<const expressions::BinaryOpExpression &>(*expression);
+                    return binary.getLeft() && binary.getRight() && patternUsesOnlyProperties(binary.getLeft(), variable) &&
+                        patternUsesOnlyProperties(binary.getRight(), variable);
+                }
+                case E::UNARY_OP: {
+                    const auto &unary = static_cast<const expressions::UnaryOpExpression &>(*expression);
+                    return unary.getOperand() && patternUsesOnlyProperties(unary.getOperand(), variable);
+                }
+                case E::EXPR_EXISTS: {
+                    const auto &nested = static_cast<const expressions::ExistsExpression &>(*expression);
+                    return nested.hasStructuredPattern() && nested.getTargetVar() != variable &&
+                        patternUsesOnlyProperties(nested.getWhereExpression(), variable);
+                }
+                case E::EXPR_PATTERN_COMPREHENSION: {
+                    const auto &nested = static_cast<const expressions::PatternComprehensionExpression &>(*expression);
+                    return nested.getTargetVar() != variable && nested.getRelationshipVar() != variable &&
+                        nested.getMapExpression() && patternUsesOnlyProperties(nested.getWhereExpression(), variable) &&
+                        patternUsesOnlyProperties(nested.getMapExpression(), variable);
+                }
+                default: return false;
+            }
+        }
+
         [[nodiscard]] detail::ScopedScalarReadValue evaluateScalarOperand(
                 const expressions::Expression &expression, LogicalPlanReadRow &row, ExecutionState &state,
                 const PropertyValue **borrowedProperty = nullptr) {
@@ -541,13 +572,15 @@
 						}
 					}
 					const storage::LogicalGraphNode sourceNode = patternSourceIdentity(state, source->second);
-					const auto matchesWhere = [&](const storage::LogicalGraphNode *target) {
+					bool borrowTarget = false;
+                    const auto matchesWhere = [&](const storage::LogicalGraphNode *target) {
 						if (target != nullptr && !exists.getTargetVar().empty()) {
 							if (const auto bound = row.values.find(exists.getTargetVar());
 								bound != row.values.end() && nodeBindingId(bound->second, state) != target->node_id) {
 								return false;
 							}
-							ScopedRowBinding binding(row, exists.getTargetVar(), *target, state);
+							ScopedPatternNodeBinding binding(row, exists.getTargetVar(), *target, state,
+                                borrowTarget);
 							return !exists.hasWhereClause() ||
 								   booleanOrNull(scalarValue(
 										   evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
@@ -560,6 +593,8 @@
 					}
 					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
 							exists.getWhereExpression(), nullptr, exists.getTargetVar(), {}, state.shared.snapshot);
+                    borrowTarget = patternShape.has_value() &&
+                        patternUsesOnlyProperties(exists.getWhereExpression(), exists.getTargetVar());
 					bool matched = false;
 					static_cast<void>(visitPatternTargets(
 							sourceNode, exists.getRelType(), exists.getTargetLabel(), exists.getDirection(), state,
@@ -588,7 +623,8 @@
 					MaterializedByteReservation valuesReservation(&state.shared.materialized_budget);
 					std::vector<PropertyValue> values;
 					size_t valuesBytes = sizeof(uint32_t);
-					const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
+					bool borrowTarget = false;
+                    const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
 												 const storage::LogicalGraphNode *target) {
 						const auto appendBoundValue = [&]() {
 							if (comprehension.hasWhereClause() &&
@@ -641,7 +677,8 @@
 								bound != row.values.end() && nodeBindingId(bound->second, state) != target->node_id) {
 								return true;
 							}
-							ScopedRowBinding targetBinding(row, comprehension.getTargetVar(), *target, state);
+							ScopedPatternNodeBinding targetBinding(row, comprehension.getTargetVar(), *target, state,
+                                borrowTarget);
 							if (edge != nullptr && !comprehension.getRelationshipVar().empty()) {
 								ScopedRowBinding relationshipBinding(row, comprehension.getRelationshipVar(), *edge,
 																	 state);
@@ -672,6 +709,9 @@
 					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
 							comprehension.getWhereExpression(), comprehension.getMapExpression(),
 							comprehension.getTargetVar(), comprehension.getRelationshipVar(), state.shared.snapshot);
+                    borrowTarget = patternShape.has_value() &&
+                        patternUsesOnlyProperties(comprehension.getWhereExpression(), comprehension.getTargetVar()) &&
+                        patternUsesOnlyProperties(comprehension.getMapExpression(), comprehension.getTargetVar());
 					static_cast<void>(visitPatternTargets(
 							sourceNode, comprehension.getRelType(), comprehension.getTargetLabel(),
 							comprehension.getDirection(), state,

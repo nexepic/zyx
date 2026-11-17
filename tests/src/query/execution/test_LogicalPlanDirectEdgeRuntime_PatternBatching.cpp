@@ -1,3 +1,6 @@
+#include "graph/query/QueryGuard.hpp"
+#include "graph/query/QueryContext.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "CypherParserImpl.hpp"
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
 
@@ -685,6 +688,12 @@ namespace graph::query::execution {
 		for (const bool referencePages: {false, true}) {
 			for (const auto &[expression, expected]: cases) {
 				SCOPED_TRACE(expression);
+                size_t borrowedBindings = 0U;
+                graph::debug::PerfTrace::ScopedObserver observe(&borrowedBindings,
+                    [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                        if (!duration && key == "logical_plan.pattern.borrowed_node_bindings")
+                            *static_cast<size_t *>(p) += static_cast<size_t>(value);
+                    });
 				DirectEdgeGraph graph = directGraph();
 				graph.enable_adjacency_reference_pages = referencePages;
 				graph.enable_property_tokens = true;
@@ -708,6 +717,7 @@ namespace graph::query::execution {
 					return true;
 				}));
 				EXPECT_EQ(values, expected);
+                EXPECT_GT(borrowedBindings, 0U);
 				EXPECT_TRUE(graph.node_read_ids.empty());
 				EXPECT_TRUE(
 						std::ranges::none_of(graph.node_shaped_batch_all_properties, [](bool full) { return full; }));
@@ -916,4 +926,40 @@ namespace graph::query::execution {
 		}
 		}
 	}
+
+    TEST(LogicalPlanDirectEdgeRuntimeTest, BorrowedPatternNodeCancellationRefundsAndAllowsRetry) {
+        using namespace graph::query::execution::detail;
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U * 1024U);
+        auto graph = directGraph(); graph.enable_property_tokens = true;
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        graph::parser::cypher::CypherParserImpl parser;
+        auto plan = parser.parseToLogical("MATCH (n) RETURN [(n)-[:KNOWS]->(m) | m.rank] AS values");
+        bool cancel = false;
+        QueryGuard guard(0, 1, [&] { if (cancel) throw std::domain_error("borrowed pattern cancelled"); return size_t{0}; });
+        QueryContext context; context.guard = &guard; context.resource_account = account;
+        {
+            graph::debug::PerfTrace::ScopedObserver observe(&cancel,
+                [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+                    if (!duration && key == "logical_plan.pattern.borrowed_node_bindings")
+                        *static_cast<bool *>(p) = true;
+                });
+            EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, directBounds(), context)), std::domain_error);
+        }
+        EXPECT_TRUE(cancel);
+        EXPECT_EQ(account->used(), 0U);
+        context.guard = nullptr;
+        {
+            const auto result = runtime.executeToQueryResult(*plan.root, directBounds(), context);
+            ASSERT_EQ(result.rowCount(), 3U);
+            EXPECT_EQ(result.getRows()[0].at("values").asPrimitive(), PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(3)}));
+            EXPECT_EQ(result.getRows()[1].at("values").asPrimitive(), PropertyValue(std::vector<PropertyValue>{PropertyValue(1)}));
+            EXPECT_EQ(result.getRows()[2].at("values").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
+            EXPECT_GT(account->used(), 0U);
+        }
+        EXPECT_EQ(account->used(), 0U);
+        EXPECT_TRUE(graph.node_read_ids.empty());
+        EXPECT_TRUE(std::ranges::none_of(graph.node_shaped_batch_all_properties, [](bool full) { return full; }));
+    }
 } // namespace graph::query::execution

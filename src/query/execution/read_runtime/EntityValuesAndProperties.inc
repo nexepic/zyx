@@ -1190,6 +1190,20 @@
 				}
 			}
 			const LogicalPlanReadValue &binding = boundBinding == nullptr ? requireBinding(row, variable) : *boundBinding;
+            if (const auto *reference = std::get_if<storage::EntityRef>(&binding); reference && !reference->is_edge) {
+                for (auto *view = state.task.borrowed_pattern_node; view; view = view->previous) {
+                    if (view->row != &row || *view->variable != variable) continue;
+                    checkGuardNow(state);
+                    validateNodeRef(*reference, "logical-plan scoped Property received an invalid Node reference");
+                    if (view->node->node_id != reference->entity_id)
+                        throw std::logic_error("scoped Property borrow changed Node identity");
+                    const auto found = std::ranges::find(view->node->properties, key,
+                        &storage::LogicalGraphPropertyEntry::key);
+                    debug::PerfTrace::addValue("logical_plan.pattern.borrowed_properties", 1);
+                    return found == view->node->properties.end() ? PropertyValue() : copyResult(found->value, true);
+                }
+            }
+
 			if (const auto *reference = std::get_if<storage::EntityRef>(&binding);
 				reference != nullptr && !reference->is_edge && state.task.property_columns != nullptr &&
 				*state.task.property_columns->variable == variable) {
@@ -1462,6 +1476,49 @@
 			std::optional<bool> previous_properties_complete_;
 			std::optional<PropertyMap> previous_metadata_;
 		};
+
+        // Only new, property-only aliases borrow the synchronously retained
+        // pattern source. Pointer/control metadata does not own a payload; the
+        // source remains charged by visitPatternTargets for the entire callback.
+        class ScopedPatternNodeBinding final {
+        public:
+            ScopedPatternNodeBinding(LogicalPlanReadRow &row, const std::string &variable,
+                    const storage::LogicalGraphNode &node, ExecutionState &state, bool propertyOnly)
+                : row_(row), state_(state), bytes_(&state.shared.materialized_budget) {
+                if (!propertyOnly || variable.empty() || row.values.contains(variable) ||
+                        row.property_cache.contains(variable) || row.entity_metadata_cache.contains(variable) ||
+                        row.complete_entity_property_cache.contains(variable)) {
+                    fallback_.emplace(row, variable, node, state);
+                    return;
+                }
+                using Bindings = decltype(row.values);
+                const size_t physical = checkedSizeAdd(detail::executionBindingNodeBytes<Bindings>(),
+                    utils::detail::standardFreshStringHeapUpper(variable.size()), "scoped reference binding overflowed");
+                const size_t logical = checkedSizeAdd(variable.size(), sizeof(LogicalPlanReadValue) + sizeof(storage::EntityRef),
+                    "scoped reference binding overflowed");
+                bytes_.set((std::max)(physical, logical));
+                row.values.try_emplace(variable, storage::EntityRef{node.node_id, false, 0U, 0U, 0U});
+                view_ = {&row, &variable, &node, state.task.borrowed_pattern_node};
+                state.task.borrowed_pattern_node = &view_;
+                active_ = true;
+                debug::PerfTrace::addValue("logical_plan.pattern.borrowed_node_bindings", 1);
+            }
+            ~ScopedPatternNodeBinding() {
+                if (active_) {
+                    state_.task.borrowed_pattern_node = view_.previous;
+                    row_.values.erase(*view_.variable);
+                }
+            }
+            ScopedPatternNodeBinding(const ScopedPatternNodeBinding &) = delete;
+            ScopedPatternNodeBinding &operator=(const ScopedPatternNodeBinding &) = delete;
+        private:
+            LogicalPlanReadRow &row_;
+            ExecutionState &state_;
+            MaterializedByteReservation bytes_;
+            std::optional<ScopedRowBinding> fallback_;
+            BorrowedPatternNode view_;
+            bool active_ = false;
+        };
 
 		[[nodiscard]] const std::vector<PropertyValue> &
 		requireBoundedList(const PropertyValue &value, const ExecutionState &state, const char *operation) {
