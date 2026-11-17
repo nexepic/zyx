@@ -1,0 +1,22 @@
+[
+  {
+    "line": 919,
+    "hits": 3,
+    "source": "std::fprintf(stderr, \"CI_RESULT_OWNERSHIP phase=caches_retired row_before=%zu row_after=%zu buffered_source_charge=%zu used=%zu available=%zu cache_nodes=%zu cache_edges=%zu cache_payload=%zu cache_allocator=%zu final_result=%zu reports_limit=20\\n\","
+  },
+  {
+    "line": 921,
+    "hits": 3,
+    "source": "state.shared.materialized_budget.available(), state.shared.node_cache.size(), state.shared.edge_cache.size(),"
+  },
+  {
+    "line": 922,
+    "hits": 3,
+    "source": "state.shared.materialized_cache_reservation.bytes(), state.shared.entity_cache_memory.used(),"
+  },
+  {
+    "line": 923,
+    "hits": 3,
+    "source": "state.shared.final_result_reservation.bytes());"
+  }
+]

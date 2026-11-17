@@ -1,0 +1,88 @@
+{
+  "binary_sha": "3b31d8184292f30c6b9372ac39371a2f0292015ed54ad2540633f06cf603e31f",
+  "base": "399e70fdc",
+  "head": "27584bbfc",
+  "files": {
+    "src/query/execution/procedure_runtime/BufferedRows.inc": [
+      {
+        "line": 472,
+        "hits": 8064,
+        "source": "            if (!scalar || output.contains(column) ||"
+      },
+      {
+        "line": 475,
+        "hits": 7063,
+        "source": "            const size_t moveProxy = type == PropertyType::MAP"
+      },
+      {
+        "line": 476,
+        "hits": 7063,
+        "source": "                ? detail::procedureEmptyMapHeapUpper<PropertyValue::MapType>()"
+      },
+      {
+        "line": 477,
+        "hits": 7063,
+        "source": "                : (type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES"
+      },
+      {
+        "line": 478,
+        "hits": 7025,
+        "source": "                    ? detail::standardContainerProxyBytes() : 0U);"
+      },
+      {
+        "line": 494,
+        "hits": 7063,
+        "source": "            checkOverlap(0U, moveProxy, \"scalar_staging_moves\");"
+      },
+      {
+        "line": 495,
+        "hits": 7063,
+        "source": "            detail::ProcedurePayloadAdmissionScope::admit(moveProxy);"
+      },
+      {
+        "line": 521,
+        "hits": 7063,
+        "source": "            if (type == PropertyType::MAP)"
+      },
+      {
+        "line": 522,
+        "hits": 37,
+        "source": "                graph::debug::PerfTrace::addValue(\"logical_procedure.map_binding_staged\", 1);"
+      }
+    ],
+    "src/query/execution/procedure_runtime/VectorOutputAndTopK.inc": [
+      {
+        "line": 444,
+        "hits": 8065,
+        "source": "                    context.checkGuard();"
+      }
+    ],
+    "src/query/execution/read_runtime/RowBindingAndResults.inc": [
+      {
+        "line": 919,
+        "hits": 0,
+        "source": "                std::fprintf(stderr, \"CI_RESULT_OWNERSHIP phase=caches_retired row_before=%zu row_after=%zu buffered_source_charge=%zu used=%zu available=%zu cache_nodes=%zu cache_edges=%zu cache_payload=%zu cache_allocator=%zu final_result=%zu reports_limit=20\\n\","
+      },
+      {
+        "line": 921,
+        "hits": 0,
+        "source": "                    state.shared.materialized_budget.available(), state.shared.node_cache.size(), state.shared.edge_cache.size(),"
+      },
+      {
+        "line": 922,
+        "hits": 0,
+        "source": "                    state.shared.materialized_cache_reservation.bytes(), state.shared.entity_cache_memory.used(),"
+      },
+      {
+        "line": 923,
+        "hits": 0,
+        "source": "                    state.shared.final_result_reservation.bytes());"
+      },
+      {
+        "line": 951,
+        "hits": 55272,
+        "source": "                moveScratch = (std::max)(moveScratch, emptyMove);"
+      }
+    ]
+  }
+}

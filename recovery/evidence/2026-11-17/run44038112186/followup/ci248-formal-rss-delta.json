@@ -1,0 +1,44 @@
+{
+  "scope": "completed RSS-instrumented case inside the formal ASan suite, not a standalone cold/warmed replay",
+  "phases": [
+    {
+      "phase": "before-query",
+      "asan_available": 1,
+      "live": 10872423,
+      "heap": 1327382528,
+      "resident": 2440003584,
+      "internal": 2024980480,
+      "external": 415023104,
+      "reusable": 0,
+      "compressed": 109559808,
+      "footprint": 2140412160,
+      "free": 323701155
+    },
+    {
+      "phase": "after-backend-destruction",
+      "asan_available": 1,
+      "live": 10691871,
+      "heap": 1362903040,
+      "resident": 2479734784,
+      "internal": 2064449536,
+      "external": 415285248,
+      "reusable": 0,
+      "compressed": 109559808,
+      "footprint": 2179897664,
+      "free": 363615102
+    }
+  ],
+  "delta_bytes": {
+    "asan_available": 0,
+    "live": -180552,
+    "heap": 35520512,
+    "resident": 39731200,
+    "internal": 39469056,
+    "external": 262144,
+    "reusable": 0,
+    "compressed": 0,
+    "footprint": 39485504,
+    "free": 39913947
+  },
+  "causality": "descriptive only; no caller attribution"
+}

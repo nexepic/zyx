@@ -1,0 +1,4 @@
+{
+  "outcome": "launcher and all eight native shard exits were zero",
+  "limitation": "Shared GTEST_OUTPUT overwrote three early XMLs; missing ZYX_TEST_KEEP_COVERAGE_ARTIFACTS=true allowed exit cleanup to delete raw profiles and per-shard logs. Five XML snapshots and full launcher/coverage console retained. Rerunning identical binary with explicit retention and unique per-shard XMLs."
+}
