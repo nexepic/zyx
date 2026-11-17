@@ -1,0 +1,297 @@
+{
+  "run": 44091123437,
+  "head": "a9e8f5026e92318706a3bb7c8308fd104110f69d",
+  "complete_job_log": true,
+  "stages": {
+    "unit": {
+      "journals": [
+        {
+          "started": 11128,
+          "completed": 11128,
+          "failed": 5,
+          "passed": 11122,
+          "skipped": 1,
+          "unclassified_completed": 0,
+          "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+          "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+          "last_started_observed_seconds": 3409.0160000000005,
+          "last_completed_observed_seconds": 3412.6720000000005,
+          "failed_names": [
+            "LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+            "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+            "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+            "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+            "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+          ],
+          "failed_names_truncated": false,
+          "skipped_names": [
+            "InputxxTerminalTest.PosixPseudoTerminalCoverageIsNotApplicableOnWindows"
+          ],
+          "skipped_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        }
+      ],
+      "failed_case_records": [
+        {
+          "xml": "xml\\shard-0.xml",
+          "class": "LogicalGraphReadExecutorIndexLookupContractsTest",
+          "name": "UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation",
+          "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+          "line": "492",
+          "identity_truncated": false,
+          "assertion_locations": [
+            {
+              "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+              "line": "529"
+            },
+            {
+              "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+              "line": "530"
+            },
+            {
+              "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+              "line": "532"
+            },
+            {
+              "file": "test_LogicalGraphReadExecutor_IndexLookupContracts.cpp",
+              "line": "529"
+            }
+          ],
+          "observations": {
+            "kinds": [],
+            "scalars": [
+              {
+                "label": "Which is",
+                "value": "0"
+              },
+              {
+                "label": "Which is",
+                "value": "4"
+              }
+            ],
+            "truncated": true
+          },
+          "failures": 6
+        },
+        {
+          "xml": "xml\\shard-0.xml",
+          "class": "LogicalPlanDirectEdgeRuntimeTest",
+          "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+          "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "1238",
+          "identity_truncated": false,
+          "assertion_locations": [],
+          "observations": {
+            "kinds": [
+              "byte_bound"
+            ],
+            "scalars": [],
+            "truncated": false
+          },
+          "failures": 1
+        },
+        {
+          "xml": "xml\\shard-0.xml",
+          "class": "LogicalPlanDirectEdgeRuntimeTest",
+          "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+          "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+          "line": "1349",
+          "identity_truncated": false,
+          "assertion_locations": [],
+          "observations": {
+            "kinds": [
+              "byte_bound"
+            ],
+            "scalars": [],
+            "truncated": false
+          },
+          "failures": 1
+        },
+        {
+          "xml": "xml\\shard-0.xml",
+          "class": "LogicalPlanDirectEdgeRuntimeTest",
+          "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+          "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+          "line": "674",
+          "identity_truncated": false,
+          "assertion_locations": [],
+          "observations": {
+            "kinds": [
+              "byte_bound"
+            ],
+            "scalars": [],
+            "truncated": false
+          },
+          "failures": 1
+        },
+        {
+          "xml": "xml\\shard-0.xml",
+          "class": "RelocatableStorageBackendTest",
+          "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+          "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+          "line": "28",
+          "identity_truncated": false,
+          "assertion_locations": [
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "88"
+            },
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "91"
+            },
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "92"
+            },
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "97"
+            }
+          ],
+          "observations": {
+            "kinds": [
+              "byte_bound"
+            ],
+            "scalars": [
+              {
+                "label": "Which is",
+                "value": "0"
+              },
+              {
+                "label": "Which is",
+                "value": "6"
+              }
+            ],
+            "truncated": true
+          },
+          "failures": 5
+        }
+      ],
+      "evidence_status": [
+        "2026-11-17T15:05:04.2033958Z CI_EVIDENCE directory=unit exit=1 output_bytes=2331104 truncated=False"
+      ]
+    },
+    "stress": {
+      "journals": [],
+      "failed_case_records": [],
+      "evidence_status": [
+        "2026-11-17T15:10:54.8991645Z CI_EVIDENCE directory=stress exit=0 output_bytes=2262 truncated=False"
+      ]
+    },
+    "lifecycle": {
+      "journals": [
+        {
+          "started": 608,
+          "completed": 608,
+          "failed": 1,
+          "passed": 607,
+          "skipped": 0,
+          "unclassified_completed": 0,
+          "last_started": "RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+          "last_completed": "RelocatableStorageBackendTest.CorrelatedOptionalGatherKeepsDuplicateMissingAndNullInputsAcrossReopen",
+          "last_started_observed_seconds": 1013.7350000000006,
+          "last_completed_observed_seconds": 1014.3600000000006,
+          "failed_names": [
+            "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+          ],
+          "failed_names_truncated": false,
+          "skipped_names": [],
+          "skipped_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        }
+      ],
+      "failed_case_records": [
+        {
+          "xml": "tests.xml",
+          "class": "RelocatableStorageBackendTest",
+          "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+          "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+          "line": "28",
+          "identity_truncated": false,
+          "assertion_locations": [
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "88"
+            },
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "91"
+            },
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "92"
+            },
+            {
+              "file": "test_RelocatableEdgeCellAdmission.cpp",
+              "line": "97"
+            }
+          ],
+          "observations": {
+            "kinds": [
+              "byte_bound"
+            ],
+            "scalars": [
+              {
+                "label": "Which is",
+                "value": "0"
+              },
+              {
+                "label": "Which is",
+                "value": "6"
+              }
+            ],
+            "truncated": true
+          },
+          "failures": 5
+        }
+      ],
+      "evidence_status": [
+        "2026-11-17T15:27:49.9248305Z CI_EVIDENCE directory=lifecycle exit=1 output_bytes=149934 truncated=False"
+      ]
+    },
+    "recovery-maintenance": {
+      "journals": [
+        {
+          "started": 45,
+          "completed": 45,
+          "failed": 0,
+          "passed": 45,
+          "skipped": 0,
+          "unclassified_completed": 0,
+          "last_started": "RelocatableSegmentRelocationSchedulerTest.RejectsInvalidExecutorsRequestsAndResults",
+          "last_completed": "RelocatableSegmentRelocationSchedulerTest.RejectsInvalidExecutorsRequestsAndResults",
+          "last_started_observed_seconds": 12.905999999999949,
+          "last_completed_observed_seconds": 12.92199999999957,
+          "failed_names": [],
+          "failed_names_truncated": false,
+          "skipped_names": [],
+          "skipped_names_truncated": false,
+          "oversized_lines": 0,
+          "counts_are_observed_not_discovery": true
+        }
+      ],
+      "failed_case_records": [],
+      "evidence_status": [
+        "2026-11-17T15:28:03.3045450Z CI_EVIDENCE directory=recovery-maintenance exit=0 output_bytes=13786 truncated=False"
+      ]
+    }
+  },
+  "new_vs_248": [],
+  "resolved_vs_248": [
+    "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+    "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+    "RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues",
+    "RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+    "RelocatableStorageBackendTest.OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe"
+  ],
+  "lifecycle_failures_overlap_unit": true,
+  "crash_cases": [
+    "2026-11-17T14:14:54.1453082Z CI_CASE_END RelocatableDriverAbiIngestTest.ProcessCrashBeforePublicationRetainsTheOldGraphAndAllowsRetry failed=0 skipped=0",
+    "2026-11-17T14:14:55.0546341Z CI_CASE_END RelocatableDriverAbiIngestTest.ProcessCrashAfterPublicationBeforeFinalSyncRecoversTheCompleteGraphAndRemainsWritable failed=0 skipped=0",
+    "2026-11-17T15:11:03.6422077Z CI_CASE_END RelocatableDriverAbiIngestTest.ProcessCrashBeforePublicationRetainsTheOldGraphAndAllowsRetry failed=0 skipped=0",
+    "2026-11-17T15:11:04.2117319Z CI_CASE_END RelocatableDriverAbiIngestTest.ProcessCrashAfterPublicationBeforeFinalSyncRecoversTheCompleteGraphAndRemainsWritable failed=0 skipped=0"
+  ]
+}
