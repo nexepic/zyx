@@ -1,0 +1,112 @@
+{
+  "247": {
+    "completed": 729,
+    "longest_completed": [
+      {
+        "case": "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce",
+        "seconds": 241.184
+      },
+      {
+        "case": "RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace",
+        "seconds": 237.325
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages",
+        "seconds": 180.516
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication",
+        "seconds": 179.33
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts",
+        "seconds": 74.405
+      },
+      {
+        "case": "RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories",
+        "seconds": 58.719
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedCrossRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry",
+        "seconds": 34.36
+      },
+      {
+        "case": "RelocatableStorageBackendTest.RepeatedOrdinaryAdjacencyChurnRetiresEmptyRootsAcrossReopen",
+        "seconds": 27.564
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedAdjacencySmallInternalRootPreservesOldAndNewEdges",
+        "seconds": 21.331
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedAdjacencySmallExactEntryBoundariesSurviveReopen",
+        "seconds": 19.182
+      },
+      {
+        "case": "RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills",
+        "seconds": 16.436
+      },
+      {
+        "case": "RelocatableStorageBackendTest.ShapedEdgeBatchSpansEntityPagesAndPreservesLogicalOrder",
+        "seconds": 15.97
+      }
+    ],
+    "unfinished": []
+  },
+  "248": {
+    "completed": 601,
+    "longest_completed": [
+      {
+        "case": "RelocatableStorageBackendTest.IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace",
+        "seconds": 314.62
+      },
+      {
+        "case": "RelocatableStorageBackendTest.OrdinaryIndexImagesRegisterSharedBatchFreshPoolsOnlyOnce",
+        "seconds": 305.341
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedAdjacencyDeltaEnforcesFinalEntryBoundBeforePublication",
+        "seconds": 222.173
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedSmallAdjacencyDeltaPreservesOldPinsAndChangesOnlyBoundedPages",
+        "seconds": 219.419
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedPropertyBatchesReuseAdjacencyAndPublishExactTypeCounts",
+        "seconds": 100.624
+      },
+      {
+        "case": "RelocatableStorageBackendTest.ColdInsertionUsesBoundedSummaryAcrossGrowingDirectories",
+        "seconds": 87.378
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedBulkEdgeAuthenticatedCrossRunOrderingDivergenceRollsBackCleansUpAndAllowsRetry",
+        "seconds": 45.146
+      },
+      {
+        "case": "RelocatableStorageBackendTest.RepeatedOrdinaryAdjacencyChurnRetiresEmptyRootsAcrossReopen",
+        "seconds": 36.36
+      },
+      {
+        "case": "RelocatableStorageBackendTest.StreamedAdjacencySmallInternalRootPreservesOldAndNewEdges",
+        "seconds": 29.865
+      },
+      {
+        "case": "RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills",
+        "seconds": 24.694
+      },
+      {
+        "case": "RelocatableStorageBackendTest.ShapedEdgeBatchSpansEntityPagesAndPreservesLogicalOrder",
+        "seconds": 24.31
+      },
+      {
+        "case": "RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills",
+        "seconds": 22.82
+      }
+    ],
+    "unfinished": [
+      "RelocatableStorageBackendTest.StreamedAdjacencySmallExactEntryBoundariesSurviveReopen"
+    ]
+  }
+}
