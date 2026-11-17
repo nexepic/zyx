@@ -53,3 +53,48 @@ TEST(CellScratchVectorTest, UnreservedGrowthAndOverflowRejectWithoutChangingStor
     EXPECT_EQ(values[0], 7U);
     EXPECT_THROW(CellScratchVector<size_t>::allocationUpper(SIZE_MAX), std::overflow_error);
 }
+
+#include "query/execution/CellKeySelection.hpp"
+using graph::query::execution::detail::CellKeySelection;
+TEST(CellKeySelectionTest, SingleKeyBorrowsExistingViewWithoutOrdinalOrKeyScratch) {
+    const std::array<std::string_view, 1> keys{"payload"};
+    CellKeySelection selection(keys);
+    EXPECT_EQ(CellKeySelection::workingSetUpper(1U), 0U);
+    EXPECT_EQ(selection.heapBytes(), 0U);
+    EXPECT_TRUE(selection.empty());
+    EXPECT_THROW(selection.column(0U), std::out_of_range);
+    for (int retry = 0; retry < 3; ++retry) {
+        selection.append(0U);
+        EXPECT_EQ(selection.keys().data(), keys.data());
+        EXPECT_EQ(selection.keys().front(), "payload");
+        EXPECT_EQ(selection.column(0U), 0U);
+        EXPECT_THROW(selection.append(0U), std::length_error);
+        EXPECT_THROW(selection.append(1U), std::out_of_range);
+        selection.clear();
+        EXPECT_TRUE(selection.empty());
+        EXPECT_EQ(selection.heapBytes(), 0U);
+    }
+}
+TEST(CellKeySelectionTest, MultipleKeysPreserveSelectionOrderAndRetainedCapacityAcrossRetry) {
+    const std::array<std::string_view, 3> keys{"a", "b", "c"};
+    CellKeySelection selection(keys);
+    const auto bytes = selection.heapBytes();
+    EXPECT_EQ(bytes, CellKeySelection::workingSetUpper(keys.size()));
+    EXPECT_GT(bytes, 0U);
+    for (int retry = 0; retry < 3; ++retry) {
+        selection.append(2U); selection.append(0U);
+        EXPECT_EQ(selection.size(), 2U);
+        EXPECT_EQ(selection.column(0U), 2U); EXPECT_EQ(selection.column(1U), 0U);
+        EXPECT_EQ(selection.keys()[0], "c"); EXPECT_EQ(selection.keys()[1], "a");
+        selection.append(1U);
+        EXPECT_THROW(selection.append(0U), std::length_error);
+        EXPECT_EQ(selection.size(), 3U);
+        selection.clear();
+        EXPECT_EQ(selection.heapBytes(), bytes);
+    }
+    CellKeySelection empty(std::span<const std::string_view>{});
+    EXPECT_TRUE(empty.keys().empty());
+    EXPECT_EQ(CellKeySelection::workingSetUpper(0U), 0U);
+    EXPECT_THROW(empty.append(0U), std::out_of_range);
+    EXPECT_THROW(CellKeySelection::workingSetUpper(SIZE_MAX), std::overflow_error);
+}

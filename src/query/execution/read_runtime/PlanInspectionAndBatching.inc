@@ -1378,10 +1378,7 @@
                             (edgeCells ? state.shared.snapshot.supportsResumableEdgePropertyCells()
                                        : state.shared.snapshot.supportsResumableNodePropertyCells())) {
                             const size_t ordinalBytes = detail::CellScratchVector<size_t>::workingSetUpper(cellIds.size());
-                            const size_t selectionBytes = checkedSizeAdd(
-                                detail::CellScratchVector<size_t>::workingSetUpper(keys.size()),
-                                detail::CellScratchVector<std::string_view>::workingSetUpper(keys.size()),
-                                "Property cell key selection overflowed");
+                            const size_t selectionBytes = detail::CellKeySelection::workingSetUpper(keys.size());
                             const size_t cellStructures = checkedSizeAdd(
                                 checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
                                 checkedSizeAdd(ordinalBytes, selectionBytes, "Property cell state overflowed"),
@@ -1389,8 +1386,7 @@
                             propertyReadBytes.set(cellStructures);
                             detail::CellScratchVector<size_t> rowOrdinals; rowOrdinals.reserve(cellIds.size());
                             for (size_t ordinal = 0U; ordinal < cellIds.size(); ++ordinal) rowOrdinals.push_back(rows.size());
-                            detail::CellScratchVector<size_t> selectedColumns; selectedColumns.reserve(keys.size());
-                            detail::CellScratchVector<std::string_view> selectedKeys; selectedKeys.reserve(keys.size());
+                            detail::CellKeySelection selectedKeys(keys);
                             for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
                                 const auto &reference = std::get<storage::EntityRef>(rows.values()[rowIndex].values.at(group.variable));
                                 const auto position = std::ranges::lower_bound(cellIds, reference.entity_id);
@@ -1404,9 +1400,9 @@
                                 return alias != cache.end() && alias->second.contains(group.keys[column]);
                             };
                             for (size_t first = 0U; first < cellIds.size();) {
-                                selectedColumns.clear(); selectedKeys.clear();
+                                selectedKeys.clear();
                                 for (size_t column = 0U; column < keys.size(); ++column) if (!hasCell(first, column)) {
-                                    selectedColumns.push_back(column); selectedKeys.push_back(keys[column]);
+                                    selectedKeys.append(column);
                                 }
                                 size_t last = first + 1U;
                                 for (; last < cellIds.size(); ++last) {
@@ -1424,7 +1420,8 @@
                                 for (size_t ordinal = first; ordinal < last; ++ordinal) {
                                     const auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
                                     bool chargedNewAlias = false;
-                                    for (const size_t column : selectedColumns) {
+                                    for (size_t selected = 0U; selected < selectedKeys.size(); ++selected) {
+                                        const size_t column = selectedKeys.column(selected);
                                         size_t bytes = cacheMetadataBytes(cache, group.variable, group.keys[column]);
                                         if (!cache.contains(group.variable)) {
                                             using Cache = std::remove_cvref_t<decltype(cache)>;
@@ -1453,9 +1450,9 @@
 #endif
                                 const auto receiveValue = [&](size_t relative, size_t selected, std::optional<PropertyValue> value) {
                                     verifyPropertySource();
-                                    if (relative >= last - first || selected >= selectedColumns.size())
+                                    if (relative >= last - first || selected >= selectedKeys.size())
                                         throw std::runtime_error("logical graph backend changed Property cell cardinality");
-                                    const size_t ordinal = first + relative, column = selectedColumns[selected];
+                                    const size_t ordinal = first + relative, column = selectedKeys.column(selected);
                                     if (rowOrdinals[ordinal] == rows.size() || hasCell(ordinal, column))
                                         throw std::runtime_error("logical graph backend repeated a Property cell");
                                     PropertyValue decoded = value ? std::move(*value) : PropertyValue();
@@ -1477,15 +1474,15 @@
                                 };
                                 const storage::LogicalGraphReadSnapshot::PropertyCellSink receive = std::ref(receiveValue);
                                 const auto owners = std::span<const uint64_t>(cellIds).subspan(first, last - first);
-                                const std::span<const std::string_view> selection(selectedKeys.data(), selectedKeys.size());
+                                const auto selection = selectedKeys.keys();
                                 if (edgeCells) state.shared.snapshot.readEdgePropertyCellsSortedWithAdmission(owners, selection, receive, admitProperty);
                                 else state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(owners, selection, receive, admitProperty);
                                 verifyPropertySource();
                                 // Omitted cells become NULL only after this whole run
                                 // completed; a failed run leaves unproduced keys pending.
                                 for (size_t ordinal = first; ordinal < last; ++ordinal)
-                                    for (size_t column = 0U; column < selectedColumns.size(); ++column)
-                                        if (!hasCell(ordinal, selectedColumns[column])) receive(ordinal - first, column, std::nullopt);
+                                    for (size_t column = 0U; column < selectedKeys.size(); ++column)
+                                        if (!hasCell(ordinal, selectedKeys.column(column))) receive(ordinal - first, column, std::nullopt);
                                 // Producer-local encoded/token staging has died;
                                 // owning payload credit is already in the private rows.
                                 propertyReadBytes.set(cellStructures);
