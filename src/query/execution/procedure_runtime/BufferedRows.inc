@@ -460,7 +460,8 @@
 
         // Transfer a terminal scalar through a stack owner so its consumed
         // binding node is destroyed before allocating the public hash node.
-        // MAP moves have a separate empty-table cost; keep their existing path.
+        // A MAP move retains an empty table in the source on MSVC. Admit that
+        // whole table at each move boundary, not just a container proxy.
         bool tryStageProcedureScalarOutput(QueryResult &result, ProcedureRows &rows,
                 size_t rowIndex, QueryResult::Row &output, const std::string &column,
                 size_t maximumBytes, size_t externalSourceBytes, bool checkLocalBound) {
@@ -468,11 +469,13 @@
             auto binding = buffered.row.values.find(column);
             if (binding == buffered.row.values.end()) return false;
             auto *scalar = std::get_if<PropertyValue>(&binding->second);
-            if (!scalar || scalar->getType() == PropertyType::MAP || output.contains(column) ||
+            if (!scalar || output.contains(column) ||
                     output.max_load_factor() != 1.0F || output.size() + 1U > output.bucket_count()) return false;
             const auto type = scalar->getType();
-            const size_t moveProxy = type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES
-                ? detail::standardContainerProxyBytes() : 0U;
+            const size_t moveProxy = type == PropertyType::MAP
+                ? detail::procedureEmptyMapHeapUpper<PropertyValue::MapType>()
+                : (type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES
+                    ? detail::standardContainerProxyBytes() : 0U);
             const auto checkOverlap = [&](size_t temporary, size_t allocation, const char *phase) {
                 if (!checkLocalBound) return;
                 const size_t source = checkedProcedureSizeAdd(publicationSourceBytes(rows, rowIndex), temporary);
@@ -513,6 +516,8 @@
             consumeProcedureOutputBinding(result, rows, rowIndex, output, column,
                 maximumBytes, externalSourceBytes, checkLocalBound);
             graph::debug::PerfTrace::addValue("logical_procedure.scalar_binding_staged", 1);
+            if (type == PropertyType::MAP)
+                graph::debug::PerfTrace::addValue("logical_procedure.map_binding_staged", 1);
             return true;
         }
 

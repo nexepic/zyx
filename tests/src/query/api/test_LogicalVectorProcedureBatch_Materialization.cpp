@@ -1583,7 +1583,7 @@ namespace graph::query {
         size_t transfers = 0U;
         graph::debug::PerfTrace::ScopedObserver observer(&transfers,
             [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
-                if (!duration && key == "logical_procedure.scalar_binding_staged") *static_cast<size_t *>(p) += static_cast<size_t>(value);
+                if (!duration && key == "logical_procedure.map_binding_staged") *static_cast<size_t *>(p) += static_cast<size_t>(value);
             });
 		for (auto &[id, node]: backend->state->nodes) {
 			node.labels = {"Person"};
