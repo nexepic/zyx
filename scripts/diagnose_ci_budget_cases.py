@@ -9,6 +9,7 @@ from pathlib import Path
 
 # Exercise the final merge and ownership transitions independently on each platform.
 BUILD249_OWNERSHIP = [
+    'PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties',
     'ExternalQuerySortTest.FinalTwoRunsStreamWithoutRewritingAndPreserveStableOrder',
     'ExternalQuerySortTest.FinalMergeRejectsCrossRunDuplicateOrdinalAndRefundsVisitorFailure',
     'LogicalPlanDirectEdgeRuntimeTest.PreparedResultAndExistingPatternBorrowRefundCancellation',

@@ -910,13 +910,15 @@ namespace graph::storage {
         if(keys.size()==1U) {
             // A single resolved token maps directly to column zero. Keep the
             // token admitted, without duplicate token/column route vectors.
-            if(batches && (!batches->scalars || !batches->texts))
-                throw std::invalid_argument("Property runs require both sinks");
             if(admission)(*admission)(sizeof(uint32_t));
             const auto cached=active.propertyToken(keys.front());
             const auto token=cached ? *cached : names_.resolvePropertyToken(snapshot,keys.front());
             if(!cached)active.putPropertyToken(keys.front(),token);
             if(!token || *token==0U)return;
+            // Preserve admission/name-resolution errors and the missing-key
+            // no-op before validating optional run sinks, as in the general path.
+            if(batches && (!batches->scalars || !batches->texts))
+                throw std::invalid_argument("Property runs require both sinks");
             const uint32_t resolved=*token;
             pages_.readEntityPropertyCellsSorted(snapshot,ownerKind,ids,std::span(&resolved,1U),sink,
                 &active,admission,scalars,texts,batches);
