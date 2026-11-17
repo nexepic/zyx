@@ -916,9 +916,11 @@
             static std::atomic<unsigned> reports{0U};
             if (before != after && std::getenv("ZYX_CI_BUDGET_TRACE") &&
                     reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
-                std::fprintf(stderr, "CI_RESULT_OWNERSHIP phase=caches_retired row_before=%zu row_after=%zu buffered_source_charge=%zu used=%zu available=%zu reports_limit=20\n",
+                std::fprintf(stderr, "CI_RESULT_OWNERSHIP phase=caches_retired row_before=%zu row_after=%zu buffered_source_charge=%zu used=%zu available=%zu cache_nodes=%zu cache_edges=%zu cache_payload=%zu cache_allocator=%zu final_result=%zu reports_limit=20\n",
                     before, after, sourceReservation.bytes(), state.shared.materialized_budget.used(),
-                    state.shared.materialized_budget.available());
+                    state.shared.materialized_budget.available(), state.shared.node_cache.size(), state.shared.edge_cache.size(),
+                    state.shared.materialized_cache_reservation.bytes(), state.shared.entity_cache_memory.used(),
+                    state.shared.final_result_reservation.bytes());
                 std::fflush(stderr);
             }
 #endif
