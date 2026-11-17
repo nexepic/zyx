@@ -7,6 +7,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Keep the unchanged-budget scheduling and three-cursor failure paths visible.
+BUILD250_OWNERSHIP = [
+    'ExternalQuerySortTest.ThreeRunsStreamWideKeysInsideTheOriginalWorkspace',
+    'ExternalQuerySortTest.ThirdCursorAndStreamingVisitorFailuresRefundAllRuns',
+    'LogicalPlanDirectEdgeRuntimeTest.TerminalReferenceSchedulingPreservesBudgetDenialsAndSuccessfulRetry',
+]
+
 # Exercise the final merge and ownership transitions independently on each platform.
 BUILD249_OWNERSHIP = [
     'PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties',
@@ -36,6 +43,7 @@ BUILD248_OWNERSHIP = [
 ]
 
 WINDOWS = [
+    *BUILD250_OWNERSHIP,
     *BUILD249_OWNERSHIP,
     *BUILD248_OWNERSHIP,
     *BUILD247_ADDITIONAL_WINDOWS,
@@ -186,6 +194,7 @@ WINDOWS = [
     'RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner',
 ]
 MACOS = [
+    *BUILD250_OWNERSHIP,
     *BUILD249_OWNERSHIP,
     *BUILD248_OWNERSHIP,
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
@@ -228,6 +237,7 @@ WINDOWS_CURRENT = [*BUILD249_OWNERSHIP, *BUILD248_OWNERSHIP, *BUILD247_ADDITIONA
 
 
 ASAN = [
+    *BUILD250_OWNERSHIP,
     *BUILD249_OWNERSHIP,
     *BUILD248_OWNERSHIP,
     'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
