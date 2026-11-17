@@ -38,6 +38,22 @@ def test_missing_native_evidence_is_not_a_pass(monkeypatch, tmp_path, debugger_e
     assert module.diagnose(tmp_path / 'suite', module.CASE, tmp_path / 'tests.xml', 'lldb') == 2
 
 
+def test_raw_stack_is_flushed_before_a_failing_pdb_symbol_lookup(monkeypatch, capsys):
+    module = trace_module(monkeypatch)
+    monkeypatch.setenv('ZYX_CI_QUOTA_SYMBOL_ONLY', '1')
+    def broken_symbol():
+        records = [json.loads(line.split(' ', 1)[1]) for line in capsys.readouterr().out.splitlines()
+                   if line.startswith('CI_QUOTA_PC ')]
+        assert records == [{'index': i, 'pc': 4096 + i} for i in range(32)]
+        raise RuntimeError('PDB symbol lookup failed')
+    def frame_at(i):
+        return SimpleNamespace(IsValid=lambda: True, GetPC=lambda: 4096 + i,
+                               GetSymbol=broken_symbol)
+    root = SimpleNamespace(GetThread=lambda: SimpleNamespace(GetFrameAtIndex=frame_at))
+    with pytest.raises(RuntimeError, match='PDB symbol lookup failed'):
+        module.on_quota(root, None, {})
+
+
 def test_previous_evidence_is_preserved_without_launching(monkeypatch, tmp_path):
     module = load('diagnose_macos_quota')
     xml = tmp_path / 'tests.xml'

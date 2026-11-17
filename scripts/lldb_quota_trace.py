@@ -17,13 +17,22 @@ def on_quota(frame, _location, _internal):
     quota_reports += 1
     print('CI_QUOTA_BACKTRACE begin maximum_frames=32', flush=True)
     thread = frame.GetThread()
+    symbol_only = os.environ.get('ZYX_CI_QUOTA_SYMBOL_ONLY') == '1'
+    if symbol_only:
+        # PDB symbol lookup itself can crash LLDB (Build 247), even without
+        # GetFunctionName. Flush every raw PC before any symbol resolution so
+        # a later debugger failure does not discard the rest of the stack.
+        for index in range(32):
+            current = thread.GetFrameAtIndex(index)
+            if not current.IsValid():
+                break
+            print('CI_QUOTA_PC ' + json.dumps({'index': index, 'pc': current.GetPC()}), flush=True)
     for index in range(32):
         current = thread.GetFrameAtIndex(index)
         if not current.IsValid():
             break
         # Windows LLDB crashed completing C++ PDB types through GetFunctionName
         # in Build 244. Public symbols and PCs avoid function/type expansion.
-        symbol_only = os.environ.get('ZYX_CI_QUOTA_SYMBOL_ONLY') == '1'
         line = None if symbol_only else current.GetLineEntry()
         function = (current.GetSymbol().GetName() if symbol_only else current.GetFunctionName()) or '<unknown>'
         print('CI_QUOTA_FRAME ' + json.dumps({
