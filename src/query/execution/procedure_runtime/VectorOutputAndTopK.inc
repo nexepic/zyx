@@ -441,6 +441,7 @@
                 QueryResult::Row output;
                 detail::procedureMapReserve(output, buffered.row.values.size());
 				for (const std::string &column: result.getColumns()) {
+                    context.checkGuard();
                     if (tryStageProcedureScalarOutput(result, rows, rowIndex, output, column,
                             readBounds.maximum_materialized_bytes, retainedSourceBytes, accountOutputTransition)) continue;
 					const auto value = buffered.row.values.find(column);

@@ -1622,6 +1622,38 @@ namespace graph::query {
 
 
 
+    TEST_F(LogicalVectorPropertyBatchTest, WideTransferredOutputChecksTheGuardBeforeFinishingTheRow) {
+        backend->state->search_result.hits = {{1U, 0.0F}};
+        constexpr size_t columns = 1100U;
+        std::vector<logical::LogicalProjectItem> items;
+        for (size_t i = 0U; i < columns; ++i)
+            items.emplace_back(std::make_shared<expressions::LiteralExpression>(static_cast<int64_t>(i)),
+                "value" + std::to_string(i));
+        const auto score = std::make_shared<expressions::VariableReferenceExpression>("score");
+        logical::LogicalProject project(std::make_unique<logical::LogicalSort>(search(),
+            std::vector<logical::LogicalSortItem>{{score, true}}), std::move(items));
+        size_t staged = 0U;
+        graph::debug::PerfTrace::ScopedObserver observer(&staged,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_procedure.scalar_binding_staged")
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
+        QueryGuard guard(0, 1, [&] { return staged ? 2U * 1024U * 1024U : 0U; });
+        QueryContext context;
+        context.guard = &guard;
+        EXPECT_THROW(static_cast<void>(execute(project, context)), QueryMemoryExceededException);
+        EXPECT_GT(staged, 0U);
+        EXPECT_LT(staged, columns);
+        QueryGuard retryGuard(0, 1, [] { return 0U; });
+        context.guard = &retryGuard;
+        const auto result = execute(project, context);
+        ASSERT_EQ(result.rowCount(), 1U);
+        ASSERT_EQ(result.getColumns().size(), columns);
+        for (size_t i = 0U; i < columns; ++i)
+            EXPECT_EQ(result.getRows().front().at("value" + std::to_string(i)).asPrimitive(),
+                PropertyValue(static_cast<int64_t>(i)));
+    }
+
 	TEST_F(LogicalVectorPropertyBatchTest, CompleteSourceAdmissionRejectsBeforeCopyAndDoesNotRetrySourceErrors) {
 		backend->state->enable_shaped_property_admission = true;
 		backend->state->search_result.hits = {{1U, 0.0F}};
