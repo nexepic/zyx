@@ -166,9 +166,10 @@ jobs:
   native-storage-asan-ubsan:
     name: Native storage ASan+UBSan (macOS)
     runs-on: macos-latest
-    # Cold Conan setup and an instrumented build can consume most of 45 minutes
-    # before the sanitizer test gates even start on hosted arm64 runners.
-    timeout-minutes: 90
+    # Build #248 used ~49 minutes before its 60-minute gate. Budget the
+    # complete gate plus the separately bounded follow-up diagnostics (~58m)
+    # and evidence upload. Per-command limits and sanitizer checks stay intact.
+    timeout-minutes: 180
 
     steps:
       - name: Checkout Code
@@ -178,7 +179,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/ci-evidence"
           printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
-          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 5100 ))" >> "$GITHUB_ENV"
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 10500 ))" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Set up Python

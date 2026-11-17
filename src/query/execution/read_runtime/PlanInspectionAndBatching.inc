@@ -1220,6 +1220,21 @@
 						}
 					}
 					for (const PropertyGroup &group: groups) {
+						// Predicate scans can already own every requested cell in the
+						// row cache. No ID/key gather is needed for such a group.
+						// Keep reference validation even when no snapshot read follows.
+						const bool cachedGroup = std::ranges::all_of(rows.values(), [&](const LogicalPlanReadRow &row) {
+							checkGuardNow(state);
+							const auto value = row.values.find(group.variable);
+							if (value == row.values.end()) return false;
+							const auto *reference = std::get_if<storage::EntityRef>(&value->second);
+							if (!reference) return false;
+							validateEntityRef(*reference);
+							const auto cached = row.property_cache.find(group.variable);
+							return cached != row.property_cache.end() &&
+								std::ranges::all_of(group.keys, [&](const std::string &key) { return cached->second.contains(key); });
+						});
+						if (cachedGroup) continue;
 						// IDs can contain at most one binding per buffered row. Reserve that
 						// temporary gather space before either vector starts growing.
 						MaterializedByteReservation propertyReadBytes(&state.shared.materialized_budget);

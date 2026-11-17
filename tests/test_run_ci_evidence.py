@@ -122,6 +122,9 @@ def test_shared_deadline_fails_without_starting_command(tmp_path):
     assert p.returncode == r['exit_code'] == 124
     assert r['state'] == 'evidence_deadline_exhausted'
     assert not (tmp_path / 'case/output.log').exists()
+    message = json.loads(p.stdout.decode().strip().removeprefix('CI_EVIDENCE '))
+    assert message['state'] == r['state'] and message['command_started'] is False
+    assert message['exit_code'] == 124 and message['effective_timeout_seconds'] == 0
 
 
 def test_output_is_bounded_and_keeps_tail(tmp_path):

@@ -152,6 +152,9 @@ def run_evidence(command, directory, timeout, *, gtest=False):
     if effective_timeout <= 0:
         record.update(state='evidence_deadline_exhausted', exit_code=124, completed_at=time.time())
         write_json(directory / 'result.json', record)
+        print('CI_EVIDENCE ' + json.dumps({'state': record['state'], 'exit_code': 124,
+              'command_started': False, 'requested_timeout_seconds': timeout,
+              'effective_timeout_seconds': 0}), flush=True)
         return 124
     runner = Path(__file__).with_name('run_test_process.py')
     try:
