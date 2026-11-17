@@ -1,0 +1,4865 @@
+[
+  {
+    "time": "2026-11-17T04:26:49.9814071Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 2,
+      "completed": 2,
+      "failed": 0,
+      "passed": 2,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch",
+      "last_completed": "RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch",
+      "last_started_observed_seconds": 1.875,
+      "last_completed_observed_seconds": 2.344000000000051,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:50.8476657Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.MissThenHitAndUpdateExistingEntry",
+      "last_completed": "PlanCacheTest.MissThenHitAndUpdateExistingEntry",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:51.4600073Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.EvictsLeastRecentlyUsedWhenAtCapacity",
+      "last_completed": "PlanCacheTest.EvictsLeastRecentlyUsedWhenAtCapacity",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:52.2907852Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.ZeroCapacityDisablesCachingWithoutCloningOrEvictingAnEmptyList",
+      "last_completed": "PlanCacheTest.ZeroCapacityDisablesCachingWithoutCloningOrEvictingAnEmptyList",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:52.9019230Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.CloneFailureKeepsThePriorEntryAndItsEvictionOrder",
+      "last_completed": "PlanCacheTest.CloneFailureKeepsThePriorEntryAndItsEvictionOrder",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:53.6176293Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant",
+      "last_completed": "PlanCacheTest.QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:54.2423274Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry",
+      "last_completed": "PlanCacheTest.EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:55.0300922Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.CacheHitsAndUpdatesDoNotAllocateAnotherQueryTextOrQueueNode",
+      "last_completed": "PlanCacheTest.CacheHitsAndUpdatesDoNotAllocateAnotherQueryTextOrQueueNode",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:55.6524542Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.CacheRetainsItsAllocatorUntilItsLastOwnedMetadataIsDestroyed",
+      "last_completed": "PlanCacheTest.CacheRetainsItsAllocatorUntilItsLastOwnedMetadataIsDestroyed",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:56.4601690Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.OperatorObjectsRetainTheirResourceAfterTheAllocationScopeEnds",
+      "last_completed": "PlanCacheTest.OperatorObjectsRetainTheirResourceAfterTheAllocationScopeEnds",
+      "last_started_observed_seconds": 0.23500000000012733,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:57.1049302Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.CachedOperatorAndHitCloneUseSeparateAllocationOwners",
+      "last_completed": "PlanCacheTest.CachedOperatorAndHitCloneUseSeparateAllocationOwners",
+      "last_started_observed_seconds": 0.25,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:57.8385406Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.OperatorAdmissionFailureCannotReplaceAnExistingCachedPlan",
+      "last_completed": "PlanCacheTest.OperatorAdmissionFailureCannotReplaceAnExistingCachedPlan",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:58.4867497Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.RebindingIsAtomicAndClearingReleasesEvenEmptyMetadataCapacity",
+      "last_completed": "PlanCacheTest.RebindingIsAtomicAndClearingReleasesEvenEmptyMetadataCapacity",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:59.2780286Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.ClearPreservesAdmissionAuthorityForTheNextInsertion",
+      "last_completed": "PlanCacheTest.ClearPreservesAdmissionAuthorityForTheNextInsertion",
+      "last_started_observed_seconds": 0.23500000000012733,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:26:59.9074939Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.FailedOperatorConstructionRefundsItsInheritedAllocation",
+      "last_completed": "PlanCacheTest.FailedOperatorConstructionRefundsItsInheritedAllocation",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:00.6394977Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.IndexBorrowsTheOwnedQueryTextInsteadOfAllocatingASecondCopy",
+      "last_completed": "PlanCacheTest.IndexBorrowsTheOwnedQueryTextInsteadOfAllocatingASecondCopy",
+      "last_started_observed_seconds": 0.2660000000000764,
+      "last_completed_observed_seconds": 0.2660000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:01.2596250Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.BorrowedIndexKeysSurviveCallerMutationRehashUpdatesAndLruSplices",
+      "last_completed": "PlanCacheTest.BorrowedIndexKeysSurviveCallerMutationRehashUpdatesAndLruSplices",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:01.9873541Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate",
+      "last_completed": "PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:02.0143518Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 17,
+      "completed": 17,
+      "failed": 0,
+      "passed": 17,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate",
+      "last_completed": "PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate",
+      "last_started_observed_seconds": 11.452999999999975,
+      "last_completed_observed_seconds": 11.452999999999975,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:03.0570338Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.SchemaCachesRejectSpareCapacityAndRetainSmallDefinitions",
+      "last_completed": "NativeReadSessionTokenBudgetTest.SchemaCachesRejectSpareCapacityAndRetainSmallDefinitions",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:03.6882549Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.IndexMetricCapacityCannotBypassSchemaCacheBudget",
+      "last_completed": "NativeReadSessionTokenBudgetTest.IndexMetricCapacityCannotBypassSchemaCacheBudget",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:04.3700331Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.NamedTokenNamespacesAdmitBeforeCopyAndRefundEvictedNames",
+      "last_completed": "NativeReadSessionTokenBudgetTest.NamedTokenNamespacesAdmitBeforeCopyAndRefundEvictedNames",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.28099999999994907,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:04.9856105Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.TokenNameReplacementEvictsOtherKindsAndRefundsOldPayload",
+      "last_completed": "NativeReadSessionTokenBudgetTest.TokenNameReplacementEvictsOtherKindsAndRefundsOldPayload",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:05.5954172Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.TokenNameUpdatesPreserveFifoAndEntryCap",
+      "last_completed": "NativeReadSessionTokenBudgetTest.TokenNameUpdatesPreserveFifoAndEntryCap",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:06.2939210Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.CachedNameCopyAdmitsBeforeAllocationAndPreservesCacheOnRejection",
+      "last_completed": "NativeReadSessionTokenBudgetTest.CachedNameCopyAdmitsBeforeAllocationAndPreservesCacheOnRejection",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:06.9077476Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.DirectPropertyAdmissionDoesNotConsumeOversizedRvalues",
+      "last_completed": "NativeReadSessionTokenBudgetTest.DirectPropertyAdmissionDoesNotConsumeOversizedRvalues",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:07.6556245Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.PropertyAdmissionChargesSpareListAndByteCapacity",
+      "last_completed": "NativeReadSessionTokenBudgetTest.PropertyAdmissionChargesSpareListAndByteCapacity",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:08.2840315Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.PropertyCopiesChargeActualCapacityAndRejectSpareMapBuckets",
+      "last_completed": "NativeReadSessionTokenBudgetTest.PropertyCopiesChargeActualCapacityAndRejectSpareMapBuckets",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:09.1245701Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.TinyFifosDoNotReserveWholePagesForTheirFirstEntry",
+      "last_completed": "NativeReadSessionTokenBudgetTest.TinyFifosDoNotReserveWholePagesForTheirFirstEntry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:09.7457666Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OwnedLabelsAndTokenNamesChargePayloadAndReleaseTogether",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OwnedLabelsAndTokenNamesChargePayloadAndReleaseTogether",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:10.4445934Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.FailedConstructionRefundsEveryPartialContainer",
+      "last_completed": "NativeReadSessionTokenBudgetTest.FailedConstructionRefundsEveryPartialContainer",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:11.0609945Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.EveryOwnedPropertyInsertionFailurePreservesItsOldEntryAndRefunds",
+      "last_completed": "NativeReadSessionTokenBudgetTest.EveryOwnedPropertyInsertionFailurePreservesItsOldEntryAndRefunds",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:11.8497254Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry",
+      "last_completed": "NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:12.4681296Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OwnedObjectSurvivesOwnerReleaseAndDeletesThroughBase",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OwnedObjectSurvivesOwnerReleaseAndDeletesThroughBase",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:13.2086286Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OwnedObjectConstructorFailureRefundsPrefixAndBody",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OwnedObjectConstructorFailureRefundsPrefixAndBody",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:13.8335628Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OwnedCanonicalPropertyCodecMatchesExistingWireAndRollsBackFailure",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OwnedCanonicalPropertyCodecMatchesExistingWireAndRollsBackFailure",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:14.6640249Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.EveryCanonicalMapScratchFailureRefundsAndAllowsRetry",
+      "last_completed": "NativeReadSessionTokenBudgetTest.EveryCanonicalMapScratchFailureRefundsAndAllowsRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:15.2745989Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OwnedPropertyCachePreservesNestedNullAndAbsentValues",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OwnedPropertyCachePreservesNestedNullAndAbsentValues",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:16.0112321Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.DeniedOwnedPropertyReplacementPreservesOldValueAndSource",
+      "last_completed": "NativeReadSessionTokenBudgetTest.DeniedOwnedPropertyReplacementPreservesOldValueAndSource",
+      "last_started_observed_seconds": 0.25,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:16.6304267Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.NativeGrantChargesAdoptedSchemaBuffersAndReleasesOldDefinitions",
+      "last_completed": "NativeReadSessionTokenBudgetTest.NativeGrantChargesAdoptedSchemaBuffersAndReleasesOldDefinitions",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:17.4433324Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.DeniedSchemaAdoptionPreservesCachedDefinitionAndRetriesAfterPressure",
+      "last_completed": "NativeReadSessionTokenBudgetTest.DeniedSchemaAdoptionPreservesCachedDefinitionAndRetriesAfterPressure",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:18.0652569Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.EntityPoolCopiesAreChargedThroughTheSessionResource",
+      "last_completed": "NativeReadSessionTokenBudgetTest.EntityPoolCopiesAreChargedThroughTheSessionResource",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:18.8275184Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.UnownedObjectUsesPermanentStorageAcrossAnAmbientDefaultChange",
+      "last_completed": "NativeReadSessionTokenBudgetTest.UnownedObjectUsesPermanentStorageAcrossAnAmbientDefaultChange",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:19.4493970Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.CachedNameCopyUsesSourceAdmissionAndKeepsItsOriginalSessionOwner",
+      "last_completed": "NativeReadSessionTokenBudgetTest.CachedNameCopyUsesSourceAdmissionAndKeepsItsOriginalSessionOwner",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:20.2716273Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.CachedIndexCopiesReleasePrivateQueryAuthorityBeforeSessionEnds",
+      "last_completed": "NativeReadSessionTokenBudgetTest.CachedIndexCopiesReleasePrivateQueryAuthorityBeforeSessionEnds",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:20.8842467Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.CachedConstraintCopiesReleasePrivateQueryAuthorityBeforeSessionEnds",
+      "last_completed": "NativeReadSessionTokenBudgetTest.CachedConstraintCopiesReleasePrivateQueryAuthorityBeforeSessionEnds",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:21.5776659Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OptionalEntityCacheDeclinesAdmissionAndRetriesAcrossFifoGrowth",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OptionalEntityCacheDeclinesAdmissionAndRetriesAcrossFifoGrowth",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:22.1898823Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OptionalEntityCachePreservesNonAdmissionAllocationFailures",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OptionalEntityCachePreservesNonAdmissionAllocationFailures",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:23.0041092Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OptionalNamedTokenAdmissionPreservesNamespacesAndFifoAcrossRetries",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OptionalNamedTokenAdmissionPreservesNamespacesAndFifoAcrossRetries",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.32799999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:23.6802243Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.OptionalPayloadPresenceAndPoolCachesDeclineOnlyHierarchicalAdmission",
+      "last_completed": "NativeReadSessionTokenBudgetTest.OptionalPayloadPresenceAndPoolCachesDeclineOnlyHierarchicalAdmission",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2660000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:24.4092477Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "last_completed": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:24.4342782Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 32,
+      "completed": 32,
+      "failed": 0,
+      "passed": 32,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "last_completed": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "last_started_observed_seconds": 21.842999999999847,
+      "last_completed_observed_seconds": 21.842999999999847,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:25.4777277Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.SharedVariableReferencesConsumeTheSameSlot",
+      "last_completed": "BoundProjectionReferencesTest.SharedVariableReferencesConsumeTheSameSlot",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:26.0930251Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.ProjectedPropertyColumnWinsOverAnEntityWithTheSameVariable",
+      "last_completed": "BoundProjectionReferencesTest.ProjectedPropertyColumnWinsOverAnEntityWithTheSameVariable",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:26.8394207Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.DynamicExpressionsAndUnknownReferencesRetainSemanticFallback",
+      "last_completed": "BoundProjectionReferencesTest.DynamicExpressionsAndUnknownReferencesRetainSemanticFallback",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:27.4505193Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.MissingInputAndPresentNullAreDistinctAndRowsDoNotRetainPointers",
+      "last_completed": "BoundProjectionReferencesTest.MissingInputAndPresentNullAreDistinctAndRowsDoNotRetainPointers",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:28.2002227Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.NestedBindingAndForeignInstructionsAreRejectedWithoutLosingTheCurrentRow",
+      "last_completed": "BoundProjectionReferencesTest.NestedBindingAndForeignInstructionsAreRejectedWithoutLosingTheCurrentRow",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:28.8061599Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.ExceptionsReleaseRowBorrowsAndOwnedAllocations",
+      "last_completed": "BoundProjectionReferencesTest.ExceptionsReleaseRowBorrowsAndOwnedAllocations",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:29.4188216Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.EveryConstructionAllocationFailureRefundsBudgetAndAllowsRetry",
+      "last_completed": "BoundProjectionReferencesTest.EveryConstructionAllocationFailureRefundsBudgetAndAllowsRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:30.0348607Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.RuntimeProjectionPreservesProjectedPropertyPriorityAndDistinctRows",
+      "last_completed": "BoundProjectionReferencesTest.RuntimeProjectionPreservesProjectedPropertyPriorityAndDistinctRows",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:30.6490478Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.RuntimeMixedProjectionPreservesOwnedOutputEarlyStopAndRetryAfterErrors",
+      "last_completed": "BoundProjectionReferencesTest.RuntimeMixedProjectionPreservesOwnedOutputEarlyStopAndRetryAfterErrors",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:31.3543817Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.RuntimeLocalComprehensionShadowingRestoresBoundEntitySlots",
+      "last_completed": "BoundProjectionReferencesTest.RuntimeLocalComprehensionShadowingRestoresBoundEntitySlots",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.32799999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:31.3795273Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 10,
+      "completed": 10,
+      "failed": 0,
+      "passed": 10,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundProjectionReferencesTest.RuntimeLocalComprehensionShadowingRestoresBoundEntitySlots",
+      "last_completed": "BoundProjectionReferencesTest.RuntimeLocalComprehensionShadowingRestoresBoundEntitySlots",
+      "last_started_observed_seconds": 6.375,
+      "last_completed_observed_seconds": 6.485000000000127,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:32.4228773Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.DeclarationAndLookupProduceStablePlanSlots",
+      "last_completed": "BoundSlotRegistryTest.DeclarationAndLookupProduceStablePlanSlots",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:33.0348450Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.LexicalShadowingDoesNotOverwriteOuterBinding",
+      "last_completed": "BoundSlotRegistryTest.LexicalShadowingDoesNotOverwriteOuterBinding",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:33.8316117Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.IsolatedSubqueryRequiresExplicitCorrelatedImport",
+      "last_completed": "BoundSlotRegistryTest.IsolatedSubqueryRequiresExplicitCorrelatedImport",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:34.4368085Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.ImportsCannotJumpAcrossAnIsolatedScopeOrSeeSiblingLocals",
+      "last_completed": "BoundSlotRegistryTest.ImportsCannotJumpAcrossAnIsolatedScopeOrSeeSiblingLocals",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:35.1753181Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.ForeignAndInvalidIdentifiersAreRejected",
+      "last_completed": "BoundSlotRegistryTest.ForeignAndInvalidIdentifiersAreRejected",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:35.7841118Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.SealedLayoutRemainsReadableAndForbidsEveryMutation",
+      "last_completed": "BoundSlotRegistryTest.SealedLayoutRemainsReadableAndForbidsEveryMutation",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:36.3959404Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.BindingScopeAndNameLimitsAlsoCountImportedAliases",
+      "last_completed": "BoundSlotRegistryTest.BindingScopeAndNameLimitsAlsoCountImportedAliases",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:37.0343393Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.EveryGrowthFailurePreservesEarlierNamesAndAllocatorOwnership",
+      "last_completed": "BoundSlotRegistryTest.EveryGrowthFailurePreservesEarlierNamesAndAllocatorOwnership",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:37.6589294Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.AllocationFailureAtEachDeclarationStagePreservesBindingsAndAllowsRetry",
+      "last_completed": "BoundSlotRegistryTest.AllocationFailureAtEachDeclarationStagePreservesBindingsAndAllowsRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:38.2825620Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.ScopeAndDescriptorGrowthPreserveIdsAndRefundAllOwnedMemory",
+      "last_completed": "BoundSlotRegistryTest.ScopeAndDescriptorGrowthPreserveIdsAndRefundAllOwnedMemory",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:38.8896984Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.InvalidLimitsAndConstructorAllocationFailureDoNotLeakCharges",
+      "last_completed": "BoundSlotRegistryTest.InvalidLimitsAndConstructorAllocationFailureDoNotLeakCharges",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:39.6453941Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.SharedBudgetLimitFailsBeforePublishingANameAndRetainsOtherOwners",
+      "last_completed": "BoundSlotRegistryTest.SharedBudgetLimitFailsBeforePublishingANameAndRetainsOtherOwners",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:40.2565432Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.ReusingRegistryAddressDoesNotValidateStalePlanIdentifiers",
+      "last_completed": "BoundSlotRegistryTest.ReusingRegistryAddressDoesNotValidateStalePlanIdentifiers",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:40.2818543Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 13,
+      "completed": 13,
+      "failed": 0,
+      "passed": 13,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BoundSlotRegistryTest.ReusingRegistryAddressDoesNotValidateStalePlanIdentifiers",
+      "last_completed": "BoundSlotRegistryTest.ReusingRegistryAddressDoesNotValidateStalePlanIdentifiers",
+      "last_started_observed_seconds": 8.436999999999898,
+      "last_completed_observed_seconds": 8.436999999999898,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:42.2890094Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 7,
+      "completed": 7,
+      "failed": 0,
+      "passed": 7,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation",
+      "last_completed": "RelocatableStorageBackendTest.QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation",
+      "last_started_observed_seconds": 1.2029999999999745,
+      "last_completed_observed_seconds": 1.5630000000001019,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:43.8159368Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1582",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:43.8162916Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "last_completed": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [
+        "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:44.8905013Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:45.9358687Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1236",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:45.9362294Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:47.1669794Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1313",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:47.1673310Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:48.2129060Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1347",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:48.2132412Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:49.3596492Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:50.5047644Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:51.6768713Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "671",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:51.6775144Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.32799999999997453,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:53.0042851Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.29700000000002547,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:54.2417214Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "last_completed": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:55.2857875Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "last_completed": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:57.0538364Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+      "line": "28",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "88"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "91"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "92"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "97"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "6"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 5
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:57.0542430Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_completed": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.7660000000000764,
+      "failed_names": [
+        "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:58.5158667Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_completed": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.5,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:27:58.5404568Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 13,
+      "completed": 13,
+      "failed": 6,
+      "passed": 7,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_completed": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_started_observed_seconds": 15.375,
+      "last_completed_observed_seconds": 15.655999999999949,
+      "failed_names": [
+        "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+        "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+        "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+        "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+        "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+        "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:28:30.3245493Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "last_completed": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "last_started_observed_seconds": 30.061999999999898,
+      "last_completed_observed_seconds": 30.84400000000005,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:33:35.5954673Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 0,
+      "failed": 0,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact",
+      "last_completed": null,
+      "last_started_observed_seconds": 29.53099999999995,
+      "last_completed_observed_seconds": null,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:34:38.6528043Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 0,
+      "failed": 0,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_completed": null,
+      "last_started_observed_seconds": 30.391000000000076,
+      "last_completed_observed_seconds": null,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:13.0193659Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 0,
+      "failed": 0,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_completed": null,
+      "last_started_observed_seconds": 29.936999999999898,
+      "last_completed_observed_seconds": null,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:14.4431512Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.29700000000002547,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:15.6814982Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.31300000000010186,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:16.8271182Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures",
+      "last_completed": "RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.31199999999989814,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:21.1282661Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput",
+      "last_completed": "ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 3.469000000000051,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:22.3819608Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ExternalQuerySortTest.ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner",
+      "last_completed": "ExternalQuerySortTest.ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.32799999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:23.6451893Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.ChargesOverlappingBuffersAndPreservesPayloadIdentity",
+      "last_completed": "ConsumedPrefixCompactionTest.ChargesOverlappingBuffersAndPreservesPayloadIdentity",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:24.6753868Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.AllocatorRejectionLeavesSourceAndRetryIntact",
+      "last_completed": "ConsumedPrefixCompactionTest.AllocatorRejectionLeavesSourceAndRetryIntact",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:25.8668121Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.GeometricCompactionBoundsTotalMoves",
+      "last_completed": "ConsumedPrefixCompactionTest.GeometricCompactionBoundsTotalMoves",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:26.9110104Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.NoThrowSwapTransfersPayloadWhenMoveMayThrow",
+      "last_completed": "ConsumedPrefixCompactionTest.NoThrowSwapTransfersPayloadWhenMoveMayThrow",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:27.9491448Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.FailedEmptyPreparationLeavesAllSourcePayloadsAndAllowsRetry",
+      "last_completed": "ConsumedPrefixCompactionTest.FailedEmptyPreparationLeavesAllSourcePayloadsAndAllowsRetry",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:29.0927072Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.SemanticPreparationFailurePropagatesWithoutChangingTheSource",
+      "last_completed": "ConsumedPrefixCompactionTest.SemanticPreparationFailurePropagatesWithoutChangingTheSource",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:30.2269287Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.ReclaimsBackingBeforeRetainedOutputsConsumeTheTemporaryHeadroom",
+      "last_completed": "ConsumedPrefixCompactionTest.ReclaimsBackingBeforeRetainedOutputsConsumeTheTemporaryHeadroom",
+      "last_started_observed_seconds": 0.20400000000017826,
+      "last_completed_observed_seconds": 0.20400000000017826,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:31.2840479Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.PotentiallyThrowingMovesKeepOriginalStorage",
+      "last_completed": "ConsumedPrefixCompactionTest.PotentiallyThrowingMovesKeepOriginalStorage",
+      "last_started_observed_seconds": 0.25,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:32.5721218Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.AllocationFailureFallsBackWithoutMovingAndAllowsRetry",
+      "last_completed": "ConsumedPrefixCompactionTest.AllocationFailureFallsBackWithoutMovingAndAllowsRetry",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:33.6237878Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ConsumedPrefixCompactionTest.HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases",
+      "last_completed": "ConsumedPrefixCompactionTest.HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:34.6986378Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack",
+      "last_completed": "BudgetMemoryResourceTest.HashNodeLayoutIncludesAlignmentWithoutArbitraryPerNodeSlack",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:35.8867827Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce",
+      "last_completed": "RelocatableMetadataStoreTest.LargeValueRangeReuseValidatesRawAndCompressedChunksOnce",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2660000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:36.9782963Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableBTreePageCodecTest.DecodingBorrowsTheRetainedPredecessorInsteadOfCopyingItsKey",
+      "last_completed": "RelocatableBTreePageCodecTest.DecodingBorrowsTheRetainedPredecessorInsteadOfCopyingItsKey",
+      "last_started_observed_seconds": 0.28099999999994907,
+      "last_completed_observed_seconds": 0.28099999999994907,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:38.2819840Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableBTreePageCodecTest.StreamingValidationRetainsOnlyTwoChargedKeysAndRefundsFailure",
+      "last_completed": "RelocatableBTreePageCodecTest.StreamingValidationRetainsOnlyTwoChargedKeysAndRefundsFailure",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:39.3577908Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableBTreePageCodecTest.StreamingValidationMatchesOwningDecodeForCorruptedEntries",
+      "last_completed": "RelocatableBTreePageCodecTest.StreamingValidationMatchesOwningDecodeForCorruptedEntries",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:40.4914453Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableBTreePageCodecTest.PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied",
+      "last_completed": "RelocatableBTreePageCodecTest.PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:41.5388090Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableBTreePageCodecTest.PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry",
+      "last_completed": "RelocatableBTreePageCodecTest.PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:42.7930558Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableBTreePageCodecTest.PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation",
+      "last_completed": "RelocatableBTreePageCodecTest.PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:44.0881293Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "QueryResultResourcesTest.SwapGrowthAvoidsThrowingMoveCopiesAndRollsBackDestinationFailure",
+      "last_completed": "QueryResultResourcesTest.SwapGrowthAvoidsThrowingMoveCopiesAndRollsBackDestinationFailure",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:45.1445616Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "QueryResultResourcesTest.ChargedAndUnchargedRowGrowthKeepIndependentHeapPayloadAddresses",
+      "last_completed": "QueryResultResourcesTest.ChargedAndUnchargedRowGrowthKeepIndependentHeapPayloadAddresses",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:46.4928538Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.46900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:48.2129633Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.ParentPressureUsesNecessaryResultCapacityAndRefundsEveryRetry",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.ParentPressureUsesNecessaryResultCapacityAndRefundsEveryRetry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.7040000000001783,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:49.2640613Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap",
+      "last_completed": "CellScratchVectorTest.SingleOrdinalAndKeyViewStayInsideTheirOwnersWithoutHeap",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:50.3893954Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge",
+      "last_completed": "CellScratchVectorTest.MultipleColumnsReserveOnceAndClearWithoutDroppingTheirCharge",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:51.5751781Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues",
+      "last_completed": "CellScratchVectorTest.UnreservedGrowthAndOverflowRejectWithoutChangingStoredValues",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:52.9842852Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot",
+      "last_completed": "RelocatableStorageBackendTest.BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.5630000000001019,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:54.5264996Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "last_completed": "RelocatableStorageBackendTest.GroupedMixedCountDoesNotPrefetchLargeCountOnlyProperties",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.6089999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:55.8466981Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_completed": "RelocatableStorageBackendTest.NativeAndOverlayNodePredicatesAdmitBeforeDecodeAndSplitColumns",
+      "last_started_observed_seconds": 0.32799999999997453,
+      "last_completed_observed_seconds": 0.4839999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:57.1838071Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\storage\\relocatable\\backend\\test_RelocatableEdgeCellAdmission.cpp",
+      "line": "28",
+      "identity_truncated": false,
+      "assertion_locations": [
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "88"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "91"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "92"
+        },
+        {
+          "file": "test_RelocatableEdgeCellAdmission.cpp",
+          "line": "97"
+        }
+      ],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [
+          {
+            "label": "Which is",
+            "value": "0"
+          },
+          {
+            "label": "Which is",
+            "value": "6"
+          }
+        ],
+        "truncated": true
+      },
+      "failures": 5
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:57.1841888Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_completed": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.5,
+      "failed_names": [
+        "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:35:58.5405315Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "last_completed": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "last_started_observed_seconds": 0.20400000000017826,
+      "last_completed_observed_seconds": 0.5160000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:00.0997041Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix",
+      "last_completed": "RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.46900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:02.7385596Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners",
+      "last_completed": "RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 1.7820000000001528,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:05.4069706Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads",
+      "last_completed": "LogicalVectorBufferedSortTest.SelectedPropertyGatherPreservesThreeHundredRowsAcrossBoundedReads",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 1.0,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:06.7270789Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget",
+      "last_completed": "LogicalVectorPropertyBatchTest.ProjectExpressionsShareRetainedProcedureOutputBudget",
+      "last_started_observed_seconds": 0.23500000000012733,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:07.8606437Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget",
+      "last_completed": "LogicalVectorPropertyBatchTest.GdsDijkstraProcedureForwardsMaterializedByteBudget",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:09.0147153Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+      "last_completed": "LogicalVectorPropertyBatchTest.SelectedColumnsShareRetainedResultBudgetAndKeepHitOrder",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:10.0708960Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "last_completed": "LogicalVectorPropertyBatchTest.BareNodeAliasesAdmitSourceAndIndependentCopiesBeforePublishing",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:11.9198573Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "last_completed": "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 1.0160000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:13.2606799Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota",
+      "last_completed": "LogicalVectorPropertyBatchTest.CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.5,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:15.1039454Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.OwnedProjectionHandoffKeepsRoomUnderVaryingParentHeadroom",
+      "last_completed": "LogicalVectorPropertyBatchTest.OwnedProjectionHandoffKeepsRoomUnderVaryingParentHeadroom",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 1.0160000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:16.2651212Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.ConsumedHitsReleaseBeforeHydrationAndSourceErrorsNeverReplay",
+      "last_completed": "LogicalVectorPropertyBatchTest.ConsumedHitsReleaseBeforeHydrationAndSourceErrorsNeverReplay",
+      "last_started_observed_seconds": 0.23500000000012733,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:17.4048125Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry",
+      "last_completed": "LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:18.5381932Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.RejectsOversizedSearchHitBufferBeforeReadingNodes",
+      "last_completed": "LogicalVectorPropertyBatchTest.RejectsOversizedSearchHitBufferBeforeReadingNodes",
+      "last_started_observed_seconds": 0.31199999999989814,
+      "last_completed_observed_seconds": 0.31199999999989814,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:19.7805325Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "last_completed": "LogicalVectorPropertyBatchTest.MetadataSemanticErrorsPrecedeJointPressureSplitting",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:21.0557611Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+      "last_completed": "LogicalVectorPropertyBatchTest.FilterRetainsOneRowCacheAcrossSelectedProjectionUnderJointBound",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:22.1167009Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalVectorPropertyBatchTest",
+      "name": "CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\api\\test_LogicalVectorProcedureBatch_Materialization.cpp",
+      "line": "1582",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:22.1170988Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "last_completed": "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [
+        "LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:23.1896108Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+      "last_completed": "LogicalVectorPropertyBatchTest.ExpandsDistinctTopKForFilterAfterSkip",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:24.3570284Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads",
+      "last_completed": "LogicalVectorPropertyBatchTest.ShortestPathSelectedPropertiesRestorePathOrderWithoutCompleteReads",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:25.4092398Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.BatchesMetadataAndSelectedPropertiesInTheSameExpression",
+      "last_completed": "LogicalVectorPropertyBatchTest.BatchesMetadataAndSelectedPropertiesInTheSameExpression",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:26.6548664Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder",
+      "last_completed": "LogicalVectorPropertyBatchTest.BareNodeOutputSharesRetainedResultBudgetAndPreservesHitOrder",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:27.9163869Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "last_completed": "LogicalVectorPropertyBatchTest.CompleteSemanticErrorsPrecedeJointPressureRetry",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:28.9477380Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PrepaidMemoryResourceTest.StandardResultMapStructuralBoundCoversIndependentAllocatorRequests",
+      "last_completed": "PrepaidMemoryResourceTest.StandardResultMapStructuralBoundCoversIndependentAllocatorRequests",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:30.0760784Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CsvReaderTest.SharesByteAllowanceBetweenRawRecordsAndDecodedFieldSlots",
+      "last_completed": "CsvReaderTest.SharesByteAllowanceBetweenRawRecordsAndDecodedFieldSlots",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:31.2177310Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CsvReaderTest.BufferedAllowanceChangesOnlyAfterConsumingThePeekedRow",
+      "last_completed": "CsvReaderTest.BufferedAllowanceChangesOnlyAfterConsumingThePeekedRow",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:32.2543212Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CsvReaderTest.SharedStringAccountingIncludesSmallExternalAndRetainedBuffers",
+      "last_completed": "CsvReaderTest.SharedStringAccountingIncludesSmallExternalAndRetainedBuffers",
+      "last_started_observed_seconds": 0.2339999999999236,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:33.5352045Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "CsvReaderTest.RetainedPropertyAccountingObservesCopiedContainerCapacity",
+      "last_completed": "CsvReaderTest.RetainedPropertyAccountingObservesCopiedContainerCapacity",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:34.6053845Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:35.7207990Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1236",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:35.7211839Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:36.8636588Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "FilterBetweenSortsTransfersSelectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1313",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:36.8640204Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:37.9035769Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "ProjectBetweenSortsTransfersProjectedRowReservations",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime.cpp",
+      "line": "1347",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:37.9039030Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:39.1554477Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:40.4326498Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:41.4763233Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFinalEdgesAggregateWithinBudget",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFinalEdgesAggregateWithinBudget",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:42.6293155Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:43.6717587Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:44.9156535Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:46.1914373Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "LogicalPlanDirectEdgeRuntimeTest",
+      "name": "NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "file": "D:\\a\\zyx\\zyx\\tests\\src\\query\\execution\\test_LogicalPlanDirectEdgeRuntime_PatternBatching.cpp",
+      "line": "671",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "byte_bound"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:46.1917860Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [
+        "LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:47.2830249Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "last_completed": "LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsPreserveUnknownTokensAndMissingValues",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2660000000000764,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:48.4505342Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.RejectsRemoteUrisAndFilesOutsideTheConfiguredRoot",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.RejectsRemoteUrisAndFilesOutsideTheConfiguredRoot",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:49.6058645Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.ExecutionBudgetRejectsCsvSourceBuffersBeforeRowDelivery",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:50.7230673Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.PreflightsListAndMapSlotsBeforeConstructingWideCsvRows",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.29700000000002547,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:51.9768036Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.OutputBatchSharesCsvSourceBudgetWhileReadingAhead",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:53.0484767Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.NestedSortTransfersRowsWithoutDuplicatingSharedCharges",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:54.3100345Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "last_completed": "LogicalPlanLoadCsvRuntimeTest.AggregateAndCsvRetainedHeadersShareTheExecutionBudget",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:55.4990695Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "last_completed": "LogicalPlanUnionRuntimeTest.SortTransfersLargeRowsToDirectLimitAndSkipBuffers",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:56.6404459Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnwindRuntimeTest.RangeAdmitsListGrowthBeforeAllocation",
+      "last_completed": "LogicalPlanUnwindRuntimeTest.RangeAdmitsListGrowthBeforeAllocation",
+      "last_started_observed_seconds": 0.29700000000002547,
+      "last_completed_observed_seconds": 0.31300000000010186,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:57.9134837Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnwindRuntimeTest.ProjectRetainsEarlierListWhileEvaluatingLaterRange",
+      "last_completed": "LogicalPlanUnwindRuntimeTest.ProjectRetainsEarlierListWhileEvaluatingLaterRange",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.23500000000012733,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:36:59.1816752Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnwindRuntimeTest.FunctionRetainsEarlierArgumentDuringLaterRange",
+      "last_completed": "LogicalPlanUnwindRuntimeTest.FunctionRetainsEarlierArgumentDuringLaterRange",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:00.5072974Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnwindRuntimeTest.BinaryExpressionRetainsLeftValueDuringRightEvaluation",
+      "last_completed": "LogicalPlanUnwindRuntimeTest.BinaryExpressionRetainsLeftValueDuringRightEvaluation",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:01.5737241Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnwindRuntimeTest.InExpressionRetainsActualValueDuringCandidateEvaluation",
+      "last_completed": "LogicalPlanUnwindRuntimeTest.InExpressionRetainsActualValueDuringCandidateEvaluation",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:02.7375277Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanUnwindRuntimeTest.SimpleCaseRetainsComparisonValueDuringWhenEvaluation",
+      "last_completed": "LogicalPlanUnwindRuntimeTest.SimpleCaseRetainsComparisonValueDuringWhenEvaluation",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:03.8194220Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "last_completed": "LogicalPlanReadRuntimeTest.PaginationFlushesUnderBytePressureWithoutChangingTheWindow",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.25,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:05.0267363Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "last_completed": "LogicalPlanReadRuntimeTest.SortPaginationAndSortTransferRowsWithinTheSharedBudget",
+      "last_started_observed_seconds": 0.23500000000012733,
+      "last_completed_observed_seconds": 0.2820000000001528,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:06.2878576Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "last_completed": "LogicalPlanVarLengthRuntimeTest.ChargesInitialCountFrontierCapacityToMaterializedByteBound",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:07.3245291Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership",
+      "last_completed": "PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:08.5578505Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner",
+      "last_completed": "PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:09.7333038Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction",
+      "last_completed": "PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:10.8040258Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.ProjectionRejectsBeforeScanningAndRefundsItsPartialConstruction",
+      "last_completed": "LogicalGdsResourceOwnershipTest.ProjectionRejectsBeforeScanningAndRefundsItsPartialConstruction",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:12.0360605Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.EscapedLazyCsrUsesTheOriginatingAuthorityAndOutlivesTheProjection",
+      "last_completed": "LogicalGdsResourceOwnershipTest.EscapedLazyCsrUsesTheOriginatingAuthorityAndOutlivesTheProjection",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:13.2756690Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.DeniedLazyCsrPublishesNothingAndRefundsBeforeTheSameProjectionRetries",
+      "last_completed": "LogicalGdsResourceOwnershipTest.DeniedLazyCsrPublishesNothingAndRefundsBeforeTheSameProjectionRetries",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:14.3187461Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.DeniedProjectionCopyPreservesTheSourceAndItsCompleteAdjacency",
+      "last_completed": "LogicalGdsResourceOwnershipTest.DeniedProjectionCopyPreservesTheSourceAndItsCompleteAdjacency",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:15.4671926Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.LegacyProjectionDoesNotBorrowAnUnrelatedDefaultPmrResource",
+      "last_completed": "LogicalGdsResourceOwnershipTest.LegacyProjectionDoesNotBorrowAnUnrelatedDefaultPmrResource",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:16.6112715Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.CatalogCommitAndLazyCsrKeepTheirCacheOwnerUnderAForeignCaller",
+      "last_completed": "LogicalGdsResourceOwnershipTest.CatalogCommitAndLazyCsrKeepTheirCacheOwnerUnderAForeignCaller",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:17.6564830Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.AbandonedCatalogPreparationRefundsCandidateMetadataAndRevisionState",
+      "last_completed": "LogicalGdsResourceOwnershipTest.AbandonedCatalogPreparationRefundsCandidateMetadataAndRevisionState",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2179999999998472,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:18.8807298Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.EveryPreparationAdmissionFailureRestoresTheEmptyCatalogAndRefundsBeforeRetry",
+      "last_completed": "LogicalGdsResourceOwnershipTest.EveryPreparationAdmissionFailureRestoresTheEmptyCatalogAndRefundsBeforeRetry",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:19.9267516Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "last_completed": "LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:21.0524515Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.OwnedAlgorithmResultsRetainOnlyTheirEscapedQueryArrays",
+      "last_completed": "LogicalGdsResourceOwnershipTest.OwnedAlgorithmResultsRetainOnlyTheirEscapedQueryArrays",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:22.2164028Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalGdsResourceOwnershipTest.AllAlgorithmAdmissionPointsRefundBeforeRetryAndLeaveTheCsrReusable",
+      "last_completed": "LogicalGdsResourceOwnershipTest.AllAlgorithmAdmissionPointsRefundBeforeRetryAndLeaveTheCsrReusable",
+      "last_started_observed_seconds": 0.2179999999998472,
+      "last_completed_observed_seconds": 0.2339999999999236,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:23.2509529Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.TinyFifosDoNotReserveWholePagesForTheirFirstEntry",
+      "last_completed": "NativeReadSessionTokenBudgetTest.TinyFifosDoNotReserveWholePagesForTheirFirstEntry",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:24.5088366Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.FailedConstructionRefundsEveryPartialContainer",
+      "last_completed": "NativeReadSessionTokenBudgetTest.FailedConstructionRefundsEveryPartialContainer",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:25.7082033Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.EveryOwnedPropertyInsertionFailurePreservesItsOldEntryAndRefunds",
+      "last_completed": "NativeReadSessionTokenBudgetTest.EveryOwnedPropertyInsertionFailurePreservesItsOldEntryAndRefunds",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:26.7478767Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry",
+      "last_completed": "NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry",
+      "last_started_observed_seconds": 0.20299999999997453,
+      "last_completed_observed_seconds": 0.20299999999997453,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:27.9927918Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "last_completed": "NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:29.9498783Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "last_completed": "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+      "last_started_observed_seconds": 0.21900000000005093,
+      "last_completed_observed_seconds": 0.9380000000001019,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T04:37:30.9917369Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "last_completed": "LogicalVectorPropertyBatchTest.TopKResultPublicationSharesHeapRowsAndRetainedResultBudget",
+      "last_started_observed_seconds": 0.20400000000017826,
+      "last_completed_observed_seconds": 0.21900000000005093,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  }
+]

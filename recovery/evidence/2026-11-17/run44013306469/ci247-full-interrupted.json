@@ -1,0 +1,14 @@
+{
+  "reason": "Local full regression interrupted for newly available macOS test-contract correction; not a pass",
+  "pids": [
+    1590,
+    1591,
+    1592,
+    1593,
+    1594,
+    1595,
+    1596,
+    1597,
+    1598
+  ]
+}

@@ -1,0 +1,349 @@
+[
+  {
+    "time": "2026-11-17T05:00:50.4482910Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 714,
+      "completed": 714,
+      "failed": 0,
+      "passed": 714,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableMaintenanceServiceTest.WorkspaceAdmissionDefersBeforePublicationAndScopesOwnedBuffers",
+      "last_completed": "RelocatableMaintenanceServiceTest.WorkspaceAdmissionDefersBeforePublicationAndScopesOwnedBuffers",
+      "last_started_observed_seconds": 1696.2288333329998,
+      "last_completed_observed_seconds": 1696.270016208,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:00:53.5071520Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage",
+      "last_completed": "RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage",
+      "last_started_observed_seconds": 0.6239665419998346,
+      "last_completed_observed_seconds": 1.2317990000001373,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:02.9976060Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "file": "/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp",
+      "line": "45",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "rss_guard"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:02.9981290Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "last_completed": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "last_started_observed_seconds": 0.9092251669999314,
+      "last_completed_observed_seconds": 8.233770957999695,
+      "failed_names": [
+        "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:11.7371710Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "file": "/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp",
+      "line": "45",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "rss_guard"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:11.7376490Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "last_completed": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "last_started_observed_seconds": 0.7322469999999157,
+      "last_completed_observed_seconds": 7.390463582999473,
+      "failed_names": [
+        "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:18.9541410Z",
+    "kind": "CI_FAILED_CASE",
+    "data": {
+      "xml": "tests.xml",
+      "class": "RelocatableStorageBackendTest",
+      "name": "NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "file": "/Users/runner/work/zyx/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp",
+      "line": "45",
+      "identity_truncated": false,
+      "assertion_locations": [],
+      "observations": {
+        "kinds": [
+          "rss_guard"
+        ],
+        "scalars": [],
+        "truncated": false
+      },
+      "failures": 1
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:18.9546460Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 1,
+      "passed": 0,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "last_completed": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+      "last_started_observed_seconds": 0.8558491670000876,
+      "last_completed_observed_seconds": 6.871683459000451,
+      "failed_names": [
+        "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection"
+      ],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:21.5235230Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_completed": "RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded",
+      "last_started_observed_seconds": 0.6060861249998197,
+      "last_completed_observed_seconds": 1.3298570419992757,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:24.7645180Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "last_completed": "RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded",
+      "last_started_observed_seconds": 0.8281870000000708,
+      "last_completed_observed_seconds": 1.788888125000085,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:26.8899840Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 1,
+      "completed": 1,
+      "failed": 0,
+      "passed": 1,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "last_completed": "RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose",
+      "last_started_observed_seconds": 0.6432914159995562,
+      "last_completed_observed_seconds": 1.2288592079994487,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:28.5680120Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 3,
+      "completed": 3,
+      "failed": 0,
+      "passed": 3,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ResultPropertyMapAdmissionTest.GuardedCopyCanGrowAnAdoptedMapBeyondItsSourceLayout",
+      "last_completed": "ResultPropertyMapAdmissionTest.GuardedCopyCanGrowAnAdoptedMapBeyondItsSourceLayout",
+      "last_started_observed_seconds": 0.7417649159997382,
+      "last_completed_observed_seconds": 0.7421212500003094,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:30.2578230Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 5,
+      "completed": 5,
+      "failed": 0,
+      "passed": 5,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+      "last_completed": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+      "last_started_observed_seconds": 0.7367479590002404,
+      "last_completed_observed_seconds": 0.7369488750000528,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:30.4783340Z",
+    "kind": "CI_CASE_JOURNAL",
+    "data": {
+      "started": 11,
+      "completed": 11,
+      "failed": 0,
+      "passed": 11,
+      "skipped": 0,
+      "unclassified_completed": 0,
+      "last_started": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+      "last_completed": "ScopedScalarReadValueTest.PropagatesProducerFailureWithoutEvaluatingItTwice",
+      "last_started_observed_seconds": 11.027492207999785,
+      "last_completed_observed_seconds": 11.027710458000001,
+      "failed_names": [],
+      "failed_names_truncated": false,
+      "skipped_names": [],
+      "skipped_names_truncated": false,
+      "oversized_lines": 0,
+      "counts_are_observed_not_discovery": true
+    }
+  },
+  {
+    "time": "2026-11-17T05:01:30.6827230Z",
+    "kind": "CI_STEP_OUTCOMES",
+    "data": {
+      "asan_cases": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "asan_gate": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "diagnostic_tests": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "rss_cold": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      },
+      "rss_control": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      },
+      "rss_warmed": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      }
+    }
+  }
+]
