@@ -1,0 +1,157 @@
+{
+  "complete_log": true,
+  "shards": [
+    {
+      "index": 0,
+      "pid": 8989,
+      "raw_exit_code": 0,
+      "journal_available": true,
+      "status_details_available": true,
+      "observed_counts": {
+        "started": 5566,
+        "completed": 5566,
+        "failed": 0,
+        "passed": 5566,
+        "skipped": 0,
+        "unclassified_completed": 0
+      },
+      "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096",
+      "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096"
+    },
+    {
+      "index": 1,
+      "pid": 8990,
+      "raw_exit_code": 0,
+      "journal_available": true,
+      "status_details_available": true,
+      "observed_counts": {
+        "started": 5566,
+        "completed": 5566,
+        "failed": 0,
+        "passed": 5566,
+        "skipped": 0,
+        "unclassified_completed": 0
+      },
+      "last_started": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse",
+      "last_completed": "FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/interleaved_dense_sparse"
+    },
+    {
+      "index": 0,
+      "pid": 57096,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    },
+    {
+      "index": 1,
+      "pid": 57097,
+      "raw_exit_code": 0,
+      "journal_available": false,
+      "status_details_available": false
+    }
+  ],
+  "step_outcomes": [
+    {
+      "calibration": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "diagnostic_tests": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "lifecycle": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "linux_result_owner_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "macos_budget_diagnostic": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "macos_quota_diagnostic": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      },
+      "recovery_maintenance": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "timer_allocation_diagnostic": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "unit_tests": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "windows_budget_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_current_cases_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_final_shape_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_ingest_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_ownership_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_plan_cache_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_projection_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_read_session_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_slots_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_stack_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      },
+      "windows_string_diagnostic": {
+        "conclusion": "skipped",
+        "outcome": "skipped",
+        "outputs": {}
+      }
+    }
+  ]
+}
