@@ -35,8 +35,8 @@ def on_quota(frame, _location, _internal):
         current = thread.GetFrameAtIndex(index)
         if not current.IsValid():
             break
-        # Windows LLDB crashed completing C++ PDB types through GetFunctionName
-        # in Build 244. Public symbols and PCs avoid function/type expansion.
+        # Prefer symbol names over GetFunctionName (which crashed in Build 244).
+        # Symbol lookup can still crash on PDBs; raw PCs were flushed above.
         line = None if symbol_only else current.GetLineEntry()
         function = (current.GetSymbol().GetName() if symbol_only else current.GetFunctionName()) or '<unknown>'
         print('CI_QUOTA_FRAME ' + json.dumps({
