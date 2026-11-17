@@ -1,0 +1,9 @@
+{
+  "local_restored_head": "621e7eabec929f0ba914538f25825dce70fcc89e",
+  "objects_equal": true,
+  "reachable_objects": 45459,
+  "bundle_sha256": "f496fc4db0ef79e50aa6a1ff5d8ff857ef3c7f3c6218afaa375d444bcd5ca59f",
+  "external_status": "NOT SAVED: helper failed before preparation with hosted apps tools/list network error",
+  "last_confirmed_external_version": 51,
+  "reverse_download": "Previous 403 respected; not retried"
+}

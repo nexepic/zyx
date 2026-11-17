@@ -1,0 +1,281 @@
+{
+  "note": "warmed before-query to rejection; mapped bytes and allocation counts only; invalid allocator RSS excluded; not call-site attribution",
+  "deltas": [
+    {
+      "size_class_bytes": 5120,
+      "mapped_bytes": 7340032,
+      "allocs": 1404,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 208,
+      "mapped_bytes": 5767168,
+      "allocs": 27648,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 64,
+      "mapped_bytes": 2359296,
+      "allocs": 34432,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 128,
+      "mapped_bytes": 2097152,
+      "allocs": 16640,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 10240,
+      "mapped_bytes": 2097152,
+      "allocs": 204,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 8192,
+      "mapped_bytes": 1048576,
+      "allocs": 120,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 112,
+      "mapped_bytes": 786432,
+      "allocs": 6272,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 896,
+      "mapped_bytes": 786432,
+      "allocs": 876,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 114688,
+      "mapped_bytes": 786432,
+      "allocs": 6,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 131072,
+      "mapped_bytes": 786432,
+      "allocs": 6,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 48,
+      "mapped_bytes": 524288,
+      "allocs": 15232,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 384,
+      "mapped_bytes": 524288,
+      "allocs": 1664,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 24576,
+      "mapped_bytes": 524288,
+      "allocs": 12,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 98304,
+      "mapped_bytes": 524288,
+      "allocs": 4,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 32,
+      "mapped_bytes": 262144,
+      "allocs": 7168,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 96,
+      "mapped_bytes": 262144,
+      "allocs": 2944,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 176,
+      "mapped_bytes": 262144,
+      "allocs": 1536,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 192,
+      "mapped_bytes": 262144,
+      "allocs": 256,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 2048,
+      "mapped_bytes": 262144,
+      "allocs": 64,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 3072,
+      "mapped_bytes": 262144,
+      "allocs": 63,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 6144,
+      "mapped_bytes": 262144,
+      "allocs": 10,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 7168,
+      "mapped_bytes": 262144,
+      "allocs": 9,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 28672,
+      "mapped_bytes": 262144,
+      "allocs": 4,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 57344,
+      "mapped_bytes": 262144,
+      "allocs": 3,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 160,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 224,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 240,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 256,
+      "mapped_bytes": 0,
+      "allocs": 128,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 320,
+      "mapped_bytes": 0,
+      "allocs": 128,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 448,
+      "mapped_bytes": 0,
+      "allocs": 384,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 512,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 640,
+      "mapped_bytes": 0,
+      "allocs": 102,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 768,
+      "mapped_bytes": 0,
+      "allocs": 85,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 1024,
+      "mapped_bytes": 0,
+      "allocs": 64,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 1280,
+      "mapped_bytes": 0,
+      "allocs": 102,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 1536,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 1792,
+      "mapped_bytes": 0,
+      "allocs": 36,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 2560,
+      "mapped_bytes": 0,
+      "allocs": 50,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 3584,
+      "mapped_bytes": 0,
+      "allocs": 18,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 4096,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 12288,
+      "mapped_bytes": 0,
+      "allocs": 5,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 14336,
+      "mapped_bytes": 0,
+      "allocs": 4,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 20480,
+      "mapped_bytes": 0,
+      "allocs": 6,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 40960,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 65536,
+      "mapped_bytes": 0,
+      "allocs": 1,
+      "frees": 0
+    },
+    {
+      "size_class_bytes": 81920,
+      "mapped_bytes": 0,
+      "allocs": 0,
+      "frees": 0
+    }
+  ]
+}
