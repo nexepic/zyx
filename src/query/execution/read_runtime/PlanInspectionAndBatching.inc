@@ -1377,25 +1377,32 @@
                             cellIds.size() == rows.size() && !cellIds.empty() &&
                             (edgeCells ? state.shared.snapshot.supportsResumableEdgePropertyCells()
                                        : state.shared.snapshot.supportsResumableNodePropertyCells())) {
-                            const size_t ordinalBytes = detail::CellScratchVector<size_t>::workingSetUpper(cellIds.size());
+                            const size_t ordinalBytes = cellIds.size()==1U ? 0U : detail::CellScratchVector<size_t>::workingSetUpper(cellIds.size());
                             const size_t selectionBytes = detail::CellKeySelection::workingSetUpper(keys.size());
                             const size_t cellStructures = checkedSizeAdd(
                                 checkedSizeAdd(idStorageBytes, keys.capacity() * sizeof(std::string_view), "Property cell ID storage overflowed"),
                                 checkedSizeAdd(ordinalBytes, selectionBytes, "Property cell state overflowed"),
                                 "Property cell workspace overflowed");
                             propertyReadBytes.set(cellStructures);
-                            detail::CellScratchVector<size_t> rowOrdinals; rowOrdinals.reserve(cellIds.size());
-                            for (size_t ordinal = 0U; ordinal < cellIds.size(); ++ordinal) rowOrdinals.push_back(rows.size());
+                            detail::CellScratchVector<size_t> rowOrdinals;
+                            if(cellIds.size()>1U) {
+                                rowOrdinals.reserve(cellIds.size());
+                                for(size_t ordinal=0U;ordinal<cellIds.size();++ordinal)rowOrdinals.push_back(rows.size());
+                            }
+                            const auto rowForOrdinal=[&](size_t ordinal) {
+                                if(ordinal>=cellIds.size())throw std::out_of_range("Property cell owner ordinal is invalid");
+                                return cellIds.size()==1U ? size_t{0U} : rowOrdinals[ordinal];
+                            };
                             detail::CellKeySelection selectedKeys(keys);
                             for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
                                 const auto &reference = std::get<storage::EntityRef>(rows.values()[rowIndex].values.at(group.variable));
                                 const auto position = std::ranges::lower_bound(cellIds, reference.entity_id);
                                 if (position == cellIds.end() || *position != reference.entity_id)
                                     throw std::runtime_error("Property cell batch lost its owner binding");
-                                rowOrdinals[static_cast<size_t>(position - cellIds.begin())] = rowIndex;
+                                if(cellIds.size()>1U)rowOrdinals[static_cast<size_t>(position - cellIds.begin())] = rowIndex;
                             }
                             const auto hasCell = [&](size_t ordinal, size_t column) {
-                                const auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
+                                const auto &cache = rows.values()[rowForOrdinal(ordinal)].property_cache;
                                 const auto alias = cache.find(group.variable);
                                 return alias != cache.end() && alias->second.contains(group.keys[column]);
                             };
@@ -1418,7 +1425,7 @@
                                 MaterializedByteReservation pendingMetadata(&state.shared.materialized_budget);
                                 size_t metadataUpper = 0U;
                                 for (size_t ordinal = first; ordinal < last; ++ordinal) {
-                                    const auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
+                                    const auto &cache = rows.values()[rowForOrdinal(ordinal)].property_cache;
                                     bool chargedNewAlias = false;
                                     for (size_t selected = 0U; selected < selectedKeys.size(); ++selected) {
                                         const size_t column = selectedKeys.column(selected);
@@ -1453,13 +1460,13 @@
                                     if (relative >= last - first || selected >= selectedKeys.size())
                                         throw std::runtime_error("logical graph backend changed Property cell cardinality");
                                     const size_t ordinal = first + relative, column = selectedKeys.column(selected);
-                                    if (rowOrdinals[ordinal] == rows.size() || hasCell(ordinal, column))
+                                    if (rowForOrdinal(ordinal) == rows.size() || hasCell(ordinal, column))
                                         throw std::runtime_error("logical graph backend repeated a Property cell");
                                     PropertyValue decoded = value ? std::move(*value) : PropertyValue();
                                     const size_t prior = propertyReadBytes.bytes();
                                     const size_t payload = retainedExpressionValueBytes(decoded, state);
                                     const size_t transfer = value ? (std::min)(payload, prior - (std::min)(prior, cellStructures)) : 0U;
-                                    auto &cache = rows.values()[rowOrdinals[ordinal]].property_cache;
+                                    auto &cache = rows.values()[rowForOrdinal(ordinal)].property_cache;
                                     const size_t metadata = cacheMetadataBytes(cache, group.variable, group.keys[column]);
                                     bufferedRowsBytes.absorb(pendingMetadata.splitOff(metadata));
                                     bufferedRowsBytes.absorb(propertyReadBytes.splitOff(transfer));
@@ -1663,7 +1670,7 @@
 					// Selected columns are attached to the buffered rows during the flush;
 					// recompute the byte budget after that enrichment so LargeValue payloads
 					// are covered by the same bound as the input rows.
-					const size_t bitmapBytes = SelectionVector::requiredStorageBytes(rows.size());
+					const size_t bitmapBytes = selectionPredicate ? SelectionVector::requiredStorageBytes(rows.size()) : 0U;
 					const size_t sharedAvailable =
 							checkedSizeAdd(state.shared.materialized_budget.available(), bufferedRowsBytes.bytes(),
 										   "logical-plan prefetch allowance overflowed");
@@ -1703,21 +1710,25 @@
 						~ColumnScope() { state.task.property_columns = previous; }
 					} columnScope{state, state.task.property_columns};
 					if (ownedColumns) state.task.property_columns = &*ownedColumns;
-					SelectionVector selection(rows.size(), &selectionMemory);
+					// A projection with no predicate selects every row implicitly.
+                    // Do not allocate a bitmap whose bits can never change.
+                    std::optional<SelectionVector> selection;
+                    if(selectionPredicate)selection.emplace(rows.size(), &selectionMemory);
+                    const auto includes=[&](size_t index){return !selection || selection->includes(index);};
 					if (selectionPredicate) {
 						for (size_t index = 0U; index < rows.size(); ++index) {
 							checkGuard(state);
 							ScopedAdmittedPropertyRow admittedRow(state, rows.values()[index],
                                 logicalReadRowBytes(rows.values()[index], state.shared.context));
                             if (!selectionPredicate(rows.values()[index], state)) {
-								selection.reject(index);
+								selection->reject(index);
 							}
 						}
 					}
 					debug::PerfTrace::addValue("logical_plan.selection.selected_rows",
-											   static_cast<int64_t>(selection.selectedCount()));
+											   static_cast<int64_t>((selection ? selection->selectedCount() : rows.size())));
 					debug::PerfTrace::addValue("logical_plan.selection.rejected_rows",
-											   static_cast<int64_t>(rows.size() - selection.selectedCount()));
+											   static_cast<int64_t>(rows.size() - (selection ? selection->selectedCount() : rows.size())));
 					if (ownedColumns && selectionPredicate) {
 						// Filter rows may outlive this flush in downstream batching. Keep
 						// independent caches for selected rows only; rejected rows never
@@ -1738,11 +1749,11 @@
 							return static_cast<size_t>(position - columns.ids.begin());
 						};
 						for (size_t index = 0U; index < rows.size(); ++index) {
-							if (!selection.includes(index)) continue;
+							if (!includes(index)) continue;
 							if (const auto ordinal = ordinalFor(rows.values()[index])) lastSelected[*ordinal] = index;
 						}
 						for (size_t index = 0U; index < rows.size(); ++index) {
-							if (!selection.includes(index)) continue;
+							if (!includes(index)) continue;
 							auto &row = rows.values()[index];
 							const auto selectedOrdinal = ordinalFor(row);
 							if (!selectedOrdinal) continue;
@@ -1776,7 +1787,7 @@
 					for (size_t index = 0U; index < rowCount; ++index) {
 						checkGuard(state);
                         if (coordinatedStorage) {
-                            if (!selection.includes(index)) { rows.discardBack(); continue; }
+                            if (!includes(index)) { rows.discardBack(); continue; }
                             auto charged = rows.popBackCharged();
                             const bool accepted = chargedReceiver
                                 ? (*chargedReceiver)(std::move(charged.value), std::move(charged.reservation))
@@ -1785,7 +1796,7 @@
                             continue;
                         }
 						LogicalPlanReadRow row = rows.popBack();
-						if (selection.includes(index)) {
+						if (includes(index)) {
 							if (chargedReceiver != nullptr) {
 								MaterializedByteReservation rowCharge =
 										bufferedRowsBytes.splitOff(logicalReadRowBytes(row, state.shared.context));

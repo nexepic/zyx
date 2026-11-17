@@ -298,3 +298,38 @@ TEST_F(RelocatableStorageBackendTest, QueryCellRetriesAbortChangedOverlayAndCanR
     EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
     backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, SingleNamedPropertyCellKeepsTokenAdmissionAndRetrySemantics) {
+    materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(std::move(options));backend.open();
+    const auto nodes=backend.createLogicalNodes({
+        {{"SingleCell"},{{"payload",PropertyValue(std::string(3000U,'a'))}}},
+        {{"SingleCell"},{{"payload",PropertyValue(std::string(3000U,'b'))}}}});
+    const auto edges=backend.createLogicalEdges({
+        {nodes[0],nodes[0],"SINGLE_CELL",{{"payload",PropertyValue(std::string(3000U,'a'))}}},
+        {nodes[1],nodes[1],"SINGLE_CELL",{{"payload",PropertyValue(std::string(3000U,'b'))}}}});
+    auto snapshot=backend.openLogicalGraphReadSnapshot();
+    for(const bool edge : {false,true}) {
+        SCOPED_TRACE(edge);
+        const auto &ids=edge ? edges : nodes;
+        const auto read=[&](std::string_view key,const auto &sink,const auto &admit) {
+            const std::array<std::string_view,1> keys{key};
+            if(edge)snapshot->readEdgePropertyCellsSortedWithAdmission(ids,keys,sink,admit);
+            else snapshot->readNodePropertyCellsSortedWithAdmission(ids,keys,sink,admit);
+        };
+        size_t delivered=0U,firstAdmission=0U;
+        const auto reject=[&](size_t bytes){firstAdmission=bytes;throw std::domain_error("token admission denied");};
+        EXPECT_THROW(read("payload",[&](size_t,size_t,std::optional<PropertyValue>){++delivered;},reject),std::domain_error);
+        EXPECT_EQ(firstAdmission,sizeof(uint32_t));EXPECT_EQ(delivered,0U);
+        size_t admitted=0U;
+        read("payload",[&](size_t owner,size_t column,std::optional<PropertyValue> value) {
+            ASSERT_LT(owner,2U);EXPECT_EQ(column,0U);ASSERT_TRUE(value);
+            EXPECT_EQ(*value,PropertyValue(std::string(3000U,static_cast<char>('a'+owner))));++delivered;
+        },[&](size_t bytes){admitted+=bytes;});
+        EXPECT_EQ(delivered,2U);EXPECT_GE(admitted,6000U);
+        delivered=0U;admitted=0U;
+        read("missing",[&](size_t,size_t,std::optional<PropertyValue>){++delivered;},[&](size_t bytes){admitted+=bytes;});
+        EXPECT_EQ(delivered,0U);EXPECT_EQ(admitted,sizeof(uint32_t));
+    }
+    snapshot.reset();backend.close();
+}

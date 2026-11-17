@@ -907,6 +907,21 @@ namespace graph::storage {
 		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct named Property cells require a sink");
 		std::optional<NativeReadSession> local;
 		auto &active = activeSession(snapshot, session, local);
+        if(keys.size()==1U) {
+            // A single resolved token maps directly to column zero. Keep the
+            // token admitted, without duplicate token/column route vectors.
+            if(batches && (!batches->scalars || !batches->texts))
+                throw std::invalid_argument("Property runs require both sinks");
+            if(admission)(*admission)(sizeof(uint32_t));
+            const auto cached=active.propertyToken(keys.front());
+            const auto token=cached ? *cached : names_.resolvePropertyToken(snapshot,keys.front());
+            if(!cached)active.putPropertyToken(keys.front(),token);
+            if(!token || *token==0U)return;
+            const uint32_t resolved=*token;
+            pages_.readEntityPropertyCellsSorted(snapshot,ownerKind,ids,std::span(&resolved,1U),sink,
+                &active,admission,scalars,texts,batches);
+            return;
+        }
 		constexpr size_t tokenBytes = sizeof(std::pair<uint32_t, size_t>) + sizeof(uint32_t);
 		if (keys.size() > std::numeric_limits<size_t>::max() / tokenBytes)
 			throw std::overflow_error("direct Property token staging overflowed");
