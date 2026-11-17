@@ -98,3 +98,29 @@ TEST(CellKeySelectionTest, MultipleKeysPreserveSelectionOrderAndRetainedCapacity
     EXPECT_THROW(empty.append(0U), std::out_of_range);
     EXPECT_THROW(CellKeySelection::workingSetUpper(SIZE_MAX), std::overflow_error);
 }
+
+#include "query/execution/ReleaseEmptyMapStorage.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
+TEST(EmptyAdmissionMapStorageTest, ReleasesBucketsAtZeroHeadroomAndCanAllocateAgain) {
+    graph::query::execution::MaterializedByteBudget budget(8192U);
+    graph::utils::AdmissionPmrUnorderedMap<int, int> cache{&budget};
+    for (int id = 0; id < 32; ++id) cache.emplace(id, id);
+    cache.clear();
+    const size_t buckets = budget.used();
+    ASSERT_GT(buckets, 0U);
+    graph::query::execution::MaterializedByteReservation competitor(&budget);
+    competitor.set(budget.available());
+    ASSERT_EQ(budget.available(), 0U);
+    EXPECT_NO_THROW(graph::query::execution::detail::releaseEmptyMapStorage(cache));
+    EXPECT_TRUE(cache.empty());
+    EXPECT_EQ(budget.available(), buckets);
+    competitor.reset();
+    cache.emplace(7, 42);
+    EXPECT_EQ(cache.at(7), 42);
+    const size_t retained = budget.used();
+    EXPECT_THROW(graph::query::execution::detail::releaseEmptyMapStorage(cache), std::logic_error);
+    EXPECT_EQ(cache.at(7), 42); EXPECT_EQ(budget.used(), retained);
+    cache.clear(); graph::query::execution::detail::releaseEmptyMapStorage(cache);
+    EXPECT_EQ(budget.used(), 0U);
+}

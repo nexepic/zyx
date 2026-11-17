@@ -46,6 +46,7 @@
 #include "query/execution/ExternalQuerySort.hpp"
 #include "query/execution/CellScratchVector.hpp"
 #include "query/execution/CellKeySelection.hpp"
+#include "query/execution/ReleaseEmptyMapStorage.hpp"
 #include "query/execution/ScalarResultHandoff.hpp"
 #include "query/execution/ExternalQueryKeySet.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"

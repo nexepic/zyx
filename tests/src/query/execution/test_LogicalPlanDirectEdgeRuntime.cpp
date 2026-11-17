@@ -1,3 +1,5 @@
+#include "graph/query/QueryGuard.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
@@ -1783,5 +1785,63 @@ namespace graph::query::execution {
 			EXPECT_EQ(delivered, 1U);
 		}
 	}
+
+    TEST(LogicalPlanDirectEdgeRuntimeTest, TerminalReferencePressureRetiresCachesAndPreservesCompleteResults) {
+        // Find a genuine pressure window across STL layouts. This does not alter
+        // the fixed native regression quotas above: every successful result is
+        // checked, and at least one must actually reclaim an owned cache entry.
+        bool sawPressure = false, reclaimedSuccess = false;
+        for (size_t limit = 2048U; limit <= 8192U && !reclaimedSuccess; limit += 32U) {
+            SCOPED_TRACE(limit);
+            DirectEdgeGraph graph = directGraph();
+            for (auto &[id, node] : graph.nodes)
+                node.properties.emplace_back("payload", PropertyValue(std::string(80U, static_cast<char>('a' + id))));
+            DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+            graph::parser::cypher::CypherParserImpl parser;
+            auto plan = parser.parseToLogical("MATCH (n) RETURN n ORDER BY id(n)");
+            auto bounds = directBounds(); bounds.maximum_materialized_bytes = limit;
+            size_t reclaimed = 0U;
+            graph::debug::PerfTrace::ScopedObserver observe(&reclaimed,
+                [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                    if (!duration && key == "logical_plan.result.reclaimed_entity_cache_bytes")
+                        *static_cast<size_t *>(p) += static_cast<size_t>(value);
+                });
+            try {
+                const auto result = runtime.executeToQueryResult(*plan.root, bounds);
+                ASSERT_EQ(result.rowCount(), graph.nodes.size());
+                size_t index = 0U;
+                for (const auto &[id, node] : graph.nodes) {
+                    const auto &actual = result.getRows()[index++].at("n").asLogicalNode();
+                    EXPECT_EQ(actual.node_id, id);
+                    EXPECT_EQ(actual.labels, node.labels);
+                    ASSERT_EQ(actual.properties.size(), node.properties.size());
+                    for (const auto &property : node.properties)
+                        EXPECT_EQ(actual.properties.at(property.key), property.value);
+                }
+                reclaimedSuccess = reclaimed != 0U;
+                if (reclaimedSuccess) {
+                    bool cancel = false;
+                    QueryGuard guard(0, 1, [&] { if (cancel) throw std::domain_error("cache retirement cancelled"); return size_t{0}; });
+                    QueryContext context; context.guard = &guard;
+                    {
+                        graph::debug::PerfTrace::ScopedObserver cancelOnRetirement(&cancel,
+                            [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+                                if (!duration && key == "logical_plan.result.reclaimed_entity_cache_bytes")
+                                    *static_cast<bool *>(p) = true;
+                            });
+                        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, bounds, context)), std::domain_error);
+                    }
+                    EXPECT_TRUE(cancel);
+                    EXPECT_EQ(runtime.executeToQueryResult(*plan.root, bounds).rowCount(), graph.nodes.size());
+                }
+            } catch (const std::runtime_error &error) {
+                const std::string message = error.what();
+                EXPECT_TRUE(message.find("bound") != std::string::npos || message.find("budget") != std::string::npos) << message;
+                sawPressure = true;
+            }
+        }
+        EXPECT_TRUE(sawPressure);
+        EXPECT_TRUE(reclaimedSuccess);
+    }
 
 } // namespace graph::query::execution

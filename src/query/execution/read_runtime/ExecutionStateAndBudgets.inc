@@ -456,6 +456,45 @@
 				2U * detail::standardContainerProxyBytes(), "logical-plan result column storage size overflowed");
 		}
 
+        // Terminal publication runs after upstream cache borrows have been
+        // copied into private rows. Reclaim optional cache entries only under
+        // pressure; never refund a live payload or retained hash bucket array.
+        template<class Protected>
+        void reclaimResultCaches(ExecutionState &state, size_t requested, size_t previous, Protected protect) {
+            const size_t growth = requested > previous ? requested - previous : 0U;
+            const auto enough = [&] { return growth <= state.shared.materialized_budget.availableWithParent(); };
+            const auto reclaim = [&](auto &cache, bool edge) {
+                for (auto it = cache.begin(); it != cache.end() && !enough();) {
+                    if (protect(edge, it->first)) { ++it; continue; }
+                    if (state.shared.context) state.shared.context->checkGuardNow();
+                    const size_t bytes = [&] {
+                        if constexpr (std::is_same_v<typename std::remove_reference_t<decltype(cache)>::mapped_type,
+                                storage::LogicalGraphNode>) return logicalNodeCacheBytes(it->second, state.shared.context);
+                        else return logicalEdgeCacheBytes(it->second, state.shared.context);
+                    }();
+                    const size_t payload = bytes - sizeof(it->second);
+                    const size_t reserved = state.shared.materialized_cache_reservation.bytes();
+                    if (payload > reserved || bytes > state.shared.materialized_cache_bytes)
+                        throw std::logic_error("result cache retirement exceeded its retained charge");
+                    it = cache.erase(it); // destroy payload and free allocator node first
+                    state.shared.materialized_cache_reservation.set(reserved - payload);
+                    state.shared.materialized_cache_bytes -= bytes;
+                    debug::PerfTrace::addValue("logical_plan.result.reclaimed_entity_cache_bytes", static_cast<int64_t>(bytes));
+                    if (state.shared.context) state.shared.context->checkGuardNow();
+                }
+                if (cache.empty() && !enough()) {
+                    if (state.shared.context) state.shared.context->checkGuardNow();
+                    const size_t before = state.shared.entity_cache_memory.used();
+                    detail::releaseEmptyMapStorage(cache);
+                    const size_t after = state.shared.entity_cache_memory.used();
+                    debug::PerfTrace::addValue("logical_plan.result.reclaimed_cache_bucket_bytes",
+                        static_cast<int64_t>(before - after));
+                    if (state.shared.context) state.shared.context->checkGuardNow();
+                }
+            };
+            reclaim(state.shared.node_cache, false);
+            reclaim(state.shared.edge_cache, true);
+        }
 		void appendMaterializedResultRow(QueryResult &result, QueryResult::Row &&row, ExecutionState &state,
 			MaterializedByteReservation &&rowReservation) {
 			const size_t rowBytes = materializedResultRowBytes(row, state);
@@ -505,6 +544,14 @@
                 // The local headroom probe does not include parent QUERY or
                 // PROCESS pressure. A rejected admission leaves its owner
                 // unchanged, so retry only quota denials at the exact size.
+                // No conversion still borrows an entity: row owns every cell.
+                if (requestedCapacity > minimumCapacity && transientBytes > state.shared.final_result_reservation.bytes() &&
+                        transientBytes - state.shared.final_result_reservation.bytes() > state.shared.materialized_budget.availableWithParent()) {
+                    requestedCapacity = minimumCapacity;
+                    transientBytes = growthPeak(requestedCapacity);
+                }
+                reclaimResultCaches(state, transientBytes, state.shared.final_result_reservation.bytes(),
+                    [](bool, uint64_t) { return false; });
                 try { admitGrowth(); }
                 catch (...) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS

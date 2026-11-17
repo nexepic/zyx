@@ -674,6 +674,57 @@
 			reservation.set(nextBytes);
 		}
 
+        // The reference is a small independent value; complete cached records
+        // remain borrowed only until the owning public result has been copied.
+        [[nodiscard]] ResultValue materializeReferenceResultValue(const storage::EntityRef &reference,
+                ExecutionState &state, size_t rowPrefixBytes, size_t columnNameBytes,
+                bool rowPreflighted, MaterializedByteReservation &outputReservation) {
+            const auto copyCheckpoint = [&] { checkGuardNow(state); };
+
+			validateEntityRef(reference);
+			if (reference.is_edge) {
+				MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
+				std::optional<storage::LogicalGraphEdge> loaded;
+				const auto cached = state.shared.edge_cache.find(reference.entity_id);
+				const storage::LogicalGraphEdge *edge = nullptr;
+				if (cached != state.shared.edge_cache.end()) {
+					edge = &cached->second;
+				} else {
+					loaded.emplace(readEdgeCached(state, reference.entity_id));
+					edge = &*loaded;
+				}
+				validateEdgeReferenceRecord(reference, *edge, state, "logical graph Entity reference");
+				const std::optional<size_t> entityBytes =
+						rowPreflighted ? std::nullopt
+									   : std::optional<size_t>(completeEntityResultBytes(*edge, state));
+				if (loaded)
+					loadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));
+				if (entityBytes)
+					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+				PropertyValue::MapType properties = materializeCompleteEntityProperties(*edge, state);
+				return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
+													 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
+			}
+			MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
+			std::optional<storage::LogicalGraphNode> loaded;
+			const auto cached = state.shared.node_cache.find(reference.entity_id);
+			const storage::LogicalGraphNode *node = nullptr;
+			if (cached != state.shared.node_cache.end()) {
+				node = &cached->second;
+			} else {
+				loaded.emplace(readNodeCached(state, reference.entity_id));
+				node = &*loaded;
+			}
+			const std::optional<size_t> entityBytes =
+					rowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));
+			if (loaded)
+				loadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));
+			if (entityBytes)
+				admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+			PropertyValue::MapType properties = materializeCompleteEntityProperties(*node, state);
+			return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
+        }
+
 		[[nodiscard]] ResultValue materializeResultValue(const LogicalPlanReadRow &row,
 														 const LogicalPlanReadValue &value, ExecutionState &state,
 														 MaterializedPropertyCache &materialized, size_t rowPrefixBytes,
@@ -698,52 +749,10 @@
 					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				}));
 			}
-			// Borrow a prefetched complete record while constructing the public
-			// result. Only a cache miss needs a local shaped read.
-			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-				validateEntityRef(*reference);
-				if (reference->is_edge) {
-					MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
-					std::optional<storage::LogicalGraphEdge> loaded;
-					const auto cached = state.shared.edge_cache.find(reference->entity_id);
-					const storage::LogicalGraphEdge *edge = nullptr;
-					if (cached != state.shared.edge_cache.end()) {
-						edge = &cached->second;
-					} else {
-						loaded.emplace(readEdgeCached(state, reference->entity_id));
-						edge = &*loaded;
-					}
-					validateEdgeReferenceRecord(*reference, *edge, state, "logical graph Entity reference");
-					const std::optional<size_t> entityBytes =
-							rowPreflighted ? std::nullopt
-										   : std::optional<size_t>(completeEntityResultBytes(*edge, state));
-					if (loaded)
-						loadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));
-					if (entityBytes)
-						admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
-					PropertyValue::MapType properties = materializeCompleteEntityProperties(*edge, state);
-					return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
-														 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
-				}
-				MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
-				std::optional<storage::LogicalGraphNode> loaded;
-				const auto cached = state.shared.node_cache.find(reference->entity_id);
-				const storage::LogicalGraphNode *node = nullptr;
-				if (cached != state.shared.node_cache.end()) {
-					node = &cached->second;
-				} else {
-					loaded.emplace(readNodeCached(state, reference->entity_id));
-					node = &*loaded;
-				}
-				const std::optional<size_t> entityBytes =
-						rowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));
-				if (loaded)
-					loadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));
-				if (entityBytes)
-					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
-				PropertyValue::MapType properties = materializeCompleteEntityProperties(*node, state);
-				return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
-			}
+            if (const auto *reference = std::get_if<storage::EntityRef>(&value))
+                return materializeReferenceResultValue(*reference, state, rowPrefixBytes,
+                    columnNameBytes, rowPreflighted, outputReservation);
+
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				if (!repeatedEntity) {
 					PropertyValue::MapType properties = materializeUniqueEntityProperties(row, *node, state);
@@ -999,11 +1008,52 @@
             return true;
         }
 
+        bool appendTransferredReferenceResultRow(QueryResult &result, LogicalPlanReadRow &row,
+                const std::vector<std::string> &columns, ExecutionState &state,
+                MaterializedByteReservation &sourceReservation) {
+            if (columns.size() != 1U) return false;
+            const auto binding = row.values.find(columns.front());
+            if (binding == row.values.end()) return false;
+            const auto *source = std::get_if<storage::EntityRef>(&binding->second);
+            if (!source) return false;
+            const auto entityBytes = predictableReferenceResultBytes(*source, state);
+            if (!entityBytes) return false;
+            size_t predicted = checkedSizeAdd(sizeof(QueryResult::Row), columns.front().size(),
+                "reference result size overflowed");
+            predicted = checkedSizeAdd(predicted, sizeof(ResultValue), "reference result size overflowed");
+            predicted = checkedSizeAdd(predicted, *entityBytes, "reference result size overflowed");
+            MaterializedByteReservation outputBytes(&state.shared.materialized_budget);
+            std::optional<QueryResult::Row> output;
+            {
+                MaterializedByteReservation stagedBytes(&state.shared.materialized_budget);
+                stagedBytes.set(sizeof(storage::EntityRef));
+                const storage::EntityRef reference = *source;
+                checkGuardNow(state);
+                retireResultSourceRow(row, state, sourceReservation);
+                // Keep the current complete record until its independent result
+                // has been built. Other cache entries are immutable reread hints.
+                reclaimResultCaches(state, predicted, 0U, [&](bool edge, uint64_t id) {
+                    return edge == reference.is_edge && id == reference.entity_id;
+                });
+                outputBytes.set(predicted);
+                output.emplace(); output->reserve(1U);
+                output->try_emplace(columns.front(), materializeReferenceResultValue(reference,
+                    state, sizeof(QueryResult::Row), columns.front().size(), true, outputBytes));
+            } // the staged reference is dead before final vector growth
+            const size_t retained = materializedResultRowBytes(*output, state);
+            reclaimResultCaches(state, retained, outputBytes.bytes(), [](bool, uint64_t) { return false; });
+            outputBytes.set(retained);
+            debug::PerfTrace::addValue("logical_plan.result.transferred_entity_refs", 1);
+            appendMaterializedResultRow(result, std::move(*output), state, std::move(outputBytes));
+            return true;
+        }
+
 		void appendLogicalResultRow(QueryResult &result, LogicalPlanReadRow &row,
 								const std::vector<std::string> &columns, ExecutionState &state,
                 MaterializedByteReservation &sourceReservation) {
             retireUnusedResultCaches(row, state, sourceReservation);
             if (appendTransferredScalarResultRow(result, row, columns, state, sourceReservation)) return;
+            if (appendTransferredReferenceResultRow(result, row, columns, state, sourceReservation)) return;
 			// Scalars and unique Entities whose complete records are already in
 			// memory have an exact logical result size before payloads are copied.
 			size_t predictableBytes = sizeof(QueryResult::Row);
