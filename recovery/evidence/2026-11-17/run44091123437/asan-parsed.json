@@ -1,0 +1,51 @@
+{
+  "platform": "asan",
+  "complete_log": true,
+  "case_journal_records": 736,
+  "failed_records": [
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection"
+  ],
+  "skipped_records": [],
+  "step_outcomes": [
+    {
+      "asan_cases": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "asan_concurrent_diagnostic": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "asan_gate": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "diagnostic_tests": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      },
+      "rss_cold": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      },
+      "rss_control": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      },
+      "rss_warmed": {
+        "conclusion": "success",
+        "outcome": "failure",
+        "outputs": {}
+      }
+    }
+  ],
+  "shards": []
+}

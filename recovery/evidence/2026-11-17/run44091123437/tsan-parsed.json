@@ -1,0 +1,17 @@
+{
+  "platform": "tsan",
+  "complete_log": true,
+  "case_journal_records": 27,
+  "failed_records": [],
+  "skipped_records": [],
+  "step_outcomes": [
+    {
+      "diagnostic_tests": {
+        "conclusion": "success",
+        "outcome": "success",
+        "outputs": {}
+      }
+    }
+  ],
+  "shards": []
+}

@@ -1,0 +1,8 @@
+{
+  "commit": "a9e8f5026e92318706a3bb7c8308fd104110f69d",
+  "context": "codecov/patch",
+  "state": "failure",
+  "report": "https://app.codecov.io/gh/nexepic/zyx/commit/a9e8f5026e92318706a3bb7c8308fd104110f69d",
+  "report_access": "web open Internal Error; no line attribution available",
+  "upload": "one explicitly selected coverage file; queued successfully"
+}

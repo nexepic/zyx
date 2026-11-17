@@ -1,0 +1,26 @@
+{
+  "WINDOWS": {
+    "selectors": 152,
+    "cases": 152,
+    "missing": 0,
+    "duplicates": 0
+  },
+  "WINDOWS_CURRENT": {
+    "selectors": 28,
+    "cases": 28,
+    "missing": 0,
+    "duplicates": 0
+  },
+  "MACOS": {
+    "selectors": 30,
+    "cases": 30,
+    "missing": 0,
+    "duplicates": 0
+  },
+  "ASAN": {
+    "selectors": 16,
+    "cases": 22,
+    "missing": 0,
+    "duplicates": 0
+  }
+}
