@@ -1,0 +1,8 @@
+{
+  "source_commit": "25b63ff7ae6c568f96b99a12d9be9224df2f351f",
+  "executed": 11137,
+  "failed": [
+    "LogicalPlanPatternExpressionRuntimeTest.RetainsPatternComprehensionValuesAcrossAdjacencyPages"
+  ],
+  "skipped": []
+}

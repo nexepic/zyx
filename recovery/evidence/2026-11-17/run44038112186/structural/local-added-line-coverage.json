@@ -1,0 +1,1314 @@
+{
+  "base": "8a5fe34b2a0dd13f23b18d690a9a9b0583fa3886",
+  "head": "ed2b537d09df94615ce7b1b2c91b5396b8146eaa",
+  "scope": "added executable production lines, local unfiltered full-suite profile; not Codecov server patch",
+  "files": {
+    "src/query/execution/CellKeySelection.hpp": [
+      {
+        "line": 14,
+        "hits": 227,
+        "source": "        explicit Multiple(size_t count) { columns.reserve(count); keys.reserve(count); }"
+      },
+      {
+        "line": 17,
+        "hits": 1458,
+        "source": "    static size_t workingSetUpper(size_t count) {"
+      },
+      {
+        "line": 18,
+        "hits": 1458,
+        "source": "        return count <= 1U ? 0U : utils::detail::addStandardHeapBytes("
+      },
+      {
+        "line": 19,
+        "hits": 228,
+        "source": "            CellScratchVector<size_t>::workingSetUpper(count),"
+      },
+      {
+        "line": 20,
+        "hits": 228,
+        "source": "            CellScratchVector<std::string_view>::workingSetUpper(count));"
+      },
+      {
+        "line": 21,
+        "hits": 1458,
+        "source": "    }"
+      },
+      {
+        "line": 22,
+        "hits": 1457,
+        "source": "    explicit CellKeySelection(std::span<const std::string_view> keys) : source_(keys) {"
+      },
+      {
+        "line": 23,
+        "hits": 1457,
+        "source": "        if (keys.size() > 1U) multiple_.emplace(keys.size());"
+      },
+      {
+        "line": 24,
+        "hits": 1457,
+        "source": "    }"
+      },
+      {
+        "line": 25,
+        "hits": 1460,
+        "source": "    void clear() noexcept {"
+      },
+      {
+        "line": 26,
+        "hits": 1460,
+        "source": "        single_selected_ = false;"
+      },
+      {
+        "line": 27,
+        "hits": 1460,
+        "source": "        if (multiple_) { multiple_->columns.clear(); multiple_->keys.clear(); }"
+      },
+      {
+        "line": 28,
+        "hits": 1460,
+        "source": "    }"
+      },
+      {
+        "line": 29,
+        "hits": 1719,
+        "source": "    void append(size_t column) {"
+      },
+      {
+        "line": 30,
+        "hits": 1719,
+        "source": "        if (column >= source_.size()) throw std::out_of_range(\"Property cell selection column is invalid\");"
+      },
+      {
+        "line": 31,
+        "hits": 1715,
+        "source": "        if (multiple_) {"
+      },
+      {
+        "line": 32,
+        "hits": 481,
+        "source": "            if (multiple_->columns.size() >= source_.size())"
+      },
+      {
+        "line": 33,
+        "hits": 3,
+        "source": "                throw std::length_error(\"Property cell selection exceeds admitted storage\");"
+      },
+      {
+        "line": 34,
+        "hits": 478,
+        "source": "            multiple_->columns.push_back(column);"
+      },
+      {
+        "line": 35,
+        "hits": 478,
+        "source": "            multiple_->keys.push_back(source_[column]);"
+      },
+      {
+        "line": 36,
+        "hits": 1234,
+        "source": "        } else {"
+      },
+      {
+        "line": 37,
+        "hits": 1234,
+        "source": "            if (single_selected_) throw std::length_error(\"Property cell single selection is duplicated\");"
+      },
+      {
+        "line": 38,
+        "hits": 1231,
+        "source": "            single_selected_ = true;"
+      },
+      {
+        "line": 39,
+        "hits": 1231,
+        "source": "        }"
+      },
+      {
+        "line": 40,
+        "hits": 1715,
+        "source": "    }"
+      },
+      {
+        "line": 41,
+        "hits": 268853,
+        "source": "    size_t size() const noexcept { return multiple_ ? multiple_->columns.size() : size_t(single_selected_); }"
+      },
+      {
+        "line": 42,
+        "hits": 1458,
+        "source": "    bool empty() const noexcept { return size() == 0U; }"
+      },
+      {
+        "line": 43,
+        "hits": 100048,
+        "source": "    size_t column(size_t selected) const {"
+      },
+      {
+        "line": 44,
+        "hits": 100048,
+        "source": "        if (selected >= size()) throw std::out_of_range(\"Property cell selection ordinal is invalid\");"
+      },
+      {
+        "line": 45,
+        "hits": 100047,
+        "source": "        return multiple_ ? multiple_->columns[selected] : 0U;"
+      },
+      {
+        "line": 46,
+        "hits": 100048,
+        "source": "    }"
+      },
+      {
+        "line": 47,
+        "hits": 1467,
+        "source": "    std::span<const std::string_view> keys() const noexcept {"
+      },
+      {
+        "line": 48,
+        "hits": 1467,
+        "source": "        return multiple_ ? std::span<const std::string_view>(multiple_->keys.data(), multiple_->keys.size())"
+      },
+      {
+        "line": 49,
+        "hits": 1467,
+        "source": "                         : source_.first(size());"
+      },
+      {
+        "line": 50,
+        "hits": 1467,
+        "source": "    }"
+      },
+      {
+        "line": 51,
+        "hits": 8,
+        "source": "    size_t heapBytes() const {"
+      },
+      {
+        "line": 52,
+        "hits": 8,
+        "source": "        return multiple_ ? utils::detail::addStandardHeapBytes(multiple_->columns.heapBytes(), multiple_->keys.heapBytes()) : 0U;"
+      },
+      {
+        "line": 53,
+        "hits": 8,
+        "source": "    }"
+      }
+    ],
+    "src/query/execution/LogicalPlanReadRuntime.cpp": [],
+    "src/query/execution/ReleaseEmptyMapStorage.hpp": [
+      {
+        "line": 7,
+        "hits": 92,
+        "source": "template<class Map> void releaseEmptyMapStorage(Map &map) {"
+      },
+      {
+        "line": 8,
+        "hits": 92,
+        "source": "    if (!map.empty()) throw std::logic_error(\"cannot release storage of a nonempty cache\");"
+      },
+      {
+        "line": 9,
+        "hits": 91,
+        "source": "    Map replacement(0U, map.hash_function(), map.key_eq(), map.get_allocator());"
+      },
+      {
+        "line": 10,
+        "hits": 91,
+        "source": "    map.swap(replacement);"
+      },
+      {
+        "line": 11,
+        "hits": 91,
+        "source": "}"
+      }
+    ],
+    "src/query/execution/read_runtime/EntityValuesAndProperties.inc": [
+      {
+        "line": 1193,
+        "hits": 25821,
+        "source": "            if (const auto *reference = std::get_if<storage::EntityRef>(&binding); reference && !reference->is_edge) {"
+      },
+      {
+        "line": 1194,
+        "hits": 6719,
+        "source": "                for (auto *view = state.task.borrowed_pattern_node; view; view = view->previous) {"
+      },
+      {
+        "line": 1195,
+        "hits": 147,
+        "source": "                    if (view->row != &row || *view->variable != variable) continue;"
+      },
+      {
+        "line": 1196,
+        "hits": 127,
+        "source": "                    checkGuardNow(state);"
+      },
+      {
+        "line": 1197,
+        "hits": 127,
+        "source": "                    validateNodeRef(*reference, \"logical-plan scoped Property received an invalid Node reference\");"
+      },
+      {
+        "line": 1198,
+        "hits": 127,
+        "source": "                    if (view->node->node_id != reference->entity_id)"
+      },
+      {
+        "line": 1199,
+        "hits": 0,
+        "source": "                        throw std::logic_error(\"scoped Property borrow changed Node identity\");"
+      },
+      {
+        "line": 1200,
+        "hits": 127,
+        "source": "                    const auto found = std::ranges::find(view->node->properties, key,"
+      },
+      {
+        "line": 1201,
+        "hits": 127,
+        "source": "                        &storage::LogicalGraphPropertyEntry::key);"
+      },
+      {
+        "line": 1202,
+        "hits": 127,
+        "source": "                    debug::PerfTrace::addValue(\"logical_plan.pattern.borrowed_properties\", 1);"
+      },
+      {
+        "line": 1203,
+        "hits": 127,
+        "source": "                    return found == view->node->properties.end() ? PropertyValue() : copyResult(found->value, true);"
+      },
+      {
+        "line": 1204,
+        "hits": 127,
+        "source": "                }"
+      },
+      {
+        "line": 1205,
+        "hits": 6699,
+        "source": "            }"
+      },
+      {
+        "line": 1487,
+        "hits": 209,
+        "source": "                : row_(row), state_(state), bytes_(&state.shared.materialized_budget) {"
+      },
+      {
+        "line": 1488,
+        "hits": 209,
+        "source": "                if (!propertyOnly || variable.empty() || row.values.contains(variable) ||"
+      },
+      {
+        "line": 1489,
+        "hits": 209,
+        "source": "                        row.property_cache.contains(variable) || row.entity_metadata_cache.contains(variable) ||"
+      },
+      {
+        "line": 1490,
+        "hits": 209,
+        "source": "                        row.complete_entity_property_cache.contains(variable)) {"
+      },
+      {
+        "line": 1491,
+        "hits": 70,
+        "source": "                    fallback_.emplace(row, variable, node, state);"
+      },
+      {
+        "line": 1492,
+        "hits": 70,
+        "source": "                    return;"
+      },
+      {
+        "line": 1493,
+        "hits": 70,
+        "source": "                }"
+      },
+      {
+        "line": 1494,
+        "hits": 139,
+        "source": "                using Bindings = decltype(row.values);"
+      },
+      {
+        "line": 1495,
+        "hits": 139,
+        "source": "                const size_t physical = checkedSizeAdd(detail::executionBindingNodeBytes<Bindings>(),"
+      },
+      {
+        "line": 1496,
+        "hits": 139,
+        "source": "                    utils::detail::standardFreshStringHeapUpper(variable.size()), \"scoped reference binding overflowed\");"
+      },
+      {
+        "line": 1497,
+        "hits": 139,
+        "source": "                const size_t logical = checkedSizeAdd(variable.size(), sizeof(LogicalPlanReadValue) + sizeof(storage::EntityRef),"
+      },
+      {
+        "line": 1498,
+        "hits": 139,
+        "source": "                    \"scoped reference binding overflowed\");"
+      },
+      {
+        "line": 1499,
+        "hits": 139,
+        "source": "                bytes_.set((std::max)(physical, logical));"
+      },
+      {
+        "line": 1500,
+        "hits": 139,
+        "source": "                row.values.try_emplace(variable, storage::EntityRef{node.node_id, false, 0U, 0U, 0U});"
+      },
+      {
+        "line": 1501,
+        "hits": 139,
+        "source": "                view_ = {&row, &variable, &node, state.task.borrowed_pattern_node};"
+      },
+      {
+        "line": 1502,
+        "hits": 139,
+        "source": "                state.task.borrowed_pattern_node = &view_;"
+      },
+      {
+        "line": 1503,
+        "hits": 139,
+        "source": "                active_ = true;"
+      },
+      {
+        "line": 1504,
+        "hits": 139,
+        "source": "                debug::PerfTrace::addValue(\"logical_plan.pattern.borrowed_node_bindings\", 1);"
+      },
+      {
+        "line": 1505,
+        "hits": 139,
+        "source": "            }"
+      },
+      {
+        "line": 1506,
+        "hits": 206,
+        "source": "            ~ScopedPatternNodeBinding() {"
+      },
+      {
+        "line": 1507,
+        "hits": 206,
+        "source": "                if (active_) {"
+      },
+      {
+        "line": 1508,
+        "hits": 138,
+        "source": "                    state_.task.borrowed_pattern_node = view_.previous;"
+      },
+      {
+        "line": 1509,
+        "hits": 138,
+        "source": "                    row_.values.erase(*view_.variable);"
+      },
+      {
+        "line": 1510,
+        "hits": 138,
+        "source": "                }"
+      },
+      {
+        "line": 1511,
+        "hits": 206,
+        "source": "            }"
+      }
+    ],
+    "src/query/execution/read_runtime/ExecutionStateAndBudgets.inc": [
+      {
+        "line": 471,
+        "hits": 8984,
+        "source": "        void reclaimResultCaches(ExecutionState &state, size_t requested, size_t previous, Protected protect) {"
+      },
+      {
+        "line": 472,
+        "hits": 8984,
+        "source": "            const size_t growth = requested > previous ? requested - previous : 0U;"
+      },
+      {
+        "line": 473,
+        "hits": 17990,
+        "source": "            const auto enough = [&] { return growth <= state.shared.materialized_budget.availableWithParent(); };"
+      },
+      {
+        "line": 474,
+        "hits": 17967,
+        "source": "            const auto reclaim = [&](auto &cache, bool edge) {"
+      },
+      {
+        "line": 475,
+        "hits": 18017,
+        "source": "                for (auto it = cache.begin(); it != cache.end() && !enough();) {"
+      },
+      {
+        "line": 476,
+        "hits": 50,
+        "source": "                    if (protect(edge, it->first)) { ++it; continue; }"
+      },
+      {
+        "line": 477,
+        "hits": 23,
+        "source": "                    if (state.shared.context) state.shared.context->checkGuardNow();"
+      },
+      {
+        "line": 478,
+        "hits": 23,
+        "source": "                    const size_t bytes = [&] {"
+      },
+      {
+        "line": 480,
+        "hits": 23,
+        "source": "                                storage::LogicalGraphNode>) return logicalNodeCacheBytes(it->second, state.shared.context);"
+      },
+      {
+        "line": 481,
+        "hits": 0,
+        "source": "                        else return logicalEdgeCacheBytes(it->second, state.shared.context);"
+      },
+      {
+        "line": 482,
+        "hits": 23,
+        "source": "                    }();"
+      },
+      {
+        "line": 483,
+        "hits": 23,
+        "source": "                    const size_t payload = bytes - sizeof(it->second);"
+      },
+      {
+        "line": 484,
+        "hits": 23,
+        "source": "                    const size_t reserved = state.shared.materialized_cache_reservation.bytes();"
+      },
+      {
+        "line": 485,
+        "hits": 23,
+        "source": "                    if (payload > reserved || bytes > state.shared.materialized_cache_bytes)"
+      },
+      {
+        "line": 486,
+        "hits": 0,
+        "source": "                        throw std::logic_error(\"result cache retirement exceeded its retained charge\");"
+      },
+      {
+        "line": 487,
+        "hits": 23,
+        "source": "                    it = cache.erase(it); // destroy payload and free allocator node first"
+      },
+      {
+        "line": 488,
+        "hits": 23,
+        "source": "                    state.shared.materialized_cache_reservation.set(reserved - payload);"
+      },
+      {
+        "line": 489,
+        "hits": 23,
+        "source": "                    state.shared.materialized_cache_bytes -= bytes;"
+      },
+      {
+        "line": 490,
+        "hits": 23,
+        "source": "                    debug::PerfTrace::addValue(\"logical_plan.result.reclaimed_entity_cache_bytes\", static_cast<int64_t>(bytes));"
+      },
+      {
+        "line": 491,
+        "hits": 23,
+        "source": "                    if (state.shared.context) state.shared.context->checkGuardNow();"
+      },
+      {
+        "line": 492,
+        "hits": 23,
+        "source": "                }"
+      },
+      {
+        "line": 493,
+        "hits": 17967,
+        "source": "                if (cache.empty() && !enough()) {"
+      },
+      {
+        "line": 494,
+        "hits": 89,
+        "source": "                    if (state.shared.context) state.shared.context->checkGuardNow();"
+      },
+      {
+        "line": 495,
+        "hits": 89,
+        "source": "                    const size_t before = state.shared.entity_cache_memory.used();"
+      },
+      {
+        "line": 496,
+        "hits": 89,
+        "source": "                    detail::releaseEmptyMapStorage(cache);"
+      },
+      {
+        "line": 497,
+        "hits": 89,
+        "source": "                    const size_t after = state.shared.entity_cache_memory.used();"
+      },
+      {
+        "line": 498,
+        "hits": 89,
+        "source": "                    debug::PerfTrace::addValue(\"logical_plan.result.reclaimed_cache_bucket_bytes\","
+      },
+      {
+        "line": 499,
+        "hits": 89,
+        "source": "                        static_cast<int64_t>(before - after));"
+      },
+      {
+        "line": 500,
+        "hits": 89,
+        "source": "                    if (state.shared.context) state.shared.context->checkGuardNow();"
+      },
+      {
+        "line": 501,
+        "hits": 89,
+        "source": "                }"
+      },
+      {
+        "line": 502,
+        "hits": 17967,
+        "source": "            };"
+      },
+      {
+        "line": 503,
+        "hits": 8984,
+        "source": "            reclaim(state.shared.node_cache, false);"
+      },
+      {
+        "line": 504,
+        "hits": 8984,
+        "source": "            reclaim(state.shared.edge_cache, true);"
+      },
+      {
+        "line": 505,
+        "hits": 8984,
+        "source": "        }"
+      },
+      {
+        "line": 556,
+        "hits": 5362,
+        "source": "                if (requestedCapacity > minimumCapacity && transientBytes > state.shared.final_result_reservation.bytes() &&"
+      },
+      {
+        "line": 557,
+        "hits": 5362,
+        "source": "                        transientBytes - state.shared.final_result_reservation.bytes() > state.shared.materialized_budget.availableWithParent()) {"
+      },
+      {
+        "line": 558,
+        "hits": 15,
+        "source": "                    requestedCapacity = minimumCapacity;"
+      },
+      {
+        "line": 559,
+        "hits": 15,
+        "source": "                    transientBytes = growthPeak(requestedCapacity);"
+      },
+      {
+        "line": 560,
+        "hits": 15,
+        "source": "                }"
+      },
+      {
+        "line": 561,
+        "hits": 5362,
+        "source": "                reclaimResultCaches(state, transientBytes, state.shared.final_result_reservation.bytes(),"
+      },
+      {
+        "line": 562,
+        "hits": 5362,
+        "source": "                    [](bool, uint64_t) { return false; });"
+      }
+    ],
+    "src/query/execution/read_runtime/ExpressionEvaluation.inc": [
+      {
+        "line": 3,
+        "hits": 603,
+        "source": "        bool patternUsesOnlyProperties(const expressions::Expression *expression, std::string_view variable) {"
+      },
+      {
+        "line": 4,
+        "hits": 603,
+        "source": "            if (!expression) return true;"
+      },
+      {
+        "line": 5,
+        "hits": 391,
+        "source": "            using E = expressions::ExpressionType;"
+      },
+      {
+        "line": 6,
+        "hits": 391,
+        "source": "            switch (expression->getExpressionType()) {"
+      },
+      {
+        "line": 7,
+        "hits": 224,
+        "source": "                case E::LITERAL: case E::PARAMETER: case E::PROPERTY_ACCESS: return true;"
+      },
+      {
+        "line": 8,
+        "hits": 74,
+        "source": "                case E::BINARY_OP: {"
+      },
+      {
+        "line": 9,
+        "hits": 74,
+        "source": "                    const auto &binary = static_cast<const expressions::BinaryOpExpression &>(*expression);"
+      },
+      {
+        "line": 10,
+        "hits": 74,
+        "source": "                    return binary.getLeft() && binary.getRight() && patternUsesOnlyProperties(binary.getLeft(), variable) &&"
+      },
+      {
+        "line": 11,
+        "hits": 74,
+        "source": "                        patternUsesOnlyProperties(binary.getRight(), variable);"
+      },
+      {
+        "line": 12,
+        "hits": 23,
+        "source": "                }"
+      },
+      {
+        "line": 13,
+        "hits": 0,
+        "source": "                case E::UNARY_OP: {"
+      },
+      {
+        "line": 14,
+        "hits": 0,
+        "source": "                    const auto &unary = static_cast<const expressions::UnaryOpExpression &>(*expression);"
+      },
+      {
+        "line": 15,
+        "hits": 0,
+        "source": "                    return unary.getOperand() && patternUsesOnlyProperties(unary.getOperand(), variable);"
+      },
+      {
+        "line": 16,
+        "hits": 23,
+        "source": "                }"
+      },
+      {
+        "line": 17,
+        "hits": 13,
+        "source": "                case E::EXPR_EXISTS: {"
+      },
+      {
+        "line": 18,
+        "hits": 13,
+        "source": "                    const auto &nested = static_cast<const expressions::ExistsExpression &>(*expression);"
+      },
+      {
+        "line": 19,
+        "hits": 13,
+        "source": "                    return nested.hasStructuredPattern() && nested.getTargetVar() != variable &&"
+      },
+      {
+        "line": 20,
+        "hits": 13,
+        "source": "                        patternUsesOnlyProperties(nested.getWhereExpression(), variable);"
+      },
+      {
+        "line": 21,
+        "hits": 23,
+        "source": "                }"
+      },
+      {
+        "line": 22,
+        "hits": 19,
+        "source": "                case E::EXPR_PATTERN_COMPREHENSION: {"
+      },
+      {
+        "line": 23,
+        "hits": 19,
+        "source": "                    const auto &nested = static_cast<const expressions::PatternComprehensionExpression &>(*expression);"
+      },
+      {
+        "line": 24,
+        "hits": 19,
+        "source": "                    return nested.getTargetVar() != variable && nested.getRelationshipVar() != variable &&"
+      },
+      {
+        "line": 25,
+        "hits": 19,
+        "source": "                        nested.getMapExpression() && patternUsesOnlyProperties(nested.getWhereExpression(), variable) &&"
+      },
+      {
+        "line": 26,
+        "hits": 19,
+        "source": "                        patternUsesOnlyProperties(nested.getMapExpression(), variable);"
+      },
+      {
+        "line": 27,
+        "hits": 23,
+        "source": "                }"
+      },
+      {
+        "line": 28,
+        "hits": 61,
+        "source": "                default: return false;"
+      },
+      {
+        "line": 29,
+        "hits": 391,
+        "source": "            }"
+      },
+      {
+        "line": 30,
+        "hits": 391,
+        "source": "        }"
+      },
+      {
+        "line": 575,
+        "hits": 49,
+        "source": "\t\t\t\t\tbool borrowTarget = false;"
+      },
+      {
+        "line": 576,
+        "hits": 49,
+        "source": "                    const auto matchesWhere = [&](const storage::LogicalGraphNode *target) {"
+      },
+      {
+        "line": 582,
+        "hits": 31,
+        "source": "\t\t\t\t\t\t\tScopedPatternNodeBinding binding(row, exists.getTargetVar(), *target, state,"
+      },
+      {
+        "line": 583,
+        "hits": 31,
+        "source": "                                borrowTarget);"
+      },
+      {
+        "line": 596,
+        "hits": 47,
+        "source": "                    borrowTarget = patternShape.has_value() &&"
+      },
+      {
+        "line": 597,
+        "hits": 47,
+        "source": "                        patternUsesOnlyProperties(exists.getWhereExpression(), exists.getTargetVar());"
+      },
+      {
+        "line": 626,
+        "hits": 189,
+        "source": "\t\t\t\t\tbool borrowTarget = false;"
+      },
+      {
+        "line": 627,
+        "hits": 189,
+        "source": "                    const auto appendValue = [&](const storage::LogicalGraphEdge *edge,"
+      },
+      {
+        "line": 680,
+        "hits": 178,
+        "source": "\t\t\t\t\t\t\tScopedPatternNodeBinding targetBinding(row, comprehension.getTargetVar(), *target, state,"
+      },
+      {
+        "line": 681,
+        "hits": 178,
+        "source": "                                borrowTarget);"
+      },
+      {
+        "line": 712,
+        "hits": 187,
+        "source": "                    borrowTarget = patternShape.has_value() &&"
+      },
+      {
+        "line": 713,
+        "hits": 187,
+        "source": "                        patternUsesOnlyProperties(comprehension.getWhereExpression(), comprehension.getTargetVar()) &&"
+      },
+      {
+        "line": 714,
+        "hits": 187,
+        "source": "                        patternUsesOnlyProperties(comprehension.getMapExpression(), comprehension.getTargetVar());"
+      }
+    ],
+    "src/query/execution/read_runtime/PlanInspectionAndBatching.inc": [
+      {
+        "line": 1381,
+        "hits": 1454,
+        "source": "                            const size_t selectionBytes = detail::CellKeySelection::workingSetUpper(keys.size());"
+      },
+      {
+        "line": 1389,
+        "hits": 1454,
+        "source": "                            detail::CellKeySelection selectedKeys(keys);"
+      },
+      {
+        "line": 1403,
+        "hits": 1454,
+        "source": "                                selectedKeys.clear();"
+      },
+      {
+        "line": 1405,
+        "hits": 1697,
+        "source": "                                    selectedKeys.append(column);"
+      },
+      {
+        "line": 1423,
+        "hits": 66424,
+        "source": "                                    for (size_t selected = 0U; selected < selectedKeys.size(); ++selected) {"
+      },
+      {
+        "line": 1424,
+        "hits": 33370,
+        "source": "                                        const size_t column = selectedKeys.column(selected);"
+      },
+      {
+        "line": 1453,
+        "hits": 33350,
+        "source": "                                    if (relative >= last - first || selected >= selectedKeys.size())"
+      },
+      {
+        "line": 1455,
+        "hits": 33350,
+        "source": "                                    const size_t ordinal = first + relative, column = selectedKeys.column(selected);"
+      },
+      {
+        "line": 1477,
+        "hits": 1454,
+        "source": "                                const auto selection = selectedKeys.keys();"
+      },
+      {
+        "line": 1484,
+        "hits": 66332,
+        "source": "                                    for (size_t column = 0U; column < selectedKeys.size(); ++column)"
+      },
+      {
+        "line": 1485,
+        "hits": 33318,
+        "source": "                                        if (!hasCell(ordinal, selectedKeys.column(column))) receive(ordinal - first, column, std::nullopt);"
+      }
+    ],
+    "src/query/execution/read_runtime/RowBindingAndResults.inc": [
+      {
+        "line": 681,
+        "hits": 1991,
+        "source": "                bool rowPreflighted, MaterializedByteReservation &outputReservation) {"
+      },
+      {
+        "line": 682,
+        "hits": 67820,
+        "source": "            const auto copyCheckpoint = [&] { checkGuardNow(state); };"
+      },
+      {
+        "line": 684,
+        "hits": 1991,
+        "source": "\t\t\tvalidateEntityRef(reference);"
+      },
+      {
+        "line": 685,
+        "hits": 1991,
+        "source": "\t\t\tif (reference.is_edge) {"
+      },
+      {
+        "line": 686,
+        "hits": 59,
+        "source": "\t\t\t\tMaterializedByteReservation loadedBytes(&state.shared.materialized_budget);"
+      },
+      {
+        "line": 687,
+        "hits": 59,
+        "source": "\t\t\t\tstd::optional<storage::LogicalGraphEdge> loaded;"
+      },
+      {
+        "line": 688,
+        "hits": 59,
+        "source": "\t\t\t\tconst auto cached = state.shared.edge_cache.find(reference.entity_id);"
+      },
+      {
+        "line": 689,
+        "hits": 59,
+        "source": "\t\t\t\tconst storage::LogicalGraphEdge *edge = nullptr;"
+      },
+      {
+        "line": 690,
+        "hits": 59,
+        "source": "\t\t\t\tif (cached != state.shared.edge_cache.end()) {"
+      },
+      {
+        "line": 691,
+        "hits": 56,
+        "source": "\t\t\t\t\tedge = &cached->second;"
+      },
+      {
+        "line": 692,
+        "hits": 56,
+        "source": "\t\t\t\t} else {"
+      },
+      {
+        "line": 693,
+        "hits": 3,
+        "source": "\t\t\t\t\tloaded.emplace(readEdgeCached(state, reference.entity_id));"
+      },
+      {
+        "line": 694,
+        "hits": 3,
+        "source": "\t\t\t\t\tedge = &*loaded;"
+      },
+      {
+        "line": 695,
+        "hits": 3,
+        "source": "\t\t\t\t}"
+      },
+      {
+        "line": 696,
+        "hits": 59,
+        "source": "\t\t\t\tvalidateEdgeReferenceRecord(reference, *edge, state, \"logical graph Entity reference\");"
+      },
+      {
+        "line": 697,
+        "hits": 59,
+        "source": "\t\t\t\tconst std::optional<size_t> entityBytes ="
+      },
+      {
+        "line": 698,
+        "hits": 59,
+        "source": "\t\t\t\t\t\trowPreflighted ? std::nullopt"
+      },
+      {
+        "line": 699,
+        "hits": 59,
+        "source": "\t\t\t\t\t\t\t\t\t   : std::optional<size_t>(completeEntityResultBytes(*edge, state));"
+      },
+      {
+        "line": 700,
+        "hits": 59,
+        "source": "\t\t\t\tif (loaded)"
+      },
+      {
+        "line": 701,
+        "hits": 3,
+        "source": "\t\t\t\t\tloadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));"
+      },
+      {
+        "line": 702,
+        "hits": 59,
+        "source": "\t\t\t\tif (entityBytes)"
+      },
+      {
+        "line": 703,
+        "hits": 11,
+        "source": "\t\t\t\t\tadmitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);"
+      },
+      {
+        "line": 704,
+        "hits": 59,
+        "source": "\t\t\t\tPropertyValue::MapType properties = materializeCompleteEntityProperties(*edge, state);"
+      },
+      {
+        "line": 705,
+        "hits": 59,
+        "source": "\t\t\t\treturn ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,"
+      },
+      {
+        "line": 706,
+        "hits": 59,
+        "source": "\t\t\t\t\t\t\t\t\t\t\t\t\t detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});"
+      },
+      {
+        "line": 707,
+        "hits": 59,
+        "source": "\t\t\t}"
+      },
+      {
+        "line": 708,
+        "hits": 1932,
+        "source": "\t\t\tMaterializedByteReservation loadedBytes(&state.shared.materialized_budget);"
+      },
+      {
+        "line": 709,
+        "hits": 1932,
+        "source": "\t\t\tstd::optional<storage::LogicalGraphNode> loaded;"
+      },
+      {
+        "line": 710,
+        "hits": 1932,
+        "source": "\t\t\tconst auto cached = state.shared.node_cache.find(reference.entity_id);"
+      },
+      {
+        "line": 711,
+        "hits": 1932,
+        "source": "\t\t\tconst storage::LogicalGraphNode *node = nullptr;"
+      },
+      {
+        "line": 712,
+        "hits": 1932,
+        "source": "\t\t\tif (cached != state.shared.node_cache.end()) {"
+      },
+      {
+        "line": 713,
+        "hits": 1932,
+        "source": "\t\t\t\tnode = &cached->second;"
+      },
+      {
+        "line": 714,
+        "hits": 1932,
+        "source": "\t\t\t} else {"
+      },
+      {
+        "line": 715,
+        "hits": 0,
+        "source": "\t\t\t\tloaded.emplace(readNodeCached(state, reference.entity_id));"
+      },
+      {
+        "line": 716,
+        "hits": 0,
+        "source": "\t\t\t\tnode = &*loaded;"
+      },
+      {
+        "line": 717,
+        "hits": 0,
+        "source": "\t\t\t}"
+      },
+      {
+        "line": 718,
+        "hits": 1932,
+        "source": "\t\t\tconst std::optional<size_t> entityBytes ="
+      },
+      {
+        "line": 719,
+        "hits": 1932,
+        "source": "\t\t\t\t\trowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));"
+      },
+      {
+        "line": 720,
+        "hits": 1932,
+        "source": "\t\t\tif (loaded)"
+      },
+      {
+        "line": 721,
+        "hits": 0,
+        "source": "\t\t\t\tloadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));"
+      },
+      {
+        "line": 722,
+        "hits": 1932,
+        "source": "\t\t\tif (entityBytes)"
+      },
+      {
+        "line": 723,
+        "hits": 16,
+        "source": "\t\t\t\tadmitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);"
+      },
+      {
+        "line": 724,
+        "hits": 1932,
+        "source": "\t\t\tPropertyValue::MapType properties = materializeCompleteEntityProperties(*node, state);"
+      },
+      {
+        "line": 725,
+        "hits": 1932,
+        "source": "\t\t\treturn ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});"
+      },
+      {
+        "line": 726,
+        "hits": 1991,
+        "source": "        }"
+      },
+      {
+        "line": 752,
+        "hits": 229,
+        "source": "            if (const auto *reference = std::get_if<storage::EntityRef>(&value))"
+      },
+      {
+        "line": 753,
+        "hits": 186,
+        "source": "                return materializeReferenceResultValue(*reference, state, rowPrefixBytes,"
+      },
+      {
+        "line": 754,
+        "hits": 186,
+        "source": "                    columnNameBytes, rowPreflighted, outputReservation);"
+      },
+      {
+        "line": 1013,
+        "hits": 1943,
+        "source": "                MaterializedByteReservation &sourceReservation) {"
+      },
+      {
+        "line": 1014,
+        "hits": 1943,
+        "source": "            if (columns.size() != 1U) return false;"
+      },
+      {
+        "line": 1015,
+        "hits": 1837,
+        "source": "            const auto binding = row.values.find(columns.front());"
+      },
+      {
+        "line": 1016,
+        "hits": 1837,
+        "source": "            if (binding == row.values.end()) return false;"
+      },
+      {
+        "line": 1017,
+        "hits": 1835,
+        "source": "            const auto *source = std::get_if<storage::EntityRef>(&binding->second);"
+      },
+      {
+        "line": 1018,
+        "hits": 1835,
+        "source": "            if (!source) return false;"
+      },
+      {
+        "line": 1019,
+        "hits": 1819,
+        "source": "            const auto entityBytes = predictableReferenceResultBytes(*source, state);"
+      },
+      {
+        "line": 1020,
+        "hits": 1819,
+        "source": "            if (!entityBytes) return false;"
+      },
+      {
+        "line": 1021,
+        "hits": 1819,
+        "source": "            size_t predicted = checkedSizeAdd(sizeof(QueryResult::Row), columns.front().size(),"
+      },
+      {
+        "line": 1022,
+        "hits": 1819,
+        "source": "                \"reference result size overflowed\");"
+      },
+      {
+        "line": 1023,
+        "hits": 1819,
+        "source": "            predicted = checkedSizeAdd(predicted, sizeof(ResultValue), \"reference result size overflowed\");"
+      },
+      {
+        "line": 1024,
+        "hits": 1819,
+        "source": "            predicted = checkedSizeAdd(predicted, *entityBytes, \"reference result size overflowed\");"
+      },
+      {
+        "line": 1025,
+        "hits": 1819,
+        "source": "            MaterializedByteReservation outputBytes(&state.shared.materialized_budget);"
+      },
+      {
+        "line": 1026,
+        "hits": 1819,
+        "source": "            std::optional<QueryResult::Row> output;"
+      },
+      {
+        "line": 1027,
+        "hits": 1819,
+        "source": "            {"
+      },
+      {
+        "line": 1028,
+        "hits": 1819,
+        "source": "                MaterializedByteReservation stagedBytes(&state.shared.materialized_budget);"
+      },
+      {
+        "line": 1029,
+        "hits": 1819,
+        "source": "                stagedBytes.set(sizeof(storage::EntityRef));"
+      },
+      {
+        "line": 1030,
+        "hits": 1819,
+        "source": "                const storage::EntityRef reference = *source;"
+      },
+      {
+        "line": 1031,
+        "hits": 1819,
+        "source": "                checkGuardNow(state);"
+      },
+      {
+        "line": 1032,
+        "hits": 1819,
+        "source": "                retireResultSourceRow(row, state, sourceReservation);"
+      },
+      {
+        "line": 1035,
+        "hits": 1819,
+        "source": "                reclaimResultCaches(state, predicted, 0U, [&](bool edge, uint64_t id) {"
+      },
+      {
+        "line": 1036,
+        "hits": 47,
+        "source": "                    return edge == reference.is_edge && id == reference.entity_id;"
+      },
+      {
+        "line": 1037,
+        "hits": 47,
+        "source": "                });"
+      },
+      {
+        "line": 1038,
+        "hits": 1819,
+        "source": "                outputBytes.set(predicted);"
+      },
+      {
+        "line": 1039,
+        "hits": 1819,
+        "source": "                output.emplace(); output->reserve(1U);"
+      },
+      {
+        "line": 1040,
+        "hits": 1819,
+        "source": "                output->try_emplace(columns.front(), materializeReferenceResultValue(reference,"
+      },
+      {
+        "line": 1041,
+        "hits": 1819,
+        "source": "                    state, sizeof(QueryResult::Row), columns.front().size(), true, outputBytes));"
+      },
+      {
+        "line": 1042,
+        "hits": 1819,
+        "source": "            } // the staged reference is dead before final vector growth"
+      },
+      {
+        "line": 1043,
+        "hits": 1819,
+        "source": "            const size_t retained = materializedResultRowBytes(*output, state);"
+      },
+      {
+        "line": 1044,
+        "hits": 1819,
+        "source": "            reclaimResultCaches(state, retained, outputBytes.bytes(), [](bool, uint64_t) { return false; });"
+      },
+      {
+        "line": 1045,
+        "hits": 1819,
+        "source": "            outputBytes.set(retained);"
+      },
+      {
+        "line": 1046,
+        "hits": 1819,
+        "source": "            debug::PerfTrace::addValue(\"logical_plan.result.transferred_entity_refs\", 1);"
+      },
+      {
+        "line": 1047,
+        "hits": 1819,
+        "source": "            appendMaterializedResultRow(result, std::move(*output), state, std::move(outputBytes));"
+      },
+      {
+        "line": 1048,
+        "hits": 1819,
+        "source": "            return true;"
+      },
+      {
+        "line": 1049,
+        "hits": 1819,
+        "source": "        }"
+      },
+      {
+        "line": 1056,
+        "hits": 2024,
+        "source": "            if (appendTransferredReferenceResultRow(result, row, columns, state, sourceReservation)) return;"
+      }
+    ]
+  },
+  "added_executable_lines": 258,
+  "covered_added_executable_lines": 248
+}

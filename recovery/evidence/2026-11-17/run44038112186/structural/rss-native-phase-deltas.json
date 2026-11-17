@@ -1,0 +1,217 @@
+{
+  "run": 44038112186,
+  "case": "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+  "context": "formal ASan suite, not isolated cold process",
+  "phases": [
+    {
+      "phase": "before-query",
+      "bytes": {
+        "resident": 2440003584,
+        "internal": 2024980480,
+        "external": 415023104,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2140412160
+      },
+      "delta_from_before_query": {
+        "resident": 0,
+        "internal": 0,
+        "external": 0,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 0
+      }
+    },
+    {
+      "phase": "sort-before-first-spill",
+      "bytes": {
+        "resident": 2446114816,
+        "internal": 2030944256,
+        "external": 415170560,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2146375936
+      },
+      "delta_from_before_query": {
+        "resident": 6111232,
+        "internal": 5963776,
+        "external": 147456,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 5963776
+      }
+    },
+    {
+      "phase": "sort-after-first-spill",
+      "bytes": {
+        "resident": 2447245312,
+        "internal": 2032009216,
+        "external": 415236096,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2147440896
+      },
+      "delta_from_before_query": {
+        "resident": 7241728,
+        "internal": 7028736,
+        "external": 212992,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 7028736
+      }
+    },
+    {
+      "phase": "sort-before-merge",
+      "bytes": {
+        "resident": 2450440192,
+        "internal": 2035187712,
+        "external": 415252480,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2150635840
+      },
+      "delta_from_before_query": {
+        "resident": 10436608,
+        "internal": 10207232,
+        "external": 229376,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 10223680
+      }
+    },
+    {
+      "phase": "sort-merge-level-begin",
+      "bytes": {
+        "resident": 2450472960,
+        "internal": 2035220480,
+        "external": 415252480,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2150668608
+      },
+      "delta_from_before_query": {
+        "resident": 10469376,
+        "internal": 10240000,
+        "external": 229376,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 10256448
+      }
+    },
+    {
+      "phase": "sort-merge-level-end",
+      "bytes": {
+        "resident": 2455945216,
+        "internal": 2040692736,
+        "external": 415252480,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2156140864
+      },
+      "delta_from_before_query": {
+        "resident": 15941632,
+        "internal": 15712256,
+        "external": 229376,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 15728704
+      }
+    },
+    {
+      "phase": "sort-merge-level-begin",
+      "bytes": {
+        "resident": 2455945216,
+        "internal": 2040692736,
+        "external": 415252480,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2156140864
+      },
+      "delta_from_before_query": {
+        "resident": 15941632,
+        "internal": 15712256,
+        "external": 229376,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 15728704
+      }
+    },
+    {
+      "phase": "sort-merge-level-end",
+      "bytes": {
+        "resident": 2462351360,
+        "internal": 2047098880,
+        "external": 415252480,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2162547008
+      },
+      "delta_from_before_query": {
+        "resident": 22347776,
+        "internal": 22118400,
+        "external": 229376,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 22134848
+      }
+    },
+    {
+      "phase": "sort-before-output",
+      "bytes": {
+        "resident": 2462351360,
+        "internal": 2047098880,
+        "external": 415252480,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2162547008
+      },
+      "delta_from_before_query": {
+        "resident": 22347776,
+        "internal": 22118400,
+        "external": 229376,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 22134848
+      }
+    },
+    {
+      "phase": "sort-finished",
+      "bytes": {
+        "resident": 2479587328,
+        "internal": 2064318464,
+        "external": 415268864,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2179766592
+      },
+      "delta_from_before_query": {
+        "resident": 39583744,
+        "internal": 39337984,
+        "external": 245760,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 39354432
+      }
+    },
+    {
+      "phase": "after-backend-destruction",
+      "bytes": {
+        "resident": 2479734784,
+        "internal": 2064449536,
+        "external": 415285248,
+        "reusable": 0,
+        "compressed": 109559808,
+        "footprint": 2179897664
+      },
+      "delta_from_before_query": {
+        "resident": 39731200,
+        "internal": 39469056,
+        "external": 262144,
+        "reusable": 0,
+        "compressed": 0,
+        "footprint": 39485504
+      }
+    }
+  ],
+  "cold_rss_diagnostics": "shared deadline exhausted before launch; exit124 is not an RSS assertion"
+}

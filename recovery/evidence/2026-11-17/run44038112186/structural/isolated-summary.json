@@ -1,0 +1,12 @@
+{
+  "platform": "Linux execution of Windows-current selection",
+  "checkout_sha": "ed2b537d09df94615ce7b1b2c91b5396b8146eaa",
+  "cases": 24,
+  "exit_codes": [
+    0
+  ],
+  "failed": 0,
+  "skipped": 0,
+  "truncated": 0,
+  "all_have_xml": true
+}
