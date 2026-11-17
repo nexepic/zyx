@@ -234,6 +234,7 @@ jobs:
         shell: bash
 
       - name: Diagnose concurrent publication with ASan+UBSan
+        id: asan_concurrent_diagnostic
         if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
         continue-on-error: true
         run: |
@@ -445,6 +446,7 @@ jobs:
       # Keep the reports and test transcripts outside the build directory so
       # every platform can upload one self-contained Stage 10 audit artifact.
       - name: Diagnose static timer label allocation requests
+        id: timer_allocation_diagnostic
         continue-on-error: true
         run: |
           cmake --build buildDir --target zyx_perf_timer_allocation_probe
@@ -454,6 +456,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows fresh string allocations
+        id: windows_string_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -497,6 +500,7 @@ jobs:
 
       # Diagnostics are additional to, and cannot replace, the normal unit gate.
       - name: Diagnose Windows ingest failures
+        id: windows_ingest_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
@@ -504,6 +508,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows plan cache failures
+        id: windows_plan_cache_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
@@ -511,6 +516,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows read session termination
+        id: windows_read_session_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -521,6 +527,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows projection binding allocation failures
+        id: windows_projection_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -530,6 +537,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows slot allocation failures
+        id: windows_slots_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -544,6 +552,7 @@ jobs:
       # its caller-site evidence must remain visible if that console is capped
       # or the optional debugger crashes before producing a useful stack.
       - name: Diagnose Windows retained property and scratch ownership
+        id: windows_ownership_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -553,6 +562,7 @@ jobs:
         shell: bash
 
       - name: Diagnose current Windows budget failures independently
+        id: windows_current_cases_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -562,6 +572,7 @@ jobs:
         shell: bash
 
       - name: Diagnose bounded Windows admission stacks
+        id: windows_stack_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -576,6 +587,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows materialization budgets
+        id: windows_budget_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         env:
@@ -586,6 +598,7 @@ jobs:
         shell: bash
 
       - name: Diagnose Windows final shape duration
+        id: windows_final_shape_diagnostic
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
@@ -593,6 +606,7 @@ jobs:
         shell: bash
 
       - name: Diagnose macOS materialization budgets
+        id: macos_budget_diagnostic
         if: runner.os == 'macOS'
         continue-on-error: true
         env:
@@ -602,6 +616,7 @@ jobs:
         shell: bash
 
       - name: Locate the macOS conversion quota rejection
+        id: macos_quota_diagnostic
         if: runner.os == 'macOS'
         continue-on-error: true
         env:
