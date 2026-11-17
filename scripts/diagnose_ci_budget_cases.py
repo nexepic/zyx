@@ -7,7 +7,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+BUILD247_ADDITIONAL_WINDOWS = [
+    'LogicalGraphReadExecutorIndexLookupContractsTest.UnverifiedCandidatesSplitBeforeDeliveryAndKeepMissingNullAndCancellation',
+    'RelocatableStorageBackendTest.OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe',
+    'RelocatableStorageBackendTest.CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget',
+    'RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues',
+]
+
 WINDOWS = [
+    *BUILD247_ADDITIONAL_WINDOWS,
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry',
     'RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures',
@@ -178,7 +186,8 @@ MACOS = [
 
 # Keep the current native failures visible even if the historical aggregate
 # reaches its console cap or an optional debugger times out. Same test bounds.
-WINDOWS_CURRENT = ['LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
+WINDOWS_CURRENT = [*BUILD247_ADDITIONAL_WINDOWS,
+    'LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
     'LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation',
     'LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows',
     'LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations',
