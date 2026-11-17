@@ -220,7 +220,7 @@ MACOS = [
 
 # Keep the current native failures visible even if the historical aggregate
 # reaches its console cap or an optional debugger times out. Same test bounds.
-WINDOWS_CURRENT = [*BUILD249_OWNERSHIP, *BUILD248_OWNERSHIP, *BUILD247_ADDITIONAL_WINDOWS,
+WINDOWS_CURRENT = [*BUILD250_OWNERSHIP, *BUILD249_OWNERSHIP, *BUILD248_OWNERSHIP, *BUILD247_ADDITIONAL_WINDOWS,
     'LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
     'LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation',
     'LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows',
