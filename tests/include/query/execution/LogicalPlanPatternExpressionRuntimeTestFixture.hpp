@@ -70,6 +70,7 @@ namespace {
 		std::shared_ptr<size_t> node_existence_probe_count;
 		std::shared_ptr<size_t> node_existence_batch_probe_count;
 		std::shared_ptr<size_t> adjacency_topology_scan_count;
+		std::function<void(bool)> before_adjacency_topology_scan;
 		std::shared_ptr<size_t> adjacency_reference_scan_count;
 		std::shared_ptr<size_t> edge_shaped_batch_read_count;
 		std::shared_ptr<size_t> edge_shaped_admission_read_count;
@@ -336,6 +337,8 @@ namespace {
 			if (faults_.adjacency_topology_scan_count) {
 				++*faults_.adjacency_topology_scan_count;
 			}
+			if (faults_.before_adjacency_topology_scan)
+				faults_.before_adjacency_topology_scan(continuation.has_value());
 			const LogicalGraphAdjacencyPage full =
 					scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
 			LogicalGraphAdjacencyTopologyPage result;
@@ -393,6 +396,8 @@ namespace {
 			if (faults_.adjacency_reference_scan_count) {
 				++*faults_.adjacency_reference_scan_count;
 			}
+			if (faults_.before_adjacency_topology_scan)
+				faults_.before_adjacency_topology_scan(continuation.has_value());
 			const LogicalGraphAdjacencyPage full =
 					scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
 			LogicalGraphAdjacencyReferencePage result;

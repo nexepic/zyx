@@ -14,7 +14,20 @@ BUILD247_ADDITIONAL_WINDOWS = [
     'RelocatableStorageBackendTest.CountNonNullProbePreservesNullAndKeyExistenceForInlineAndLargeValues',
 ]
 
+# Build 248 ownership candidates: isolate their exception and allocator paths
+# as well as the original failures; all fixed native quotas remain unchanged.
+BUILD248_OWNERSHIP = [
+    'LogicalPlanPatternExpressionRuntimeTest.RetainedPatternValueRemainsChargedAtNextPageAndRefundsOnFailure',
+    'LogicalPlanPatternExpressionRuntimeTest.RetainsPatternComprehensionValuesAcrossAdjacencyPages',
+    'EmptyAdmissionMapStorageTest.ReleasesBucketsAtZeroHeadroomAndCanAllocateAgain',
+    'CellKeySelectionTest.SingleKeyBorrowsExistingViewWithoutOrdinalOrKeyScratch',
+    'CellKeySelectionTest.MultipleKeysPreserveSelectionOrderAndRetainedCapacityAcrossRetry',
+    'LogicalPlanDirectEdgeRuntimeTest.TerminalReferencePressureRetiresCachesAndPreservesCompleteResults',
+    'LogicalPlanDirectEdgeRuntimeTest.BorrowedPatternNodeCancellationRefundsAndAllowsRetry',
+]
+
 WINDOWS = [
+    *BUILD248_OWNERSHIP,
     *BUILD247_ADDITIONAL_WINDOWS,
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry',
@@ -163,6 +176,7 @@ WINDOWS = [
     'RelocatableBTreePageCodecTest.RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner',
 ]
 MACOS = [
+    *BUILD248_OWNERSHIP,
     'LogicalPlanLoadCsvRuntimeTest.AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure',
     'LogicalPlanLoadCsvRuntimeTest.AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry',
     'RelocatableStorageBackendSchemaTest.ExecutesNativeDbmsConfigurationAndStatisticsProcedures',
@@ -186,7 +200,7 @@ MACOS = [
 
 # Keep the current native failures visible even if the historical aggregate
 # reaches its console cap or an optional debugger times out. Same test bounds.
-WINDOWS_CURRENT = [*BUILD247_ADDITIONAL_WINDOWS,
+WINDOWS_CURRENT = [*BUILD248_OWNERSHIP, *BUILD247_ADDITIONAL_WINDOWS,
     'LogicalVectorPropertyBatchTest.CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication',
     'LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation',
     'LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows',
@@ -203,6 +217,7 @@ WINDOWS_CURRENT = [*BUILD247_ADDITIONAL_WINDOWS,
 
 
 ASAN = [
+    *BUILD248_OWNERSHIP,
     'RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded',
     'RelocatableStorageBackendTest.NativeSelectedPayloadAdmissionKeepsTightAndAmpleReadsBounded',
     'RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose',
