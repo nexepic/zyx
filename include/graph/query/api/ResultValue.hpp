@@ -159,7 +159,8 @@ namespace graph::query {
 
 		// Constructors
 		ResultValue() : data_(PropertyValue()) {}
-		ResultValue(PropertyValue val) : data_(std::move(val)) {}
+		ResultValue(const PropertyValue &val) : data_(val) {}
+		ResultValue(PropertyValue &&val) : data_(std::move(val)) {}
 		ResultValue(Node node) : data_(std::move(node)) {}
 		ResultValue(Edge edge) : data_(std::move(edge)) {}
 		ResultValue(LogicalNodeResult node) : data_(std::move(node)) {}

@@ -489,8 +489,10 @@
                     throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
                 }
             };
-            checkOverlap(0U, 2U * moveProxy, "scalar_staging_moves");
-            detail::ProcedurePayloadAdmissionScope::admit(2U * moveProxy);
+            // ResultValue constructs its PropertyValue alternative directly
+            // from the rvalue reference, leaving one empty source container.
+            checkOverlap(0U, moveProxy, "scalar_staging_moves");
+            detail::ProcedurePayloadAdmissionScope::admit(moveProxy);
             ResultValue staged(std::move(*scalar));
             checkOverlap(graph::query::detail::resultValueHeapBytes(staged), 0U, "scalar_staging_overlap");
             buffered.row.values.erase(binding); // destroys the moved-from proxy and binding/key nodes

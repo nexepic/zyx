@@ -11,6 +11,22 @@ std::shared_ptr<ResourceAccount> resultAccount(size_t maximum = 100000U) {
 	return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximum);
 }
 
+TEST(QueryResultResourcesTest, PrimitiveConstructionCopiesLvaluesAndTransfersNestedMapPayloads) {
+    PropertyValue source(PropertyValue::MapType{{"payload", PropertyValue(std::string(4096U, 'p'))}});
+    const auto &originalMap = std::get<PropertyValue::MapType>(source.getVariant());
+    const auto *originalPayload = std::get<std::string>(originalMap.at("payload").getVariant()).data();
+    ResultValue copied(source);
+    const auto &copyMap = std::get<PropertyValue::MapType>(copied.asPrimitive().getVariant());
+    EXPECT_EQ(copied.asPrimitive(), source);
+    EXPECT_NE(std::get<std::string>(copyMap.at("payload").getVariant()).data(), originalPayload);
+    ResultValue moved(std::move(source));
+    const auto &movedMap = std::get<PropertyValue::MapType>(moved.asPrimitive().getVariant());
+    EXPECT_EQ(std::get<std::string>(movedMap.at("payload").getVariant()).data(), originalPayload);
+    source = PropertyValue(int64_t{7});
+    EXPECT_EQ(moved.asPrimitive(), copied.asPrimitive());
+    EXPECT_EQ(source, PropertyValue(int64_t{7}));
+}
+
 TEST(QueryResultResourcesTest, BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment) {
     const std::vector<std::string> large{std::string(8192U, 'c')};
     auto account = resultAccount(4096U);

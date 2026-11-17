@@ -946,10 +946,9 @@
                     emptyMove = utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(0U);
                 else if (type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES)
                     emptyMove = detail::standardContainerProxyBytes();
-                // try_emplace constructs ResultValue directly: source -> its
-                // by-value PropertyValue parameter -> the variant alternative.
-                // MSVC may allocate an empty container at each move boundary.
-                moveScratch = (std::max)(moveScratch, checkedSizeMul(2U, emptyMove, message));
+                // try_emplace constructs ResultValue's PropertyValue alternative
+                // directly; MSVC still allocates the empty moved-from container.
+                moveScratch = (std::max)(moveScratch, emptyMove);
             }
             MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
             outputReservation.set(checkedSizeAdd(checkedSizeAdd((std::max)(logicalShell, physicalShell),
