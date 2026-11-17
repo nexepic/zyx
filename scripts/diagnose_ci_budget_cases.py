@@ -9,6 +9,8 @@ from pathlib import Path
 
 # Keep the unchanged-budget scheduling and three-cursor failure paths visible.
 BUILD250_OWNERSHIP = [
+    'RelocatableMaintenanceLoopTest.PublishesFaultOnlyAfterTheFailureHandlerAndRetainsAdmissionUntilThen',
+    'RelocatableStorageBackendSchemaTest.LargeValueMaintenanceJournalResetCandidateDiskFullRequiresReopenAndCanResume',
     'ExternalQuerySortTest.ThreeRunsStreamWideKeysInsideTheOriginalWorkspace',
     'ExternalQuerySortTest.ThirdCursorAndStreamingVisitorFailuresRefundAllRuns',
     'LogicalPlanDirectEdgeRuntimeTest.TerminalReferenceSchedulingPreservesBudgetDenialsAndSuccessfulRetry',

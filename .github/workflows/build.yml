@@ -122,7 +122,7 @@ jobs:
         run: |
           TSAN_OPTIONS='halt_on_error=1:second_deadlock_stack=1' \
             python scripts/run_ci_evidence.py --name tsan-gate --timeout 1800 --gtest -- ./build-tsan/zyx_test_suite \
-              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied'
+              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied:RelocatableMaintenanceLoopTest.*'
         shell: bash
 
       - name: Report actual step outcomes
