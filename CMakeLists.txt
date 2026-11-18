@@ -251,6 +251,7 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             zyx::core
             zyx::gtest
             zyx::gmock
+            ${CMAKE_DL_LIBS}
             zyx::cli11
     )
     # The runner creates an isolated process group and reaps its descendants.

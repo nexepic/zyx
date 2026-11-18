@@ -1,4 +1,5 @@
 #include "query/execution/CiDiagnosticForkSupport.hpp"
+#include "graph/debug/CiQuotaStack.hpp"
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -15,6 +16,22 @@
 
 namespace graph::query::execution::detail {
 namespace {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST(CiQuotaStackTest, CallbackIsOptionalAndInvokedWithoutChangingBudgetState) {
+    const auto previous = debug::ciQuotaStackCapture;
+    struct Restore {
+        decltype(previous) callback;
+        ~Restore() { debug::ciQuotaStackCapture = callback; }
+    } restore{previous};
+    debug::ciQuotaStackCapture = nullptr;
+    debug::captureCiQuotaStack();
+    static unsigned calls = 0;
+    calls = 0;
+    debug::ciQuotaStackCapture = []() noexcept { ++calls; };
+    debug::captureCiQuotaStack();
+    EXPECT_EQ(calls, 1U);
+}
+#endif
 TEST(ResourceCoordinatorTest, ProcessDatabaseAndSharedAccountLimitsAreAtomicAndRefundable) {
 	ProcessResourceBudget process(ResourceLimits::uniform(100U));
 	DatabaseResourceBudget database(process, ResourceLimits::uniform(60U));

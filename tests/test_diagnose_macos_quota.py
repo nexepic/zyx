@@ -148,3 +148,36 @@ def test_windows_symbol_mode_never_completes_cpp_types_and_caps_rejections(monke
     assert len(records) == 3 * 32
     assert disabled == [False]
     assert all(r['symbol_only'] and r['function'] == 'public_symbol' and r['pc'] == 1234 for r in records)
+
+@pytest.mark.parametrize('attempts,captured,exit_code,expected', [
+    (0, 0, 0, 0), (8, 3, 0, 0), (1, 0, 0, 2), (0, 0, 1, 1)])
+def test_native_capture_requires_complete_evidence(monkeypatch, tmp_path, attempts, captured, exit_code, expected):
+    module = load('diagnose_macos_quota')
+    xml = tmp_path / 'test.xml'
+    def run(command, env):
+        assert command == [str((tmp_path / 'suite').resolve()), '--gtest_filter=' + module.CASE]
+        assert env['ZYX_CI_QUOTA_STACK_LIMIT'] == '3'
+        suite, name = module.CASE.split('.')
+        xml.write_text(f'<testsuites><testsuite><testcase classname="{suite}" name="{name}" status="run"/></testsuite></testsuites>')
+        Path(env['ZYX_CI_QUOTA_STATUS_PATH']).write_text(json.dumps(dict(
+            exited=True, exit_code=exit_code, native=True, limit=3, attempts=attempts, captured=captured)))
+        return exit_code
+    monkeypatch.setattr(module.subprocess, 'call', run)
+    assert module.diagnose(tmp_path / 'suite', module.CASE, xml, max_stacks=3) == expected
+
+@pytest.mark.parametrize('changes', [
+    {'native': False}, {'limit': 1}, {'exit_code': 1}, {'exited': False},
+    {'attempts': -1}, {'attempts': True}, {'captured': 4}, {'exit_code': False}])
+def test_native_invalid_completion_is_not_success(monkeypatch, tmp_path, changes):
+    module = load('diagnose_macos_quota')
+    xml = tmp_path / 'test.xml'
+    def run(command, env):
+        assert env['ZYX_CI_QUOTA_NATIVE'] == '1'
+        suite, name = module.CASE.split('.')
+        xml.write_text(f'<testsuites><testsuite><testcase classname="{suite}" name="{name}" status="run"/></testsuite></testsuites>')
+        status = dict(exited=True, exit_code=0, native=True, limit=3, attempts=0, captured=0)
+        status.update(changes)
+        Path(env['ZYX_CI_QUOTA_STATUS_PATH']).write_text(json.dumps(status))
+        return 0
+    monkeypatch.setattr(module.subprocess, 'call', run)
+    assert module.diagnose(tmp_path / 'suite', module.CASE, xml, max_stacks=3) == 2

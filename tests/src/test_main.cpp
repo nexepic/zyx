@@ -1,5 +1,6 @@
 #include "query/execution/CiDiagnosticForkSupport.hpp"
 #include "query/execution/CiLayoutDiagnostics.hpp"
+#include "query/execution/CiQuotaStackSupport.hpp"
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <cstdio>
@@ -195,7 +196,7 @@ public:
 
 int main(int argc, char **argv) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-    if (!graph::test::ci_diagnostics::initialize()) {
+    if (!graph::test::ci_diagnostics::initialize() || !graph::test::ci_quota_stack::initialize()) {
         std::fputs("CI_DIAGNOSTICS fork initialization failed\n",stderr);
         return 2;
     }
@@ -239,5 +240,9 @@ int main(int argc, char **argv) {
 	const bool verboseSuiteProgress = std::getenv("ZYX_TEST_TERSE_OUTPUT") == nullptr;
     listeners.Append(new TerseSuitePrinter(verboseSuiteProgress));
 
-    return RUN_ALL_TESTS();
+    const int result=RUN_ALL_TESTS();
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    if(!graph::test::ci_quota_stack::finish(result))return 2;
+#endif
+    return result;
 }

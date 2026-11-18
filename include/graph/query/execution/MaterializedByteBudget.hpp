@@ -18,6 +18,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 #include "graph/debug/CiBudgetTrace.hpp"
+#include "graph/debug/CiQuotaStack.hpp"
 #include <cstdio>
 #include <cstdlib>
 #endif
@@ -146,6 +147,7 @@ namespace graph::query::execution {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 		void diagnosticRejection(const char *operation, size_t previous, size_t requested, size_t embedded,
                 std::source_location site = std::source_location::current()) const noexcept {
+            debug::captureCiQuotaStack();
 			if (ciTrace().allow()) {
                 const char *file = site.file_name();
                 for (const char *cursor = file; *cursor; ++cursor)

@@ -95,7 +95,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -196,7 +196,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -394,7 +394,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Diagnose fresh string allocations (macOS)
@@ -466,6 +466,18 @@ jobs:
           export LLVM_PROFILE_FILE="$PWD/buildDir/result-owner-%p.profraw"
           python scripts/run_ci_evidence.py --name linux-result-owners --timeout 300 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows'
           python scripts/check_result_owner_trace.py "$ZYX_CI_EVIDENCE_DIR/linux-result-owners/output.log"
+        shell: bash
+
+      - name: Validate sort merge diagnostics (Linux)
+        id: linux_sort_merge_diagnostic
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+        run: |
+          export LLVM_PROFILE_FILE="$PWD/buildDir/sort-merge-%p.profraw"
+          python scripts/run_ci_evidence.py --name linux-sort-merge --timeout 300 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput'
+          python scripts/check_sort_merge_trace.py "$ZYX_CI_EVIDENCE_DIR/linux-sort-merge/output.log"
         shell: bash
 
       - name: Diagnose Windows fresh string allocations
@@ -849,9 +861,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Require diagnostic supervisor and result owner checks
-        if: ${{ always() && (steps.diagnostic_tests.outcome == 'failure' || steps.linux_result_owner_diagnostic.outcome == 'failure') }}
+      - name: Require diagnostic supervisor and trace checks
+        if: ${{ always() && (steps.diagnostic_tests.outcome == 'failure' || steps.linux_result_owner_diagnostic.outcome == 'failure' || steps.linux_sort_merge_diagnostic.outcome == 'failure') }}
         run: |
-          echo 'Diagnostic checks failed; inspect diagnostic-tests and linux-result-owners evidence.'
+          echo 'Diagnostic checks failed; inspect diagnostic-tests, linux-result-owners and linux-sort-merge evidence.'
           exit 1
         shell: bash
