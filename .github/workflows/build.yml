@@ -95,7 +95,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -196,7 +196,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -349,25 +349,48 @@ jobs:
         shell: bash
 
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build on ${{ matrix.os }}${{ matrix.name_suffix }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
+            build_type: Debug
+            coverage: 'ON'
+            name_suffix: ''
+            artifact_suffix: ''
             cc: clang-20
             cxx: clang++-20
             llvm_cov: llvm-cov-20
             llvm_profdata: llvm-profdata-20
           - os: windows-latest
+            build_type: Debug
+            coverage: 'ON'
+            name_suffix: ''
+            artifact_suffix: ''
             cc: clang-cl
             cxx: clang-cl
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
           - os: macos-latest
+            build_type: Debug
+            coverage: 'ON'
+            name_suffix: ''
+            artifact_suffix: ''
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
+          # Keep all existing Debug jobs and their check names unchanged.
+          # Release exercises optimization, NDEBUG and the non-debug MSVC CRT.
+          - os: windows-latest
+            cc: clang-cl
+            cxx: clang-cl
+            llvm_cov: llvm-cov
+            llvm_profdata: llvm-profdata
+            build_type: Release
+            coverage: 'OFF'
+            name_suffix: ' (Release)'
+            artifact_suffix: '-release'
 
     steps:
       - name: Checkout Code
@@ -394,7 +417,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Diagnose fresh string allocations (macOS)
@@ -419,7 +442,7 @@ jobs:
 
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
-        run: python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- pwsh scripts/install_conan_windows.ps1 Debug
+        run: python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- pwsh scripts/install_conan_windows.ps1 ${{ matrix.build_type }}
 
       - name: Install Project Dependencies (Conan) (Unix)
         if: runner.os != 'Windows'
@@ -432,17 +455,30 @@ jobs:
 
       - name: Configure and Build
         run: |
+          release_symbols=()
+          if [[ "${{ matrix.os }}" == windows-latest && "${{ matrix.build_type }}" == Release ]]; then
+            # Keep real Release optimization/NDEBUG/CRT while retaining offline
+            # PDB diagnostics. Do not substitute RelWithDebInfo or disable /OPT.
+            release_symbols+=("-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7")
+            release_symbols+=("-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG /OPT:REF /OPT:ICF")
+          fi
           python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B buildDir -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=ON \
-            -DZYX_ENABLE_COVERAGE=ON
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DZYX_ENABLE_COVERAGE=${{ matrix.coverage }} \
+            "${release_symbols[@]}"
           python scripts/run_ci_evidence.py --name build --timeout 7200 -- cmake --build buildDir --target zyx_test_suite
         shell: bash
         env:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
+
+      - name: Verify Windows Release build configuration
+        if: runner.os == 'Windows' && matrix.build_type == 'Release'
+        run: python scripts/run_ci_evidence.py --name release-configuration --timeout 60 -- python scripts/verify_windows_release.py --build-dir buildDir
 
       # Keep the reports and test transcripts outside the build directory so
       # every platform can upload one self-contained Stage 10 audit artifact.
@@ -809,7 +845,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: stage10-evidence-${{ matrix.os }}-${{ github.run_attempt }}
+          name: stage10-evidence-${{ matrix.os }}${{ matrix.artifact_suffix }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/stage10-evidence
           if-no-files-found: warn
           retention-days: 30
@@ -861,7 +897,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-diagnostics-${{ matrix.os }}-${{ github.run_attempt }}
+          name: ci-diagnostics-${{ matrix.os }}${{ matrix.artifact_suffix }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ci-evidence
           if-no-files-found: warn
           retention-days: 14
