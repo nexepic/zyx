@@ -18,7 +18,11 @@ def _load_script(script_name):
     spec = importlib.util.spec_from_file_location(f"zyx_{script_name.replace('.', '_')}", script_path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(script_path.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 
@@ -370,3 +374,135 @@ def test_successful_and_failed_shards_both_publish_observed_counts(tmp_path, cap
     assert all(s['journal_available'] for s in summaries)
     assert [s['observed_counts'] for s in summaries] == [
         dict(started=2, completed=2, failed=0), dict(started=3, completed=3, failed=1)]
+
+@pytest.mark.parametrize('snapshot,code,expected', [
+    (b'10 77 Z\n11 77 Z+\n12 88 S\n', 0, False),
+    (b'10 77 Z\n11 77 S\n', 0, True),
+    (b'10 88 Z\n', 0, True),
+    (b'', 0, True), (b'malformed\n', 0, True),
+    (b'10 77 Z\n', 1, True), (b'x' * (1024 * 1024 + 1), 0, True)])
+def test_darwin_snapshot_only_accepts_complete_nonempty_zombie_group(monkeypatch, snapshot, code, expected):
+    runner = _load_runner()
+    def ps(command, **kwargs):
+        assert command == ['/bin/ps', '-axo', 'pid=,pgid=,stat=']
+        assert kwargs['timeout'] == 1
+        kwargs['stdout'].write(snapshot)
+        return SimpleNamespace(returncode=code)
+    monkeypatch.setattr(runner.subprocess, 'run', ps)
+    assert runner._darwin_group_has_live_members(77) is expected
+
+@pytest.mark.parametrize('error', [PermissionError(1, 'denied'), subprocess.TimeoutExpired('ps', 1)])
+def test_darwin_unavailable_snapshot_remains_active(monkeypatch, error):
+    runner = _load_runner()
+    def ps(*args, **kwargs): raise error
+    monkeypatch.setattr(runner.subprocess, 'run', ps)
+    assert runner._darwin_group_has_live_members(77)
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX group signalling')
+@pytest.mark.parametrize('live,child_code,expected', [(False, 0, 0), (True, 0, 125), (True, 17, 17)])
+def test_eperm_cleanup_preserves_child_status_and_requires_verified_inactivity(monkeypatch, live, child_code, expected, capsys):
+    runner = _load_runner()
+    monkeypatch.setattr(runner.sys, 'platform', 'darwin')
+    monkeypatch.setattr(runner, '_darwin_group_has_live_members', lambda group: live)
+    monkeypatch.setattr(runner, 'PROCESS_REAP_TIMEOUT_SECONDS', .01)
+    def deny(*args): raise PermissionError(1, 'Operation not permitted')
+    monkeypatch.setattr(runner.os, 'killpg', deny)
+    details = {}
+    assert runner.run([sys.executable, '-c', f'import sys;sys.exit({child_code})'], 5, details=details) == expected
+    assert details['child_exit_code'] == child_code
+    assert details['cleanup_succeeded'] is not live
+    if live:
+        assert details['failure_phase'] == 'cleanup'
+        assert 'cleanup signal denied' in capsys.readouterr().err
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX group signalling')
+def test_eperm_timeout_is_not_reclassified_as_startup_failure(monkeypatch):
+    runner = _load_runner()
+    original = runner.os.killpg
+    def denied_after_kill(group, sig):
+        if sig: original(group, sig)
+        raise PermissionError(1, 'denied')
+    monkeypatch.setattr(runner.os, 'killpg', denied_after_kill)
+    monkeypatch.setattr(runner, '_process_group_is_active', lambda group: True)
+    monkeypatch.setattr(runner, 'PROCESS_REAP_TIMEOUT_SECONDS', .01)
+    details = {}
+    assert runner.run([sys.executable, '-c', 'import time;time.sleep(60)'], .05, details=details) == 124
+    assert details['cleanup_succeeded'] is False
+    assert details['failure_phase'] == 'cleanup'
+
+
+def test_main_reports_startup_failure_separately(tmp_path, monkeypatch, capsys):
+    runner = _load_runner()
+    path = tmp_path / 'result.json'
+    monkeypatch.setattr(runner.sys, 'argv', ['run_test_process.py', '--result-file', str(path), '--', str(tmp_path / 'missing-command')])
+    # Use a direct launch denial to exercise the same startup boundary on Windows.
+    def deny(*args, **kwargs): raise PermissionError(1, 'launch denied')
+    monkeypatch.setattr(runner.subprocess, 'Popen', deny)
+    assert runner.main() == 127
+    result = json.loads(path.read_text())
+    assert result['failure_phase'] == 'startup' and result['child_exit_code'] is None
+    assert result['error_errno'] == 1
+    assert 'during startup' in capsys.readouterr().err
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX group signalling')
+@pytest.mark.parametrize('live', [False, True])
+def test_shard_darwin_eperm_uses_same_verified_group_state(monkeypatch, live):
+    runner = _load_script('run_test_shards.py')
+    monkeypatch.setattr(runner.sys, 'platform', 'darwin')
+    monkeypatch.setattr(runner, '_darwin_group_has_live_members', lambda group: live)
+    def deny(*args): raise PermissionError(1, 'denied')
+    monkeypatch.setattr(runner.os, 'killpg', deny)
+    assert runner.process_tree_is_active(SimpleNamespace(pid=77)) is live
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX process lifecycle')
+def test_main_retains_execution_error_stage_and_completed_child_status(monkeypatch, tmp_path, capsys):
+    runner = _load_runner()
+    path = tmp_path / 'result.json'
+    process = SimpleNamespace(pid=77, returncode=0, poll=lambda: None)
+    def fail_wait(**kwargs):
+        process.poll = lambda: 0
+        raise OSError(5, 'wait failed')
+    process.wait = fail_wait
+    monkeypatch.setattr(runner.subprocess, 'Popen', lambda *a, **kw: process)
+    monkeypatch.setattr(runner, '_process_group_is_active', lambda pid: False)
+    monkeypatch.setattr(runner.sys, 'argv', ['runner', '--result-file', str(path), '--', 'command'])
+    assert runner.main() == 125
+    result = json.loads(path.read_text())
+    assert result['failure_phase'] == 'execution' and result['child_exit_code'] == 0
+    assert 'during execution' in capsys.readouterr().err
+
+@pytest.mark.skipif(sys.platform != 'darwin', reason='Darwin native zombie-group semantics')
+def test_darwin_native_exited_unreaped_group_is_not_live():
+    runner = _load_runner()
+    process = subprocess.Popen([sys.executable, '-c', 'pass'], start_new_session=True)
+    try:
+        # Intentionally do not poll/wait until after the group-state observation.
+        deadline = time.monotonic() + 5
+        while runner._darwin_group_has_live_members(process.pid) and time.monotonic() < deadline:
+            time.sleep(.05)
+        assert not runner._darwin_group_has_live_members(process.pid)
+        assert not runner._process_group_is_active(process.pid)
+        assert process.wait(timeout=1) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX group signalling')
+@pytest.mark.parametrize('script', ['run_test_process.py', 'run_test_shards.py'])
+@pytest.mark.parametrize('initial_denial', [False, True])
+def test_darwin_successful_kernel_probe_cannot_be_overridden_by_zombie_snapshot(monkeypatch, script, initial_denial):
+    runner = _load_script(script)
+    monkeypatch.setattr(runner.sys, 'platform', 'darwin')
+    monkeypatch.setattr(runner, '_darwin_group_has_live_members', lambda group: False)
+    calls = []
+    def signal_group(group, sig):
+        calls.append((group, sig))
+        if initial_denial and len(calls) == 1:
+            raise PermissionError(1, 'zombies at first probe')
+    monkeypatch.setattr(runner.os, 'killpg', signal_group)
+    if script == 'run_test_process.py':
+        assert runner._process_group_is_active(77)
+    else:
+        assert runner.process_tree_is_active(SimpleNamespace(pid=77))
+    assert len(calls) == (2 if initial_denial else 1)

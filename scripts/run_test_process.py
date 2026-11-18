@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+import tempfile
 from pathlib import Path
 from typing import Sequence
 
@@ -186,6 +187,35 @@ def _linux_group_has_live_members(process_group_id: int) -> bool:
     return not found
 
 
+def _darwin_group_has_live_members(process_group_id: int) -> bool:
+    """Only a complete nonempty zombie-only snapshot proves inactivity.
+
+    Darwin killpg can return EPERM for zombie-only groups. Do not interpret
+    EPERM itself as death or permission to ignore live descendants. ps reads
+    only numeric identity/state, never arguments or environment.
+    """
+    try:
+        with tempfile.TemporaryFile() as output:
+            result = subprocess.run(['/bin/ps', '-axo', 'pid=,pgid=,stat='],
+                                    stdout=output, stderr=subprocess.DEVNULL, timeout=1)
+            output.seek(0)
+            raw = output.read(1024 * 1024 + 1)
+        if result.returncode or len(raw) > 1024 * 1024:
+            return True
+        found = False
+        for line in raw.decode('ascii').splitlines():
+            fields = line.split()
+            if len(fields) != 3 or not fields[0].isdecimal() or not fields[1].isdecimal():
+                return True
+            if int(fields[1]) == process_group_id:
+                found = True
+                if not fields[2].startswith('Z'):
+                    return True
+        return not found
+    except (OSError, subprocess.TimeoutExpired, UnicodeError):
+        return True
+
+
 def _process_group_is_active(process_group_id: int) -> bool:
     """Return whether a POSIX process group still has a member."""
     try:
@@ -193,7 +223,15 @@ def _process_group_is_active(process_group_id: int) -> bool:
     except ProcessLookupError:
         return False
     except PermissionError:
-        # The group still exists even if a sandbox prevents signalling it.
+        if sys.platform == 'darwin' and not _darwin_group_has_live_members(process_group_id):
+            # ps is not atomic. A live member missed by its snapshot must not
+            # override a successful kernel group probe after that snapshot.
+            try:
+                os.killpg(process_group_id, 0)
+            except (ProcessLookupError, PermissionError):
+                return False
+        return True
+    if sys.platform == 'darwin':
         return True
     return _linux_group_has_live_members(process_group_id) if sys.platform.startswith('linux') else True
 
@@ -229,6 +267,11 @@ def _terminate_process_tree(
         os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
     except ProcessLookupError:
         pass
+    except PermissionError as error:
+        # Keep the bounded reap checks and forced retry. Only verified group
+        # disappearance or zombie-only state can make cleanup succeed.
+        print(f"Process cleanup signal denied: pid={process.pid} force={force} "
+              f"errno={error.errno}; verifying group state", file=sys.stderr)
 
 
 def _wait_for_exit(
@@ -273,7 +316,10 @@ def _terminate_and_reap(
     return False
 
 
-def run(command: Sequence[str], timeout_seconds: float) -> int:
+def run(command: Sequence[str], timeout_seconds: float, *, details: dict | None = None) -> int:
+    if details is None:
+        details = {}
+    details.update(phase='startup', child_exit_code=None, cleanup_succeeded=None)
     if not command:
         raise ValueError("a test command is required")
 
@@ -292,6 +338,7 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
         start_new_session=os.name != "nt",
         creationflags=creationflags,
     )
+    details.update(phase="execution", child_pid=process.pid)
     windows_job = _create_windows_process_job(process)
     if os.name == "nt":
         if windows_job is None:
@@ -327,7 +374,7 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
         while process.poll() is None:
             if interrupted:
                 cleanup_attempted = True
-                _terminate_and_reap(process, reason="an interrupt", windows_job=windows_job)
+                details['cleanup_succeeded'] = _terminate_and_reap(process, reason="an interrupt", windows_job=windows_job)
                 exit_code = 130
                 break
             remaining = deadline - time.monotonic()
@@ -337,7 +384,7 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
                     file=sys.stderr,
                 )
                 cleanup_attempted = True
-                _terminate_and_reap(process, reason="the test timeout", windows_job=windows_job)
+                details['cleanup_succeeded'] = _terminate_and_reap(process, reason="the test timeout", windows_job=windows_job)
                 exit_code = 124
                 break
             if next_heartbeat is not None and time.monotonic() >= next_heartbeat:
@@ -355,7 +402,11 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
 
         else:
             exit_code = 130 if interrupted else int(process.returncode)
+    except (OSError, ValueError):
+        details['failure_phase'] = 'execution'
+        raise
     finally:
+        details.update(phase='cleanup', child_exit_code=process.poll())
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
         if windows_job is not None:
@@ -363,9 +414,16 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
             # already exited, which taskkill cannot discover afterwards.
             windows_job.close()
         if not cleanup_attempted and (process.poll() is None or (os.name != "nt" and _process_group_is_active(process.pid))):
-            if not _terminate_and_reap(process, reason="runner cleanup", windows_job=windows_job) and exit_code == 0:
+            details['cleanup_succeeded'] = _terminate_and_reap(process, reason="runner cleanup", windows_job=windows_job)
+            if not details['cleanup_succeeded'] and exit_code == 0:
                 exit_code = 125
+        elif not cleanup_attempted:
+            details['cleanup_succeeded'] = True
+        details['child_exit_code'] = process.poll()
+        if details['cleanup_succeeded'] is False:
+            details['failure_phase'] = 'cleanup'
 
+    details['phase'] = 'completed'
     return exit_code
 
 
@@ -379,14 +437,18 @@ def main() -> int:
         parser.error("--timeout must be greater than zero")
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     started = time.time()
+    details = {}
     try:
-        code = run(command, args.timeout)
+        code = run(command, args.timeout, details=details)
     except (OSError, ValueError) as error:
-        print(f"Unable to start test process: {error}", file=sys.stderr)
-        code = 127
+        phase = details.get('failure_phase', details.get('phase', 'startup'))
+        details.update(failure_phase=phase, error_type=type(error).__name__,
+                       error_errno=getattr(error, 'errno', None))
+        print(f"Test process supervisor failed during {phase}: {error}", file=sys.stderr)
+        code = 127 if phase == 'startup' else 125
     if args.result_file is not None:
         args.result_file.parent.mkdir(parents=True, exist_ok=True)
-        args.result_file.write_text(json.dumps({'raw_exit_code': code, 'started_at': started,
+        args.result_file.write_text(json.dumps({**details, 'raw_exit_code': code, 'started_at': started,
             'completed_at': time.time(), 'posix_signal': -code if code < 0 and os.name != 'nt' else None}) + '\n')
     return code
 

@@ -15,6 +15,8 @@ import tempfile
 import time
 from typing import Sequence
 
+from run_test_process import _darwin_group_has_live_members
+
 
 PROCESS_REAP_TIMEOUT_SECONDS = 5.0
 
@@ -92,6 +94,15 @@ def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
     except ProcessLookupError:
         return False
     except PermissionError:
+        if sys.platform == 'darwin' and not _darwin_group_has_live_members(process.pid):
+            # ps is not atomic. A live member missed by its snapshot must not
+            # override a successful kernel group probe after that snapshot.
+            try:
+                os.killpg(process.pid, 0)
+            except (ProcessLookupError, PermissionError):
+                return False
+        return True
+    if sys.platform == 'darwin':
         return True
     return _linux_group_has_live_members(process.pid) if sys.platform.startswith('linux') else True
 
