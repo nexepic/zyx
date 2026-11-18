@@ -143,3 +143,138 @@ def test_malformed_status_is_ignored(tmp_path):
     (evidence / 'result.json').write_text('{"process": []}')
     record = module.collect_symbols(build, evidence)
     assert not record['native_stack_detected'] and not record['crash_detected']
+
+
+def test_priority_native_case_survives_walk_limit_and_copy_limit(tmp_path, monkeypatch):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite.exe').write_bytes(b'image')
+    (build / 'zyx_test_suite.pdb').write_bytes(b'symbols')
+    evidence = tmp_path / 'evidence'; evidence.mkdir()
+    for index in range(270):
+        (evidence / f'budget-{index:03}').mkdir()
+    case = evidence / 'windows-edge-cell-stack'; case.mkdir()
+    (case / 'quota-debugger.json').write_text('{"native":true,"captured":3}')
+    (case / 'output.log').write_text(
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=00007FF75178CB80 base=00007FF74C440000 '
+        'offset=0x534cb80 module=D:\\runner\\zyx_test_suite.exe\n')
+    monkeypatch.setattr(module, 'SYMBOL_LIMIT_BYTES', 1)
+    monkeypatch.setattr(module.shutil, 'which', lambda _: '/fixed/llvm-symbolizer')
+    calls = []
+    def resolve(command, addresses):
+        calls.append((command, addresses))
+        return {'exit_code': 0, 'output': 'function\nsource.cpp:10\n'}
+    monkeypatch.setattr(module, 'bounded_symbolizer', resolve)
+    result = module.collect_symbols(build, evidence)
+    assert result['native_stack_detected'] and result['scan_truncated']
+    assert not result['complete'] and result['copied'] == []
+    assert result['local_symbolization'][0]['resolution']['exit_code'] == 0
+    assert len(calls) == 1 and calls[0][1] == '0x534cb80\n'
+    assert '--relative-address' in calls[0][0]
+    assert '--obj=' + str((build / 'zyx_test_suite.exe').resolve()) in calls[0][0]
+
+
+def test_symbolizer_rejects_foreign_and_invalid_frames(tmp_path, monkeypatch):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite.exe').write_bytes(b'image')
+    evidence = tmp_path / 'evidence'; evidence.mkdir()
+    (evidence / 'output.log').write_text('\n'.join([
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=0x1100 base=0x1000 offset=0x100 module=evil.exe',
+        'CI_QUOTA_NATIVE_PC stack=3 index=0 pc=0x1100 base=0x1000 offset=0x100 module=zyx_test_suite.exe',
+        'CI_QUOTA_NATIVE_PC stack=0 index=32 pc=0x1100 base=0x1000 offset=0x100 module=zyx_test_suite.exe',
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=0x1100 base=0x1000 offset=0x999 module=zyx_test_suite.exe',
+    ]))
+    result = module.symbolize_native(build, evidence, [evidence])[0]
+    assert result['frames'] == [] and 'unavailable' in result
+
+
+def test_macos_symbolizer_uses_fixed_image_and_runtime_base(tmp_path, monkeypatch):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite').write_bytes(b'image')
+    evidence = tmp_path / 'evidence'; evidence.mkdir()
+    (evidence / 'output.log').write_text(
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=0x1100 base=0x1000 '
+        'offset=0x100 module=/untrusted/zyx_test_suite\n')
+    monkeypatch.setattr(module.platform, 'system', lambda: 'Darwin')
+    monkeypatch.setattr(module.shutil, 'which', lambda _: '/usr/bin/atos')
+    calls = []
+    monkeypatch.setattr(module, 'bounded_symbolizer', lambda cmd, data: calls.append((cmd, data)) or {})
+    result = module.symbolize_native(build, evidence, [evidence])[0]
+    assert calls == [(['/usr/bin/atos', '-o', str((build / 'zyx_test_suite').resolve()),
+                      '-l', '0x1000', '0x1100'], '')]
+    assert result['source_lines_guaranteed'] is False
+
+
+def test_symbolizer_output_is_bounded():
+    module = load_collector()
+    result = module.bounded_symbolizer([sys.executable, '-c', 'print("x" * 100000)'], '')
+    assert result['output_truncated'] and len(result['output']) == 65536
+
+
+def test_symbolizer_timeout_is_reported(monkeypatch):
+    module = load_collector()
+    original_timer = module.threading.Timer
+    monkeypatch.setattr(module.threading, 'Timer', lambda _, callback: original_timer(.1, callback))
+    result = module.bounded_symbolizer([sys.executable, '-c', 'import time; time.sleep(30)'], '')
+    assert result['timed_out']
+
+
+def test_linux_symbolizer_does_not_require_pdb(tmp_path, monkeypatch):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite').write_bytes(b'image')
+    evidence = tmp_path / 'evidence'; evidence.mkdir()
+    (evidence / 'output.log').write_text(
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=0x1100 base=0x1000 '
+        'offset=0x100 module=/runner/zyx_test_suite\n')
+    monkeypatch.setattr(module.platform, 'system', lambda: 'Linux')
+    monkeypatch.setattr(module.shutil, 'which', lambda _: '/usr/bin/llvm-symbolizer')
+    calls = []
+    monkeypatch.setattr(module, 'bounded_symbolizer', lambda cmd, data: calls.append((cmd, data)) or {})
+    result = module.symbolize_native(build, evidence, [evidence])[0]
+    assert 'unavailable' not in result
+    assert calls[0][1] == '0x100\n'
+    assert '--relative-address' in calls[0][0]
+
+
+def test_raw_native_stack_survives_crash_or_timeout_without_status(tmp_path, monkeypatch):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite.exe').write_bytes(b'image')
+    (build / 'zyx_test_suite.pdb').write_bytes(b'symbols')
+    monkeypatch.setattr(module, 'SYMBOL_LIMIT_BYTES', 1)
+    monkeypatch.setattr(module.shutil, 'which', lambda _: '/fixed/llvm-symbolizer')
+    calls = []
+    monkeypatch.setattr(module, 'bounded_symbolizer',
+                        lambda cmd, data: calls.append(data) or {'exit_code': 0, 'output': 'function'})
+    for failure, process in [('crash', {'raw_exit_code': 139}),
+                             ('timeout', {'raw_exit_code': None, 'timed_out': True})]:
+        evidence = tmp_path / failure; evidence.mkdir()
+        case = evidence / 'native-quota-stack'; case.mkdir()
+        (case / 'result.json').write_text(json.dumps({'process': process}))
+        (case / 'output.log').write_text(
+            'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=00007FF75178CB80 base=00007FF74C440000 '
+            'offset=0x534cb80 module=D:\\a\\zyx\\zyx\\buildDir\\zyx_test_suite.exe\n')
+        result = module.collect_symbols(build, evidence)
+        assert result['native_stack_detected']
+        assert result['raw_stack_without_completed_status'] == ['native-quota-stack']
+        resolved = result['local_symbolization'][0]
+        assert resolved['capture_status'] == 'unconfirmed_or_incomplete'
+        assert resolved['resolution']['output'] == 'function'
+        assert not result['complete'] and result['copied'] == []
+    assert calls == ['0x534cb80\n', '0x534cb80\n']
+
+
+def test_raw_stack_fallback_ignores_unrecognized_directories(tmp_path):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    evidence = tmp_path / 'evidence'; evidence.mkdir()
+    case = evidence / 'arbitrary'; case.mkdir()
+    (case / 'output.log').write_text(
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=0x1100 base=0x1000 '
+        'offset=0x100 module=/runner/zyx_test_suite\n')
+    result = module.collect_symbols(build, evidence)
+    assert not result['native_stack_detected']
+    assert 'local_symbolization' not in result

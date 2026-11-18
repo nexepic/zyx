@@ -181,3 +181,24 @@ def test_native_invalid_completion_is_not_success(monkeypatch, tmp_path, changes
         return 0
     monkeypatch.setattr(module.subprocess, 'call', run)
     assert module.diagnose(tmp_path / 'suite', module.CASE, xml, max_stacks=3) == 2
+
+@pytest.mark.parametrize('captured,expected', [(0, 2), (1, 0)])
+def test_required_native_probe_cannot_pass_without_a_real_stack(monkeypatch, tmp_path, captured, expected):
+    module = load('diagnose_macos_quota')
+    xml = tmp_path / 'test.xml'
+    def run(command, env):
+        suite, name = module.CASE.split('.')
+        xml.write_text(f'<testsuites><testsuite><testcase classname="{suite}" name="{name}" status="run"/></testsuite></testsuites>')
+        Path(env['ZYX_CI_QUOTA_STATUS_PATH']).write_text(json.dumps(dict(
+            exited=True, exit_code=0, native=True, limit=1, attempts=captured, captured=captured)))
+        return 0
+    monkeypatch.setattr(module.subprocess, 'call', run)
+    assert module.diagnose(tmp_path / 'suite', module.CASE, xml, require_stack=True) == expected
+
+
+def test_required_probe_rejects_legacy_debugger_without_launch(monkeypatch, tmp_path):
+    module = load('diagnose_macos_quota')
+    def forbidden(*args, **kwargs):
+        pytest.fail('required native probe must not launch a debugger')
+    monkeypatch.setattr(module.subprocess, 'call', forbidden)
+    assert module.diagnose(tmp_path / 'suite', module.CASE, tmp_path / 'test.xml', 'lldb', require_stack=True) == 2

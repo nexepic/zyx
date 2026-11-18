@@ -250,13 +250,33 @@ ASAN = [
 ]
 
 
+# Keep the original per-case deadline; capture in this existing replay instead
+# of running the same ~300-second conversion a second time solely for a stack.
+CONVERSION_CASE = 'HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact'
+
+
+def case_command(binary, case, platform, evidence):
+    timeout = '1200' if 'EightBoundedGroups' in case else '300'
+    target = [str(binary), '--gtest_filter=' + case]
+    if evidence:
+        token = hashlib.sha256(case.encode()).hexdigest()[:16]
+        if platform == 'windows-current':
+            token = 'current-' + token
+        if case == CONVERSION_CASE and platform in ('windows', 'macos'):
+            target = [sys.executable, str(Path(__file__).with_name('diagnose_macos_quota.py')),
+                      '--binary', str(binary), '--case', case, '--max-stacks', '3']
+        return [sys.executable, str(Path(__file__).with_name('run_ci_evidence.py')),
+                '--name', 'budget-' + token, '--timeout', timeout, '--gtest', '--', *target]
+    return [sys.executable, str(Path(__file__).with_name('run_test_process.py')),
+            '--timeout', timeout, '--', *target]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--platform', choices=('windows', 'windows-current', 'macos', 'asan'), required=True)
     args = parser.parse_args()
     cases = {'windows': WINDOWS, 'windows-current': WINDOWS_CURRENT, 'macos': MACOS, 'asan': ASAN}[args.platform]
-    runner = Path(__file__).with_name('run_test_process.py')
     failures = []
     child_env = os.environ.copy()
     child_env.setdefault('ZYX_CI_CASE_TRACE', '1')
@@ -268,16 +288,7 @@ def main():
             print(f'CI_BUDGET_CASE missing or undiscoverable {case} exit={listing.returncode}', flush=True)
             failures.append(case)
             continue
-        timeout = '1200' if 'EightBoundedGroups' in case else '300'
-        command = [sys.executable, str(runner), '--timeout', timeout, '--',
-                   str(args.binary), '--gtest_filter=' + case]
-        if os.environ.get('ZYX_CI_EVIDENCE_DIR'):
-            token = hashlib.sha256(case.encode()).hexdigest()[:16]
-            if args.platform == 'windows-current':
-                token = 'current-' + token
-            command = [sys.executable, str(Path(__file__).with_name('run_ci_evidence.py')),
-                       '--name', 'budget-' + token, '--timeout', timeout, '--gtest', '--',
-                       str(args.binary), '--gtest_filter=' + case]
+        command = case_command(args.binary, case, args.platform, bool(os.environ.get('ZYX_CI_EVIDENCE_DIR')))
         status = subprocess.call(command, env=child_env)
         print(f'CI_BUDGET_CASE END {case} exit={status}', flush=True)
         if status:

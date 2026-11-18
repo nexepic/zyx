@@ -13,7 +13,10 @@ import xml.etree.ElementTree as ET
 CASE = 'HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact'
 
 
-def diagnose(binary, case, xml_path, debugger=None, max_stacks=1):
+def diagnose(binary, case, xml_path, debugger=None, max_stacks=1, require_stack=False):
+    if require_stack and debugger is not None:
+        print('CI_QUOTA_UNAVAILABLE reason=require_stack_needs_native_mode', flush=True)
+        return 2
     status_path = xml_path.with_name('quota-debugger.json')
     if xml_path.exists() or status_path.exists():
         print('CI_QUOTA_UNAVAILABLE reason=preexisting_evidence', flush=True)
@@ -51,6 +54,9 @@ def diagnose(binary, case, xml_path, debugger=None, max_stacks=1):
             attempts, captured = process['attempts'], process['captured']
             if type(attempts) is not int or type(captured) is not int or attempts < 0 or captured != min(attempts, max_stacks):
                 raise ValueError('incomplete native capture')
+            if require_stack and captured == 0:
+                print('CI_QUOTA_UNAVAILABLE reason=required_native_stack_not_captured', flush=True)
+                return 2
             if process['exit_code'] != status:
                 raise ValueError('process status mismatch')
         if process['exited'] is not True or type(process['exit_code']) is not int or len(executed) != 1:
@@ -70,9 +76,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--case', default=CASE)
+    parser.add_argument('--require-stack', action='store_true', help='Require a real capture for the deterministic instrumentation probe')
     parser.add_argument('--lldb', action='store_true', help='Opt-in legacy debugger mode; CI uses native capture')
     parser.add_argument('--max-stacks', type=int, choices=(1, 2, 3), default=1)
     args = parser.parse_args()
+    if args.require_stack and args.lldb:
+        parser.error('--require-stack needs native mode')
     if not re.fullmatch(r'[A-Za-z0-9_./]+', args.case):
         parser.error('one exact test name is required')
     output = os.environ.get('GTEST_OUTPUT', '')
@@ -80,7 +89,7 @@ def main():
     if (args.lldb and not debugger) or not args.binary.is_file() or not output.startswith('xml:') or not output[4:]:
         print('CI_QUOTA_UNAVAILABLE reason=missing_binary_xml_or_requested_debugger', flush=True)
         return 2
-    return diagnose(args.binary, args.case, Path(output[4:]).resolve(), debugger, args.max_stacks)
+    return diagnose(args.binary, args.case, Path(output[4:]).resolve(), debugger, args.max_stacks, args.require_stack)
 
 
 if __name__ == '__main__':

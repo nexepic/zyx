@@ -95,7 +95,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -196,7 +196,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -394,7 +394,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Diagnose fresh string allocations (macOS)
@@ -478,6 +478,18 @@ jobs:
           export LLVM_PROFILE_FILE="$PWD/buildDir/sort-merge-%p.profraw"
           python scripts/run_ci_evidence.py --name linux-sort-merge --timeout 300 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput'
           python scripts/check_sort_merge_trace.py "$ZYX_CI_EVIDENCE_DIR/linux-sort-merge/output.log"
+        shell: bash
+
+      # A successful workload can legitimately reject no quota requests. This
+      # short expected-rejection case separately proves that the unwinder runs.
+      - name: Validate native quota stack capture
+        id: native_quota_probe
+        continue-on-error: true
+        run: |
+          binary=buildDir/zyx_test_suite
+          if [[ "$RUNNER_OS" == Windows ]]; then binary+=.exe; fi
+          export LLVM_PROFILE_FILE="$PWD/buildDir/quota-probe-%p.profraw"
+          python scripts/run_ci_evidence.py --name native-quota-stack --timeout 60 --gtest -- python scripts/diagnose_macos_quota.py --binary "$binary" --max-stacks 1 --require-stack --case BatchEnvelopeTest.DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget
         shell: bash
 
       - name: Diagnose Windows fresh string allocations
@@ -605,7 +617,6 @@ jobs:
         run: |
           status=0
           python scripts/run_ci_evidence.py --name windows-query-account-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose || status=1
-          python scripts/run_ci_evidence.py --name windows-conversion-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case HybridPropertyMatureShapeCostsTest.EightBoundedGroupsKeepWholeDatabaseCostsAndEveryOwnerExact || status=1
           python scripts/run_ci_evidence.py --name windows-edge-cell-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded || status=1
           python scripts/run_ci_evidence.py --name windows-nested-scope-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties || status=1
           exit "$status"
@@ -640,15 +651,9 @@ jobs:
           python scripts/run_ci_evidence.py --name macos-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite --platform macos
         shell: bash
 
-      - name: Locate the macOS conversion quota rejection
-        id: macos_quota_diagnostic
-        if: runner.os == 'macOS'
-        continue-on-error: true
-        env:
-          ZYX_CI_BUDGET_TRACE: '1'
-        run: |
-          python scripts/run_ci_evidence.py --name macos-conversion-quota-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite
-        shell: bash
+      # Conversion stack capture is folded into the existing platform budget
+      # replay (its unchanged 1200-second per-case deadline). The full unit case
+      # also remains mandatory; do not add a redundant near-300-second replay.
 
       - name: Run Unit Tests
         id: unit_tests
@@ -862,8 +867,8 @@ jobs:
           retention-days: 14
 
       - name: Require diagnostic supervisor and trace checks
-        if: ${{ always() && (steps.diagnostic_tests.outcome == 'failure' || steps.linux_result_owner_diagnostic.outcome == 'failure' || steps.linux_sort_merge_diagnostic.outcome == 'failure') }}
+        if: ${{ always() && (steps.diagnostic_tests.outcome == 'failure' || steps.linux_result_owner_diagnostic.outcome == 'failure' || steps.linux_sort_merge_diagnostic.outcome == 'failure' || steps.native_quota_probe.outcome == 'failure') }}
         run: |
-          echo 'Diagnostic checks failed; inspect diagnostic-tests, linux-result-owners and linux-sort-merge evidence.'
+          echo 'Diagnostic checks failed; inspect diagnostic-tests, linux-result-owners, linux-sort-merge and native-quota-stack evidence.'
           exit 1
         shell: bash
