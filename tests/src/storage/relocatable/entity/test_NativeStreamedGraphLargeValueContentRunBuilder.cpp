@@ -228,7 +228,7 @@ namespace graph::storage {
 			}};
 		};
 		const OrderedBTreeEntrySource validSource = sourceFor({firstEntry});
-		const OrderedBTreeEntrySource noSource;
+		const OrderedBTreeEntrySource noSource{};
 		const OrderedBTreeEntrySource noCursor = [] { return OrderedBTreeEntryCursor{}; };
 		const NativeStreamedGraphLargeValueReferenceMapRunVisitor visitor = [](NativeBulkRunFragment &&) {};
 		const NativeStreamedGraphLargeValueReferenceMapRunVisitor noVisitor;
