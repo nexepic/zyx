@@ -135,6 +135,9 @@ def symbolize_native(build, evidence, cases):
             continue
         if image.suffix == '.exe' or platform.system() == 'Linux':
             tool = shutil.which('llvm-symbolizer')
+            if not tool and platform.system() == 'Linux':
+                # Ubuntu CI installs llvm-20, whose tools have versioned names.
+                tool = shutil.which('llvm-symbolizer-20')
             if image.suffix == '.exe' and not safe_file(build, 'zyx_test_suite.pdb'):
                 item['unavailable'] = 'missing local PDB'
                 continue
@@ -221,8 +224,10 @@ def collect_symbols(build, evidence):
     # No arbitrary modules, source trees or paths taken from stack output.
     names = ['zyx_test_suite.exe', 'zyx_test_suite.pdb']
     if not any(safe_file(build, name) for name in names):
-        names = ['zyx_test_suite', 'zyx_test_suite.dSYM/Contents/Info.plist',
-                 'zyx_test_suite.dSYM/Contents/Resources/DWARF/zyx_test_suite']
+        names = ['zyx_test_suite']
+        if platform.system() != 'Linux':
+            names += ['zyx_test_suite.dSYM/Contents/Info.plist',
+                      'zyx_test_suite.dSYM/Contents/Resources/DWARF/zyx_test_suite']
     symbols = [(name, safe_file(build, name)) for name in names]
     record['missing'] = [name for name, path in symbols if path is None]
     symbols = [(name, path) for name, path in symbols if path is not None]

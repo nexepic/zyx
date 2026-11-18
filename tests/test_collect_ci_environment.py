@@ -82,8 +82,9 @@ def test_successful_native_capture_preserves_windows_pair(tmp_path):
     assert record['copied'] == ['zyx_test_suite.exe', 'zyx_test_suite.pdb']
 
 
-def test_native_mac_copies_only_image_and_dsym_whitelist(tmp_path):
+def test_native_mac_copies_only_image_and_dsym_whitelist(tmp_path, monkeypatch):
     module = load_collector()
+    monkeypatch.setattr(module.platform, 'system', lambda: 'Darwin')
     build = tmp_path / 'build'; build.mkdir()
     names = ['zyx_test_suite', 'zyx_test_suite.dSYM/Contents/Info.plist',
              'zyx_test_suite.dSYM/Contents/Resources/DWARF/zyx_test_suite']
@@ -97,8 +98,9 @@ def test_native_mac_copies_only_image_and_dsym_whitelist(tmp_path):
     assert not (evidence / 'crash-symbols/zyx_test_suite.dSYM/secret').exists()
 
 
-def test_missing_dsym_is_explicitly_incomplete(tmp_path):
+def test_missing_dsym_is_explicitly_incomplete(tmp_path, monkeypatch):
     module = load_collector()
+    monkeypatch.setattr(module.platform, 'system', lambda: 'Darwin')
     build = tmp_path / 'build'; build.mkdir()
     (build / 'zyx_test_suite').write_bytes(b'image')
     record = module.collect_symbols(build, native_evidence(tmp_path))
@@ -278,3 +280,40 @@ def test_raw_stack_fallback_ignores_unrecognized_directories(tmp_path):
     result = module.collect_symbols(build, evidence)
     assert not result['native_stack_detected']
     assert 'local_symbolization' not in result
+
+
+def test_linux_symbol_copy_does_not_require_dsym(tmp_path, monkeypatch):
+    module = load_collector()
+    monkeypatch.setattr(module.platform, 'system', lambda: 'Linux')
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite').write_bytes(b'elf-with-debug-info')
+    record = module.collect_symbols(build, native_evidence(tmp_path))
+    assert record['copied'] == ['zyx_test_suite']
+    assert record['missing'] == [] and record['complete']
+
+
+def test_linux_versioned_symbolizer_fallback_and_precedence(tmp_path, monkeypatch):
+    module = load_collector()
+    build = tmp_path / 'build'; build.mkdir()
+    (build / 'zyx_test_suite').write_bytes(b'elf')
+    evidence = tmp_path / 'evidence'; evidence.mkdir()
+    (evidence / 'output.log').write_text(
+        'CI_QUOTA_NATIVE_PC stack=0 index=0 pc=0x1100 base=0x1000 '
+        'offset=0x100 module=/runner/zyx_test_suite\n')
+    monkeypatch.setattr(module.platform, 'system', lambda: 'Linux')
+    commands = []
+    monkeypatch.setattr(module, 'bounded_symbolizer',
+                        lambda cmd, data: commands.append(cmd) or {'exit_code': 0})
+    for available, expected in [
+            ({'llvm-symbolizer', 'llvm-symbolizer-20'}, 'llvm-symbolizer'),
+            ({'llvm-symbolizer-20'}, 'llvm-symbolizer-20')]:
+        monkeypatch.setattr(module.shutil, 'which',
+                            lambda name: '/usr/bin/' + name if name in available else None)
+        result = module.symbolize_native(build, evidence, [evidence])[0]
+        assert result['tool'] == expected
+        assert commands[-1][0] == '/usr/bin/' + expected
+        assert '--relative-address' in commands[-1]
+    monkeypatch.setattr(module.shutil, 'which', lambda _: None)
+    result = module.symbolize_native(build, evidence, [evidence])[0]
+    assert result['unavailable'] == 'platform symbolizer unavailable'
+    assert len(commands) == 2
