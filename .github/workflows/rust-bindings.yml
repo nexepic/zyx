@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/rust-bindings.yml'
       - 'bindings/rust/**'
+      - 'scripts/package_rust_crates.py'
+      - 'tests/test_package_rust_crates.py'
+      - 'Cargo.toml'
+      - 'crates/zyx-src/**'
       - 'cmake/**'
       - 'CMakeLists.txt'
       - 'conanfile.py'
@@ -16,6 +20,10 @@ on:
     paths:
       - '.github/workflows/rust-bindings.yml'
       - 'bindings/rust/**'
+      - 'scripts/package_rust_crates.py'
+      - 'tests/test_package_rust_crates.py'
+      - 'Cargo.toml'
+      - 'crates/zyx-src/**'
       - 'cmake/**'
       - 'CMakeLists.txt'
       - 'conanfile.py'
@@ -118,6 +126,23 @@ jobs:
         env:
           ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
 
+
+      - name: Test Rust package staging
+        if: runner.os == 'Linux'
+        run: python -m unittest discover -s tests -p test_package_rust_crates.py
+
+      - name: Package and verify unpublished crates together
+        if: runner.os == 'Linux'
+        run: python scripts/package_rust_crates.py --output dist --lib-dir buildDir
+
+      - name: Upload verified crate artifacts
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-crates
+          path: dist/*.crate
+          if-no-files-found: error
+
   package:
     name: Package crates
     needs: test
@@ -125,33 +150,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Package native source crate
-        run: cargo package --manifest-path Cargo.toml
-
-      - name: Package and verify sys crate
-        run: cargo package --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys --no-default-features --features system
-        env:
-          ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
-
-      - name: Package workspace crates
-        run: cargo package --manifest-path bindings/rust/Cargo.toml --workspace --no-verify
-
-      - name: Collect crate packages
-        run: |
-          mkdir -p dist
-          cp target/package/*.crate dist/
-          cp bindings/rust/target/package/*.crate dist/
-
-      - name: Upload crate artifacts
-        uses: actions/upload-artifact@v7
+      - name: Download verified crate artifacts
+        uses: actions/download-artifact@v8
         with:
           name: rust-crates
-          path: dist/*.crate
+          path: dist
 
       - name: Upload crates to GitHub Release
         if: github.event_name == 'release'
