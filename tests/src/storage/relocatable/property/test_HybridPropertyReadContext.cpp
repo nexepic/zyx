@@ -1079,9 +1079,10 @@ TEST_F(HybridPropertyReadContextTest, FieldDemotionPreparesEveryFinalDirectoryAn
         const graph::PropertyValue replacement(std::string("changed type"));
         auto change = HybridPropertyColumnDelta::planExistingColumn(context, pin,
             {EntityPropertyOwnerKind::EPOK_NODE, 1}, 1, next, memory, remove ? nullptr : &replacement);
-        ASSERT_TRUE(change); const auto baseline = memory->used();
+        ASSERT_TRUE(change);
         DemotionNoPhysicalAllocator allocator;
         MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+        const auto baseline = memory->used();
         {
             HybridPropertyDemotionPreparation prepared(batch, pin, fields, *change, memory);
             EXPECT_EQ(prepared.group().columns, 0U);
@@ -1141,9 +1142,10 @@ TEST_F(HybridPropertyReadContextTest, FieldDemotionRefusesPartialOwnerDeletionAn
     {
         auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024);
         MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), small);
+        const auto batchBytes = small->used();
         EXPECT_THROW((HybridPropertyDemotionPreparation(batch, pin, fields, *change, small)),
             graph::query::execution::MaterializedByteLimitExceeded);
-        EXPECT_EQ(small->used(), 0U);
+        EXPECT_EQ(small->used(), batchBytes);
     }
     struct CancelAfterCopy final : CancellationCheckpoint {
         graph::query::execution::MaterializedByteBudget &memory;
@@ -1415,9 +1417,10 @@ TEST_F(HybridPropertyReadContextTest, MixedGroupMutationsCloneSharedSourcesOnceA
     auto compatible = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 4, next, memory, &number);
     ASSERT_TRUE(removed && demoted && compatible);
     const std::array<const HybridPropertyColumnDelta *, 3> changes{&*compatible, &*removed, &*demoted};
-    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
     DemotionNoPhysicalAllocator allocator;
     MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+    const auto baseline = memory->used();
     {
         HybridPropertyDemotionPreparation prepared(batch, pin, fields, changes, memory);
         EXPECT_EQ(prepared.group().memberships, 144U); EXPECT_EQ(prepared.group().columns, 1U);
@@ -1562,9 +1565,10 @@ TEST_F(HybridPropertyReadContextTest, WholeOwnerDeletionCoordinatesColumnDemotio
     ASSERT_TRUE(source);
     auto firstColumn = HybridPropertyColumnDelta::planExistingColumn(context, pin, owner, 1, next, memory, nullptr);
     ASSERT_TRUE(firstColumn);
-    const auto baseline = memory->used(); const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
+    const auto epoch = io_->dataMutationEpoch(), fileSize = io_->fileSize();
     DemotionNoPhysicalAllocator allocator;
     MetadataWriteBatch batch(allocator, pin.superblock(), LogSequenceNumber(pin.superblock().checkpoint_lsn.value() + 1), memory);
+    const auto baseline = memory->used();
     {
         auto prepared = HybridPropertyDemotionPreparation::prepareOwnerDeletion(batch, context, pin, fields, owners, memory);
         EXPECT_EQ(prepared.group().live, source->live & ~UINT64_C(1));

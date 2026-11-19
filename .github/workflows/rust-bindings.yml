@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/rust-bindings.yml'
       - 'bindings/rust/**'
+      - 'scripts/package_rust_crates.py'
+      - 'tests/test_package_rust_crates.py'
+      - 'Cargo.toml'
+      - 'crates/zyx-src/**'
       - 'cmake/**'
       - 'CMakeLists.txt'
       - 'conanfile.py'
@@ -16,6 +20,10 @@ on:
     paths:
       - '.github/workflows/rust-bindings.yml'
       - 'bindings/rust/**'
+      - 'scripts/package_rust_crates.py'
+      - 'tests/test_package_rust_crates.py'
+      - 'Cargo.toml'
+      - 'crates/zyx-src/**'
       - 'cmake/**'
       - 'CMakeLists.txt'
       - 'conanfile.py'
@@ -61,10 +69,9 @@ jobs:
       - name: Install system deps (Linux)
         if: runner.os == 'Linux'
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
-          sudo apt update
-          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+          sudo add-apt-repository --no-update -y universe
+          sudo apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
+          sudo apt-get -o Acquire::Retries=3 install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
       - name: Install pkg-config (Windows)
         if: runner.os == 'Windows'
@@ -76,7 +83,7 @@ jobs:
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install llvm --version=20.1.4 --force
+          choco install llvm --version=22.1.8 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
@@ -114,10 +121,32 @@ jobs:
           echo "${{ github.workspace }}\buildDir\Release" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
+      # These binding contract tests each open independent databases. Isolate
+      # their process-wide admission budgets: 64 MiB cache per database shares
+      # a 512 MiB process limit with 16 MiB protected maintenance headroom.
+      # Native concurrency tests remain separate; this does not repair or
+      # validate concurrent admission behavior.
       - name: Run Rust tests
-        run: cargo test --manifest-path bindings/rust/Cargo.toml --workspace --no-default-features --features system
+        run: cargo test --manifest-path bindings/rust/Cargo.toml --workspace --no-default-features --features system -- --test-threads=1
         env:
           ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
+
+
+      - name: Test Rust package staging
+        if: runner.os == 'Linux'
+        run: python -m unittest discover -s tests -p test_package_rust_crates.py
+
+      - name: Package and verify unpublished crates together
+        if: runner.os == 'Linux'
+        run: python scripts/package_rust_crates.py --output dist --lib-dir buildDir
+
+      - name: Upload verified crate artifacts
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-crates
+          path: dist/*.crate
+          if-no-files-found: error
 
   package:
     name: Package crates
@@ -126,33 +155,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Package native source crate
-        run: cargo package --manifest-path Cargo.toml
-
-      - name: Package and verify sys crate
-        run: cargo package --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys --no-default-features --features system
-        env:
-          ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
-
-      - name: Package workspace crates
-        run: cargo package --manifest-path bindings/rust/Cargo.toml --workspace --no-verify
-
-      - name: Collect crate packages
-        run: |
-          mkdir -p dist
-          cp target/package/*.crate dist/
-          cp bindings/rust/target/package/*.crate dist/
-
-      - name: Upload crate artifacts
-        uses: actions/upload-artifact@v7
+      - name: Download verified crate artifacts
+        uses: actions/download-artifact@v8
         with:
           name: rust-crates
-          path: dist/*.crate
+          path: dist
 
       - name: Upload crates to GitHub Release
         if: github.event_name == 'release'

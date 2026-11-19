@@ -61,7 +61,7 @@ LogicalPlanReadRow copyLogicalReadRowGuarded(const LogicalPlanReadRow &source, C
 		destination.reserve(cache.size());
 		for (const auto &[key, values] : cache) {
 			checkpoint();
-			auto copy = copyPropertyMapGuarded(values, checkpoint);
+			auto copy = copyBindingPropertyMapGuarded(values, checkpoint);
 			destination.emplace(copyPropertyStringGuarded(key, checkpoint), std::move(copy));
 		}
 	};

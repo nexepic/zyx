@@ -414,11 +414,11 @@
 							}
 							admittedPropertyBytes += bytes;
 						};
+						if (!state.snapshot.supportsPropertyReadAdmission()) {
+							throw std::logic_error("logical MERGE relationship Property reads require source admission");
+						}
 						const std::vector<std::vector<PropertyValue>> columns =
-								state.snapshot.supportsPropertyReadAdmission()
-										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-												  edgeIds, propertyKeys, admission)
-										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, propertyKeys);
+								state.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, propertyKeys, admission);
 						if (columns.size() != orderedProperties.size()) {
 							throw std::runtime_error(
 									"logical MERGE relationship Property batch returned an invalid column count");
@@ -653,7 +653,7 @@
 			MaterializedByteBudget scratchBudget(maximumScratchBytes);
 			detail::BudgetMemoryResource scratchResource(scratchBudget);
 			using OriginalProperty = std::pair<std::string_view, const PropertyValue *>;
-			std::pmr::vector<OriginalProperty> original{&scratchResource};
+			utils::AdmissionPmrVector<OriginalProperty> original{&scratchResource};
 			original.reserve(entity.direct_properties.size());
 			for (const auto &property : entity.direct_properties) {
 				context.checkGuard();

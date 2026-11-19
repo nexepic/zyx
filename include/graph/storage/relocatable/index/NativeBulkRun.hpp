@@ -213,6 +213,9 @@ namespace graph::storage {
 		// Pins one immutable metadata generation for the lifetime of the returned
 		// reader. Rewindable typed sources request a fresh reader per pass, avoiding
 		// per-fragment snapshot acquisition and transaction-sized route tables.
+        // A task-confined reader may reuse this pin across reads, but must
+        // release it before changing or reclaiming its scratch fragments.
+        [[nodiscard]] MetadataSnapshotPin openPayloadReadSnapshot() const;
 		[[nodiscard]] NativeBulkRunPayloadReader openOpaquePayloadReader() const;
 		[[nodiscard]] NativeBulkRunManifest writeManifest(uint64_t transactionId,
 														  std::span<const NativeBulkRunFragmentLocation> fragments,

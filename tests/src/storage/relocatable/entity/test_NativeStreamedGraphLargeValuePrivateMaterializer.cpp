@@ -235,7 +235,7 @@ namespace graph::storage {
 			});
 		}
 
-		const OrderedBTreeEntrySource noContentEntries;
+		const OrderedBTreeEntrySource noContentEntries{};
 		const NativeStreamedGraphLargeValueReferenceMapRunPlan mapPlan{1U, 1U};
 		expectFormatFailure([&] {
 			return NativeStreamedGraphLargeValuePrivateMaterializer::materializeReferenceMap(

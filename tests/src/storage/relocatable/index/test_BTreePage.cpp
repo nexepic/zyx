@@ -46,6 +46,49 @@ namespace {
 
 } // namespace
 
+TEST(RelocatableBTreePageCodecTest, DecodingBorrowsTheRetainedPredecessorInsteadOfCopyingItsKey) {
+    class KeyAllocations final : public graph::utils::UnmanagedAllocationResource {
+    public:
+        size_t key_allocations = 0U;
+        size_t proxy_allocations = 0U;
+        size_t live = 0U;
+        void reserveUnmanaged(size_t bytes) override {
+            if (bytes == 257U) ++key_allocations;
+            if (bytes != 0U && bytes == graph::utils::detail::standardContainerProxyBytes())
+                ++proxy_allocations;
+            live += bytes;
+        }
+        void releaseUnmanaged(size_t bytes) noexcept override { live -= bytes; }
+    private:
+        void *do_allocate(size_t bytes, size_t alignment) override {
+            return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+        }
+        void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+            std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    };
+    BTreePageEntry input;
+    input.key.resize(257U, std::byte{'k'});
+    input.value_or_child = 19U;
+    auto encoded = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, std::span(&input, 1U));
+    auto memory = std::make_shared<KeyAllocations>();
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        auto decoded = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, encoded);
+        ASSERT_EQ(decoded.size(), 1U);
+        EXPECT_EQ(decoded.front(), input);
+        EXPECT_EQ(memory->key_allocations, 1U);
+        // Offsets, entries and the final key each own a proxy on MSVC.
+        // Allow one non-elided return, but no temporary key/entry moves.
+        EXPECT_LE(memory->proxy_allocations, 4U);
+        std::fill(encoded.begin(), encoded.end(), std::byte{});
+        EXPECT_EQ(decoded.front(), input);
+        EXPECT_GT(memory->live, 0U);
+    }
+    EXPECT_EQ(memory->live, 0U);
+}
+
 TEST(RelocatableBTreePageCodecTest, ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata) {
 	auto header = leafHeader();
 	header.entry_count = 0;
@@ -311,6 +354,46 @@ TEST(RelocatableBTreePageCodecTest, FindsKeysAcrossPackedRestartGroups) {
 	std::vector<std::byte> missing(48U, std::byte{'p'});
 	missing.push_back(std::byte{19});
 	EXPECT_FALSE(PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, missing).has_value());
+}
+
+TEST(RelocatableBTreePageCodecTest, RestartSearchBorrowsProbeKeysButReturnsAnIndependentOwner) {
+    class Keys final : public graph::utils::UnmanagedAllocationResource {
+    public:
+        size_t allocations = 0U, live = 0U;
+        void reserveUnmanaged(size_t bytes) override {
+            if (bytes == 257U) { ++allocations; live += bytes; }
+        }
+        void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U + graph::utils::detail::standardContainerProxyBytes()) live -= 257U; }
+    private:
+        void *do_allocate(size_t bytes, size_t alignment) override {
+            return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+        }
+        void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+            std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    };
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 33U; ++i) {
+        BTreePageEntry entry;
+        entry.key.resize(257U, std::byte{'k'});
+        entry.key.back() = static_cast<std::byte>(i);
+        entry.value_or_child = i + 1U;
+        entries.push_back(std::move(entry));
+    }
+    auto encoded = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries);
+    auto memory = std::make_shared<Keys>();
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        const auto found = PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, entries.front().key);
+        ASSERT_TRUE(found.has_value());
+        EXPECT_EQ(memory->allocations, 1U); // Only the selected restart-group entry.
+        RecordProperty("restart_key_allocations", memory->allocations);
+        EXPECT_EQ(memory->live, 257U);
+        std::fill(encoded.begin(), encoded.end(), std::byte{});
+        EXPECT_EQ(*found, entries.front()); // No stream borrow escapes the lookup.
+    }
+    EXPECT_EQ(memory->live, 0U);
 }
 
 TEST(RelocatableBTreePageCodecTest, RoundTripsAnOrderedKeyThatExtendsItsPredecessor) {
@@ -823,6 +906,51 @@ TEST(RelocatableBTreePageCodecTest, RebindingPackedPagesDecodesOnceRegardlessOfE
 	}
 }
 
+TEST(RelocatableBTreePageCodecTest, RebindingReleasesSourceKeysBeforeValidatingTheDestination) {
+ class KeyWorkspace final : public graph::utils::UnmanagedAllocationResource {
+ public:
+  size_t live_keys = 0, peak_keys = 0;
+  void reserveUnmanaged(size_t bytes) override {
+   if (bytes != 257U) return;
+   if (live_keys == 32U) throw std::bad_alloc();
+   peak_keys = std::max(peak_keys, ++live_keys);
+  }
+  void releaseUnmanaged(size_t bytes) noexcept override { if (bytes == 257U + graph::utils::detail::standardContainerProxyBytes()) --live_keys; }
+ private:
+  void *do_allocate(size_t bytes, size_t alignment) override {
+   return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+  }
+  void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+   std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+  }
+  bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+ };
+ PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header;
+ header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+ std::vector<BTreePageEntry> expected;
+ for (unsigned i = 0; i < 32; ++i) {
+  BTreePageEntry entry; entry.key.resize(257U, std::byte{1});
+  entry.key.back() = static_cast<std::byte>(i); entry.value_or_child = i + 1U;
+  expected.push_back(std::move(entry));
+ }
+ const auto source = BTreePage::createWithEntries(owner, header, expected);
+ owner.generation = Generation(3); owner.committed_lsn = LogSequenceNumber(10);
+ auto memory = std::make_shared<KeyWorkspace>();
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  const auto destination = source.rebindOwner(owner);
+  EXPECT_EQ(memory->live_keys, 0U);
+  EXPECT_EQ(destination.entries(), expected);
+  EXPECT_EQ(source.entries(), expected);
+  EXPECT_EQ(destination.header().generation, Generation(3));
+  EXPECT_EQ(source.header().generation, Generation(2));
+ }
+ EXPECT_EQ(memory->peak_keys, 32U);
+ EXPECT_EQ(memory->live_keys, 0U);
+}
+
 TEST(RelocatableBTreePageCodecTest, MutationsReuseTheFullyAuthenticatedSourceDecode) {
  PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
   RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
@@ -1052,4 +1180,182 @@ TEST(RelocatableBTreePageCodecTest, FixedKeyDecodeRetainsWholeLeafOrderingRestar
     // The second entry's one-byte suffix must not duplicate the first key.
     bad = bytes; bad[stream + 6U] = std::byte{0};
     EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decodeFixedKeys(bad, 2)), FormatException);
+}
+
+namespace {
+class PrivateRebindBudget final : public graph::utils::UnmanagedAllocationResource {
+public:
+ size_t live = 0U, page_allocations = 0U;
+ bool deny_page = false, deny_all = false;
+ void reserveUnmanaged(size_t bytes) override { if (deny_all) throw std::bad_alloc(); live += bytes; }
+ void releaseUnmanaged(size_t bytes) noexcept override { live -= bytes; }
+private:
+ void *do_allocate(size_t bytes, size_t alignment) override {
+  if (deny_all || (deny_page && bytes == RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES)) throw std::bad_alloc();
+  void *p = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+  live += bytes; if (bytes == RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) ++page_allocations;
+  return p;
+ }
+ void do_deallocate(void *p, size_t bytes, size_t alignment) override {
+  std::pmr::new_delete_resource()->deallocate(p, bytes, alignment); live -= bytes;
+ }
+ bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+
+TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingConsumesBackingWhenAnotherPageIsDenied) {
+ auto memory = std::make_shared<PrivateRebindBudget>();
+ const PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header; header.index_id = owner.owner_id; header.page_id = owner.page_id;
+ header.generation = owner.generation; header.left_sibling = PageId(50); header.right_sibling = PageId(52);
+ const std::vector<BTreePageEntry> entries{{{std::byte{'a'}}, 1U}, {{std::byte{'b'}}, 2U}};
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  auto page = BTreePage::createWithEntries(owner, header, entries);
+  const std::vector<std::byte> removedKey(100U, std::byte{'z'});
+  page.insert({removedKey, 3U}); page.erase(removedKey);
+  const auto fragmentedFree = page.slottedPage().stats().contiguous_free_bytes;
+  const auto before = memory->live;
+  auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
+  memory->deny_page = true;
+  EXPECT_THROW(static_cast<void>(page.rebindOwner(replacement)), std::bad_alloc);
+  EXPECT_EQ(page.header().generation, owner.generation); EXPECT_EQ(memory->live, before);
+  auto rebound = std::move(page).rebindPrivateOwner(replacement);
+  EXPECT_EQ(memory->page_allocations, 1U); EXPECT_EQ(memory->live, before);
+  EXPECT_GT(rebound.slottedPage().stats().contiguous_free_bytes, fragmentedFree);
+  EXPECT_EQ(rebound.entries(), entries); EXPECT_EQ(rebound.header().left_sibling, header.left_sibling);
+  EXPECT_EQ(rebound.header().right_sibling, header.right_sibling);
+  EXPECT_EQ(rebound.slottedPage().memoryOwner(), memory);
+  memory->deny_page = false;
+  const auto encoded = rebound.serialize(); const auto opened = BTreePage::open(replacement, encoded);
+  EXPECT_EQ(opened.entries(), entries); EXPECT_EQ(opened.header().generation, replacement.generation);
+  EXPECT_EQ(opened.slottedPage().ownerCommittedLsn(), replacement.committed_lsn);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingRejectsBeforeMutationAndAllowsRetry) {
+ auto memory = std::make_shared<PrivateRebindBudget>();
+ const PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header; header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  auto page = BTreePage::create(owner, header); const auto original = page.serialize();
+  auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
+  for (unsigned field = 0U; field < 6U; ++field) {
+   SCOPED_TRACE(field);
+   auto invalid = replacement;
+   if (field == 0U) invalid.owner_id = 18U;
+   if (field == 1U) invalid.page_id = PageId(52);
+   if (field == 2U) invalid.kind = PageOwnerKind::POK_NONE;
+   if (field == 3U) invalid.generation = {};
+   if (field == 4U) invalid.committed_lsn = {};
+   if (field == 5U) invalid.flags = 1U;
+   expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(invalid)); }, FormatError::FERR_INVALID_STATE);
+   EXPECT_EQ(page.serialize(), original);
+  }
+  const auto before = memory->live; memory->deny_all = true;
+  EXPECT_THROW(static_cast<void>(std::move(page).rebindPrivateOwner(replacement)), std::bad_alloc);
+  memory->deny_all = false; EXPECT_EQ(memory->live, before); EXPECT_EQ(page.serialize(), original);
+  auto rebound = std::move(page).rebindPrivateOwner(replacement);
+  EXPECT_TRUE(rebound.entries().empty()); EXPECT_EQ(rebound.header().generation, replacement.generation);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, PrivateOwnerBindingAuthenticatesPackedContentsBeforeMutation) {
+ auto memory = std::make_shared<PrivateRebindBudget>();
+ const PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header; header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  auto page = BTreePage::create(owner, header);
+  // A valid outer SlottedPage checksum must not authenticate a mismatched
+  // typed entry count. Inject through the outer page only for this regression.
+  auto forged = page.header(); forged.entry_count = 1U;
+  auto &slots = const_cast<SlottedPage &>(page.slottedPage());
+  slots.overwrite({owner.page_id, 0U, 1U}, BTreePageHeaderCodec::encode(forged));
+  const auto before = slots.serialize();
+  auto replacement = owner; replacement.generation = Generation(3); replacement.committed_lsn = LogSequenceNumber(10);
+  expectFormatError([&] { static_cast<void>(std::move(page).rebindPrivateOwner(replacement)); }, FormatError::FERR_INVALID_HEADER);
+  EXPECT_EQ(slots.serialize(), before); EXPECT_EQ(slots.pageGeneration(), owner.generation);
+ }
+ EXPECT_EQ(memory->live, 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, StreamingValidationRetainsOnlyTwoChargedKeysAndRefundsFailure) {
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 64U; ++i)
+        entries.push_back({{std::byte{'k'}, static_cast<std::byte>(i)}, i + 1U});
+    const auto bytes = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries);
+    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(512U);
+    graph::utils::OwnedAllocationScope scope(budget);
+    EXPECT_THROW(static_cast<void>(PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, bytes)),
+        graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(budget->used(), 0U);
+    EXPECT_NO_THROW(PackedBTreePageCodec::validate(BTreeNodeKind::BPN_LEAF, bytes));
+    EXPECT_EQ(budget->used(), 0U);
+    auto tiny = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    {
+        graph::utils::OwnedAllocationScope denied(tiny);
+        EXPECT_THROW(PackedBTreePageCodec::validate(BTreeNodeKind::BPN_LEAF, bytes),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(tiny->used(), 0U);
+    EXPECT_NO_THROW(PackedBTreePageCodec::validate(BTreeNodeKind::BPN_LEAF, bytes));
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(RelocatableBTreePageCodecTest, StreamingValidationMatchesOwningDecodeForCorruptedEntries) {
+    for (const auto kind : {BTreeNodeKind::BPN_LEAF, BTreeNodeKind::BPN_INTERNAL}) {
+        std::vector<BTreePageEntry> entries;
+        for (unsigned i = 0; i < 20U; ++i)
+            entries.push_back({{std::byte{'k'}, static_cast<std::byte>(i)}, i + 1U});
+        const auto bytes = PackedBTreePageCodec::encode(kind, entries);
+        const auto error = [&](const auto &input, bool streaming) -> std::optional<FormatError> {
+            try {
+                if (streaming) PackedBTreePageCodec::validate(kind, input);
+                else static_cast<void>(PackedBTreePageCodec::decode(kind, input));
+                return std::nullopt;
+            } catch (const FormatException &exception) { return exception.error(); }
+        };
+        EXPECT_EQ(error(bytes, true), std::nullopt);
+        for (size_t offset = 0; offset < bytes.size(); ++offset) {
+            SCOPED_TRACE(offset);
+            auto corrupt = bytes;
+            corrupt[offset] ^= std::byte{0xff};
+            EXPECT_EQ(error(corrupt, true), error(corrupt, false));
+        }
+        for (size_t length = 0; length < bytes.size(); ++length) {
+            const auto truncated = std::span<const std::byte>(bytes).first(length);
+            EXPECT_EQ(error(truncated, true), error(truncated, false));
+        }
+    }
+}
+
+TEST(RelocatableBTreePageCodecTest, OpeningPageValidatesWithoutRetainingAllDecodedEntries) {
+    auto header = leafHeader(); header.entry_count = 0U;
+    PageOwnerHeader owner;
+    owner.page_id = header.page_id; owner.owner_id = header.index_id;
+    owner.kind = PageOwnerKind::POK_INDEX; owner.generation = header.generation;
+    owner.committed_lsn = LogSequenceNumber(5);
+    owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+    std::vector<BTreePageEntry> entries;
+    for (unsigned i = 0; i < 64U; ++i)
+        entries.push_back({{std::byte{'k'}, static_cast<std::byte>(i)}, i + 1U});
+    const auto original = BTreePage::createWithEntries(owner, header, entries);
+    auto source = SlottedPage::open(owner, original.serialize());
+    auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(2048U);
+    {
+        graph::utils::OwnedAllocationScope scope(budget);
+        auto opened = BTreePage::open(std::move(source));
+        EXPECT_EQ(opened.header().entry_count, 64U);
+        EXPECT_THROW(static_cast<void>(opened.entries()), graph::query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(budget->used(), 0U);
+        EXPECT_EQ(opened.find(entries.back().key)->value_or_child, 64U);
+    }
+    EXPECT_EQ(budget->used(), 0U);
 }

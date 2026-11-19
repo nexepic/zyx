@@ -1,4 +1,5 @@
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 
 namespace graph::query::execution {
 	using namespace direct_edge_test;
@@ -66,6 +67,53 @@ namespace graph::query::execution {
 		}));
 		EXPECT_EQ(delivered, 1U);
 		EXPECT_GT(graph.batch_adjacency_ref_scans, 0U);
+	}
+
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, TwoHopCountReleasesTraversalWorkspaceBeforePublishing) {
+		DirectEdgeGraph graph; graph.enable_batch_adjacency_reference_scan = true;
+		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Seed"}});
+		graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Mid"}});
+		graph.nodes.emplace(3U, LogicalGraphNode{3U, {"End"}});
+		graph.edges.emplace_back(10U, 1U, 2U, "KNOWS");
+		for (uint64_t id = 11U; id < 111U; ++id) graph.edges.emplace_back(id, 2U, 3U, "KNOWS");
+		DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+		auto process = std::make_shared<detail::ProcessResourceBudget>(detail::ResourceLimits::uniform(65536U));
+		auto database = std::make_shared<detail::DatabaseResourceBudget>(process, detail::ResourceLimits::uniform(65536U));
+		auto account = std::make_shared<detail::ResourceAccount>(database, detail::ResourceClass::RCK_QUERY, 65536U);
+		QueryContext context; context.resource_account = account;
+		auto bounds = directBounds(); bounds.maximum_materialized_bytes = 8192U;
+		bounds.maximum_edges_per_node = 128U; bounds.maximum_edge_records = 128U; bounds.maximum_rows = 128U;
+		const auto plan = [](bool knownType) {
+			auto inner = std::make_unique<logical::LogicalTraversal>(
+				std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Seed"}),
+				"a", "r", "b", "KNOWS", "out", std::vector<std::string>{"Mid"});
+			auto outer = std::make_unique<logical::LogicalTraversal>(std::move(inner), "b", "s", "c",
+				knownType ? "KNOWS" : "MISSING", "out", std::vector<std::string>{"End"});
+			return std::make_unique<logical::LogicalAggregate>(std::move(outer), utils::OwnedStdVector<std::shared_ptr<expressions::Expression>>{},
+				utils::OwnedStdVector<logical::LogicalAggItem>{{"count", std::make_shared<expressions::VariableReferenceExpression>("c"), "count", false}});
+		};
+		size_t emptyResultCharge = 0U;
+		static_cast<void>(runtime.execute(*plan(false), bounds, [&](const LogicalPlanReadRow &row) {
+			EXPECT_EQ(std::get<PropertyValue>(row.values.at("count")), PropertyValue(0));
+			emptyResultCharge = account->used(); return true;
+		}, context));
+		EXPECT_EQ(account->used(), 0U);
+		for (bool throwFromVisitor : {true, false}) {
+			const auto execute = [&] {
+				return runtime.execute(*plan(true), bounds, [&](const LogicalPlanReadRow &row) {
+					EXPECT_EQ(std::get<PropertyValue>(row.values.at("count")), PropertyValue(100));
+					// Both published rows have the same scalar layout. No completed traversal
+					// buffers may compete with a downstream operator's reservation.
+					EXPECT_EQ(account->used(), emptyResultCharge);
+					if (throwFromVisitor) throw std::runtime_error("downstream failure");
+					return false;
+				}, context);
+			};
+			if (throwFromVisitor) EXPECT_THROW(static_cast<void>(execute()), std::runtime_error);
+			else EXPECT_NO_THROW(static_cast<void>(execute()));
+			EXPECT_EQ(account->used(), 0U);
+		}
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget) {
@@ -439,9 +487,10 @@ namespace graph::query::execution {
 				return true;
 			}));
 			EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(1)});
-			EXPECT_EQ(edges ? graph.edge_property_point_reads : graph.node_property_point_reads, 3U);
-			// This compatibility reader implements an Edge Property point read
-			// by reading its Edge. COUNT must not add an existence/full-read pass.
+			EXPECT_EQ(edges ? graph.edge_property_point_reads : graph.node_property_point_reads, 0U);
+			// This fallback supplies one admitted selected column per owner. It
+			// must not add an existence or full-read pass.
+			EXPECT_EQ(edges ? graph.edge_property_column_batch_reads : graph.node_property_column_batch_reads, 3U);
 			EXPECT_EQ(graph.edge_read_ids.size(), edges ? 3U : 0U);
 			if (!edges) EXPECT_TRUE(graph.node_read_ids.empty());
 		}
@@ -1240,7 +1289,10 @@ namespace graph::query::execution {
 				"m" + std::to_string(index), false});
 		logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {}, std::move(items));
 		auto bounds = directBounds();
-		bounds.maximum_materialized_bytes = 12000U;
+		// Ordinary aggregates no longer allocate 128 unused DISTINCT sets.
+		// Keep this failure-injection allowance below the accumulator objects,
+		// so the test still rejects before reading its source.
+		bounds.maximum_materialized_bytes = 4096U;
 		size_t delivered = 0U;
 		try {
 			static_cast<void>(runtime.execute(aggregate, bounds, [&](const LogicalPlanReadRow &) {
@@ -1248,9 +1300,10 @@ namespace graph::query::execution {
 			}));
 			FAIL() << "aggregate objects must be admitted before allocation";
 		} catch (const std::runtime_error &error) {
-			EXPECT_NE(std::string(error.what()).find("Aggregate accumulator object exceeded its materialized byte bound"), std::string::npos);
+			EXPECT_NE(std::string(error.what()).find("Aggregate accumulator object exceeded its materialized byte bound"), std::string::npos) << error.what();
 		}
 		EXPECT_EQ(delivered, 0U);
+		EXPECT_EQ(graph.node_label_match_scans, 0U);
 		bounds.maximum_materialized_bytes = 1024U * 1024U;
 		static_cast<void>(runtime.execute(aggregate, bounds, [&](const LogicalPlanReadRow &row) {
 			++delivered; EXPECT_EQ(row.values.size(), 128U);

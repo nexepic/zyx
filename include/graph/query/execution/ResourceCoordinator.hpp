@@ -9,6 +9,11 @@
 #include <mutex>
 #include <stdexcept>
 #include <utility>
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include "graph/debug/CiBudgetTrace.hpp"
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 namespace graph::query::execution::detail {
 
@@ -126,6 +131,13 @@ public:
 	ResourceAccount(std::shared_ptr<DatabaseResourceBudget> database, ResourceClass kind, size_t maximum)
 		: ResourceAccount(requireOwner(database), kind, maximum) { database_owner_ = std::move(database); }
 	~ResourceAccount() {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+            size_t used;
+            { std::lock_guard lock(database_.process_.mutex_); used = used_; }
+            ciTrace().summary(used, 0U, maximum_);
+        } else ciTrace().discard();
+#endif
 		if (kind_ == static_cast<size_t>(ResourceClass::RCK_QUERY)) {
 			std::lock_guard lock(database_.process_.mutex_); --database_.queries_;
 		}
@@ -144,6 +156,9 @@ public:
 	}
 private:
 	friend class ResourceLease;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    debug::CiBudgetTrace ciTrace() const noexcept { return {this,"account"}; }
+#endif
 	[[nodiscard]] size_t availableLocked() const noexcept {
 		const auto &process = database_.process_;
 		size_t remaining = (std::min)({maximum_ - used_,
@@ -189,6 +204,9 @@ public:
 		return *this;
 	}
 	[[nodiscard]] size_t bytes() const noexcept { return bytes_; }
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    size_t diagnosticAccountId() const noexcept { return account_ ? account_->ciTrace().id() : 0U; }
+#endif
 	[[nodiscard]] bool sameAccount(const ResourceLease &other) const noexcept { return account_ && account_ == other.account_; }
 	[[nodiscard]] size_t accountMaximum() const noexcept { return account_ ? account_->maximum() : 0U; }
 	[[nodiscard]] size_t available() const { return account_ ? account_->available() : 0U; }
@@ -208,12 +226,36 @@ public:
 		}
 		auto &database = account_->database_;
 		auto &process = database.process_;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+		std::unique_lock lock(process.mutex_);
+#else
 		std::lock_guard lock(process.mutex_);
+#endif
 		const size_t kind = account_->kind_;
 		if (next > bytes_) {
 			const size_t delta = next - bytes_;
-			if (delta > account_->availableLocked()) return false;
+			const size_t available = account_->availableLocked();
+			if (delta > available) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                {
+                    const auto previous = bytes_, accountUsed = account_->used_, accountMaximum = account_->maximum_;
+                    const auto databaseUsed = database.usage_.total, databaseMaximum = database.limits_.total;
+                    const auto processUsed = process.usage_.total, processMaximum = process.limits_.total;
+                    const auto databaseClassUsed = database.usage_.classes[kind], databaseClassMaximum = database.limits_.classes[kind];
+                    const auto processClassUsed = process.usage_.classes[kind], processClassMaximum = process.limits_.classes[kind];
+                    lock.unlock();
+                    if (account_->ciTrace().allow()) {
+                    std::fprintf(stderr, "CI_RESOURCE account_id=%zu class=%zu lease=%zu requested=%zu available=%zu account=%zu/%zu database=%zu/%zu database_class=%zu/%zu process=%zu/%zu process_class=%zu/%zu\n", account_->ciTrace().id(), kind, previous, next, available, accountUsed, accountMaximum, databaseUsed, databaseMaximum, databaseClassUsed, databaseClassMaximum, processUsed, processMaximum, processClassUsed, processClassMaximum);
+                    std::fflush(stderr);
+                    }
+                }
+#endif
+				return false;
+			}
 			account_->used_ += delta;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            account_->ciTrace().observePeak(account_->used_);
+#endif
 			database.usage_.total += delta; database.usage_.classes[kind] += delta;
 			process.usage_.total += delta; process.usage_.classes[kind] += delta;
 		} else {
@@ -221,6 +263,18 @@ public:
 			account_->used_ -= delta;
 			database.usage_.total -= delta; database.usage_.classes[kind] -= delta;
 			process.usage_.total -= delta; process.usage_.classes[kind] -= delta;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            if (delta && account_->ciTrace().active()) {
+                const auto accountUsed = account_->used_, databaseUsed = database.usage_.total, processUsed = process.usage_.total;
+                bytes_ = next;
+                lock.unlock();
+                if (account_->ciTrace().allow()) {
+                std::fprintf(stderr, "CI_RESOURCE account_id=%zu refund class=%zu amount=%zu lease=%zu account=%zu database=%zu process=%zu\n", account_->ciTrace().id(), kind, delta, next, accountUsed, databaseUsed, processUsed);
+                std::fflush(stderr);
+                }
+                return true;
+            }
+#endif
 		}
 		bytes_ = next;
 		return true;

@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/query/execution/StandardContainerHeapBytes.hpp"
 #include "graph/core/PropertyDecodeAllocationScope.hpp"
+#include "graph/utils/StringBufferBytes.hpp"
 #include "graph/core/GuardedPropertyCopy.hpp"
 #include "graph/debug/PerfTrace.hpp"
 
@@ -259,7 +260,10 @@ namespace graph::storage {
                         if constexpr (requires { payload.get_allocator().resource(); }) return payload.get_allocator().resource();
                         else return std::pmr::get_default_resource();
                     }();
-                    std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> entries(resource);
+                    // MSVC's allocator-only constructor is noexcept but may
+                    // allocate an iterator proxy. The count constructor lets
+                    // a denied scratch allocation propagate to our rollback.
+                    std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> entries(size_t{0U}, resource);
 					entries.reserve(argument.size());
 					for (const auto &[key, entry]: argument) entries.emplace_back(key, &entry);
 					std::ranges::sort(entries, [](const auto &left, const auto &right) {
@@ -291,18 +295,11 @@ namespace graph::storage {
 			}, value.getVariant());
 		}
 
-		void encodeValue(std::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
-			if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
-			std::vector<std::byte> payload;
-			encodePayload(payload, value, depth);
-			requireU32Size(payload.size(), "Property value payload is too large");
-			appendU8(bytes, static_cast<uint8_t>(kindFor(value)));
-			appendU8(bytes, 0U);
-			appendU32(bytes, static_cast<uint32_t>(payload.size()));
-			appendBytes(bytes, payload);
-		}
-
-		void encodeValue(std::pmr::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+        // Write nested payloads directly into the caller's buffer. Both
+        // allocator variants share prefix rollback; a per-value temporary
+        // would allocate/copy even an eight-byte integer at every spill pass.
+        template<class Bytes>
+        void encodeValueInPlace(Bytes &bytes, const PropertyValue &value, uint32_t depth) {
             if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
             const size_t start = bytes.size();
             try {
@@ -314,6 +311,13 @@ namespace graph::storage {
                 requireU32Size(payloadBytes, "Property value payload is too large");
                 LittleEndianCodec::writeU32(bytes, start + 2U, static_cast<uint32_t>(payloadBytes));
             } catch (...) { bytes.resize(start); throw; }
+        }
+
+        void encodeValue(std::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+            encodeValueInPlace(bytes, value, depth);
+        }
+        void encodeValue(std::pmr::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+            encodeValueInPlace(bytes, value, depth);
         }
 
         using query::execution::detail::addStandardHeapBytes;
@@ -336,7 +340,7 @@ namespace graph::storage {
         size_t defaultMovingMapHeapUpper() {
 #if defined(_MSVC_STL_VERSION)
             using Entry = PropertyValue::MapType::value_type;
-            constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+            constexpr size_t node = utils::detail::standardHashNodeBytes<Entry>();
             return addStandardHeapBytes(2U * standardContainerProxyBytes(),
                 addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Entry)),
                     standardAllocatorRequestBytes(16U * sizeof(void *), alignof(void *))));
@@ -346,7 +350,7 @@ namespace graph::storage {
         }
         size_t reservedDecodedMapHeapUpper(size_t count) {
             using Entry = PropertyValue::MapType::value_type;
-            constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+            constexpr size_t node = utils::detail::standardHashNodeBytes<Entry>();
 #if defined(_MSVC_STL_VERSION)
             const auto nodes = addStandardHeapBytes(count, 1U);
             constexpr size_t bucketWidth = 2U * sizeof(void *);
@@ -665,10 +669,21 @@ namespace graph::storage {
 
 	PropertyValue CanonicalPropertyValueCodec::decodeNext(std::span<const std::byte> bytes, size_t &offset) {
         if (auto *scope = property_decode::AllocationScope::current()) {
-            const auto admit = [&](const DecodeShape &shape) { scope->admit(shape.maximum_heap_request_bytes); };
+            size_t admitted = 0U;
+            const auto admit = [&](const DecodeShape &shape) {
+                scope->admit(shape.maximum_heap_request_bytes);
+                admitted = shape.maximum_heap_request_bytes;
+            };
             const auto check = [&] { scope->checkpoint(); };
-            // std::function reference_wrapper targets require no heap storage.
-            return decodeNextWithAdmission(bytes, offset, std::ref(admit), std::ref(check));
+            // Keep the full construction upper bound until construction finishes.
+            // A standalone string then exposes its actual retained capacity in O(1).
+            // Compound values retain their conservative grant until their scope dies.
+            auto value = decodeNextWithAdmission(bytes, offset, std::ref(admit), std::ref(check));
+            if (const auto *text = std::get_if<std::string>(&value.getVariant())) {
+                const size_t retained = utils::detail::dynamicStringBufferBytes(*text);
+                if (retained < admitted) scope->refundUnused(admitted - retained);
+            }
+            return value;
         }
 		if (offset > bytes.size()) fail(FormatError::FERR_INVALID_HEADER, "Property cursor exceeds payload");
 		ByteReader reader{bytes.subspan(offset)};

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <compare>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,7 @@
 #include <memory>
 #include <memory_resource>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -46,7 +48,7 @@ namespace graph::storage {
 
 	struct VectorCodebook {
 		VectorCodebookHeader header;
-        std::vector<std::byte, utils::OwnedPmrAllocator<std::byte>> payload;
+        utils::OwnedVector<std::byte> payload;
 
         VectorCodebook() = default;
         VectorCodebook(VectorCodebookHeader value, std::span<const std::byte> bytes,
@@ -163,8 +165,13 @@ namespace graph::storage {
 		mutable std::mutex cache_mutex_;
 		// Own the allocator until both metadata containers have been destroyed.
 		std::shared_ptr<std::pmr::memory_resource> cache_memory_owner_;
-		mutable std::pmr::list<CacheKey> cache_recency_;
-		mutable std::pmr::map<CacheKey, CacheEntry> cache_;
+		// Empty MSVC containers allocate sentinels; defer them until cache publication.
+        struct CacheState {
+            explicit CacheState(std::pmr::memory_resource *memory) : recency(memory), entries(memory) {}
+            std::pmr::list<CacheKey> recency;
+            std::pmr::map<CacheKey, CacheEntry> entries;
+        };
+        mutable std::optional<CacheState> cache_;
 	};
 
 } // namespace graph::storage

@@ -49,7 +49,7 @@ public:
         for (const auto &field : source) { meter.add(writeStringCopyHeapUpper(field.key)); meter.property(field.value); }
         query::execution::MaterializedByteReservation incoming(budget_); incoming.set(meter.bytes());
         {
-            std::pmr::vector<const LogicalGraphWriteProperty *> ordered(memory_);
+            std::pmr::vector<const LogicalGraphWriteProperty *> ordered(size_t{0U}, memory_);
             ordered.reserve(source.size());
             for (const auto &field : source) ordered.push_back(&field);
             std::ranges::sort(ordered, [](const auto *left, const auto *right) { return left->key < right->key; });
@@ -67,7 +67,7 @@ public:
         WriteCopySizer meter(headroom(), checkpoint); meter.strings(source);
         query::execution::MaterializedByteReservation incoming(budget_); incoming.set(meter.bytes());
         {
-            std::pmr::vector<const std::string *> ordered(memory_); ordered.reserve(source.size());
+            std::pmr::vector<const std::string *> ordered(size_t{0U}, memory_); ordered.reserve(source.size());
             for (const auto &label : source) ordered.push_back(&label);
             std::ranges::sort(ordered, [](const auto *left, const auto *right) { return *left < *right; });
             for (size_t i = 0U; i < ordered.size(); ++i)

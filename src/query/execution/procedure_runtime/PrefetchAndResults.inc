@@ -454,11 +454,10 @@
 							if (columnBytes.wouldExceed(next)) throw ProcedureColumnBytePressure{};
 							columnBytes.set(next);
 						};
-						auto columns = snapshot.supportsPropertyReadAdmission()
-							? (isEdge ? snapshot.readEdgePropertyColumnsSortedWithAdmission(batch, keys, admission)
-								: snapshot.readNodePropertyColumnsSortedWithAdmission(batch, keys, admission))
-							: (isEdge ? snapshot.readEdgePropertyColumnsSorted(batch, keys)
-								: snapshot.readNodePropertyColumnsSorted(batch, keys));
+						if (!snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded procedure Property columns require source admission");
+						auto columns = isEdge ? snapshot.readEdgePropertyColumnsSortedWithAdmission(batch, keys, admission)
+							: snapshot.readNodePropertyColumnsSortedWithAdmission(batch, keys, admission);
 						if (columns.size() != keys.size() || std::ranges::any_of(columns, [&](const auto &column) {
 							return column.size() != count;
 						})) throw std::runtime_error("logical procedure backend changed Property batch cardinality");
@@ -633,10 +632,12 @@
 			validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
 			QueryResult result = makeAdmittedProcedureResult(context);
 			result.setColumns(columns);
+            reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes);
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+				context.checkGuard();
+				compactConsumedProcedureRows(result, rows, rowIndex, readBounds.maximum_materialized_bytes);
 				BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
-				context.checkGuard();
 				const ProcedurePayloadReconcileGuard reconcile{buffered};
                 detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
                 QueryResult::Row row;
@@ -652,6 +653,8 @@
 					}
 					detail::procedureAdmitMapNode(row, column);
                     row.emplace(column, std::move(*scalar));
+                    consumeProcedureOutputBinding(result, rows, rowIndex, row, column,
+                        readBounds.maximum_materialized_bytes, 0U, true);
 				}
 				appendProcedureResultRow(result, rows, rowIndex, std::move(row),
 						readBounds.maximum_materialized_bytes);

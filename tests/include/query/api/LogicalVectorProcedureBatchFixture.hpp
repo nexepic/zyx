@@ -71,13 +71,14 @@ using test::RecordingVectorProcedureBackend;
 						std::vector<PropertyValue>{PropertyValue("memory_embedding"), PropertyValue(topK),
 								PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})});
 			}
-			[[nodiscard]] QueryResult execute(const logical::LogicalOperator &root) const {
+			[[nodiscard]] QueryResult execute(const logical::LogicalOperator &root,
+					const QueryContext &context = QueryContext{}) const {
 				execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
 				return runtime.execute(root, options.bounds, options.maximum_vector_mapping_entries,
 						options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 						options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 						options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-						options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+						options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
 			}
             // Fixed workspace allowance expressed in the active STL's value and
             // container frame sizes. Input cardinality is deliberately much

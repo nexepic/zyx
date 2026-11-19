@@ -7,6 +7,7 @@
  */
 
 #include "graph/query/execution/LogicalPlanMutationRuntime.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include "BudgetMemoryResource.hpp"
 #include "graph/utils/OwnedPmrAllocator.hpp"
 #include "DeferredReferenceRowVisitor.hpp"
@@ -269,7 +270,7 @@ namespace graph::query::execution {
 						*snapshot, *chain->read_root, bounds,
 						[&](const LogicalPlanReadRow &row) {
 							context.checkGuard();
-							std::unordered_map<std::string, PropertyMap> propertyCache = row.property_cache;
+							PropertyCache propertyCache = row.property_cache;
 							for (const logical::LogicalOperator *operation: chain->operations) {
 								context.checkGuard();
 								if (operation->getType() == logical::LogicalOpType::LOP_SET) {
@@ -396,7 +397,7 @@ namespace graph::query::execution {
 					? MaterializedByteBudget(bounds.maximum_materialized_bytes, context.resource_account)
 					: MaterializedByteBudget(bounds.maximum_materialized_bytes);
 				detail::BudgetMemoryResource planningMemory(planningBudget);
-				std::pmr::set<uint64_t> nodeIds(&planningMemory), edgeIds(&planningMemory);
+				utils::AdmissionPmrSet<uint64_t> nodeIds(&planningMemory), edgeIds(&planningMemory);
 				BoundedBatch<LogicalPlanReadRow> projectionRows(bounds.maximum_rows,
 					bounds.maximum_materialized_bytes,
 					[&](const auto &row) { return detail::retainedLogicalReadRowBytes(row, context); },

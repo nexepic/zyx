@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 #include <gtest/gtest.h>
 #include <iostream>
 #include <map>
@@ -42,7 +43,7 @@ template<class Operation>
 void measurePropertyIO(const std::string &shape, const char *operation, Operation run) {
 	PropertyPageIO reads, writes;
 	StorageIO::ScopedNativeReadHookForTesting readHook([&](file_handle_t fd, void *buffer, size_t count, pwrite_off_t offset) {
-		const auto result = portable_pread(fd, buffer, count, offset);
+		const auto result = graph::storage::testing::readWithNativeLease(fd, buffer, count, offset);
 		if (result > 0) reads.record(buffer, static_cast<size_t>(result), offset);
 		return result;
 	});

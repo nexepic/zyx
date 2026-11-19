@@ -253,11 +253,12 @@ namespace graph::storage {
 			return offsets;
 		}
 
-		[[nodiscard]] std::optional<BTreePageEntry> decodeOne(std::span<const std::byte> stream, size_t &offset,
-															  utils::OwnedStdVector<std::byte> &previous, bool restart,
-															  bool includesValue) {
+		template<class Destination>
+		bool decodeOneTo(std::span<const std::byte> stream, size_t &offset,
+				std::span<const std::byte> previous, bool restart, bool includesValue,
+				Destination &&destination) {
 			if (offset == stream.size()) {
-				return std::nullopt;
+				return false;
 			}
 			const uint64_t shared = readVarint(stream, offset);
 			const uint64_t suffixBytes = readVarint(stream, offset);
@@ -272,15 +273,23 @@ namespace graph::storage {
 			}
 			// Reserve the complete reconstructed key once. Growing a shared-prefix
 			// vector during suffix insertion otherwise retains nearly double capacity.
-			utils::OwnedStdVector<std::byte> key;
+			auto &entry = destination();
+			auto &key = entry.key;
             key.resize(static_cast<size_t>(shared + suffixBytes));
             std::copy_n(previous.begin(), static_cast<size_t>(shared), key.begin());
             std::copy_n(stream.begin() + static_cast<std::ptrdiff_t>(offset), static_cast<size_t>(suffixBytes),
                 key.begin() + static_cast<std::ptrdiff_t>(shared));
 			offset += static_cast<size_t>(suffixBytes);
-			const uint64_t value = includesValue ? readVarint(stream, offset) : 0U;
-			previous = key;
-			return BTreePageEntry{std::move(key), value};
+			entry.value_or_child = includesValue ? readVarint(stream, offset) : 0U;
+			return true;
+		}
+
+		[[nodiscard]] std::optional<BTreePageEntry> decodeOne(std::span<const std::byte> stream, size_t &offset,
+				std::span<const std::byte> previous, bool restart, bool includesValue) {
+			std::optional<BTreePageEntry> entry;
+			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
+					[&]() -> BTreePageEntry & { return entry.emplace(); })) return std::nullopt;
+			return entry;
 		}
 
 	} // namespace
@@ -498,7 +507,7 @@ namespace graph::storage {
 		ByteVector stream;
 		utils::OwnedStdVector<uint32_t> offsets;
 		offsets.reserve(restartCount);
-		utils::OwnedStdVector<std::byte> previous;
+		std::span<const std::byte> previous;
 		for (size_t index = 0U; index < entries.size(); ++index) {
 			const BTreePageEntry &entry = entries[index];
 			if (index != 0U && !lessKey(entries[index - 1U].key, entry.key)) {
@@ -571,7 +580,7 @@ namespace graph::storage {
 		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
 		utils::OwnedStdVector<BTreePageEntry> entries;
 		entries.reserve(header.entry_count);
-		utils::OwnedStdVector<std::byte> previous;
+		std::span<const std::byte> previous;
 		const std::span<const std::byte> stream = bytes.subspan(header.stream_offset, header.stream_bytes);
 		size_t offset = 0U;
 		for (uint32_t index = 0U; index < header.entry_count; ++index) {
@@ -580,26 +589,79 @@ namespace graph::storage {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree restart offset does not point to an entry");
 			}
-			auto entry = decodeOne(stream, offset, previous, restart, includesValue);
-			if (!entry.has_value()) {
+			// Construct keys in their reserved final slots: moving an owned vector
+			// needs a second, genuinely allocated empty-container proxy on MSVC.
+			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
+					[&]() -> BTreePageEntry & {
+						entries.resize(static_cast<size_t>(index) + 1U);
+						return entries.back();
+					})) {
 				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"relocatable packed B+Tree entry stream ended early");
 			}
-			if (!entries.empty() && !lessKey(entries.back().key, entry->key)) {
+			auto &entry = entries.back();
+			if (index != 0U && !lessKey(entries[index - 1U].key, entry.key)) {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree entries are not strictly ordered");
 			}
-			if (kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry->value_or_child).isValid()) {
+			if (kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry.value_or_child).isValid()) {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed internal B+Tree entry has an invalid child Page ID");
 			}
-			entries.push_back(std::move(*entry));
+			// The reserved output owns this prefix until the next entry is decoded.
+			previous = entries.back().key;
 		}
 		if (offset != stream.size()) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable packed B+Tree entry stream has trailing bytes");
 		}
 		return entries;
+	}
+
+	void PackedBTreePageCodec::validate(BTreeNodeKind kind, std::span<const std::byte> bytes,
+															 BTreeLeafValueLayout leafValueLayout) {
+		debug::PerfTrace::addValue("native_btree.read.packed_page_decodes", 1);
+		validateValueLayout(kind, leafValueLayout);
+		const bool includesValue = storesValue(kind, leafValueLayout);
+		const PackedHeader header = decodePackedHeader(bytes);
+		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
+		std::array<std::optional<BTreePageEntry>, 2U> entries;
+		std::span<const std::byte> previous;
+		const std::span<const std::byte> stream = bytes.subspan(header.stream_offset, header.stream_bytes);
+		size_t offset = 0U;
+		for (uint32_t index = 0U; index < header.entry_count; ++index) {
+			const bool restart = (index % header.restart_interval) == 0U;
+			if (restart && offset != offsets[index / header.restart_interval]) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+									"relocatable packed B+Tree restart offset does not point to an entry");
+			}
+			// Alternate two charged key buffers; retain only the predecessor,
+			// while authenticating every entry before any owner mutation.
+			if (!decodeOneTo(stream, offset, previous, restart, includesValue,
+					[&]() -> BTreePageEntry & {
+						auto &slot = entries[index % 2U];
+                        if (!slot) slot.emplace();
+                        return *slot;
+					})) {
+				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
+									"relocatable packed B+Tree entry stream ended early");
+			}
+			auto &entry = *entries[index % 2U];
+			if (index != 0U && !lessKey(entries[(index + 1U) % 2U]->key, entry.key)) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+									"relocatable packed B+Tree entries are not strictly ordered");
+			}
+			if (kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry.value_or_child).isValid()) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+									"relocatable packed internal B+Tree entry has an invalid child Page ID");
+			}
+			// This buffer is not reused until its successor has been checked.
+			previous = entry.key;
+		}
+		if (offset != stream.size()) {
+			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+								"relocatable packed B+Tree entry stream has trailing bytes");
+		}
 	}
 
 	std::span<const std::byte> BTreeFixedKey::key() const {
@@ -672,11 +734,21 @@ namespace graph::storage {
 		// Binary-search restart keys, then decode only the selected restart group.
 		const auto restartKeyAt = [&stream, &offsets, includesValue](size_t candidate) {
 			size_t offset = offsets[candidate];
-			utils::OwnedStdVector<std::byte> previous;
-			const auto entry = decodeOne(stream, offset, previous, true, includesValue);
-			// restartOffsets() proved this offset lies inside the stream; decodeOne()
-			// consequently either returns the restart entry or throws a codec error.
-			return entry->key;
+			// Restart keys have no predecessor. Compare their authenticated stream
+			// bytes directly, instead of allocating an owning key (and an MSVC
+			// iterator proxy) for each binary-search probe. The input span outlives
+			// this synchronous search; only the final returned entry owns a key.
+			const auto shared = readVarint(stream, offset);
+			const auto suffix = readVarint(stream, offset);
+			if (shared != 0U || suffix > stream.size() - offset) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
+					"relocatable packed B+Tree restart key exceeds the stream");
+			}
+			const auto result = stream.subspan(offset, static_cast<size_t>(suffix));
+			offset += static_cast<size_t>(suffix);
+			// Preserve validation of the encoded value, even for a skipped probe.
+			if (includesValue) static_cast<void>(readVarint(stream, offset));
+			return result;
 		};
 		size_t firstGreater = 0U;
 		size_t upper = offsets.size();
@@ -694,7 +766,7 @@ namespace graph::storage {
 		const size_t first = group * header.restart_interval;
 		for (size_t index = first; index < std::min<size_t>(header.entry_count, first + header.restart_interval);
 			 ++index) {
-			const auto entry = decodeOne(stream, offset, previous, index == first, includesValue);
+			auto entry = decodeOne(stream, offset, previous, index == first, includesValue);
 			if (!entry.has_value()) {
 				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"relocatable packed B+Tree entry stream ended during lookup");
@@ -709,6 +781,7 @@ namespace graph::storage {
 			if (lessKey(key, entry->key)) {
 				break;
 			}
+			previous = std::move(entry->key);
 		}
 		return std::nullopt;
 	}
@@ -880,9 +953,14 @@ namespace graph::storage {
 	}
 
 	void BTreePage::validateLayout() const {
-		// packedEntries() validates the stable slots, owner identity, packed entry
-		// count, ordering, and internal child references in one canonical decode.
-		static_cast<void>(packedEntries());
+        // Authentication needs only the predecessor key, not an owning copy
+        // of every entry. Keep envelope/owner/count checks and validate the
+        // complete canonical stream before publishing or returning the page.
+        const auto payload = validatePackedEnvelope();
+        const auto current = header();
+        withIndexRecord(page_, payload, [&](auto bytes) {
+            PackedBTreePageCodec::validate(current.kind, bytes, current.leaf_value_layout);
+        });
 	}
 
 	utils::OwnedStdVector<BTreePageEntry> BTreePage::entries() const {
@@ -915,9 +993,44 @@ namespace graph::storage {
 		rebound.entry_count = 0;
 		// The immutable source is decoded and authenticated once. Repacking the
 		// complete ordered page avoids repeatedly decoding every growing prefix.
-		const auto validatedEntries = entries();
-		return BTreePage::createWithEntries(owner, rebound, validatedEntries);
+		auto destination = [&] {
+			const auto validatedEntries = entries();
+			auto page = BTreePage::create(owner, rebound);
+			page.writePackedEntries(validatedEntries);
+			rebound.entry_count = static_cast<uint32_t>(validatedEntries.size());
+			page.writeHeader(rebound);
+			return page;
+		}();
+		// Source entries are no longer needed once the independent packed image
+		// exists. Release them before authenticating that image; otherwise both
+		// complete decoded pages compete for the same bounded workspace.
+		destination.validateLayout();
+		return destination;
 	}
+
+
+    BTreePage BTreePage::rebindPrivateOwner(const PageOwnerHeader &owner) && {
+        auto rebound = header();
+        if (owner.kind != PageOwnerKind::POK_INDEX || owner.owner_id != rebound.index_id ||
+            owner.page_id != rebound.page_id || owner.flags != 0U || !owner.generation.isValid() || !owner.committed_lsn.isValid())
+            throwBTreePageError(FormatError::FERR_INVALID_STATE,
+                "relocatable B+Tree page relocation owner does not preserve its logical identity");
+        SlottedPage::validateOwner(owner);
+        // All decoding/admission precedes mutation. Only the fixed-size typed
+        // header and SlottedPage's existing owner/checksum fields then change.
+        const auto payload = validatePackedEnvelope();
+        withIndexRecord(page_, payload, [&](auto bytes) {
+            PackedBTreePageCodec::validate(rebound.kind, bytes, rebound.leaf_value_layout);
+        });
+        rebound.generation = owner.generation;
+        const auto bytes = BTreePageHeaderCodec::encode(rebound);
+        // Existing bounded in-place compaction uses no heap allocation and
+        // preserves the free-space behavior of immutable rebinding.
+        page_.compact();
+        page_.rebindOwner(owner);
+        page_.overwrite({rebound.page_id, 0U, 1U}, bytes);
+        return std::move(*this);
+    }
 
 	void BTreePage::writeHeader(BTreePageHeader updated) {
 		const SlottedSlotReference reference{page_.pageId(), 0, 1};

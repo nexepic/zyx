@@ -15,6 +15,9 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#if defined(_MSVC_STL_VERSION)
+#include <boost/unordered_map.hpp>
+#endif
 #include <vector>
 
 #include "graph/storage/LogicalGraphRead.hpp"
@@ -142,7 +145,14 @@ namespace graph::query::gds {
 		std::shared_ptr<std::pmr::memory_resource> allocation_owner_ = utils::sharedAllocationOwner();
         using Adjacency = utils::OwnedStdVector<LogicalProjectionEdge>;
         using AdjacencyEntry = std::pair<const uint64_t, Adjacency>;
-        using AdjacencyMap = std::unordered_map<uint64_t, Adjacency, std::hash<uint64_t>,
+        // MSVC's hash bucket-vector constructor allocates its debug proxy
+        // inside noexcept. A rejecting resource must unwind, not terminate.
+        using AdjacencyMap =
+#if defined(_MSVC_STL_VERSION)
+            boost::unordered_map<uint64_t, Adjacency, std::hash<uint64_t>,
+#else
+            std::unordered_map<uint64_t, Adjacency, std::hash<uint64_t>,
+#endif
             std::equal_to<uint64_t>, utils::OwnedPmrAllocator<AdjacencyEntry>>;
         utils::OwnedStdVector<uint64_t> node_ids_;
         AdjacencyMap outgoing_{utils::OwnedPmrAllocator<AdjacencyEntry>(allocation_owner_)};

@@ -31,7 +31,14 @@ class OwnedStdVector final : private OwnedHeapReservation, public std::vector<T>
     using Vector = std::vector<T>;
 public:
     using OwnedHeapElement = void;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    // Report the actual empty-container caller, not this wrapper, when an
+    // MSVC iterator proxy is denied. No allocation or accounting changes.
+    OwnedStdVector(std::source_location site = std::source_location::current())
+        : Credit(currentOwner(), detail::standardContainerProxyBytes(), site), Vector() {}
+#else
     OwnedStdVector() : Credit(currentOwner(), detail::standardContainerProxyBytes()), Vector() {}
+#endif
     OwnedStdVector(std::initializer_list<T> source) requires std::is_copy_constructible_v<T> : OwnedStdVector() {
         reserve(source.size());
         for (const auto &value : source) push_back(value);

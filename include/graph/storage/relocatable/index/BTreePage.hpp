@@ -128,6 +128,9 @@ namespace graph::storage {
 		[[nodiscard]] static utils::OwnedStdVector<BTreePageEntry>
 		decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+        // Complete validation retaining two charged key buffers, not all entries.
+        static void validate(BTreeNodeKind kind, std::span<const std::byte> bytes,
+            BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		// Checks only the fixed payload envelope and restart table. Page-local point
 		// lookups use this before probing one restart group; full entry validation
 		// remains the responsibility of decode() and integrity scans.
@@ -176,6 +179,10 @@ namespace graph::storage {
 		// the stable Page ID, tree links, and entries. B+Tree slot IDs are page-
 		// local implementation details, so rebuilding also safely compacts holes.
 		[[nodiscard]] BTreePage rebindOwner(const PageOwnerHeader &owner) const;
+        // Consume an exclusively owned, unpublished image. Authenticate it
+        // before updating fixed owner/header bytes; retain its backing/authority
+        // and compact existing slots instead of allocating another complete page.
+        [[nodiscard]] BTreePage rebindPrivateOwner(const PageOwnerHeader &owner) &&;
 		void insert(BTreePageEntry entry);
 		void erase(std::span<const std::byte> key);
 		[[nodiscard]] std::vector<std::byte> serialize() const;

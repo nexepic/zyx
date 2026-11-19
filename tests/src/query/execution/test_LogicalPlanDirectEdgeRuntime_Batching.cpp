@@ -1202,9 +1202,25 @@ namespace graph::query::execution {
 		auto bounds = directBounds();
 		// One retained payload plus source/output row slots and column staging.
 		bounds.maximum_materialized_bytes = 2U * sizeof(LogicalPlanReadRow) +
-				sizeof(LogicalPlanReadValue) + sizeof(PropertyValue) + 400U + 216U;
+				sizeof(LogicalPlanReadValue) + sizeof(PropertyValue) + 400U + 216U +
+                retainedBindingMetadataDelta() +
+                detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)>() +
+                detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)::mapped_type>() +
+                std::string("payload").size() + std::string("n").size() + 2U*sizeof(size_t);
+        // The fixed efficiency ceiling concerns private bookkeeping, not
+        // unavoidable differences in the installed STL's public value layout.
+        // Three tree nodes embed three string keys; the inner cache also
+        // embeds a second PropertyValue. Keep 776 bytes as an independent
+        // ceiling after removing only those explicit public ABI components.
+        constexpr size_t publicLayoutBytes = 2U * sizeof(LogicalPlanReadRow) +
+            sizeof(LogicalPlanReadValue) + 2U * sizeof(PropertyValue) +
+            3U * sizeof(std::string) + 3U * graph::utils::detail::standardContainerProxyBytes();
+        ASSERT_GE(bounds.maximum_materialized_bytes, publicLayoutBytes);
+        ASSERT_LE(bounds.maximum_materialized_bytes - publicLayoutBytes, 776U);
 		EXPECT_LT(bounds.maximum_materialized_bytes,
-				2U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 400U + 7U));
+				2U * (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>() + 401U) +
+                    detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)>() +
+                    detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::property_cache)::mapped_type>());
 		for (const bool continueVisiting: {false, true}) {
 			SCOPED_TRACE(continueVisiting);
 			size_t delivered = 0U;
@@ -1409,8 +1425,8 @@ namespace graph::query::execution {
 		}));
 
 		ASSERT_EQ(observed, (std::vector<PropertyValue>{PropertyValue("a")}));
-		EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
-		EXPECT_EQ(graph.node_property_point_reads, 1U);
+		EXPECT_EQ(graph.node_property_column_batch_ids, (std::vector<std::vector<uint64_t>>{{1U}}));
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, ReusesSelectedPropertiesAcrossEntityAliasProjections) {
@@ -1922,9 +1938,9 @@ namespace graph::query::execution {
 		}, context)));
 		const auto trace = debug::PerfTrace::snapshotAndReset();
 		debug::PerfTrace::setValueCollectionEnabled(traceWasEnabled);
-		const auto boundReads = trace.find("logical_plan.bound_projection.property_reads");
+		const auto boundReads = trace.find("logical_plan.project.moved_property_values");
 		ASSERT_NE(boundReads, trace.end());
-		EXPECT_GE(boundReads->second.totalValue, 2);
+		EXPECT_EQ(boundReads->second.totalValue, 2);
 		EXPECT_EQ(delivered, 1U);
 		EXPECT_EQ(account->used(), 0U);
 	}
@@ -1934,8 +1950,17 @@ namespace graph::query::execution {
 	TEST(LogicalPlanDirectEdgeRuntimeTest, TightAndAmplePropertyPrefetchReadEachNodeOnce) {
 		for (const size_t budget : {size_t{4096U}, size_t{100000U}}) {
 			SCOPED_TRACE(budget);
+			struct Trace { size_t node_splits = 0; size_t prefetch_splits = 0; } trace;
+			debug::PerfTrace::ScopedObserver observer(&trace, [](void *owner, std::string_view key,
+																	 int64_t value, bool) noexcept {
+				if (key == "logical_plan.node_predicate_split_batches" && value > 0)
+					static_cast<Trace *>(owner)->node_splits += static_cast<size_t>(value);
+				if (key == "logical_plan.property_prefetch_split_batches" && value > 0)
+					static_cast<Trace *>(owner)->prefetch_splits += static_cast<size_t>(value);
+			});
 			direct_edge_test::DirectEdgeGraph graph = direct_edge_test::directGraph();
 			graph.enable_property_tokens = true;
+			graph.enable_property_read_admission = true;
 			graph.nodes.clear();
 			const PropertyValue payload(std::string(3000U, 'p'));
 			for (uint64_t id = 1; id <= 6; ++id)
@@ -1955,9 +1980,53 @@ namespace graph::query::execution {
 			for (const auto &batch : graph.node_property_column_batch_ids)
 				fetched.insert(fetched.end(), batch.begin(), batch.end());
 			std::ranges::sort(fetched);
-			EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U, 4U, 5U, 6U}));
+			EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U, 4U, 5U, 6U}))
+					<< "node predicate splits=" << trace.node_splits
+					<< ", property prefetch splits=" << trace.prefetch_splits;
 			if (budget == 100000U) EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
 			EXPECT_EQ(graph.node_property_point_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, PropertyPrefetchRejectsBackendWithoutSourceAdmissionBeforeReading) {
+		direct_edge_test::DirectEdgeGraph graph = direct_edge_test::directGraph();
+		graph.enable_property_tokens = true;
+		graph.enable_property_read_admission = false;
+		graph.nodes.clear();
+		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"payload", PropertyValue(std::string(3000U, 'p'))}}});
+		direct_edge_test::DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "payload"), "payload");
+		logical::LogicalProject root(std::make_unique<logical::LogicalNodeScan>("n"), std::move(items));
+		auto bounds = direct_edge_test::directBounds(); bounds.maximum_materialized_bytes = 4096U;
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::logic_error);
+		EXPECT_EQ(delivered, 0U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, PointPropertyEvaluationRequiresSourceAdmissionBeforeReading) {
+		for (const bool edge : {false, true}) {
+			SCOPED_TRACE(edge);
+			auto graph = direct_edge_test::directGraph(); graph.enable_property_read_admission = false;
+			direct_edge_test::DirectEdgeSnapshot snapshot(graph);
+			LogicalPlanReadRow row;
+			row.values.emplace("item", edge ? EntityRef{10U, true, 1U, 2U, 1U} : EntityRef{1U, false, 0U, 0U, 0U});
+			expressions::VariableReferenceExpression expression("item", edge ? "weight" : "rank");
+			QueryContext context;
+			EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+				snapshot, expression, row, direct_edge_test::directBounds(), context)), std::logic_error);
+			EXPECT_EQ(graph.node_property_point_reads, 0U); EXPECT_EQ(graph.edge_property_point_reads, 0U);
+			EXPECT_EQ(graph.node_property_column_batch_reads, 0U); EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+			graph.enable_property_read_admission = true;
+			const auto value = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+				snapshot, expression, row, direct_edge_test::directBounds(), context);
+			EXPECT_EQ(std::get<PropertyValue>(value), PropertyValue(edge ? 7 : 1));
+			EXPECT_EQ(edge ? graph.edge_property_column_admission_reads : graph.node_property_column_admission_reads, 1U);
 		}
 	}
 }

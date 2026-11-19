@@ -41,6 +41,13 @@ ZYX 通过 Conan 自动管理其依赖：
 - **CLI11**: 命令行界面
 - **ANTLR4 C++ Runtime**: 解析器生成（4.13.1）
 
+所有核心库构建（包括 Linux、macOS、Windows 和 WASM）均需要仅含头文件的
+Boost.Container 组件，用于紧凑且地址稳定的查询绑定。现有 Conan 配方会提供这些
+头文件。系统依赖构建需要让 CMake 找到它们；源码和 WASM 构建可将环境变量
+`ZYX_BOOST_HEADER_DIR` 指向包含 `boost/` 的目录。WASM 仅接收 Boost 头文件目录，
+不会引入宿主机 C/C++ 标准头文件。这不会增加核心库的 Boost 运行时库依赖，
+公开结果类型保持不变。
+
 ## 运行时要求
 
 ### 操作系统

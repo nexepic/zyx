@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/utils/OwnedVector.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 #include <algorithm>
@@ -720,7 +721,7 @@ namespace graph::storage {
         using FrameKey = std::pair<uint64_t, uint8_t>;
         using RetiredEntry = std::pair<const FrameKey, PhysicalPageRef>;
         std::map<FrameKey, PhysicalPageRef, std::less<FrameKey>, utils::OwnedPmrAllocator<RetiredEntry>> retired;
-        std::vector<PhysicalPageRef, utils::OwnedPmrAllocator<PhysicalPageRef>> retirement;
+        utils::OwnedVector<PhysicalPageRef> retirement;
         if (metadata_retirement_complete_) {
             const auto bootstrapRoot = candidate_.page_directory_root;
             if (!ownsAllocatedPage(bootstrapRoot) ||

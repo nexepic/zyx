@@ -383,7 +383,16 @@ TEST(LogicalGraphReadExecutorTest, ReducesIndexResidualBatchSizeForByteBudgetBef
 		data.nodes.emplace(nodeId, std::move(node));
 		candidates.push_back({nodeId, false, 0U, 0U, 0U});
 	}
-	data.range_candidate_result = IndexCandidateBatch{std::move(candidates), 17U, false, false, {}, true};
+	// Stream bounded candidate pages; the property residual still needs to
+	// shrink these pages under the unchanged 8 KiB materialization limit.
+	data.range_candidate_stream_results.emplace();
+	for (size_t begin = 0U; begin < candidates.size(); begin += 64U) {
+		const size_t end = std::min(candidates.size(), begin + 64U);
+		data.range_candidate_stream_results->push_back(IndexCandidateBatch{
+			std::vector<EntityRef>(candidates.begin() + begin, candidates.begin() + end),
+			17U, false, false, {}, true});
+	}
+
 	TestLogicalGraphBackend backend(std::move(data));
 	LogicalPlanReadRuntime runtime(backend);
 	auto scan = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});

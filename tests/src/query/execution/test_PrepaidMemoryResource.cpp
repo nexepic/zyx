@@ -1,16 +1,70 @@
 #include <gtest/gtest.h>
+#include "graph/query/api/QueryResult.hpp"
+#include "graph/utils/StandardContainerHeapBytes.hpp"
+#include <unordered_map>
+#include "graph/utils/AdmissionPmrContainers.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
 #include <array>
 #include <barrier>
 #include <thread>
+#include <span>
 #include <vector>
 #include "graph/query/execution/PrepaidMemoryResource.hpp"
 
 namespace graph::query::execution::detail {
 namespace {
+// Observe allocator requests independently of admission arithmetic. In MSVC
+// debug builds a live empty/moved-from vector also owns an iterator proxy.
+class ActualPmrRequests final : public std::pmr::memory_resource {
+public:
+    size_t live = 0U, allocations = 0U;
+private:
+    void *do_allocate(size_t bytes, size_t alignment) override {
+        auto *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+        live += bytes; ++allocations;
+        return result;
+    }
+    void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+        std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+        live -= bytes;
+    }
+    bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+
 std::shared_ptr<ResourceAccount> prepaidAccount(size_t maximum = 1000U) {
 	auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
 	auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
 	return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_CACHE, maximum);
+}
+
+TEST(PrepaidMemoryResourceTest, StandardResultMapStructuralBoundCoversIndependentAllocatorRequests) {
+    // Inert storage with the public mapped value's exact layout isolates
+    // structural requests from key/value heap payloads. PMR reports actual
+    // requests independently of the production capacity/admission formulas.
+    using graph::query::ResultValue;
+    struct alignas(alignof(ResultValue)) Slot { std::byte bytes[sizeof(ResultValue)]; };
+    using ReferenceMap = std::unordered_map<std::string, Slot>;
+    static_assert(sizeof(ReferenceMap::value_type) == sizeof(graph::query::QueryResult::Row::value_type));
+    static_assert(alignof(ReferenceMap::value_type) == alignof(graph::query::QueryResult::Row::value_type));
+    for (const size_t count : {0U, 1U, 2U, 17U, 300U}) {
+        SCOPED_TRACE(count);
+        ActualPmrRequests requests;
+        {
+            ReferenceMap reference;
+            std::pmr::unordered_map<std::string, Slot> observed(&requests);
+            if (count) { reference.reserve(count); observed.reserve(count); }
+            for (size_t index = 0U; index < count; ++index) {
+                const auto key = std::to_string(index);
+                reference.emplace(key, Slot{}); observed.emplace(key, Slot{});
+            }
+            const size_t upper = utils::detail::standardUnorderedMapStructuralHeapBytes(reference);
+            EXPECT_GE(upper, requests.live);
+            // A conservative request bound must stay near actual storage,
+            // rather than silently charging another embedded value per node.
+            EXPECT_LE(upper, requests.live + requests.live / 4U + 256U);
+        }
+        EXPECT_EQ(requests.live, 0U);
+    }
 }
 
 TEST(PrepaidMemoryResourceTest, UnusedGrantStaysChargedAndContainersChargeActualCapacity) {
@@ -19,7 +73,7 @@ TEST(PrepaidMemoryResourceTest, UnusedGrantStaysChargedAndContainersChargeActual
 		PrepaidMemoryResource memory(account, 800U);
 		EXPECT_EQ(account->used(), 800U); EXPECT_EQ(memory.used(), 0U);
 		{
-			std::pmr::vector<uint64_t> values(&memory); values.reserve(20U);
+			graph::utils::AdmissionPmrVector<uint64_t> values(&memory); values.reserve(20U);
 			EXPECT_EQ(memory.used(), values.capacity() * sizeof(uint64_t));
 			values.push_back(7U); values.clear();
 			EXPECT_GT(memory.used(), 0U); EXPECT_EQ(account->used(), 800U);
@@ -31,11 +85,11 @@ TEST(PrepaidMemoryResourceTest, UnusedGrantStaysChargedAndContainersChargeActual
 
 TEST(PrepaidMemoryResourceTest, VectorGrowthOverlapIsAdmittedBeforeReplacingTheOldBuffer) {
 	auto account = prepaidAccount(); PrepaidMemoryResource memory(account, 80U);
-	std::pmr::vector<uint64_t> values(&memory); values.reserve(4U); values.push_back(42U);
+	graph::utils::AdmissionPmrVector<uint64_t> values(&memory); values.reserve(4U); values.push_back(42U);
 	EXPECT_THROW(values.reserve(8U), ResourceAdmissionDenied);
 	EXPECT_EQ(values.size(), 1U); EXPECT_EQ(values[0], 42U); EXPECT_EQ(values.capacity(), 4U);
 	EXPECT_EQ(memory.used(), 32U); EXPECT_EQ(memory.denials(), 1U);
-	std::pmr::vector<uint64_t>(&memory).swap(values);
+	graph::utils::AdmissionPmrVector<uint64_t>(&memory).swap(values);
 	values.reserve(8U); EXPECT_EQ(memory.used(), 64U);
 }
 
@@ -76,7 +130,7 @@ TEST(PrepaidMemoryResourceTest, ParentLifetimeExtendsUntilEveryGrantedContainerI
 	{
 		auto account = prepaidAccount(); lifetime = account;
 		PrepaidMemoryResource memory(account, 100U); account.reset();
-		std::pmr::vector<uint64_t> values(&memory); values.push_back(42U);
+		graph::utils::AdmissionPmrVector<uint64_t> values(&memory); values.push_back(42U);
 		ASSERT_FALSE(lifetime.expired()); EXPECT_EQ(lifetime.lock()->used(), 100U);
 	}
 	EXPECT_TRUE(lifetime.expired());
@@ -126,15 +180,17 @@ TEST(PrepaidMemoryResourceTest, OwningAllocatorRetainsTheGrantThroughTheLastShar
 }
 
 TEST(PrepaidMemoryResourceTest, OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership) {
+    ActualPmrRequests firstRequests, secondRequests;
     auto firstAccount = prepaidAccount(), secondAccount = prepaidAccount();
-    auto first = std::make_shared<PrepaidMemoryResource>(firstAccount, 800U);
-    auto second = std::make_shared<PrepaidMemoryResource>(secondAccount, 800U);
+    auto first = std::make_shared<PrepaidMemoryResource>(firstAccount, 800U, &firstRequests);
+    auto second = std::make_shared<PrepaidMemoryResource>(secondAccount, 800U, &secondRequests);
     using Values = std::vector<uint64_t, utils::OwnedPmrAllocator<uint64_t>>;
     {
         Values original({1U, 2U, 3U}, utils::OwnedPmrAllocator<uint64_t>(first));
         Values copy = original;
         EXPECT_EQ(copy, original);
-        EXPECT_EQ(first->used(), (original.capacity() + copy.capacity()) * sizeof(uint64_t));
+        EXPECT_EQ(first->used(), firstRequests.live);
+        EXPECT_GE(firstRequests.live, (original.capacity() + copy.capacity()) * sizeof(uint64_t));
         Values assigned({7U}, utils::OwnedPmrAllocator<uint64_t>(second));
         assigned = copy;
         EXPECT_EQ(second->used(), 0U);
@@ -151,14 +207,17 @@ TEST(PrepaidMemoryResourceTest, OwningAllocatorCopiesAndAssignmentsPreserveActua
     }
     EXPECT_EQ(first->used(), 0U);
     EXPECT_EQ(second->used(), 0U);
+    EXPECT_EQ(firstRequests.live, 0U);
+    EXPECT_EQ(secondRequests.live, 0U);
 }
 }
 
 #include "graph/utils/OwnedVector.hpp"
 namespace graph::query::execution::detail {
 TEST(PrepaidMemoryResourceTest, ScopedConstructionAndCopyRebindingRestoreThePreviousOwner) {
-    auto first = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U);
-    auto second = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U);
+    ActualPmrRequests firstRequests, secondRequests;
+    auto first = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U, &firstRequests);
+    auto second = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U, &secondRequests);
     graph::utils::OwnedVector<uint64_t> retained;
     {
         graph::utils::OwnedAllocationScope outer(first);
@@ -169,7 +228,8 @@ TEST(PrepaidMemoryResourceTest, ScopedConstructionAndCopyRebindingRestoreThePrev
             const auto copy = original;
             EXPECT_EQ(copy, original);
             EXPECT_EQ(copy.get_allocator().owner(), second);
-            EXPECT_EQ(second->used(), copy.capacity() * sizeof(uint64_t));
+            EXPECT_EQ(second->used(), secondRequests.live);
+            EXPECT_GE(secondRequests.live, copy.capacity() * sizeof(uint64_t));
         }
         EXPECT_EQ(second->used(), 0U);
         retained = original;
@@ -183,7 +243,8 @@ TEST(PrepaidMemoryResourceTest, ScopedConstructionAndCopyRebindingRestoreThePrev
 }
 
 TEST(PrepaidMemoryResourceTest, MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction) {
-    auto memory = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U);
+    ActualPmrRequests requests;
+    auto memory = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U, &requests);
     std::weak_ptr<PrepaidMemoryResource> lifetime = memory;
     graph::utils::OwnedVector<uint64_t> source{utils::OwnedPmrAllocator<uint64_t>(memory)};
     source.push_back(42U);
@@ -193,11 +254,51 @@ TEST(PrepaidMemoryResourceTest, MovedFromOwningVectorKeepsAReusableAllocatorAfte
         EXPECT_EQ(destination[0], 42U);
     }
     ASSERT_FALSE(lifetime.expired());
-    EXPECT_EQ(lifetime.lock()->used(), 0U);
+    EXPECT_EQ(lifetime.lock()->used(), requests.live);
+    EXPECT_GE(requests.live, source.capacity() * sizeof(uint64_t));
     source.push_back(43U);
     EXPECT_EQ(source[0], 43U);
     source = graph::utils::OwnedVector<uint64_t>{};
     EXPECT_TRUE(lifetime.expired());
+    EXPECT_EQ(requests.live, 0U);
+}
+
+TEST(PrepaidMemoryResourceTest, OwningVectorMovesReuseFullCreditWithoutNewAllocatorRequests) {
+    static_assert(std::is_nothrow_move_constructible_v<utils::OwnedVector<uint64_t>>);
+    static_assert(std::is_nothrow_move_assignable_v<utils::OwnedVector<uint64_t>>);
+    static_assert(std::contiguous_iterator<utils::OwnedVector<uint64_t>::iterator>);
+    ActualPmrRequests firstRequests, secondRequests;
+    auto first = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U, &firstRequests);
+    auto second = std::make_shared<PrepaidMemoryResource>(prepaidAccount(), 800U, &secondRequests);
+    {
+        const std::vector<uint64_t> input{1U, 2U, 3U};
+        utils::OwnedVector<uint64_t> source(input, utils::OwnedPmrAllocator<uint64_t>(first));
+        EXPECT_EQ(source, input); EXPECT_EQ(input, source);
+        const std::span<const uint64_t> view(source);
+        EXPECT_EQ(view.data(), source.data()); EXPECT_EQ(view.size(), 3U);
+        utils::OwnedVector<uint64_t> target({9U}, utils::OwnedPmrAllocator<uint64_t>(second));
+        {
+            utils::OwnedHeapReservation hold(first); hold.set(800U - first->used());
+            const auto allocations = firstRequests.allocations;
+            utils::OwnedVector<uint64_t> empty{utils::OwnedPmrAllocator<uint64_t>(first)};
+            auto moved = std::move(source);
+            source = std::move(moved);
+            target = std::move(source);
+            source = std::move(target);
+            EXPECT_EQ(firstRequests.allocations, allocations);
+            EXPECT_EQ(first->used(), 800U);
+            EXPECT_EQ(source.get_allocator().owner(), first);
+            ASSERT_EQ(source.size(), 3U); EXPECT_EQ(source[0], 1U); EXPECT_EQ(source[2], 3U);
+        }
+        target = std::move(source);
+        ASSERT_EQ(target.size(), 3U); EXPECT_EQ(target[0], 1U); EXPECT_EQ(target[2], 3U);
+        EXPECT_TRUE(source.empty());
+        EXPECT_EQ(target.get_allocator().owner(), first);
+        EXPECT_EQ(first->used(), firstRequests.live);
+        EXPECT_EQ(second->used(), secondRequests.live);
+    }
+    EXPECT_EQ(first->used(), 0U); EXPECT_EQ(second->used(), 0U);
+    EXPECT_EQ(firstRequests.live, 0U); EXPECT_EQ(secondRequests.live, 0U);
 }
 
 TEST(PrepaidMemoryResourceTest, AllocationScopeIsThreadLocalAcrossIndependentDomains) {

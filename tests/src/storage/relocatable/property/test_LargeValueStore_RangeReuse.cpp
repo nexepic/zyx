@@ -49,7 +49,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueRangeReuseValidatesRawAndCompress
    const auto result = store.readRangeFromManifestCached(snapshot, manifest, offset, 32, cache,
     [&](size_t bytes) { admitted = bytes; });
    EXPECT_EQ(result, slice(input, offset, 32));
-   EXPECT_EQ(admitted, result.capacity() + cache.retainedBytes());
+   EXPECT_EQ(admitted, graph::utils::detail::standardVectorHeapBufferBytes(result) + cache.retainedBytes());
    EXPECT_LE(cache.retainedBytes(), RSS_LARGE_VALUE_EXTENT_128K_BYTES);
   }
   const auto trace = graph::debug::PerfTrace::snapshotAndReset();
@@ -197,7 +197,19 @@ TEST_F(RelocatableMetadataStoreTest, PrivateSequentialChunkWorkspaceDoesNotAccum
   graph::storage::detail::PropertyDecodeWorkspace workspace(budget);
   const auto result = store.readRangeFromManifest(snapshot, manifest, 0U, input.size());
   EXPECT_EQ(result, input);
-  EXPECT_EQ(budget->used(), result.capacity());
+  // Include the retained STL proxy and large-allocation prefix as well as
+  // capacity. They are real owners on MSVC and must not be refunded early.
+  EXPECT_EQ(budget->used(), graph::utils::detail::standardVectorHeapBufferBytes(result));
+  EXPECT_LE(budget->used(), 163840U);
+  RecordProperty("retained_result_bytes", budget->used());
  }
  EXPECT_EQ(budget->used(), 0U);
+ size_t lastAdmission = 0U;
+ const auto callbackResult = store.readRangeFromManifest(snapshot, manifest, 0U, input.size(),
+  [&](size_t bytes) { lastAdmission = bytes; });
+ EXPECT_EQ(callbackResult, input);
+ const auto retainedBytes = graph::utils::detail::standardVectorHeapBufferBytes(callbackResult);
+ EXPECT_EQ(lastAdmission, retainedBytes);
+ EXPECT_THROW(static_cast<void>(store.readRangeFromManifest(snapshot, manifest, 0U, input.size(),
+  [&](size_t bytes) { if (bytes >= retainedBytes) throw std::length_error("result backing denied"); })), std::length_error);
 }

@@ -56,10 +56,9 @@ jobs:
       - name: Install system deps (Linux)
         if: runner.os == 'Linux'
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
-          sudo apt update
-          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+          sudo add-apt-repository --no-update -y universe
+          sudo apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
+          sudo apt-get -o Acquire::Retries=3 install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
       - name: Install pkg-config (Windows)
         if: runner.os == 'Windows'
@@ -85,7 +84,7 @@ jobs:
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install llvm --version=20.1.4 --force
+          choco install llvm --version=22.1.8 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
@@ -148,10 +147,9 @@ jobs:
       - name: Install system deps (Linux)
         if: runner.os == 'Linux'
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
-          sudo apt update
-          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+          sudo add-apt-repository --no-update -y universe
+          sudo apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
+          sudo apt-get -o Acquire::Retries=3 install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
       - name: Install pkg-config (Windows)
         if: runner.os == 'Windows'
@@ -177,7 +175,7 @@ jobs:
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install llvm --version=20.1.4 --force
+          choco install llvm --version=22.1.8 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 

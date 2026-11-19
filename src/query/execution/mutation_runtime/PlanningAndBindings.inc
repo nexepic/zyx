@@ -20,6 +20,7 @@
 		using storage::LogicalGraphPropertyMutationRequest;
 		using storage::LogicalGraphWriteProperty;
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
+		using PropertyCache = decltype(LogicalPlanReadRow::property_cache);
 
 		void assignBoundedProperty(PropertyMap &properties, const std::string &key, const PropertyValue &value, size_t maximumEntries) {
 			if (!properties.contains(key) && properties.size() >= maximumEntries)
@@ -628,7 +629,7 @@
 		evaluateCreatePropertyExpression(const expressions::Expression &expression, const QueryContext &context,
 										 const LogicalPlanReadRow &row, storage::LogicalGraphReadSnapshot &snapshot,
 										 const LogicalPlanReadRuntimeBounds &bounds,
-										 std::unordered_map<std::string, PropertyMap> &propertyCache) {
+										 PropertyCache &propertyCache) {
 			LogicalPlanReadRow evaluationRow = row;
 			evaluationRow.property_cache = propertyCache;
 			const LogicalPlanReadValue value = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
@@ -704,7 +705,7 @@
 
 		void synchronizeEntityPropertyCache(const LogicalPlanReadRow &row, const MutableGraphEntity &entity,
 											const PropertyMap &properties,
-											std::unordered_map<std::string, PropertyMap> &propertyCache) {
+											PropertyCache &propertyCache) {
 			for (const auto &[variable, value]: row.values) {
 				const auto *node = std::get_if<storage::LogicalGraphNode>(&value);
 				const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value);
@@ -721,7 +722,7 @@
 		void applySetOperation(const logical::LogicalSet &setOperator, const LogicalPlanReadRow &row,
 								   storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 								   const QueryContext &context, MutableGraphEntities &entities,
-								   std::unordered_map<std::string, PropertyMap> &propertyCache) {
+								   PropertyCache &propertyCache) {
 			// Keep direct callers on the same fail-closed shape contract as every
 			// collected mutation chain before resolving a runtime binding.
 			validateSetOperationShape(setOperator, "logical SET");
@@ -784,7 +785,7 @@
 		void applyRemoveOperation(const logical::LogicalRemove &removeOperator, const LogicalPlanReadRow &row,
 									  storage::LogicalGraphReadSnapshot &snapshot,
 									  const LogicalPlanReadRuntimeBounds &bounds, MutableGraphEntities &entities,
-									  std::unordered_map<std::string, PropertyMap> &propertyCache) {
+									  PropertyCache &propertyCache) {
 			validateRemoveOperationShape(removeOperator, "logical REMOVE");
 			for (const logical::LogicalRemoveItem &item: removeOperator.getItems()) {
 				const auto binding = row.values.find(item.variable);

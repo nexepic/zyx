@@ -305,3 +305,27 @@ TEST_F(EdgeTest, HasPropertyEntityWithStorageTypeButZeroId) {
 	EXPECT_EQ(edge.getPropertyEntityId(), 0);
 	EXPECT_FALSE(edge.hasPropertyEntity());
 }
+
+TEST_F(EdgeTest, CompactValuePreservesTheFixedRecordSlotAndPackedWireBytes) {
+    EXPECT_LT(sizeof(graph::Edge), graph::Edge::getTotalSize());
+    EXPECT_EQ(graph::Edge::getTotalSize(), 256U);
+    graph::Edge edge;
+    auto &metadata = edge.getMutableMetadata();
+    metadata.id = 11; metadata.sourceNodeId = 12; metadata.targetNodeId = 13;
+    metadata.nextOutEdgeId = 14; metadata.prevOutEdgeId = 15;
+    metadata.nextInEdgeId = 16; metadata.prevInEdgeId = 17;
+    metadata.propertyEntityId = 18; metadata.typeId = 19;
+    metadata.propertyStorageType = 2; metadata.isActive = false;
+    std::string expected(77U, '\0');
+    for (size_t i = 0; i < 9U; ++i) expected[8U*i] = static_cast<char>(11U+i);
+    expected[72] = 2;
+    std::ostringstream output(std::ios::binary);
+    edge.serialize(output);
+    EXPECT_EQ(output.str(), expected);
+    EXPECT_EQ(edge.getSerializedSize(), expected.size());
+    std::istringstream input(expected, std::ios::binary);
+    const auto restored = graph::Edge::deserialize(input);
+    std::ostringstream copy(std::ios::binary);
+    restored.serialize(copy);
+    EXPECT_EQ(copy.str(), expected);
+}

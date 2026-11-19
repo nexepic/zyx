@@ -816,6 +816,22 @@ TEST_F(BufferPoolTest, CachePressureNeverBypassesPinnedGeneration) {
     EXPECT_EQ(diskByte(0U), std::byte{1});
 }
 
+TEST_F(BufferPoolTest, ColdMetadataDoesNotSpendCreditBeforeTheFirstPageRequest) {
+    open(1U);
+    auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
+    memory->fail_at = 1U;
+    ASSERT_NO_THROW(pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory));
+    EXPECT_EQ(memory->calls, 0U);
+    EXPECT_EQ(memory->grant->used(), 0U);
+    EXPECT_THROW(static_cast<void>(pool_->pin({0U, 1U})), std::bad_alloc);
+    EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+    EXPECT_EQ(memory->grant->used(), 0U);
+    memory->fail_at = (std::numeric_limits<size_t>::max)();
+    { auto retry = pool_->pin({0U, 1U}); EXPECT_EQ(retry.bytes()[0], std::byte{1}); }
+    pool_.reset();
+    EXPECT_EQ(memory->grant->used(), 0U);
+}
+
 TEST_F(BufferPoolTest, EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache) {
 	open(1U); auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
 	pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);

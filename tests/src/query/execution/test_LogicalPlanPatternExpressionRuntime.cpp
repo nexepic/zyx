@@ -1287,6 +1287,7 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathLengthRejectsOversized
 	graph.nodes.at(3U).properties.push_back({"_type", PropertyValue(std::string(8192U, 'x'))});
 	PatternExpressionSnapshotFaults faults;
 	faults.supports_node_existence_probes = true;
+	faults.node_property_column_admission_count = std::make_shared<size_t>(0U);
 	PatternExpressionSnapshot snapshot(std::move(graph), faults);
 	LogicalPlanReadRow row;
 	row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});

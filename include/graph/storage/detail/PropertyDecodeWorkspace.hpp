@@ -26,7 +26,7 @@ public:
             prepaid_charge_.emplace(std::move(prepaid), 0U);
         if (budget_ || prepaid_charge_) {
             allocation_owner_.emplace(memory);
-            scope_.emplace(this, &admit, checkpoint ? &check : nullptr);
+            scope_.emplace(this, &admit, checkpoint ? &check : nullptr, false, &refund);
         }
     }
     PropertyDecodeWorkspace(const PropertyDecodeWorkspace &) = delete;
@@ -38,6 +38,13 @@ private:
         if (self.prepaid_charge_)
             self.prepaid_charge_->set(query::execution::detail::addStandardHeapBytes(self.prepaid_charge_->bytes(), bytes));
         else self.charge_.set(query::execution::detail::addStandardHeapBytes(self.charge_.bytes(), bytes));
+    }
+    static void refund(void *context, size_t bytes) {
+        auto &self = *static_cast<PropertyDecodeWorkspace *>(context);
+        const size_t held = self.prepaid_charge_ ? self.prepaid_charge_->bytes() : self.charge_.bytes();
+        if (bytes > held) throw std::logic_error("decoded Property refund exceeds its reservation");
+        if (self.prepaid_charge_) self.prepaid_charge_->set(held - bytes);
+        else self.charge_.set(held - bytes);
     }
     static void check(void *context) {
         const auto *checkpoint = static_cast<PropertyDecodeWorkspace *>(context)->checkpoint_;

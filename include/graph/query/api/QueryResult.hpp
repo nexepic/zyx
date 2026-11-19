@@ -33,7 +33,7 @@
 
 namespace graph::query {
 
-	namespace execution { class LogicalPlanReadRuntime; namespace detail { struct ProcedureResultHandoff; } }
+	namespace execution { class LogicalPlanReadRuntime; namespace detail { struct ProcedureResultHandoff; struct ScalarResultHandoff; } }
 
     // Borrowed fields let result construction inspect its complete shape before
     // creating any map, key, value or joined-string allocation.
@@ -81,7 +81,11 @@ namespace graph::query {
 
 		// Main data ingestion point
 		void addRow(Row row) {
-			if (!resource_charge_) { rows_.push_back(std::move(row)); return; }
+			if (!resource_charge_) {
+                if (rows_.size() == rows_.capacity()) reserveStorage(rows_, rows_.empty() ? 1U :
+                    execution::detail::multiplyPropertyBufferBytes(rows_.size(), 2U));
+                rows_.push_back(std::move(row)); return;
+            }
 			const size_t bytes = detail::resultRowHeapBytes(row);
 			appendCharged(rows_, std::move(row), bytes);
 		}
@@ -247,6 +251,7 @@ namespace graph::query {
 		}
 		friend class execution::LogicalPlanReadRuntime;
         friend struct execution::detail::ProcedureResultHandoff;
+        friend struct execution::detail::ScalarResultHandoff;
 		void retainExecutionCharge(execution::detail::ResourceLease charge) {
 			if (resource_charge_) throw std::logic_error("query result already owns a resource lease");
 			resource_charge_.emplace(std::move(charge));
@@ -258,14 +263,19 @@ namespace graph::query {
 			notifications_.swap(other.notifications_); pipeline_row_count_.swap(other.pipeline_row_count_);
 		}
 		template<typename Value>
+		static void reserveStorage(std::vector<Value> &values, size_t capacity) {
+			if constexpr (std::is_same_v<Value, Row>) detail::reserveResultRowsBySwap(values, capacity);
+			else values.reserve(capacity);
+		}
+		template<typename Value>
 		void reserveCharged(std::vector<Value> &values, size_t capacity) {
-			if (!resource_charge_ || capacity <= values.capacity()) { values.reserve(capacity); return; }
+			if (!resource_charge_ || capacity <= values.capacity()) { reserveStorage(values, capacity); return; }
 			using namespace execution::detail;
 			const size_t previous = resource_charge_->bytes();
 			const size_t oldBytes = standardVectorHeapBufferBytes(values) - standardContainerProxyBytes();
 			resource_charge_->set(addPropertyBufferBytes(previous, addPropertyBufferBytes(relocationHeapUpper(values),
                 standardAllocatorRequestBytes(multiplyPropertyBufferBytes(capacity, sizeof(Value)), alignof(Value)))));
-			try { values.reserve(capacity); }
+			try { reserveStorage(values, capacity); }
 			catch (...) { resource_charge_->set(previous); throw; }
 			resource_charge_->set(addPropertyBufferBytes(previous - oldBytes,
 				standardVectorHeapBufferBytes(values) - standardContainerProxyBytes()));

@@ -19,14 +19,17 @@
         using ProcedureOrderedDistinctRows = std::set<utils::OwnedStdString, std::less<>,
             utils::OwnedPmrAllocator<utils::OwnedStdString>>;
 
-		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
+		using PropertyMap = decltype(LogicalPlanReadRow::property_cache)::mapped_type;
 		[[nodiscard]] size_t checkedProcedureSizeAdd(size_t left, size_t right);
 		[[nodiscard]] size_t checkedProcedureSizeMul(size_t left, size_t right);
 		struct CachedNodeProperties {
 			PropertyMap values;
 			bool complete = false;
 		};
-		using NodePropertyMaps = std::unordered_map<uint64_t, CachedNodeProperties>;
+		// Like the row's other private caches, keep an empty cache allocation-free.
+		// In particular MSVC hash maps allocate sentinels, buckets and iterator
+		// proxies even for rows that never need a node-property cache.
+		using NodePropertyMaps = detail::ExecutionBindingMap<uint64_t, CachedNodeProperties>;
 		[[nodiscard]] std::optional<uint64_t> procedureNodeIdentity(const LogicalPlanReadValue &value) {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				return node->node_id;
@@ -58,7 +61,8 @@
 			return children.front();
 		}
 
-		[[nodiscard]] PropertyMap takeNodeProperties(storage::LogicalGraphNode &node,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map takeNodeProperties(storage::LogicalGraphNode &node,
 				size_t maximumEntries, const QueryContext &context) {
 			context.checkGuard();
 			if (node.properties.size() > maximumEntries) throw std::runtime_error("logical Vector procedure Node Properties exceeded its caller-supplied bound");
@@ -69,8 +73,8 @@
 					if (entry.key.empty() || !keys.insert(entry.key).second) throw std::runtime_error("logical Vector procedure read an invalid Node Property entry set");
 				}
 			}
-            detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<PropertyMap>());
-			PropertyMap properties;
+            detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<Map>());
+			Map properties;
 			detail::procedureMapReserve(properties, node.properties.size());
 			for (auto &entry: node.properties) {
 				context.checkGuard();
@@ -196,13 +200,13 @@
 			}
 			const size_t queryBytes = value.getList().size() * sizeof(float);
 			if (queryBytes > maximumMaterializedBytes) {
-				throw std::runtime_error("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
+				throw detail::ProcedureByteBoundExceeded("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 			}
 			context.checkGuardNow();
 			utils::OwnedStdVector<float> query;
 			query.reserve(value.getList().size());
 			if (checkedProcedureSizeMul(query.capacity(), sizeof(float)) > maximumMaterializedBytes) {
-				throw std::runtime_error("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
+				throw detail::ProcedureByteBoundExceeded("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 			}
 			size_t coordinateIndex = 0U;
 			for (const PropertyValue &coordinate: value.getList()) {
@@ -761,7 +765,7 @@
 				// entries in place. Output aliases never enter the source scope.
 				const size_t retainedBytes = retainedProjectionBytes();
 				if (retainedBytes >= readBounds.maximum_materialized_bytes) {
-					throw std::runtime_error("logical procedure Project exceeded its shared materialized byte bound before expression");
+					throw detail::ProcedureByteBoundExceeded("logical procedure Project exceeded its shared materialized byte bound before expression");
 				}
 				LogicalPlanReadRuntimeBounds expressionBounds = readBounds;
 				expressionBounds.maximum_materialized_bytes -= retainedBytes;
@@ -771,12 +775,12 @@
 					throw std::logic_error("logical Vector procedure projection has duplicate output aliases");
 				}
 				if (retainedProjectionBytes() > readBounds.maximum_materialized_bytes) {
-					throw std::runtime_error("logical procedure Project exceeded its shared materialized byte bound after expression");
+					throw detail::ProcedureByteBoundExceeded("logical procedure Project exceeded its shared materialized byte bound after expression");
 				}
 			}
 			// Scalar-only output cannot use the identity cache in a later layer.
 			// Populate it once only for entities that remain in the output scope.
-			std::erase_if(nodeProperties, [&](const auto &cached) {
+			detail::eraseExecutionBindingsIf(nodeProperties, [&](const auto &cached) {
 				return !std::ranges::any_of(result.values, [&](const auto &binding) {
 					return procedureNodeIdentity(binding.second) == cached.first;
 				});
@@ -851,7 +855,7 @@
 			if (auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				validateNode(*node);
 				nodeProperties.erase(node->node_id);
-				auto properties = takeNodeProperties(*node, readBounds.maximum_property_entries, context);
+				auto properties = takeNodeProperties<PropertyValue::MapType>(*node, readBounds.maximum_property_entries, context);
 				return LogicalNodeResult{node->node_id, std::move(node->labels), std::move(properties)};
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {

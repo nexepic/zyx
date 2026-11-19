@@ -799,7 +799,7 @@ TEST_F(BuildingScanMembershipTest, MetadataMaintenanceReleasesAtMostOnePoolAndPr
         EXPECT_EQ(result.released_pool_slots.size(), result.reclaimed_pool_slots);
         EXPECT_EQ(result.superblock.hybrid_property_descriptor_root, root.hybrid_property_descriptor_root);
         EXPECT_NE(result.superblock.flags & RSS_SUPERBLOCK_FLAG_SCAN_BUILDING, 0U);
-        EXPECT_EQ(memory->used(), result.released_pool_slots.capacity() * sizeof(PhysicalSlotId));
+        EXPECT_EQ(memory->used(), graph::utils::detail::standardVectorHeapBufferBytes(result.released_pool_slots));
         return result;
     };
     static_cast<void>(run());

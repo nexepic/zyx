@@ -9,7 +9,9 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 
 #include <algorithm>
+#include <array>
 #include <limits>
+#include <exception>
 #include <stdexcept>
 
 #include "graph/utils/ChecksumUtils.hpp"
@@ -50,9 +52,8 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::vector<std::byte> buildPreparedSegment(const CatalogEntry &entry,
-																  const PhysicalSegmentAllocationRequest &request) {
-			std::vector<std::byte> bytes(RSS_SEGMENT_SIZE);
+        void writePreparedSegment(StorageIO &io, uint64_t segmentOffset, const CatalogEntry &entry,
+                                  const PhysicalSegmentAllocationRequest &request) {
 			SegmentEnvelope envelope;
 			envelope.header_bytes = request.header_bytes;
 			envelope.kind = request.kind;
@@ -64,12 +65,25 @@ namespace graph::storage {
 			envelope.payload_bytes = static_cast<uint32_t>(request.payload.size());
 			envelope.payload_crc = payloadCrc(request.payload);
 
-			const auto encodedEnvelope = SegmentEnvelopeCodec::encode(envelope);
-			std::copy(encodedEnvelope.begin(), encodedEnvelope.end(), bytes.begin());
-			std::copy(request.header_extension.begin(), request.header_extension.end(),
-					  bytes.begin() + RSS_ENVELOPE_BYTES);
-			std::copy(request.payload.begin(), request.payload.end(), bytes.begin() + request.header_bytes);
-			return bytes;
+            const auto encodedEnvelope = SegmentEnvelopeCodec::encode(envelope);
+            // The persisted image is already described by three immutable
+            // spans plus zero padding. Assemble one fixed page at a time rather
+            // than allocating another complete segment for every spill write.
+            std::array<std::byte, RSS_PAGE_SIZE> page;
+            for (size_t pageOffset = 0U; pageOffset < RSS_SEGMENT_SIZE; pageOffset += page.size()) {
+                page.fill(std::byte{0});
+                const auto copyOverlap = [&](size_t begin, std::span<const std::byte> source) {
+                    const size_t first = (std::max)(begin, pageOffset);
+                    const size_t last = (std::min)(begin + source.size(), pageOffset + page.size());
+                    if (first < last)
+                        std::copy_n(source.begin() + static_cast<std::ptrdiff_t>(first - begin), last - first,
+                            page.begin() + static_cast<std::ptrdiff_t>(first - pageOffset));
+                };
+                copyOverlap(0U, encodedEnvelope);
+                copyOverlap(RSS_ENVELOPE_BYTES, request.header_extension);
+                copyOverlap(request.header_bytes, request.payload);
+                io.writeAt({segmentOffset + pageOffset, entry.generation.value()}, page.data(), page.size());
+            }
 		}
 
 	} // namespace
@@ -282,6 +296,68 @@ namespace graph::storage {
 		return PhysicalSegmentContents{entry, envelope, std::move(headerExtension), std::move(payload)};
 	}
 
+    PhysicalSegmentContents PhysicalSegmentAllocator::readPaged(const MetadataSnapshotPin &snapshot,
+                                                               SegmentId segmentId) const {
+        const CatalogEntry entry = metadata_.findCatalog(snapshot, segmentId);
+        if (entry.state != SegmentState::SGS_SEALED)
+            throwPhysicalAllocatorError(FormatError::FERR_INVALID_STATE,
+                "relocatable physical segment read requires a sealed Catalog generation");
+        if (!metadata_.isPhysicalSlotAllocated(snapshot, entry.physical_slot))
+            throwPhysicalAllocatorError(FormatError::FERR_INVALID_STATE,
+                "relocatable Catalog mapping references a free physical slot");
+        const uint64_t segmentOffset = checkedSlotOffset(data_region_offset_, entry.physical_slot);
+        SegmentEnvelope envelope;
+        std::exception_ptr envelopeError;
+        bool mappingMismatch = false;
+        std::vector<std::byte> headerExtension, payload;
+        // Coalesce only padding after a complete small payload. Larger payloads
+        // keep page-sized copying; four pages still bound stack use to16KiB.
+        std::array<std::byte, 4U * RSS_PAGE_SIZE> page;
+        size_t chunkBytes = RSS_PAGE_SIZE;
+        for (size_t offset = 0U; offset < RSS_SEGMENT_SIZE; offset += chunkBytes) {
+            chunkBytes = offset != 0U && !envelopeError && !mappingMismatch &&
+                static_cast<size_t>(envelope.header_bytes) + envelope.payload_bytes <= RSS_PAGE_SIZE
+                ? (std::min)(page.size(), RSS_SEGMENT_SIZE - offset) : RSS_PAGE_SIZE;
+            if (!entry.generation.isValid() ||
+                io_->readAtSequential(segmentOffset + offset, page.data(), chunkBytes) != chunkBytes)
+                throwPhysicalAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+                    "relocatable physical segment is truncated");
+            if (offset == 0U) {
+                try { envelope = SegmentEnvelopeCodec::decode(std::span<const std::byte>(page).first(RSS_ENVELOPE_BYTES)); }
+                catch (const FormatException &) { envelopeError = std::current_exception(); }
+                if (!envelopeError) {
+                    mappingMismatch = envelope.state != SegmentState::SGS_SEALED || envelope.kind != entry.kind ||
+                        envelope.segment_id != entry.segment_id || envelope.owner_id != entry.owner_id ||
+                        envelope.generation != entry.generation || envelope.committed_lsn != entry.committed_lsn;
+                    if (!mappingMismatch) {
+                        headerExtension.resize(envelope.header_bytes - RSS_ENVELOPE_BYTES);
+                        payload.resize(envelope.payload_bytes);
+                    }
+                }
+            }
+            // Keep the original full-read precedence: a truncated tail wins
+            // over an invalid envelope/catalog mapping at the beginning.
+            if (envelopeError || mappingMismatch) continue;
+            const auto copyOverlap = [&](size_t begin, std::span<std::byte> destination) {
+                const size_t first = (std::max)(begin, offset);
+                const size_t last = (std::min)(begin + destination.size(), offset + chunkBytes);
+                if (first < last)
+                    std::copy_n(page.begin() + static_cast<std::ptrdiff_t>(first - offset), last - first,
+                        destination.begin() + static_cast<std::ptrdiff_t>(first - begin));
+            };
+            copyOverlap(RSS_ENVELOPE_BYTES, headerExtension);
+            copyOverlap(envelope.header_bytes, payload);
+        }
+        if (envelopeError) std::rethrow_exception(envelopeError);
+        if (mappingMismatch)
+            throwPhysicalAllocatorError(FormatError::FERR_INVALID_STATE,
+                "relocatable physical segment envelope disagrees with its Catalog mapping");
+        if (payloadCrc(payload) != envelope.payload_crc)
+            throwPhysicalAllocatorError(FormatError::FERR_CHECKSUM_MISMATCH,
+                "relocatable physical segment payload checksum does not match");
+        return PhysicalSegmentContents{entry, envelope, std::move(headerExtension), std::move(payload)};
+    }
+
 	void PhysicalSegmentAllocator::validateRequests(std::span<const PhysicalSegmentAllocationRequest> requests) const {
 		if (requests.empty()) {
 			throwPhysicalAllocatorError(FormatError::FERR_INVALID_HEADER,
@@ -318,8 +394,7 @@ namespace graph::storage {
 			const CatalogEntry &entry = entries[index];
 			const PhysicalSegmentAllocationRequest &request = requests[index];
 			const uint64_t segmentOffset = checkedSlotOffset(data_region_offset_, entry.physical_slot);
-			const std::vector<std::byte> bytes = buildPreparedSegment(entry, request);
-			writeCompleteSegment(*io_, segmentOffset, entry.generation, bytes);
+            writePreparedSegment(*io_, segmentOffset, entry, request);
 		}
 	}
 

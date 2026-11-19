@@ -264,8 +264,24 @@ TEST_F(StorageIOTest, TypedPageRangePreservesShortAndFailedReadSemantics) {
 	}
 	{
 		StorageIO::ScopedNativeReadHookForTesting failedRead(
-				[](file_handle_t, void *, size_t, pwrite_off_t) -> pwrite_ssize_t { return -1; });
-		EXPECT_THROW(static_cast<void>(io->readPages({0U, 9U}, page.data(), page.size())), std::runtime_error);
+                [](file_handle_t, void *, size_t, pwrite_off_t) -> pwrite_ssize_t {
+#ifdef _WIN32
+                    ::SetLastError(ERROR_ACCESS_DENIED);
+#else
+                    errno = EACCES;
+#endif
+                    return -1;
+                });
+        try {
+            static_cast<void>(io->readPages({0U, 9U}, page.data(), page.size()));
+            FAIL() << "native read failure was ignored";
+        } catch (const std::system_error &error) {
+#ifdef _WIN32
+            EXPECT_EQ(error.code(), std::error_code(ERROR_ACCESS_DENIED, std::system_category()));
+#else
+            EXPECT_EQ(error.code(), std::error_code(EACCES, std::generic_category()));
+#endif
+        }
 	}
 }
 

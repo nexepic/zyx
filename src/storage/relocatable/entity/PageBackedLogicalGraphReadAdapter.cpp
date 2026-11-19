@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <array>
@@ -291,7 +292,7 @@ namespace graph::storage {
         const auto nameMemory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
             session.memoryOwner();
         auto *const nameResource = nameMemory ? nameMemory.get() : std::pmr::new_delete_resource();
-        std::pmr::unordered_set<std::string_view> labelNames(nameResource);
+        utils::AdmissionPmrUnorderedSet<std::string_view> labelNames(nameResource);
         labelNames.reserve(node.label_token_ids.size());
 		for (const uint64_t tokenId: node.label_token_ids) {
 			// NodeEntityRecordCodec rejects zero inline label tokens.
@@ -309,7 +310,7 @@ namespace graph::storage {
         }
         detail::admitScopedPropertyVectorGrowth(result.properties, node.properties.size());
         result.properties.reserve(node.properties.size());
-        std::pmr::unordered_set<std::string_view> propertyNames(nameResource);
+        utils::AdmissionPmrUnorderedSet<std::string_view> propertyNames(nameResource);
         propertyNames.reserve(node.properties.size());
 		size_t propertyOrdinal = 0U;
 		for (auto &property: node.properties) {
@@ -390,7 +391,7 @@ namespace graph::storage {
 		admitPropertySlots(result.properties.capacity());
 		// reserve keeps output keys stable while the duplicate set borrows them.
 		AdmittedTemporaryResource propertyNameMemory(temporaryAdmission, session.memoryOwner());
-		std::pmr::unordered_set<std::string_view> propertyNames(&propertyNameMemory);
+		utils::AdmissionPmrUnorderedSet<std::string_view> propertyNames(&propertyNameMemory);
 		propertyNames.reserve(edge.properties.size());
 		size_t propertyOrdinal = 0U;
 		for (auto &property: edge.properties) {
@@ -897,7 +898,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	void PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+	void PageBackedLogicalGraphReadAdapter::readEntityPropertyCellsSorted(const MetadataSnapshotPin &snapshot, EntityPropertyOwnerKind ownerKind,
 		std::span<const uint64_t> ids, std::span<const std::string_view> keys,
 		const LogicalGraphReadSnapshot::PropertyCellSink &sink, NativeReadSession *session,
 		const SelectedPropertyReadAdmission *admission, const PropertyScalarReadSink *scalars,
@@ -906,6 +907,23 @@ namespace graph::storage {
 		if (!sink || (scalars && !*scalars) || (texts && !*texts)) throw std::invalid_argument("direct named Property cells require a sink");
 		std::optional<NativeReadSession> local;
 		auto &active = activeSession(snapshot, session, local);
+        if(keys.size()==1U) {
+            // A single resolved token maps directly to column zero. Keep the
+            // token admitted, without duplicate token/column route vectors.
+            if(admission)(*admission)(sizeof(uint32_t));
+            const auto cached=active.propertyToken(keys.front());
+            const auto token=cached ? *cached : names_.resolvePropertyToken(snapshot,keys.front());
+            if(!cached)active.putPropertyToken(keys.front(),token);
+            if(!token || *token==0U)return;
+            // Preserve admission/name-resolution errors and the missing-key
+            // no-op before validating optional run sinks, as in the general path.
+            if(batches && (!batches->scalars || !batches->texts))
+                throw std::invalid_argument("Property runs require both sinks");
+            const uint32_t resolved=*token;
+            pages_.readEntityPropertyCellsSorted(snapshot,ownerKind,ids,std::span(&resolved,1U),sink,
+                &active,admission,scalars,texts,batches);
+            return;
+        }
 		constexpr size_t tokenBytes = sizeof(std::pair<uint32_t, size_t>) + sizeof(uint32_t);
 		if (keys.size() > std::numeric_limits<size_t>::max() / tokenBytes)
 			throw std::overflow_error("direct Property token staging overflowed");
@@ -971,7 +989,7 @@ namespace graph::storage {
                     batches->texts(rows, it->second, values);
             };
         }
-        pages_.readNodePropertyCellsSorted(snapshot, ids, tokens, std::ref(mapValue),
+        pages_.readEntityPropertyCellsSorted(snapshot, ownerKind, ids, tokens, std::ref(mapValue),
             &active, admission, scalars ? &emitScalar : nullptr, texts ? &emitText : nullptr,
             batches ? &mappedBatches : nullptr);
 	}

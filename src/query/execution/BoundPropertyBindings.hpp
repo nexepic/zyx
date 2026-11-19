@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <atomic>
 #include <functional>
@@ -51,6 +52,11 @@ class BoundPropertyBindings final {
 		std::optional<uint32_t> token;
 		Binding(BoundSlotId slot, std::string_view name, std::optional<uint32_t> resolved,
 			std::pmr::memory_resource *memory) : source(slot), key(name, memory), token(resolved) {}
+		Binding(const Binding &other)
+			: source(other.source), key(other.key, other.key.get_allocator()), token(other.token) {}
+#if !defined(_MSVC_STL_VERSION) || _ITERATOR_DEBUG_LEVEL == 0
+		Binding(Binding &&) = default;
+#endif
 	};
 public:
 	BoundPropertyBindings(const BoundSlotRegistry &slots, storage::LogicalGraphReadSnapshot &snapshot,
@@ -78,7 +84,7 @@ public:
 		bindings_.reserve(requests.size()); // Key views below stay stable, including SSO.
 		requests_.reserve(requests.size());
 		{
-			std::pmr::map<std::pair<uint32_t, std::string_view>, uint32_t> unique(&memory_);
+			utils::AdmissionPmrMap<std::pair<uint32_t, std::string_view>, uint32_t> unique(&memory_);
 			for (const auto &request : requests) {
 				guard();
 				const auto key = std::pair{request.source.index, request.key};
@@ -147,8 +153,8 @@ private:
 	const bool token_support_;
 	const uint64_t program_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<Binding> bindings_;
-	std::pmr::vector<uint32_t> requests_;
+	utils::AdmissionPmrVector<Binding> bindings_;
+	utils::AdmissionPmrVector<uint32_t> requests_;
 };
 
 } // namespace graph::query::execution::detail

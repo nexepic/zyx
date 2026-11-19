@@ -147,7 +147,9 @@ class HybridPropertyDirectoryPreparation final {
             pool = selected;
             const PageOwnerHeader owner{page.header().page_id, pool.owner_id, PageOwnerKind::POK_INDEX, 0,
                 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
-            auto rebound = page.rebindOwner(owner);
+            // These dirty images are private to this preparation. Consume
+            // their authenticated backing rather than retaining old/new pages.
+            auto rebound = std::move(page).rebindPrivateOwner(owner);
             const PageLocation location{owner.page_id, pool.segment_id, uint16_t(RSS_PAGE_POOL_FIRST_DATA_FRAME + used++),
                 pool.generation, rebound.slottedPage().stats().contiguous_free_bytes};
             if (owner.page_id == root) generation = pool.generation;

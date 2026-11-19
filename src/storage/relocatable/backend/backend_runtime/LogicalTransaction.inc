@@ -203,7 +203,8 @@
 					foldCreatedEntityFinalState(normalizedBatch, nodeOffset, edgeOffset, nextAccumulated);
 					// Complete-map replacement resets all older field operations.
 					for (const auto &replacement : normalizedBatch.property_replacements)
-						std::erase_if(nextPatches, [&](const auto &patch) { return patch.entity == replacement.entity; });
+						nextPatches.erase(std::remove_if(nextPatches.begin(), nextPatches.end(),
+                            [&](const auto &patch) { return patch.entity == replacement.entity; }), nextPatches.end());
 					append(nextAccumulated, normalizedBatch);
 					foldStagedPropertyPatches(nextAccumulated, nextPatches, normalizedPatches,
 						patchEntries, maximumPropertyEntries, control);
@@ -853,6 +854,10 @@
 			size_t validateStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
 				const std::vector<LogicalGraphPropertyPatchRequest> &patches, size_t maximumEntries,
 				const LogicalGraphMutationReadControl &control) const {
+                // An empty target set cannot overlap replacements/deletions.
+                // Avoid MSVC's allocating empty tree header before the actual
+                // input-copy admission (including when WRITE is exhausted).
+                if (patches.empty()) return 0U;
 				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
 				if (!patches.empty() && (maximumEntries == 0U || patches.size() > maximumEntries))
 					throw std::invalid_argument("logical transaction Property patches require a positive work bound");
@@ -1246,7 +1251,7 @@
 							? snapshot_->readNodeShaped(replacement.entity.value, shape).properties
 							: snapshot_->readEdgeShaped(replacement.entity.value, shape).properties;
 					std::ranges::sort(source, {}, &LogicalGraphPropertyEntry::key);
-					std::pmr::vector<const LogicalGraphWriteProperty *> final(retained_->issued_node_ids.get_allocator().resource());
+					std::pmr::vector<const LogicalGraphWriteProperty *> final(size_t{0U}, retained_->issued_node_ids.get_allocator().resource());
 					final.reserve(replacement.properties.size());
 					for (const auto &field : replacement.properties) final.push_back(&field);
 					std::ranges::sort(final, [](const auto *left, const auto *right) { return left->key < right->key; });

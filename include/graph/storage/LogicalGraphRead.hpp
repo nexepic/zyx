@@ -475,11 +475,26 @@ namespace graph::storage {
 		// A failed production must be discarded before any consumer effects.
 		using PropertyCellSink = std::function<void(size_t, size_t, std::optional<PropertyValue>)>;
 		[[nodiscard]] virtual bool supportsNodePropertyCellBatches() const { return false; }
+        // Stronger retry contract: every emitted owning cell is independently
+        // authenticated against this snapshot. If the caller's own admission
+        // callback refuses a later cell, completed cells may remain in private,
+        // charged storage and be omitted from a retry on this same snapshot.
+        // No downstream effects may be published before successful completion;
+        // corruption, cancellation and other failures still discard the batch.
+        [[nodiscard]] virtual bool supportsResumableNodePropertyCells() const { return false; }
+
 		virtual void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t>,
 			std::span<const std::string_view>, const PropertyCellSink &,
 			const std::function<void(size_t)> &) const {
 			throw std::logic_error("logical graph reader does not support direct Property cells");
 		}
+        // Edge cells obey the same independently authenticated, private retry contract.
+        [[nodiscard]] virtual bool supportsResumableEdgePropertyCells() const { return false; }
+        virtual void readEdgePropertyCellsSortedWithAdmission(std::span<const uint64_t>,
+            std::span<const std::string_view>, const PropertyCellSink &,
+            const std::function<void(size_t)> &) const {
+            throw std::logic_error("logical graph reader does not support resumable Edge Property cells");
+        }
         // Native scalar producers may bypass PropertyValue. Existing readers
         // and overlays retain their owning-cell route through this fallback.
         virtual void readNodePropertyCellsWithScalarsSortedWithAdmission(std::span<const uint64_t> ids,

@@ -375,7 +375,7 @@
 						}
 					}
 					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
-					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					utils::AdmissionPmrUnorderedSet<std::pmr::string> distinctRows{&distinctMemory};
 					std::optional<detail::ExternalQueryKeySet> externalDistinct;
 					if (project.isDistinct() && state.shared.allow_cross_row_entity_batches &&
 					        state.shared.bounds.maximum_materialized_bytes >= detail::ExternalQueryKeySet::MINIMUM_QUERY_BYTES) {
@@ -404,16 +404,39 @@
 					std::optional<detail::BoundProjectionReferences> boundReferences;
 					std::optional<detail::BoundExpressionInputs> boundInputs;
 					if (state.shared.bound_program) {
-						std::pmr::vector<const expressions::Expression *> expressionInputs(&distinctMemory);
+						utils::AdmissionPmrVector<const expressions::Expression *> expressionInputs(&distinctMemory);
 						expressionInputs.reserve(items.size());
 						for (const auto &item : items) expressionInputs.push_back(item.expression.get());
 						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op), expressionInputs,
 							state.shared.snapshot, state.shared.materialized_budget, [&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
 					}
+                    const bool directPropertyMove = [&] {
+                        if (project.isDistinct()) return false;
+                        if (items.size() == 1U) {
+                            const auto *ref = dynamic_cast<const expressions::VariableReferenceExpression *>(items.front().expression.get());
+                            return ref && ref->hasProperty();
+                        }
+                        utils::AdmissionPmrVector<const expressions::VariableReferenceExpression *> sources(&distinctMemory);
+                        sources.reserve(items.size());
+                        for (const auto &item : items) {
+                            const auto *ref = dynamic_cast<const expressions::VariableReferenceExpression *>(item.expression.get());
+                            if (!ref || !ref->hasProperty()) return false;
+                            sources.push_back(ref);
+                        }
+                        const auto less = [](const auto *left, const auto *right) {
+                            if (left->getVariableName() != right->getVariableName())
+                                return left->getVariableName() < right->getVariableName();
+                            return left->getPropertyName() < right->getPropertyName();
+                        };
+                        std::ranges::sort(sources, less);
+                        return std::adjacent_find(sources.begin(), sources.end(), [&](const auto *left, const auto *right) {
+                            return !less(left, right) && !less(right, left);
+                        }) == sources.end();
+                    }();
 					// Single-item ownership forwarding stays on its existing path. The
 					// transition adapter benefits repeated direct references in wider
 					// projections without charging constant-only expressions for slots.
-					if (!state.shared.bound_program && items.size() > 1U && std::ranges::any_of(items, [](const auto &item) {
+					if (!directPropertyMove && !state.shared.bound_program && items.size() > 1U && std::ranges::any_of(items, [](const auto &item) {
 						return dynamic_cast<const expressions::VariableReferenceExpression *>(item.expression.get()) != nullptr;
 					})) {
 						MaterializedByteReservation inputNamesBytes(&state.shared.materialized_budget);
@@ -426,6 +449,38 @@
 						boundReferences.emplace(inputs, items, state.shared.materialized_budget);
 					}
 					const auto projectRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+                        if (directPropertyMove && items.size() > 1U && std::ranges::all_of(items, [&](const auto &item) {
+                            const auto &ref = static_cast<const expressions::VariableReferenceExpression &>(*item.expression);
+                            const auto entity = row.property_cache.find(ref.getVariableName());
+                            return entity != row.property_cache.end() && entity->second.contains(ref.getPropertyName());
+                        })) {
+                            size_t projectedBytes = sizeof(LogicalPlanReadRow);
+                            for (const auto &item : items) {
+                                const auto &ref = static_cast<const expressions::VariableReferenceExpression &>(*item.expression);
+                                projectedBytes = checkedSizeAdd(projectedBytes, checkedSizeAdd(item.alias.size(),
+                                    checkedSizeAdd(sizeof(LogicalPlanReadValue), retainedExpressionValueBytes(
+                                        row.property_cache.at(ref.getVariableName()).at(ref.getPropertyName()), state),
+                                        "projected Property storage overflowed"), "projected Property alias overflowed"),
+                                    "projected Property row overflowed");
+                            }
+                            // Reserve the final representation before mutation. Payloads
+                            // move once; their existing source credit stays continuously held.
+                            charge.set((std::max)(charge.bytes(), projectedBytes));
+                            row.values.clear(); row.entity_metadata_cache.clear();
+                            row.complete_entity_property_cache.clear(); row.path_cache.clear();
+                            for (const auto &item : items) {
+                                const auto &ref = static_cast<const expressions::VariableReferenceExpression &>(*item.expression);
+                                auto &properties = row.property_cache.at(ref.getVariableName());
+                                auto entry = properties.extract(ref.getPropertyName());
+                                row.values.emplace(item.alias, std::move(entry.mapped()));
+                            }
+                            row.property_cache.clear();
+                            try { debug::PerfTrace::addValue("logical_plan.project.moved_property_values", static_cast<int64_t>(items.size())); }
+                            catch (...) { /* Optional counters cannot invalidate ownership transfer. */ }
+                            charge.set(logicalReadRowBytes(row, state.shared.context));
+                            if (chargedReceiver) return (*chargedReceiver)(std::move(row), std::move(charge));
+                            charge.reset(); return visitor(std::move(row));
+                        }
 						if (!project.isDistinct() && items.size() == 1U) {
 							const auto *propertyReference =
 									dynamic_cast<const expressions::VariableReferenceExpression *>(
@@ -492,7 +547,7 @@
 									return;
 								}
 								if (source == alias) {
-									std::erase_if(cache,
+									detail::eraseExecutionBindingsIf(cache,
 												  [&](const auto &candidate) { return candidate.first != alias; });
 									return;
 								}
@@ -506,7 +561,7 @@
 								row.complete_entity_property_cache.clear();
 								row.complete_entity_property_cache.insert(alias);
 							} else {
-								std::erase_if(row.complete_entity_property_cache,
+									detail::eraseExecutionBindingsIf(row.complete_entity_property_cache,
 											  [&](const std::string &variable) { return variable != alias; });
 							}
 							retainAndRenameAlias(row.entity_metadata_cache);
@@ -717,7 +772,7 @@
 									completeEntityVariables, chargedReceiver != nullptr ? &chargedProject : nullptr,
 									!items.empty() && !project.isDistinct() && std::ranges::all_of(items, [](const auto &item) {
 										return item.expression && item.expression->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS;
-									}));
+									}), directPropertyMove);
 							batched.has_value()) {
 							return finishDistinct(*batched);
 						}

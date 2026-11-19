@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -114,8 +115,8 @@ private:
 	}
 	BoundSlotRegistry registry_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<BoundProjectionReference> instructions_;
-	std::pmr::vector<const LogicalPlanReadValue *> values_;
+	utils::AdmissionPmrVector<BoundProjectionReference> instructions_;
+	utils::AdmissionPmrVector<const LogicalPlanReadValue *> values_;
 	bool row_bound_ = false;
 };
 

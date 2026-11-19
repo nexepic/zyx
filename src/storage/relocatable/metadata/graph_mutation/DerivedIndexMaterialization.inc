@@ -983,7 +983,7 @@
 					validateCleanupEntry(ordinal, privateEntryAt(ordinal));
 				}
 			}
-			const std::array<std::byte, RSS_SEGMENT_SIZE> zeros{};
+			static constexpr std::array<std::byte, RSS_SEGMENT_SIZE> zeros{};
 			const auto clearCleanupEntry = [&](const CatalogEntry &entry) {
 				const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(
 						current.data_region_offset, entry.physical_slot);

@@ -24,12 +24,15 @@
 
 #include <gtest/gtest.h>
 #include "query/api/LogicalProcedureTestFixture.hpp"
+#include "query/execution/ProcedureByteBoundExceeded.hpp"
 
 #include "graph/core/Types.hpp"
 #include "graph/query/NativeProcedureManifest.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/gds/LogicalProjectionCatalog.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
@@ -214,6 +217,7 @@ namespace graph::query {
 			[[nodiscard]] std::unique_ptr<storage::LogicalGraphReadSnapshot>
 			openLogicalGraphReadSnapshot() const override {
 				++snapshot_opens;
+				if (before_snapshot_open) before_snapshot_open();
 				if (snapshot_open_delay.count() > 0) {
 					std::this_thread::sleep_for(snapshot_open_delay);
 				}
@@ -252,6 +256,7 @@ namespace graph::query {
 			std::unordered_map<std::string, PropertyValue> configurations;
 			std::vector<storage::LogicalGraphRuntimeStatistic> runtime_statistics;
 			std::chrono::milliseconds snapshot_open_delay{0};
+			std::function<void()> before_snapshot_open;
 			mutable size_t snapshot_opens = 0U;
 			size_t configuration_writes = 0U;
 			size_t statistics_resets = 0U;
@@ -747,29 +752,58 @@ namespace graph::query {
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest,
-			 AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget) {
+			 AdministrationPipelineRespectsParentQuotaBeforeMutation) {
 		auto backend = std::make_shared<RecordingAdministrationLogicalGraphBackend>();
 		LogicalReadExecutionOptions options;
-		options.bounds.maximum_materialized_bytes = 1024U;
+		options.bounds.maximum_materialized_bytes = 4096U;
 		QueryEngine constrained(backend, options);
+		using namespace execution::detail;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+		QueryContext context;
+		context.resource_account = account;
+		auto plan = constrained.buildPlan("CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
+		auto competing = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U * 1024U);
+		ResourceLease competingRows(competing);
+		size_t pressurePoints = 0U;
+		backend->before_snapshot_open = [&] {
+			++pressurePoints;
+			// This snapshot is opened after the administrative source row exists.
+			// Leave less than one result-vector row slot in the parent domain:
+			// unlike the former "1024 bytes must fail", this is an independent
+			// allocation lower bound on every supported STL/container layout.
+			const size_t resultSlotHeadroom = sizeof(QueryResult::Row) - 1U;
+			competingRows.set(1024U * 1024U - database->usage().total - resultSlotHeadroom);
+			EXPECT_LT(account->available(), sizeof(QueryResult::Row));
+		};
 		try {
-			static_cast<void>(constrained.execute(
-					"CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value"));
-			FAIL() << "administration pipeline omitted its retained QueryResult row from the shared byte budget";
+			static_cast<void>(constrained.executePlan(std::move(plan), context));
+			FAIL() << "administration must not publish after shared-account result denial";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			EXPECT_TRUE(dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
+				dynamic_cast<const ResourceAdmissionDenied *>(&error) ||
+				dynamic_cast<const ProcedureByteBoundExceeded *>(&error)) << error.what();
 		}
 		EXPECT_EQ(backend->configuration_writes, 0U);
 		EXPECT_FALSE(backend->configurations.contains("query.timeout_ms"));
-
-		options.bounds.maximum_materialized_bytes = 4096U;
-		QueryEngine sufficient(backend, options);
-		const QueryResult result = sufficient.execute(
-				"CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(int64_t{41}));
-		EXPECT_EQ(backend->configuration_writes, 1U);
-		EXPECT_EQ(backend->configurations.at("query.timeout_ms"), PropertyValue(int64_t{41}));
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(pressurePoints, 1U);
+		EXPECT_EQ(database->usage().total, competingRows.bytes());
+		backend->before_snapshot_open = {};
+		competingRows.reset();
+		EXPECT_EQ(database->usage().total, 0U);
+		{
+			auto sufficientPlan = constrained.buildPlan("CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
+			const QueryResult result = constrained.executePlan(std::move(sufficientPlan), context);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(int64_t{41}));
+			EXPECT_EQ(backend->configuration_writes, 1U);
+			EXPECT_EQ(backend->configurations.at("query.timeout_ms"), PropertyValue(int64_t{41}));
+			EXPECT_GT(account->used(), 0U);
+		}
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest,
@@ -1071,22 +1105,47 @@ namespace graph::query {
 		LogicalReadExecutionOptions options;
 		options.bounds.maximum_materialized_bytes = 1024U;
 		QueryEngine constrained(backend, options);
+		using namespace execution::detail;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U);
+		QueryContext context;
+		context.resource_account = account;
+        // Deny publication *after* prepare, independently of row-header size.
+        // A competing lease consumes the remaining shared account headroom;
+        // maintenance must not commit and retry must refund every query owner.
+        ResourceLease competing(account);
+        backend->state->training_prepare_hook = [&] { competing.set(account->available()); };
+		auto plan = constrained.buildPlan("CALL db.index.vector.train('memory_embedding') YIELD status RETURN status");
 		try {
-			static_cast<void>(constrained.execute(
-					"CALL db.index.vector.train('memory_embedding') YIELD status RETURN status"));
-			FAIL() << "Vector Training pipeline omitted its retained result row from the shared byte budget";
+			static_cast<void>(constrained.executePlan(std::move(plan), context));
+			FAIL() << "training must not commit after shared-account publication denial";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			EXPECT_TRUE(dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
+				dynamic_cast<const ResourceAdmissionDenied *>(&error) ||
+				dynamic_cast<const ProcedureByteBoundExceeded *>(&error)) << error.what();
 		}
+        EXPECT_GT(competing.bytes(), 0U);
+        competing.reset();
+        backend->state->training_prepare_hook = {};
+		EXPECT_EQ(backend->training_preparations, 1U);
 		EXPECT_EQ(backend->training_calls, 0U);
-
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
 		options.bounds.maximum_materialized_bytes = 4096U;
+		account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+		context.resource_account = account;
 		QueryEngine sufficient(backend, options);
-		const QueryResult result = sufficient.execute(
-				"CALL db.index.vector.train('memory_embedding') YIELD status RETURN status");
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows().front().at("status").asPrimitive(), PropertyValue("Success"));
-		EXPECT_EQ(backend->training_calls, 1U);
+		{
+			auto sufficientPlan = sufficient.buildPlan("CALL db.index.vector.train('memory_embedding') YIELD status RETURN status");
+			const QueryResult result = sufficient.executePlan(std::move(sufficientPlan), context);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("status").asPrimitive(), PropertyValue("Success"));
+			EXPECT_EQ(backend->training_calls, 1U);
+			EXPECT_GT(account->used(), 0U);
+		}
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest, VectorTrainingRejectsReadOnlyAndUnboundedRequestsBeforeMaintenance) {
@@ -1828,13 +1887,22 @@ namespace graph::query {
 				{{std::make_shared<expressions::VariableReferenceExpression>("exists"), "exists"}});
 		LogicalReadExecutionOptions options;
 		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get(), nullptr, &catalog);
-		const auto execute = [&runtime](const logical::LogicalOperator &root, const LogicalReadExecutionOptions &executionOptions) {
+		using namespace execution::detail;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+		// A destination row alone cannot fit, independently of the
+        // empty private-container layout.
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY,
+            sizeof(QueryResult::Row) - 1U);
+		const auto execute = [&runtime, &account](const logical::LogicalOperator &root, const LogicalReadExecutionOptions &executionOptions) {
+			QueryContext context;
+			context.resource_account = account;
 			return runtime.execute(root, executionOptions.bounds, executionOptions.maximum_vector_mapping_entries,
 					executionOptions.maximum_raw_vector_reads, executionOptions.vector_candidate_search_budget,
 					executionOptions.vector_candidate_refinement_budget, executionOptions.maximum_vector_training_records,
 					executionOptions.maximum_vector_training_pages, executionOptions.maximum_gds_algorithm_edges,
 					executionOptions.maximum_gds_algorithm_iterations, executionOptions.maximum_gds_algorithm_work_units,
-					QueryContext{});
+					context);
 		};
 
 		options.bounds.maximum_materialized_bytes = 1024U;
@@ -1842,13 +1910,33 @@ namespace graph::query {
 			static_cast<void>(execute(project, options));
 			FAIL() << "GDS catalog pipeline omitted its retained QueryResult row from the shared byte budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			EXPECT_TRUE(dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
+				dynamic_cast<const ResourceAdmissionDenied *>(&error) ||
+				dynamic_cast<const ProcedureByteBoundExceeded *>(&error)) << error.what();
 		}
 
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
+		EXPECT_TRUE(catalog.exists("budgeted_catalog"));
 		options.bounds.maximum_materialized_bytes = 4096U;
-		const QueryResult result = execute(project, options);
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows().front().at("exists").asPrimitive(), PropertyValue(true));
+		account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+		{
+			const QueryResult result = execute(project, options);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("exists").asPrimitive(), PropertyValue(true));
+            EXPECT_GT(account->used(), 0U);
+            ResourceLease competing(account);
+            EXPECT_FALSE(competing.trySet(account->maximum()));
+            EXPECT_EQ(competing.bytes(), 0U);
+        }
+        EXPECT_EQ(account->used(), 0U);
+        {
+            ResourceLease afterDestroy(account);
+            EXPECT_TRUE(afterDestroy.trySet(account->maximum()));
+        }
+        EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
+		EXPECT_TRUE(catalog.exists("budgeted_catalog"));
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureRuntimeRejectsMalformedOutputOperators) {

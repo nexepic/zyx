@@ -11,6 +11,22 @@ std::shared_ptr<ResourceAccount> resultAccount(size_t maximum = 100000U) {
 	return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximum);
 }
 
+TEST(QueryResultResourcesTest, PrimitiveConstructionCopiesLvaluesAndTransfersNestedMapPayloads) {
+    PropertyValue source(PropertyValue::MapType{{"payload", PropertyValue(std::string(4096U, 'p'))}});
+    const auto &originalMap = std::get<PropertyValue::MapType>(source.getVariant());
+    const auto *originalPayload = std::get<std::string>(originalMap.at("payload").getVariant()).data();
+    ResultValue copied(source);
+    const auto &copyMap = std::get<PropertyValue::MapType>(copied.asPrimitive().getVariant());
+    EXPECT_EQ(copied.asPrimitive(), source);
+    EXPECT_NE(std::get<std::string>(copyMap.at("payload").getVariant()).data(), originalPayload);
+    ResultValue moved(std::move(source));
+    const auto &movedMap = std::get<PropertyValue::MapType>(moved.asPrimitive().getVariant());
+    EXPECT_EQ(std::get<std::string>(movedMap.at("payload").getVariant()).data(), originalPayload);
+    source = PropertyValue(int64_t{7});
+    EXPECT_EQ(moved.asPrimitive(), copied.asPrimitive());
+    EXPECT_EQ(source, PropertyValue(int64_t{7}));
+}
+
 TEST(QueryResultResourcesTest, BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment) {
     const std::vector<std::string> large{std::string(8192U, 'c')};
     auto account = resultAccount(4096U);
@@ -44,14 +60,18 @@ TEST(QueryResultResourcesTest, RowsColumnsAndNotificationsRemainChargedUntilDest
 }
 
 TEST(QueryResultResourcesTest, RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission) {
-	auto account = resultAccount(1000U);
+	// Leave room for one row and the platform's container bookkeeping, while
+	// keeping each requested growth well above the complete account limit.
+	constexpr size_t limit = 8192U;
+	constexpr size_t oversized = 16384U;
+	auto account = resultAccount(limit);
 	QueryResult result{ResourceLease(account)};
 	result.addRow({{"x", PropertyValue(7)}});
 	const auto previous = account->used();
-	EXPECT_THROW(result.addRow({{"large", PropertyValue(std::string(2000U, 'x'))}}), ResourceAdmissionDenied);
+	EXPECT_THROW(result.addRow({{"large", PropertyValue(std::string(oversized, 'x'))}}), ResourceAdmissionDenied);
 	EXPECT_THROW(result.reserveRows(10000U), ResourceAdmissionDenied);
-	EXPECT_THROW(result.setColumns({std::string(2000U, 'x')}), ResourceAdmissionDenied);
-	EXPECT_THROW(result.addNotification(std::string(2000U, 'x')), ResourceAdmissionDenied);
+	EXPECT_THROW(result.setColumns({std::string(oversized, 'x')}), ResourceAdmissionDenied);
+	EXPECT_THROW(result.addNotification(std::string(oversized, 'x')), ResourceAdmissionDenied);
 	EXPECT_EQ(result.rowCount(), 1U);
 	EXPECT_EQ(result.getRows()[0].at("x").asPrimitive(), PropertyValue(7));
 	EXPECT_TRUE(result.getColumns().empty()); EXPECT_TRUE(result.getNotifications().empty());
@@ -229,6 +249,63 @@ TEST(QueryResultResourcesTest, MoveUnderFullAccountEitherTransfersOrRejectsBefor
         }
     }
     EXPECT_EQ(account->used(), 0U);
+}
+
+struct ThrowingMoveRow {
+    inline static int defaultsUntilFailure = -1;
+    inline static int copies = 0;
+    std::unique_ptr<int> payload;
+    ThrowingMoveRow() {
+        if (defaultsUntilFailure == 0) throw std::bad_alloc();
+        if (defaultsUntilFailure > 0) --defaultsUntilFailure;
+        payload = std::make_unique<int>(0);
+    }
+    explicit ThrowingMoveRow(int value) : payload(std::make_unique<int>(value)) {}
+    ThrowingMoveRow(const ThrowingMoveRow &) { ++copies; throw std::runtime_error("payload copy forbidden"); }
+    ThrowingMoveRow(ThrowingMoveRow &&other) noexcept(false) : payload(std::move(other.payload)) {}
+    friend void swap(ThrowingMoveRow &left, ThrowingMoveRow &right) noexcept { left.payload.swap(right.payload); }
+};
+
+TEST(QueryResultResourcesTest, SwapGrowthAvoidsThrowingMoveCopiesAndRollsBackDestinationFailure) {
+    std::vector<ThrowingMoveRow> rows;
+    rows.reserve(2U); rows.emplace_back(7); rows.emplace_back(9);
+    const auto first = rows[0].payload.get(), second = rows[1].payload.get();
+    EXPECT_THROW(rows.reserve(8U), std::runtime_error);
+    EXPECT_GT(ThrowingMoveRow::copies, 0);
+    ThrowingMoveRow::copies = 0;
+    ThrowingMoveRow::defaultsUntilFailure = 1;
+    EXPECT_THROW(detail::reserveResultRowsBySwap(rows, 8U), std::bad_alloc);
+    EXPECT_EQ(rows.capacity(), 2U);
+    ASSERT_EQ(rows.size(), 2U);
+    EXPECT_EQ(rows[0].payload.get(), first); EXPECT_EQ(rows[1].payload.get(), second);
+    ThrowingMoveRow::defaultsUntilFailure = -1;
+    detail::reserveResultRowsBySwap(rows, 8U);
+    EXPECT_GE(rows.capacity(), 8U);
+    EXPECT_EQ(rows[0].payload.get(), first); EXPECT_EQ(rows[1].payload.get(), second);
+    EXPECT_EQ(*rows[0].payload, 7); EXPECT_EQ(*rows[1].payload, 9);
+    EXPECT_EQ(ThrowingMoveRow::copies, 0);
+}
+
+TEST(QueryResultResourcesTest, ChargedAndUnchargedRowGrowthKeepIndependentHeapPayloadAddresses) {
+    for (bool charged : {false, true}) {
+        auto account = resultAccount(200000U);
+        {
+            QueryResult result = charged ? QueryResult{ResourceLease(account)} : QueryResult{};
+            result.addRow({{"payload", PropertyValue(std::string(32768U, 'x'))}});
+            const auto *value = &result.getRows().front().at("payload");
+            const auto before = account->used();
+            const auto oldBuffer = execution::detail::standardVectorHeapBufferBytes(result.getRows());
+            result.reserveRows(16U);
+            EXPECT_EQ(&result.getRows().front().at("payload"), value);
+            EXPECT_EQ(std::get<std::string>(value->asPrimitive().getVariant()), std::string(32768U, 'x'));
+            if (charged) {
+                const auto newBuffer = execution::detail::standardVectorHeapBufferBytes(result.getRows());
+                EXPECT_EQ(account->used(), before - oldBuffer + newBuffer);
+                EXPECT_EQ(result.retainedResourceBytes(), account->used());
+            }
+        }
+        EXPECT_EQ(account->used(), 0U);
+    }
 }
 
 } // namespace

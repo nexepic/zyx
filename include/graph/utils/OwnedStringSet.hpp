@@ -43,7 +43,7 @@ private:
     }
     static size_t structuralBytes(size_t entries, size_t buckets) {
         using namespace detail;
-        constexpr auto node = sizeof(std::string) + 2U * sizeof(void *) + alignof(std::string) - 1U;
+        constexpr auto node = standardHashNodeBytes<std::string>();
 #if defined(_MSVC_STL_VERSION)
         entries = addStandardHeapBytes(entries, 1U);
         constexpr size_t width = 2U * sizeof(void *);

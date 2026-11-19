@@ -278,8 +278,16 @@
 			if (node.node_id == 0U) {
 				throw std::runtime_error("logical graph backend returned an invalid Node");
 			}
+			// Empty and singleton label sets need no duplicate-detection table.
+			// The admitted hash adapter can allocate buckets even for one label;
+			// avoid that real allocation rather than excluding it from accounting.
+			if (node.labels.size() <= 1U) {
+				if (!node.labels.empty() && node.labels.front().empty())
+					throw std::runtime_error("logical graph backend returned an invalid Node label set");
+				return;
+			}
 			detail::BudgetMemoryResource labelMemory(state.shared.materialized_budget);
-			std::pmr::unordered_set<std::string_view> labels(&labelMemory);
+			utils::AdmissionPmrUnorderedSet<std::string_view> labels(&labelMemory);
 			detail::procedureVectorReserve(labels, node.labels.size());
 			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {
@@ -793,14 +801,15 @@
 			throw std::runtime_error("logical-plan expected a relationship variable");
 		}
 
-		[[nodiscard]] PropertyMap readInlineProperties(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map readInlineProperties(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 													   ExecutionState &state) {
 			if (entries.size() > state.shared.bounds.maximum_property_entries) {
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
 			incrementBounded(state.task.stats.property_sets_materialized,
 							 "logical-plan Property materialization counter overflowed");
-			PropertyMap properties;
+			Map properties;
 			properties.reserve(entries.size());
 			for (const storage::LogicalGraphPropertyEntry &entry: entries) {
 				checkGuard(state);
@@ -813,16 +822,18 @@
 			return properties;
 		}
 
-		[[nodiscard]] PropertyMap readNodeProperties(storage::LogicalGraphReadSnapshot &snapshot,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map readNodeProperties(storage::LogicalGraphReadSnapshot &snapshot,
 													 const storage::LogicalGraphNode &node, ExecutionState &state) {
 			static_cast<void>(snapshot);
-			return readInlineProperties(node.properties, state);
+			return readInlineProperties<Map>(node.properties, state);
 		}
 
-		[[nodiscard]] PropertyMap readEdgeProperties(storage::LogicalGraphReadSnapshot &snapshot,
+		template<class Map = PropertyMap>
+		[[nodiscard]] Map readEdgeProperties(storage::LogicalGraphReadSnapshot &snapshot,
 													 const storage::LogicalGraphEdge &edge, ExecutionState &state) {
 			static_cast<void>(snapshot);
-			return readInlineProperties(edge.properties, state);
+			return readInlineProperties<Map>(edge.properties, state);
 		}
 
 		[[nodiscard]] bool propertiesMatch(const PropertyMap &properties,
@@ -1070,7 +1081,7 @@
 			uint64_t id, bool edge, std::string_view key, ExecutionState &state) {
 			checkGuard(state);
 			if (!snapshot.supportsPropertyReadAdmission())
-				return edge ? snapshot.readEdgeProperty(id, key) : snapshot.readNodeProperty(id, key);
+				throw std::logic_error("bounded Property read requires source admission");
 			MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 			sourceBytes.set(sizeof(std::vector<PropertyValue>) + sizeof(PropertyValue));
 			const std::function<void(size_t)> admission = [&](size_t bytes) {
@@ -1099,11 +1110,25 @@
 		[[nodiscard]] PropertyValue readProperty(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
 												 const std::string &variable, const std::string &key,
 												 ExecutionState &state, const LogicalPlanReadValue *boundBinding = nullptr,
-                                                 MaterializedByteReservation *resultReservation = nullptr) {
+                                                 MaterializedByteReservation *resultReservation = nullptr,
+                                                 const PropertyValue **borrowedResult = nullptr,
+                                                 std::source_location expressionSite = std::source_location::current()) {
 			if (key.empty()) {
 				throw std::invalid_argument("logical-plan Property access has an empty key");
 			}
-			const auto copyResult = [&](const PropertyValue &source, bool borrowed = false) {
+			const auto copyResult = [&](const PropertyValue &source, bool borrowed = false, bool alreadyRetained = true) {
+                // Only a synchronous leaf-vs-parameter comparison requests
+                // this view. Batch columns or an explicitly reconciled prefetch
+                // row have a live source charge. Newly enriched row storage
+                // must not silently extend the admitted row's byte ceiling.
+                const bool admittedRow = borrowedResult && alreadyRetained &&
+                    state.task.admitted_property_row == &row &&
+                    logicalReadRowBytes(row, state.shared.context) <= state.task.admitted_property_row_bytes;
+                if (borrowedResult && alreadyRetained && (borrowed || admittedRow)) {
+                    *borrowedResult = &source;
+                    debug::PerfTrace::addValue("logical_plan.property.parameter_comparison_borrows", 1);
+                    return PropertyValue();
+                }
 				// Fixed scalar alternatives cannot allocate payload buffers. Their
 				// owning output slots remain charged by the receiving row/container.
 				switch (source.getType()) {
@@ -1118,7 +1143,25 @@
 					default: break;
 				}
 				MaterializedByteReservation copyBytes(&state.shared.materialized_budget);
-				PropertyValue copied = copyReservedPropertyValue(source, state, copyBytes);
+                PropertyValue copied = [&] {
+                    try { return copyReservedPropertyValue(source, state, copyBytes); }
+                    catch (...) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                        static thread_local unsigned reported = 0;
+                        if (reported < 32U && std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                            ++reported;
+                            const char *file = expressionSite.file_name();
+                            for (const char *c = file; *c; ++c) if (*c == '/' || *c == '\\') file = c + 1;
+                            std::fprintf(stderr, "CI_PROPERTY_COPY_FAILURE expression_file=%.128s expression_line=%u borrowed_column=%d already_retained=%d source_type=%u used=%zu available=%zu\n",
+                                file, static_cast<unsigned>(expressionSite.line()), borrowed, alreadyRetained,
+                                static_cast<unsigned>(source.getType()), state.shared.materialized_budget.used(),
+                                state.shared.materialized_budget.available());
+                            std::fflush(stderr);
+                        }
+#endif
+                        throw;
+                    }
+                }();
 				debug::PerfTrace::addValue("logical_plan.property.owned_result_copy_bytes",
 					static_cast<int64_t>(copyBytes.bytes()));
 				if (borrowed) debug::PerfTrace::addValue("logical_plan.prefetch.borrowed_value_copy_bytes",
@@ -1147,6 +1190,20 @@
 				}
 			}
 			const LogicalPlanReadValue &binding = boundBinding == nullptr ? requireBinding(row, variable) : *boundBinding;
+            if (const auto *reference = std::get_if<storage::EntityRef>(&binding); reference && !reference->is_edge) {
+                for (auto *view = state.task.borrowed_pattern_node; view; view = view->previous) {
+                    if (view->row != &row || *view->variable != variable) continue;
+                    checkGuardNow(state);
+                    validateNodeRef(*reference, "logical-plan scoped Property received an invalid Node reference");
+                    if (view->node->node_id != reference->entity_id)
+                        throw std::logic_error("scoped Property borrow changed Node identity");
+                    const auto found = std::ranges::find(view->node->properties, key,
+                        &storage::LogicalGraphPropertyEntry::key);
+                    debug::PerfTrace::addValue("logical_plan.pattern.borrowed_properties", 1);
+                    return found == view->node->properties.end() ? PropertyValue() : copyResult(found->value, true);
+                }
+            }
+
 			if (const auto *reference = std::get_if<storage::EntityRef>(&binding);
 				reference != nullptr && !reference->is_edge && state.task.property_columns != nullptr &&
 				*state.task.property_columns->variable == variable) {
@@ -1176,14 +1233,14 @@
 						detail::procedureMapEmplace(row.property_cache, variable, readNodeProperties(snapshot, *node, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
+				return found == cached->second.end() ? PropertyValue() : copyResult(found->second, false, false);
 			}
 			if (const storage::LogicalGraphEdge *edge = std::get_if<storage::LogicalGraphEdge>(&binding)) {
 				auto [cached, inserted] =
 						detail::procedureMapEmplace(row.property_cache, variable, readEdgeProperties(snapshot, *edge, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
+				return found == cached->second.end() ? PropertyValue() : copyResult(found->second, false, false);
 			}
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(binding);
 			validateEntityRef(reference);
@@ -1198,7 +1255,7 @@
             static_cast<void>(cacheInserted);
             const auto [cached, inserted] = detail::procedureMapInsertOrAssign(cacheOwner->second, key, std::move(value));
 			static_cast<void>(inserted);
-			return copyResult(cached->second);
+			return copyResult(cached->second, false, false);
 		}
 
 		[[nodiscard]] bool
@@ -1283,7 +1340,7 @@
 					throw std::runtime_error(
 							"logical-plan entity Property function requires a node, relationship, or Map");
 				}
-				return detail::procedureMapEmplace(row.property_cache, variable, detail::copyPropertyMapGuarded(value->getMap(), [&] {
+				return detail::procedureMapEmplace(row.property_cache, variable, detail::copyBindingPropertyMapGuarded(value->getMap(), [&] {
 					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				})).first->second;
 			}
@@ -1325,6 +1382,17 @@
 											  "logical-plan scoped binding size overflowed");
 				bytes = checkedSizeAdd(bytes, bindingPayloadBytes(value, state),
 									   "logical-plan scoped binding size overflowed");
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                static std::atomic<unsigned> scopeReports{0U};
+                if (std::getenv("ZYX_CI_BUDGET_TRACE") && scopeReports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                    std::fprintf(stderr, "CI_SCOPED_BINDING value_kind=%u name_bytes=%zu payload=%zu initial_charge=%zu row_bytes=%zu bindings=%zu property_aliases=%zu metadata_aliases=%zu used=%zu available=%zu reports_limit=20\n",
+                        std::is_same_v<Value, storage::LogicalGraphNode> ? 1U : std::is_same_v<Value, storage::LogicalGraphEdge> ? 2U : 0U,
+                        variable.size(), bindingPayloadBytes(value, state), bytes,
+                        logicalReadRowBytes(row, state.shared.context), row.values.size(), row.property_cache.size(),
+                        row.entity_metadata_cache.size(), state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                    std::fflush(stderr);
+                }
+#endif
 				binding_bytes_.set(bytes);
 				variable_.assign(variable);
 				if (const auto previous = row_.values.find(variable_); previous != row_.values.end()) {
@@ -1406,8 +1474,67 @@
 			std::optional<LogicalPlanReadValue> previous_value_;
 			std::optional<PropertyMap> previous_properties_;
 			std::optional<bool> previous_properties_complete_;
-			std::optional<std::unordered_map<std::string, PropertyValue>> previous_metadata_;
+			std::optional<PropertyMap> previous_metadata_;
 		};
+
+        // Only new, property-only aliases borrow the synchronously retained
+        // pattern source. Pointer/control metadata does not own a payload; the
+        // source remains charged by visitPatternTargets for the entire callback.
+        class ScopedPatternNodeBinding final {
+        public:
+            ScopedPatternNodeBinding(LogicalPlanReadRow &row, const std::string &variable,
+                    const storage::LogicalGraphNode &node, ExecutionState &state, bool propertyOnly)
+                : row_(row), state_(state), bytes_(&state.shared.materialized_budget) {
+                // A pattern target already bound to the same Node is a
+                // constraint, not a replacement binding. Keep its owner and
+                // caches intact while exposing the admitted selected record.
+                if (propertyOnly && !variable.empty()) {
+                    const auto existing=row.values.find(variable);
+                    const auto *reference=existing==row.values.end() ? nullptr :
+                        std::get_if<storage::EntityRef>(&existing->second);
+                    if(reference && !reference->is_edge && reference->entity_id==node.node_id) {
+                        validateNodeRef(*reference, "logical-plan scoped Node reference is invalid");
+                        view_={&row,&variable,&node,state.task.borrowed_pattern_node};
+                        state.task.borrowed_pattern_node=&view_;active_=true;
+                        debug::PerfTrace::addValue("logical_plan.pattern.borrowed_existing_node_bindings",1);
+                        return;
+                    }
+                }
+                if (!propertyOnly || variable.empty() || row.values.contains(variable) ||
+                        row.property_cache.contains(variable) || row.entity_metadata_cache.contains(variable) ||
+                        row.complete_entity_property_cache.contains(variable)) {
+                    fallback_.emplace(row, variable, node, state);
+                    return;
+                }
+                using Bindings = decltype(row.values);
+                const size_t physical = checkedSizeAdd(detail::executionBindingNodeBytes<Bindings>(),
+                    utils::detail::standardFreshStringHeapUpper(variable.size()), "scoped reference binding overflowed");
+                const size_t logical = checkedSizeAdd(variable.size(), sizeof(LogicalPlanReadValue) + sizeof(storage::EntityRef),
+                    "scoped reference binding overflowed");
+                bytes_.set((std::max)(physical, logical));
+                row.values.try_emplace(variable, storage::EntityRef{node.node_id, false, 0U, 0U, 0U});
+                inserted_=true;
+                view_ = {&row, &variable, &node, state.task.borrowed_pattern_node};
+                state.task.borrowed_pattern_node = &view_;
+                active_ = true;
+                debug::PerfTrace::addValue("logical_plan.pattern.borrowed_node_bindings", 1);
+            }
+            ~ScopedPatternNodeBinding() {
+                if (active_) {
+                    state_.task.borrowed_pattern_node = view_.previous;
+                    if(inserted_)row_.values.erase(*view_.variable);
+                }
+            }
+            ScopedPatternNodeBinding(const ScopedPatternNodeBinding &) = delete;
+            ScopedPatternNodeBinding &operator=(const ScopedPatternNodeBinding &) = delete;
+        private:
+            LogicalPlanReadRow &row_;
+            ExecutionState &state_;
+            MaterializedByteReservation bytes_;
+            std::optional<ScopedRowBinding> fallback_;
+            BorrowedPatternNode view_;
+            bool active_ = false, inserted_ = false;
+        };
 
 		[[nodiscard]] const std::vector<PropertyValue> &
 		requireBoundedList(const PropertyValue &value, const ExecutionState &state, const char *operation) {

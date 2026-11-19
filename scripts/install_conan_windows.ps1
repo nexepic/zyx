@@ -75,7 +75,10 @@ $llvmBin = "C:\Program Files\LLVM\bin"
 if (-not (Test-Path (Join-Path $llvmBin "clang-cl.exe"))) {
     Write-Error "clang-cl was not found in $llvmBin. Install LLVM before running Conan."
 }
-if ($env:PATH -notlike "*$llvmBin*") {
+# Only the Build workflow opts into the pinned toolchain contract. Other callers
+# retain their existing LLVM selection and do not acquire a new version requirement.
+$verifyPinnedToolchain = $env:ZYX_VERIFY_WINDOWS_TOOLCHAIN -eq "1"
+if ($verifyPinnedToolchain -or $env:PATH -notlike "*$llvmBin*") {
     $env:PATH = "$llvmBin;$env:PATH"
     Write-Host "Added LLVM to PATH: $llvmBin"
 }
@@ -94,6 +97,15 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 }
 
 Write-Host "Build type: $buildType"
+
+# Run inside this activated vcvars environment, before any expensive dependency build.
+# Python constructs slash-prefixed arguments natively, avoiding MSYS path conversion.
+if ($verifyPinnedToolchain) {
+    python "$PSScriptRoot/run_ci_evidence.py" --name windows-toolchain --timeout 300 -- python "$PSScriptRoot/verify_windows_toolchain.py" --llvm-bin "$llvmBin" --build-type "$buildType"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows compiler/STL/PDB compatibility preflight failed."
+    }
+}
 
 # Write an explicit Conan profile file to avoid any PowerShell argument parsing issues.
 # This is more reliable than passing -s flags via array expansion.

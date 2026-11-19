@@ -288,7 +288,7 @@ public:
                         // All requested columns must be admitted/authenticated
                         // before any callback. A mixed/cold field can then
                         // decline the whole group without replaying a prefix.
-                        std::pmr::vector<HybridPropertyColumnRecord> columns(
+                        std::pmr::vector<HybridPropertyColumnRecord> columns(size_t{0U},
                             memory ? memory.get() : std::pmr::get_default_resource());
                         columns.reserve(tokens.size());
                         consumed = true;

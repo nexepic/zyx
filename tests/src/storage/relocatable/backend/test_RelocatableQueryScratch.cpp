@@ -2,6 +2,9 @@
 #include "graph/storage/LogicalQueryScratch.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "query/execution/ProcessResourceDomains.hpp"
+#include "graph/debug/SanitizerAllocationSnapshot.hpp"
+#include <cstdio>
+#include <cstdlib>
 using namespace relocatable_storage_backend_test;
 TEST_F(RelocatableStorageBackendTest, QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins) {
 	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;RelocatableStorageBackend backend(options);backend.open();
@@ -38,13 +41,21 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchEnforcesDiskFragmentsAndPhysic
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryGuard.hpp"
+#include "graph/debug/ResidentMemoryDiagnostics.hpp"
 TEST_F(RelocatableStorageBackendTest, NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection) {
+    struct FinalRss { ~FinalRss(){graph::debug::traceResidentMemory("after-backend-destruction");} } finalRss;
 	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
 	graph::query::LogicalReadExecutionOptions reads;reads.bounds.maximum_materialized_bytes=8U*1024U*1024U;
 	graph::query::QueryEngine engine(std::static_pointer_cast<LogicalGraphReadBackend>(backend),reads);const auto fence=backend->currentNativeLogicalGraphMutationFence();
 	const bool wasEnabled=graph::debug::PerfTrace::isEnabled(),wasCollecting=graph::debug::PerfTrace::areValuesEnabled();
 	struct RestoreTrace{bool enabled,collecting;~RestoreTrace(){graph::debug::PerfTrace::setValueCollectionEnabled(collecting);graph::debug::PerfTrace::setEnabled(enabled);}}restore{wasEnabled,wasCollecting};
 	graph::debug::PerfTrace::setEnabled(true);graph::debug::PerfTrace::setValueCollectionEnabled(true);(void)graph::debug::PerfTrace::snapshotAndReset();
+    graph::debug::traceResidentMemory("before-query");
+    if (std::getenv("ZYX_CI_RSS_TRACE")) {
+        const auto allocator = graph::debug::captureSanitizerAllocations();
+        std::fprintf(stderr, "CI_RSS_BEGIN rss=%zu asan_available=%d live=%zu heap=%zu\n",
+            graph::query::QueryGuard::getCurrentRSSBytes(), allocator.available, allocator.live_bytes, allocator.heap_bytes);
+    }
 	graph::query::QueryGuard guard(120000,64);graph::query::QueryContext context;context.guard=&guard;
 	const auto result=engine.execute("UNWIND range(1,20000) AS x WITH x ORDER BY x DESC RETURN collect(x) AS values",context);
 	ASSERT_EQ(result.rowCount(),1U);
@@ -67,8 +78,8 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchInternalPolicyCanDenyPermissio
 }
 
 TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites) {
-	for (const bool batch : {false, true}) {
-		SCOPED_TRACE(batch);
+	for (const int operation : {0,1,2}) {
+		SCOPED_TRACE(operation);
 		materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;
 		RelocatableStorageBackend backend(options);backend.open();
 		const auto node=backend.createLogicalNodes({{{"ScratchFailure"},{{"value",PropertyValue(7)}}}}).at(0);
@@ -77,7 +88,8 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupIoFailureImmediatelyFen
 		bool injected=false;
 		{
 			StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t,const void *,size_t,pwrite_off_t){injected=true;return static_cast<pwrite_ssize_t>(-1);});
-			if(batch)EXPECT_THROW(scratch->finish(),std::exception);
+			if(operation==2)EXPECT_THROW(scratch->finish(),std::exception);
+            else if(operation==1)EXPECT_THROW(scratch->releaseBatch(std::span(&handle,1U)),std::exception);
 			else EXPECT_THROW(scratch->release(handle),std::exception);
 		}
 		ASSERT_TRUE(injected);
@@ -489,10 +501,17 @@ TEST_F(RelocatableStorageBackendTest, NativeDistinctOutputBudgetDenialCleansSpil
     graph::query::QueryContext context;
     context.resource_account = std::make_shared<ResourceAccount>(backend->queryResourceDomain(), ResourceClass::RCK_QUERY, reads.bounds.maximum_materialized_bytes);
     bool denied = false;
-    try { static_cast<void>(engine.execute("UNWIND range(1,24000) AS x RETURN DISTINCT x % 12000 AS value", context)); }
+    // Each retained result owns its key. Keep this denial independent of the
+    // public value/STL geometry: key characters alone exceed the same 8 MiB.
+    const std::string alias(8192U, 'v');
+    const size_t unique = reads.bounds.maximum_materialized_bytes / alias.size() + 1U;
+    backend->resetIoStats();
+    try { static_cast<void>(engine.execute("UNWIND range(1," + std::to_string(2U * unique) + ") AS x RETURN DISTINCT x % " +
+        std::to_string(unique) + " AS `" + alias + "`", context)); }
     catch (const MaterializedByteLimitExceeded &) { denied = true; }
     catch (const ResourceAdmissionDenied &) { denied = true; }
     EXPECT_TRUE(denied);
+    EXPECT_GT(backend->ioStats().data.write_calls, 0U);
     EXPECT_EQ(context.resource_account->used(), 0U);
     EXPECT_EQ(disk->usage().bytes, before);
     EXPECT_FALSE(backend->hasIndeterminateWriteOutcome());
@@ -543,6 +562,7 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupAdmissionDenialPrecedes
     ResourceLease pressure(account); pressure.set(ceiling - domain->usage().classes[maintenance]);
     const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
     EXPECT_THROW(scratch->release(handle), ResourceAdmissionDenied);
+    EXPECT_THROW(scratch->releaseBatch(std::span(&handle,1U)), ResourceAdmissionDenied);
     EXPECT_THROW(scratch->finish(), ResourceAdmissionDenied);
     EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
     EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
@@ -552,4 +572,68 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupAdmissionDenialPrecedes
     EXPECT_NO_THROW(scratch->finish());
     scratch.reset();
     EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchBatchReleaseValidatesBeforePublicationAndAmortizesDurableCleanup) {
+    materializeNativeDatabase();
+    auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;
+    RelocatableStorageBackend backend(options);backend.open();
+    const auto node=backend.createLogicalNodes({{{"ScratchBatch"},{{"value",PropertyValue(7)}}}}).front();
+    auto pin=backend.openLogicalGraphReadSnapshot();const auto fence=backend.currentNativeLogicalGraphMutationFence();
+    auto scratch=backend.openNativeQueryScratchSession(4U*RSS_SEGMENT_SIZE,4U);
+    const std::vector<std::byte> payload(4096U,std::byte{0x67});
+    std::array<uint64_t,4U> handles;for(auto &handle:handles) handle=scratch->write(payload);
+    EXPECT_THROW(static_cast<void>(scratch->write(payload)),std::runtime_error);
+    const auto generation=backend.currentNativeMetadataGeneration();backend.resetIoStats();
+    const std::array duplicate{handles[0],handles[0]};
+    const std::array stale{handles[0],UINT64_MAX};
+    EXPECT_THROW(scratch->releaseBatch(duplicate),std::invalid_argument);
+    EXPECT_THROW(scratch->releaseBatch(stale),std::invalid_argument);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(),generation);
+    EXPECT_EQ(backend.ioStats().data.write_calls,0U);
+    EXPECT_EQ(scratch->read(handles[0]),payload);
+    backend.resetIoStats();scratch->releaseBatch(std::span(handles).first(3U));
+    const auto batchSyncs=backend.ioStats().data.sync_calls;
+    RecordProperty("batch_cleanup_syncs",std::to_string(batchSyncs));
+    EXPECT_GT(batchSyncs,0U);
+    for(size_t i=0;i<3U;++i) EXPECT_THROW(static_cast<void>(scratch->read(handles[i])),std::invalid_argument);
+    EXPECT_EQ(scratch->read(handles[3]),payload);
+    backend.resetIoStats();scratch->release(handles[3]);
+    RecordProperty("single_cleanup_syncs",std::to_string(backend.ioStats().data.sync_calls));
+    EXPECT_EQ(batchSyncs,backend.ioStats().data.sync_calls);
+    for(auto &handle:handles) handle=scratch->write(payload);
+    EXPECT_EQ(pin->readNodeProperty(node,"value"),PropertyValue(7));
+    EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(),fence);
+    scratch->releaseBatch(handles);scratch->finish();scratch.reset();pin.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();backend.open();
+    EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNodeProperty(node,"value"),PropertyValue(7));
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation) {
+    materializeNativeDatabase(); auto options = backendOptions();
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.query_scratch_enabled = true;
+    RelocatableStorageBackend backend(options); backend.open();
+    size_t snapshots = 0U;
+    graph::debug::PerfTrace::ScopedObserver observe(&snapshots,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (!duration && key == "native_query_scratch.reader_snapshots")
+                *static_cast<size_t *>(p) += static_cast<size_t>(value);
+        });
+    auto scratch = backend.openNativeQueryScratchSession(3U * RSS_SEGMENT_SIZE, 3U);
+    const std::vector<std::byte> first(37U, std::byte{0xA1}), second(89U, std::byte{0xB2});
+    const auto a = scratch->write(first), b = scratch->write(second);
+    EXPECT_EQ(scratch->read(a), first); EXPECT_EQ(scratch->read(b), second);
+    EXPECT_EQ(snapshots, 1U);
+    const auto c = scratch->write(first);
+    EXPECT_EQ(scratch->read(c), first); EXPECT_EQ(snapshots, 2U);
+    scratch->release(a);
+    EXPECT_THROW(scratch->read(a), std::invalid_argument);
+    EXPECT_EQ(scratch->read(b), second); EXPECT_EQ(snapshots, 3U);
+    const std::array remaining{b, c}; scratch->releaseBatch(remaining);
+    const auto d = scratch->write(second);
+    EXPECT_EQ(scratch->read(d), second); EXPECT_EQ(snapshots, 4U);
+    scratch->finish(); scratch.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+    backend.close(); backend.open(); backend.close();
 }

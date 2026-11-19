@@ -24,8 +24,10 @@
 
 #include "CypherParserImpl.hpp"
 #include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
+#include "query/execution/RetainedResultBudgetTest.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/query/logical/operators/LogicalLoadCsv.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
@@ -250,7 +252,10 @@ namespace graph::query::execution {
 		ASSERT_NE(escaped.root, nullptr);
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*escaped.root, bounds(), context())),
 				 std::runtime_error);
-		const std::string encodedEscape = "file://" + root_.generic_string() + "/%2e%2e/" + outside.filename().string();
+		// Preserve the local-file URI's third slash for Windows drive paths;
+		// otherwise the syntax check rejects C: as an authority before the
+		// encoded parent traversal can reach the import-root security check.
+		const std::string encodedEscape = fileUri(root_) + "/%2e%2e/" + outside.filename().string();
 		QueryPlan encoded = parse("LOAD CSV FROM '" + encodedEscape + "' AS row RETURN row");
 		ASSERT_NE(encoded.root, nullptr);
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*encoded.root, bounds(), context())),
@@ -410,9 +415,13 @@ namespace graph::query::execution {
 					return true;
 				}, context()));
 				FAIL() << "CSV source should exceed its execution byte allowance";
-			} catch (const std::runtime_error &error) {
-				EXPECT_NE(std::string(error.what()).find("CsvReader:"), std::string::npos);
-			}
+            } catch (const MaterializedByteLimitExceeded &) {
+                // The execution account also owns source setup and allocator
+                // growth. It may refuse before CsvReader's local byte check;
+                // that typed quota failure must retain its category.
+            } catch (const std::runtime_error &error) {
+                EXPECT_NE(std::string(error.what()).find("CsvReader:"), std::string::npos);
+            }
 			EXPECT_EQ(delivered, 0U);
 			constrained.maximum_materialized_bytes = 8192U;
 			EXPECT_EQ(runtime.executeToQueryResult(*plan.root, constrained, context()).rowCount(), 1U);
@@ -546,7 +555,11 @@ namespace graph::query::execution {
 			headers += names.back();
 			record += 'a';
 		}
-		const fs::path csv = writeFile("map-structure.csv", headers + "\n" + record + "\n");
+		// Sharded runners use a longer temporary root. Exercise a long path even
+		// when this test is run alone, while preserving the same budget boundary.
+		const std::string directory(96U, 'p');
+		fs::create_directory(root_ / directory);
+		const fs::path csv = writeFile(directory + "/map-structure.csv", headers + "\n" + record + "\n");
 		QueryPlan plan = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(csv) + "' AS row RETURN row");
 		ASSERT_NE(plan.root, nullptr);
 		auto constrained = bounds();
@@ -570,7 +583,8 @@ namespace graph::query::execution {
 			}, context()));
 			FAIL() << "Map structure should exceed the conversion allowance";
 		} catch (const std::runtime_error &error) {
-			EXPECT_NE(std::string(error.what()).find("logical LOAD CSV conversion"), std::string::npos);
+			EXPECT_NE(std::string(error.what()).find("logical LOAD CSV conversion"), std::string::npos)
+					<< "actual error: " << error.what();
 		}
 		EXPECT_EQ(delivered, 0U);
 		constrained.maximum_materialized_bytes *= 4U;
@@ -615,6 +629,74 @@ namespace graph::query::execution {
 		}
 	}
 
+    TEST_F(LogicalPlanLoadCsvRuntimeTest, TightResultGrowthUsesNecessaryCapacityWithoutDuplicatingPayloads) {
+        CsvOnlyBackend backend;
+        LogicalPlanReadRuntime runtime(backend);
+        std::string values;
+        for (size_t index = 1U; index <= 33U; ++index) {
+            if (!values.empty()) values += ',';
+            values += std::to_string(index);
+        }
+        const auto plan = parse("UNWIND [" + values + "] AS x RETURN x");
+        auto constrained = bounds();
+        constrained.maximum_rows = constrained.maximum_distinct_rows = 64U;
+        // Find the real end-to-end admission boundary on each STL, rather
+        // than baking one platform's container sizes into the budget.
+        for (size_t limit = 4096U; limit <= 65536U; limit += 128U) {
+            constrained.maximum_materialized_bytes = limit;
+            try {
+                const auto result = runtime.executeToQueryResult(*plan.root, constrained);
+                ASSERT_EQ(result.rowCount(), 33U);
+                EXPECT_LT(result.getRows().capacity(), 64U);
+                for (size_t index = 0U; index < 33U; ++index)
+                    EXPECT_EQ(result.getRows()[index].at("x").asPrimitive(), PropertyValue(int64_t(index + 1U)));
+                RecordProperty("growth_success_bound", limit);
+                RecordProperty("growth_result_capacity", result.getRows().capacity());
+                return;
+            } catch (const std::runtime_error &error) {
+                // Only resource pressure may move this boundary; semantic
+                // errors must not disappear behind the calibration loop.
+                ASSERT_NE(std::string(error.what()).find("byte bound"), std::string::npos) << error.what();
+            }
+        }
+        FAIL() << "bounded scalar result never became admissible";
+    }
+    TEST_F(LogicalPlanLoadCsvRuntimeTest, ParentPressureUsesNecessaryResultCapacityAndRefundsEveryRetry) {
+        using namespace detail;
+        CsvOnlyBackend backend;
+        LogicalPlanReadRuntime runtime(backend);
+        std::string values;
+        for (size_t index = 1U; index <= 33U; ++index) {
+            if (!values.empty()) values += ',';
+            values += std::to_string(index);
+        }
+        const auto plan = parse("UNWIND [" + values + "] AS x RETURN x");
+        auto constrained = bounds();
+        constrained.maximum_rows = constrained.maximum_distinct_rows = 64U;
+        constrained.maximum_materialized_bytes = 1048576U;
+        for (size_t limit = 8192U; limit <= 131072U; limit += 128U) {
+            auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(limit));
+            auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(limit));
+            auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, limit);
+            auto queryContext = context(); queryContext.resource_account = account;
+            bool succeeded = false;
+            try {
+                const auto result = runtime.executeToQueryResult(*plan.root, constrained, queryContext);
+                ASSERT_EQ(result.rowCount(), 33U);
+                EXPECT_LT(result.getRows().capacity(), 64U);
+                EXPECT_GT(account->used(), 0U);
+                for (size_t index = 0U; index < 33U; ++index)
+                    EXPECT_EQ(result.getRows()[index].at("x").asPrimitive(), PropertyValue(int64_t(index + 1U)));
+                succeeded = true;
+            } catch (const std::runtime_error &error) {
+                ASSERT_TRUE(dynamic_cast<const ResourceAdmissionDenied *>(&error) ||
+                    std::string(error.what()).find("byte bound") != std::string::npos) << error.what();
+            }
+            EXPECT_EQ(account->used(), 0U);
+            if (succeeded) return;
+        }
+        FAIL() << "parent-limited scalar result never became admissible";
+    }
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, OutputBatchSharesCsvSourceBudgetWhileReadingAhead) {
 		CsvOnlyBackend backend;
 		LogicalPlanReadRuntime runtime(backend);
@@ -692,12 +774,29 @@ namespace graph::query::execution {
 		QueryPlan plan = parse("UNWIND ['d','b','a','c'] AS value WITH value ORDER BY value RETURN value ORDER BY 0");
 		ASSERT_NE(plan.root, nullptr);
 		auto constrained = bounds();
-		// Leave room for the old and new QueryResult row-vector allocations to
-		// coexist during growth while remaining below the duplicated-row-charge case.
-		constrained.maximum_materialized_bytes =
-				5U * sizeof(LogicalPlanReadRow) + 8U * sizeof(PropertyValue) + 664U;
+        // Freeze the efficiency envelope instead of scaling it with empty
+        // container header sizes (the former GNU bound was 2576 bytes).
+        // The live public result-vector growth is still charged in full.
+        constrained.maximum_materialized_bytes = 2304U;
 		EXPECT_LT(constrained.maximum_materialized_bytes,
-				8U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 6U));
+				8U * (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>()));
+        std::array<char,4U> streamed{};size_t delivered=0U;
+        EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root,constrained,[&](const LogicalPlanReadRow &row) {
+            const auto &text=std::get<std::string>(std::get<PropertyValue>(row.values.at("value")).getVariant());
+            EXPECT_EQ(text.size(),1U);EXPECT_LT(delivered,streamed.size());
+            if(delivered>=streamed.size() || text.empty())return false;
+            streamed[delivered++]=text.front();return true;
+        },context())));
+        EXPECT_EQ(delivered,4U);EXPECT_EQ(streamed,(std::array<char,4U>{'a','b','c','d'}));
+        const std::array<PropertyValue,4U> expected{PropertyValue("a"),PropertyValue("b"),PropertyValue("c"),PropertyValue("d")};
+        const auto completeBytes=test_support::scalarResultRequests(expected);
+        RecordProperty("complete_result_storage_requests",completeBytes);
+        if(completeBytes>constrained.maximum_materialized_bytes) {
+            auto owned=context();owned.resource_account=test_support::resultAccount(constrained.maximum_materialized_bytes);
+            EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root,constrained,owned)),std::runtime_error);
+            EXPECT_EQ(owned.resource_account->used(),0U);
+            return;
+        }
 		const auto result = runtime.executeToQueryResult(*plan.root, constrained, context());
 		ASSERT_EQ(result.rowCount(), 4U);
 		for (size_t index = 0U; index < result.rowCount(); ++index) {
@@ -750,6 +849,17 @@ namespace graph::query::execution {
 		}
 	}
 
+    TEST_F(LogicalPlanLoadCsvRuntimeTest, MixedDistinctAndOrdinaryAggregatesRetainIndependentSets) {
+        CsvOnlyBackend backend;
+        LogicalPlanReadRuntime runtime(backend);
+        auto plan = parse("UNWIND [1,1,2,2,3] AS value RETURN count(*) AS total, count(DISTINCT value) AS unique, sum(value) AS sum");
+        const auto result = runtime.executeToQueryResult(*plan.root, bounds(), context());
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows()[0].at("total").asPrimitive(), PropertyValue(5));
+        EXPECT_EQ(result.getRows()[0].at("unique").asPrimitive(), PropertyValue(3));
+        EXPECT_EQ(result.getRows()[0].at("sum").asPrimitive(), PropertyValue(9));
+    }
+
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateAndCsvRetainedHeadersShareTheExecutionBudget) {
 		CsvOnlyBackend backend;
 		LogicalPlanReadRuntime runtime(backend);
@@ -781,13 +891,37 @@ namespace graph::query::execution {
 
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, PropertyPrefetchAndLiveCsvHeadersShareTheExecutionBudget) {
 		using namespace direct_edge_test;
+		using namespace detail;
+		class ProbedSnapshot final : public DirectEdgeSnapshot {
+		public:
+			ProbedSnapshot(DirectEdgeGraph &graph, const std::function<void()> &probe)
+				: DirectEdgeSnapshot(graph), probe_(probe) {}
+			std::vector<std::vector<PropertyValue>> readNodePropertyColumnsSortedWithAdmission(
+				std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+				const std::function<void(size_t)> &admission) const override {
+				return DirectEdgeSnapshot::readNodePropertyColumnsSortedWithAdmission(ids, keys,
+					[&](size_t bytes) { if (probe_) probe_(); admission(bytes); });
+			}
+		private:
+			const std::function<void()> &probe_;
+		};
+		class ProbedBackend final : public storage::LogicalGraphReadBackend {
+		public:
+			explicit ProbedBackend(DirectEdgeGraph &graph) : graph_(graph) {}
+			std::unique_ptr<storage::LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
+				return std::make_unique<ProbedSnapshot>(graph_, before_admission);
+			}
+			std::function<void()> before_admission;
+		private:
+			DirectEdgeGraph &graph_;
+		};
 		DirectEdgeGraph graph = directGraph();
 		graph.enable_property_tokens = true;
 		graph.nodes.erase(2U);
 		graph.nodes.erase(3U);
 		const PropertyValue payload(std::string(6000U, 'p'));
 		graph.nodes.at(1U).properties.emplace_back("payload", payload);
-		DirectEdgeBackend backend(graph);
+		ProbedBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		const std::string key(2000U, 'h');
 		const fs::path csv = writeFile("prefetch-shared.csv", key + "\nx\n");
@@ -803,25 +937,64 @@ namespace graph::query::execution {
 		auto constrained = bounds();
 		// Flush within the CSV callback, while its input/header owners are live.
 		constrained.maximum_rows = 1U;
-		// The execution retains one output row slot while CSV headers and selected
-		// Property values coexist, so include that storage in the same allowance.
-		constrained.maximum_materialized_bytes = 10000U + sizeof(LogicalPlanReadRow);
+		// Keep the original 24 KiB successful efficiency bound. Force denial via
+		// independent parent pressure, rather than an ABI-dependent row estimate.
+		constrained.maximum_materialized_bytes = 24000U;
+		constexpr size_t domainLimit = 1024U * 1024U;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(domainLimit));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(domainLimit));
+		auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 24000U);
+		auto queryContext = context();
+		queryContext.resource_account = account;
+		size_t independentSourceUsage = 0U;
+		backend.before_admission = [&] { independentSourceUsage = account->used(); };
 		size_t delivered = 0U;
 		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*independent, constrained,
-				[&](const LogicalPlanReadRow &) { ++delivered; return true; })));
+				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, queryContext)));
 		EXPECT_EQ(delivered, 1U);
+		EXPECT_GT(independentSourceUsage, 0U);
+		EXPECT_EQ(account->used(), 0U);
 		QueryPlan csvOnly = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(csv) + "' AS row RETURN row." + key + " AS value");
-		EXPECT_EQ(runtime.executeToQueryResult(*csvOnly.root, constrained, context()).rowCount(), 1U);
+		EXPECT_EQ(runtime.executeToQueryResult(*csvOnly.root, constrained, queryContext).rowCount(), 1U);
+		EXPECT_EQ(account->used(), 0U);
+
+		auto competing = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, domainLimit);
+		ResourceLease competingRows(competing);
+		size_t pressurePoints = 0U;
+		backend.before_admission = [&] {
+			if (pressurePoints++ == 0U) {
+				// The live CSV header alone owns at least key.size() bytes.
+				EXPECT_GE(account->used(), independentSourceUsage + key.size());
+			}
+			const size_t withoutCompetition = database->usage().total - competingRows.bytes();
+			ASSERT_LE(withoutCompetition + 5999U, domainLimit);
+			competingRows.set(domainLimit - withoutCompetition - 5999U);
+			EXPECT_LT(account->available(), 6000U);
+		};
 		delivered = 0U;
 		const size_t readsBeforeCombined = graph.node_property_column_batch_reads;
+		const size_t admissionsBeforeCombined = graph.node_property_column_admission_reads;
 		EXPECT_THROW(static_cast<void>(runtime.execute(*combined, constrained,
-				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, context())), std::runtime_error);
+				[&](const LogicalPlanReadRow &) { ++delivered; return true; }, queryContext)), std::runtime_error);
 		EXPECT_EQ(delivered, 0U);
+		EXPECT_GT(pressurePoints, 0U);
+		EXPECT_GT(graph.node_property_column_admission_reads, admissionsBeforeCombined);
+		EXPECT_EQ(graph.node_property_column_batch_reads, readsBeforeCombined);
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, competingRows.bytes());
+		backend.before_admission = {};
+		competingRows.reset();
+		EXPECT_EQ(database->usage().total, 0U);
+		{
+			const auto result = runtime.executeToQueryResult(*combined, constrained, queryContext);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows()[0].at("payload").asPrimitive(), payload);
+			EXPECT_GE(account->used(), 6000U);
+			EXPECT_LE(account->used(), 24000U);
+		}
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
 		EXPECT_EQ(graph.node_property_column_batch_reads, readsBeforeCombined + 1U);
-		constrained.maximum_materialized_bytes = 24000U;
-		const auto result = runtime.executeToQueryResult(*combined, constrained, context());
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows()[0].at("payload").asPrimitive(), payload);
 		EXPECT_EQ(graph.node_property_point_reads, 0U);
 		EXPECT_TRUE(graph.node_read_ids.empty());
 	}
@@ -913,5 +1086,80 @@ namespace graph::query::execution {
 		for (size_t index = 0U; index < 512U; ++index)
 			EXPECT_EQ(map.at("column" + std::to_string(index)), PropertyValue(std::string(40U, 'v')));
 	}
+
+TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateBoundedCapacityGrowthPreservesGroupsUnderPressure) {
+    CsvOnlyBackend backend;
+    LogicalPlanReadRuntime runtime(backend);
+    QueryPlan plan = parse("UNWIND [1,2,3,4,5,6,7,8,9,10] AS value RETURN value, count(*) AS count");
+    bool successfulFallback = false;
+    for (size_t cap = 1536U; cap <= 8192U && !successfulFallback; cap += 16U) {
+        auto constrained = bounds();
+        constrained.maximum_materialized_bytes = cap;
+        size_t fallback = 0U, delivered = 0U;
+        std::array<bool, 10U> seen{};
+        debug::PerfTrace::ScopedObserver observe(&fallback,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.aggregate.bounded_capacity_growth" && value > 0)
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
+        try {
+            static_cast<void>(runtime.execute(*plan.root, constrained, [&](const LogicalPlanReadRow &row) {
+                const auto id = std::get<int64_t>(std::get<PropertyValue>(row.values.at("value")).getVariant());
+                EXPECT_GE(id, 1);
+                EXPECT_LE(id, 10);
+                if (id < 1 || id > 10) return false;
+                EXPECT_FALSE(seen[static_cast<size_t>(id - 1)]);
+                seen[static_cast<size_t>(id - 1)] = true;
+                EXPECT_EQ(std::get<PropertyValue>(row.values.at("count")), PropertyValue(1));
+                ++delivered;
+                return true;
+            }, context()));
+            EXPECT_EQ(delivered, 10U);
+            if (fallback) {
+                successfulFallback = true;
+                RecordProperty("bounded_growth_success_cap", cap);
+            }
+        } catch (const std::runtime_error &error) {
+            EXPECT_NE(std::string_view(error.what()).find("byte bound"), std::string_view::npos) << error.what();
+        }
+    }
+    EXPECT_TRUE(successfulFallback);
+}
+
+TEST_F(LogicalPlanLoadCsvRuntimeTest, AggregateParentPressurePreservesTypedDenialAndRefundsBeforeRetry) {
+    using namespace detail;
+    CsvOnlyBackend backend;
+    LogicalPlanReadRuntime runtime(backend);
+    const auto plan = parse("UNWIND [1,2,3,4,5,6,7,8,9,10] AS value RETURN value, count(*) AS count");
+    auto constrained = bounds();
+    constrained.maximum_materialized_bytes = 1048576U;
+    bool succeeded = false, fallbackDenied = false;
+    for (size_t cap = 1536U; cap <= 8192U && !succeeded; cap += 32U) {
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(cap));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(cap));
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, cap);
+        auto queryContext = context();
+        queryContext.resource_account = account;
+        size_t fallback = 0U, delivered = 0U;
+        debug::PerfTrace::ScopedObserver observe(&fallback,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.aggregate.bounded_capacity_growth" && value > 0)
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
+        try {
+            static_cast<void>(runtime.execute(*plan.root, constrained,
+                [&](const LogicalPlanReadRow &) { ++delivered; return true; }, queryContext));
+            EXPECT_EQ(delivered, 10U);
+            succeeded = true;
+        } catch (const ResourceAdmissionDenied &) {
+            fallbackDenied = fallbackDenied || fallback != 0U;
+        } catch (const std::exception &error) {
+            FAIL() << "Parent admission error lost its type: " << error.what();
+        }
+        EXPECT_EQ(account->used(), 0U);
+    }
+    EXPECT_TRUE(fallbackDenied);
+    EXPECT_TRUE(succeeded);
+}
 
 } // namespace graph::query::execution

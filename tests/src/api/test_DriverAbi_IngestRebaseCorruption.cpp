@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_DriverAbi_IngestRebaseCorruption.cpp
  * @brief Public Driver ABI coverage for rebased streamed-ingest source corruption.
@@ -22,6 +23,8 @@
 
 #include <gtest/gtest.h>
 
+#include "api/DatabaseBulkInternal.hpp"
+#include "api/driver_abi/DriverAbiInternal.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -278,7 +281,7 @@ TEST_F(DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting corruptRebasedManifestCount(
 				[&injected](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 						return read;
 					}
@@ -361,7 +364,7 @@ TEST_F(DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderRebasedRun(
 				[&injected](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 						return read;
 					}
@@ -443,7 +446,7 @@ TEST_F(DISABLED_RelocatableDriverAbiIngestRebaseCorruptionScaleTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderRebasedManifestRuns(
 				[&injected, &rootManifestReads](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 						return read;
 					}
@@ -577,16 +580,10 @@ TEST_F(RelocatableDriverAbiIngestRebaseCorruptionTest,
 			  ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
 
-	// Delete the staged target through a separate public handle so commit observes a real graph conflict.
-	zyx_driver_db_t *concurrentWriter = nullptr;
-	ASSERT_EQ(zyx_driver_db_open_if_exists(databasePath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
-	const std::string deleteQuery = "MATCH (n:RebaseEndpoint) WHERE id(n) = " + std::to_string(target) + " DELETE n";
-	zyx_driver_result_t *deleteResult = nullptr;
-	ASSERT_EQ(zyx_driver_db_execute(concurrentWriter, deleteQuery.c_str(), nullptr, &deleteResult, &error), ZYX_DRIVER_OK);
-	zyx_driver_result_free(deleteResult);
-	deleteResult = nullptr;
-	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
-	concurrentWriter = nullptr;
+	// Keep one writable owner: inject the actual competing deletion through
+	// its backend while the ABI transaction remains staged.
+	zyx::detail::DatabaseBulkInternal::deleteNodeOnOwnerForTesting(
+			*database->db, static_cast<uint64_t>(target));
 
 	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_EXECUTION_ERROR);
 	ASSERT_NE(error, nullptr);

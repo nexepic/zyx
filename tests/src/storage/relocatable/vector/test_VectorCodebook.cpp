@@ -1554,9 +1554,10 @@ public:
     size_t allocations = 0U;
     size_t live = 0U;
     size_t failAt = 0U;
+    bool failed = false;
 private:
     void *do_allocate(size_t bytes, size_t alignment) override {
-        if (++allocations == failAt) { throw std::bad_alloc(); }
+        if (++allocations == failAt) { failed = true; throw std::bad_alloc(); }
         void *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
         live += bytes;
         return result;
@@ -1569,6 +1570,28 @@ private:
 };
 }
 
+TEST_F(RelocatableVectorCodebookStoreTest, EmptyCacheNeedsNoGrantAndFirstReadCanRetryAfterDenial) {
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    PhysicalSegmentAllocator segments(io, *metadata);
+    VectorCodebookStore writer(segments, *metadata);
+    static_cast<void>(writer.writeImmutable(request(), payload(), PhysicalSlotId(40U), PhysicalSlotId(40U),
+                                            LogSequenceNumber(2U)));
+    const auto snapshot = metadata->openSnapshot();
+    auto resource = std::make_shared<CodebookMetadataResource>();
+    resource->failAt = 1U;
+    {
+        VectorCodebookStore store(segments, *metadata, 1024U, 1U, resource);
+        EXPECT_EQ(resource->allocations, 0U);
+        EXPECT_EQ(resource->live, 0U);
+        EXPECT_THROW(static_cast<void>(store.readSharedBounded(snapshot, 17U, 1024U, 0U)), std::bad_alloc);
+        EXPECT_EQ(resource->live, 0U);
+        resource->failAt = 0U;
+        const auto loaded = store.readSharedBounded(snapshot, 17U, 1024U, 0U);
+        EXPECT_EQ(store.readSharedBounded(snapshot, 17U, 1024U, 0U), loaded);
+    }
+    EXPECT_EQ(resource->live, 0U);
+}
+
 TEST_F(RelocatableVectorCodebookStoreTest, RollsBackEveryMetadataAllocationFailureAndRetries) {
     auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
     PhysicalSegmentAllocator segments(io, *metadata);
@@ -1576,13 +1599,31 @@ TEST_F(RelocatableVectorCodebookStoreTest, RollsBackEveryMetadataAllocationFailu
     static_cast<void>(writer.writeImmutable(request(), payload(), PhysicalSlotId(40U), PhysicalSlotId(40U),
                                             LogSequenceNumber(2U)));
     const auto snapshot = metadata->openSnapshot();
-    for (size_t failure = 1U; failure <= 4U; ++failure) {
+    size_t readAllocations = 0U;
+    {
         auto resource = std::make_shared<CodebookMetadataResource>();
         {
             VectorCodebookStore store(segments, *metadata, 1024U, 1U, resource);
-            resource->failAt = failure;
+            const size_t baseline = resource->allocations;
+            static_cast<void>(store.readSharedBounded(snapshot, 17U, 1024U, 0U));
+            readAllocations = resource->allocations - baseline;
+        }
+        EXPECT_EQ(resource->live, 0U);
+    }
+    ASSERT_GT(readAllocations, 0U);
+    for (size_t failure = 1U; failure <= readAllocations; ++failure) {
+        auto resource = std::make_shared<CodebookMetadataResource>();
+        // A memory resource may already serve other containers. In particular,
+        // Its earlier allocations must not alter this store's failure index.
+        void *prior = resource->allocate(1U, alignof(std::max_align_t));
+        resource->deallocate(prior, 1U, alignof(std::max_align_t));
+        {
+            VectorCodebookStore store(segments, *metadata, 1024U, 1U, resource);
+            const size_t baselineLive = resource->live;
+            resource->failAt = resource->allocations + failure;
             EXPECT_THROW(static_cast<void>(store.readSharedBounded(snapshot, 17U, 1024U, 0U)), std::bad_alloc);
-            EXPECT_EQ(resource->live, 0U);
+            EXPECT_TRUE(resource->failed) << "allocation " << failure;
+            EXPECT_EQ(resource->live, baselineLive);
             resource->failAt = 0U;
             const auto loaded = store.readSharedBounded(snapshot, 17U, 1024U, 0U);
             EXPECT_GT(resource->live, 0U);

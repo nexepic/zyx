@@ -211,7 +211,7 @@ TEST_F(RelocatableVectorNodeMappingTest, RejectsEmptyBoundedAndAlreadyPublishedB
 	const uint64_t mappingIndexId = VectorNodeMapping::selectMappingIndexId(snapshot, *metadata, VECTOR_INDEX_ID);
 	snapshot.release();
 
-	const OrderedBTreeEntrySource noSource;
+	const OrderedBTreeEntrySource noSource{};
 	expectFormatError(
 			[&] {
 				static_cast<void>(VectorNodeMapping::build(trees, *metadata, mappingIndexId, noSource,

@@ -205,10 +205,27 @@ TEST(LogicalPlanUnionRuntimeTest, LimitStreamsAnExactBudgetRowWithoutSelectionSt
 	auto source = std::make_unique<logical::LogicalUnwind>(
 		std::make_unique<logical::LogicalSingleRow>(), "value", std::vector<PropertyValue>{payload});
 	logical::LogicalLimit limit(std::move(source), 1);
-	auto constrained = bounds();
-	// Include the one resident output slot reserved while the source is running.
-	constrained.maximum_materialized_bytes = sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadRow) + std::string("value").size() +
-		sizeof(LogicalPlanReadValue) + property_utils::getPropertyValueSize(payload);
+    auto constrained = bounds();
+    // Independently account the allocated binding node, not only its embedded
+    // variant. The visitor owns one separate row slot. Preserve the logical
+    // payload floor as well as the actual retained string request.
+    using Bindings = decltype(LogicalPlanReadRow::values);
+    using Node = typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+    const auto &text = std::get<std::string>(payload.getVariant());
+    const size_t rowBytes = sizeof(LogicalPlanReadRow) + (std::max)(
+        std::string("value").size()+sizeof(LogicalPlanReadValue)+property_utils::getPropertyValueSize(payload),
+        sizeof(Node)+graph::query::execution::detail::dynamicStringBufferBytes(text)+
+            graph::query::execution::detail::dynamicStringBufferBytes(std::string("value")));
+    constrained.maximum_materialized_bytes = rowBytes + sizeof(LogicalPlanReadRow);
+    // A layout regression must not silently expand this success boundary.
+    ASSERT_LE(constrained.maximum_materialized_bytes, 1792U);
+
+    auto insufficient = constrained;
+    --insufficient.maximum_materialized_bytes;
+    size_t rejectedDeliveries = 0U;
+    EXPECT_THROW(static_cast<void>(runtime.execute(limit, insufficient,
+        [&](const LogicalPlanReadRow &) { ++rejectedDeliveries; return true; })), graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(rejectedDeliveries, 0U);
 	size_t delivered = 0U;
 	EXPECT_NO_THROW(static_cast<void>(runtime.execute(limit, constrained, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -292,7 +309,12 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
 		std::make_unique<logical::LogicalSingleRow>(), "value",
 		std::vector<PropertyValue>{PropertyValue(2), PropertyValue(1)});
 	std::vector<logical::LogicalSortItem> keys;
-	keys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("value"), true);
+	// A computed key must own its evaluated value; a bare scalar now borrows
+	// the already-charged row and deliberately needs no key-slot allocation.
+	keys.emplace_back(std::make_shared<expressions::BinaryOpExpression>(
+		std::make_unique<expressions::VariableReferenceExpression>("value"),
+		expressions::BinaryOperatorType::BOP_ADD,
+		std::make_unique<expressions::LiteralExpression>(int64_t{0})), true);
 	logical::LogicalSort sort(std::move(input), std::move(keys));
 	auto constrained = bounds();
 	const size_t rowBytes = sizeof(LogicalPlanReadRow) + std::string("value").size() +
@@ -345,6 +367,11 @@ TEST(LogicalPlanUnionRuntimeTest, SortAdmitsKeySlotsBeforeReservingThem) {
 }
 
 TEST(LogicalPlanUnionRuntimeTest, SortTransfersLargeRowsToDirectLimitAndSkipBuffers) {
+        size_t transfers = 0U;
+        graph::debug::PerfTrace::ScopedObserver observer(&transfers,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.sort.borrowed_scalar_rows") *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 	NoGraphBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
 	const auto makeSort = [] {
@@ -357,7 +384,8 @@ TEST(LogicalPlanUnionRuntimeTest, SortTransfersLargeRowsToDirectLimitAndSkipBuff
 		return std::make_unique<logical::LogicalSort>(std::move(source), std::move(keys));
 	};
 	const size_t rowBytes = sizeof(LogicalPlanReadRow) + std::string("value").size() +
-		sizeof(LogicalPlanReadValue) + 4096U + sizeof(size_t);
+		(std::max)(sizeof(LogicalPlanReadValue) + 4096U + sizeof(size_t),
+            graph::query::execution::detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>() + 4097U);
 	auto constrained = bounds();
 	constrained.maximum_materialized_bytes = 4U * rowBytes +
 		4U * sizeof(PropertyValue) + 4U * (4096U + sizeof(size_t)) +
@@ -377,6 +405,24 @@ TEST(LogicalPlanUnionRuntimeTest, SortTransfersLargeRowsToDirectLimitAndSkipBuff
 		return true;
 	}));
 	EXPECT_EQ(skipped, (std::vector<PropertyValue>{PropertyValue(std::string(4096U, 'd'))}));
+        EXPECT_GT(transfers, 0U);
+}
+
+TEST(LogicalPlanUnionRuntimeTest, BorrowedScalarSortPreservesNullsMultipleKeysAndStableTies) {
+    NoGraphBackend backend; LogicalPlanReadRuntime runtime(backend);
+    graph::parser::cypher::CypherParserImpl parser;
+    const auto plan = parser.parseToLogical(
+        "UNWIND [{k:1,s:0,id:0},{k:null,s:2,id:1},{k:1,s:1,id:2},{k:1,s:1,id:3}] AS row "
+        "WITH row.k AS k,row.s AS s,row.id AS id ORDER BY k ASC,s DESC RETURN id");
+    const auto result = runtime.executeToQueryResult(*plan.root, bounds());
+    ASSERT_EQ(result.rowCount(), 4U);
+    const std::array<int64_t,4> expected{2,3,0,1};
+    for (size_t i=0;i<expected.size();++i) EXPECT_EQ(result.getRows()[i].at("id").asPrimitive(), PropertyValue(expected[i]));
+    size_t delivered=0;
+    static_cast<void>(runtime.execute(*plan.root, bounds(), [&](const LogicalPlanReadRow &row) {
+        ++delivered; EXPECT_EQ(std::get<PropertyValue>(row.values.at("id")), PropertyValue(2)); return false;
+    }));
+    EXPECT_EQ(delivered,1U);
 }
 
 TEST(LogicalPlanUnionRuntimeTest, DistinctCancellationDoesNotEvaluateTheSecondBranch) {
@@ -529,7 +575,7 @@ TEST(LogicalPlanUnionRuntimeTest, ComparisonAndInTemporariesChargeNestedListSlot
 	for (const bool membership : {false, true}) {
 		SCOPED_TRACE(membership);
 		const auto plan = parser.parseToLogical(membership ?
-			"RETURN 7 IN $values AS result" : "RETURN $values = $values AS result");
+			"RETURN 7 IN $values AS result" : "RETURN tail($values) = tail($values) AS result");
 		auto limited = bounds();
 		limited.maximum_rows = 256U;
 		limited.maximum_materialized_bytes = 1024U;
@@ -547,6 +593,27 @@ TEST(LogicalPlanUnionRuntimeTest, ComparisonAndInTemporariesChargeNestedListSlot
 			}, context)));
 		EXPECT_EQ(delivered, 1U);
 	}
+}
+
+TEST(LogicalPlanUnionRuntimeTest, ComparisonBorrowsContextListsWithoutMaterializingCopies) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	QueryContext context;
+	const PropertyValue values(std::vector<PropertyValue>(128U));
+	context.parameters.emplace("values", values);
+	const auto plan = parser.parseToLogical("RETURN $values = $values AS result");
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 1024U;
+	size_t delivered = 0U;
+	EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, limited,
+		[&](const LogicalPlanReadRow &row) {
+			EXPECT_EQ(std::get<PropertyValue>(row.values.at("result")), PropertyValue(true));
+			++delivered;
+			return true;
+		}, context)));
+	EXPECT_EQ(delivered, 1U);
+	EXPECT_EQ(context.parameters.at("values"), values);
 }
 
 TEST(LogicalPlanUnionRuntimeTest, FunctionAndCaseTemporariesChargeCapacityWithoutAccumulatingDeadBranches) {

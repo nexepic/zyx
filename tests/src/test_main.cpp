@@ -1,9 +1,19 @@
+#include "query/execution/CiDiagnosticForkSupport.hpp"
+#include "query/execution/CiLayoutDiagnostics.hpp"
+#include "query/execution/CiQuotaStackSupport.hpp"
 #include <gtest/gtest.h>
 #include <cstdlib>
+#include <cstdio>
+#include <cstdint>
+#include <exception>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,7 +35,20 @@ namespace graph::test {
 		if (argv0 == nullptr || *argv0 == '\0') {
 			throw std::invalid_argument("test executable path is empty");
 		}
-		testExecutable = std::filesystem::absolute(argv0);
+#ifdef _WIN32
+        // argv[0] can omit .exe (or use a PATH alias). CreateProcessW with an
+        // explicit application name must receive the actual executable image.
+        std::vector<wchar_t> image(32768U);
+        const DWORD length = GetModuleFileNameW(nullptr, image.data(), static_cast<DWORD>(image.size()));
+        if (length == 0U)
+            throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
+                                    "cannot resolve test executable image");
+        if (length >= image.size())
+            throw std::runtime_error("test executable image path exceeds its bounded buffer");
+        testExecutable = std::filesystem::path(std::wstring(image.data(), length));
+#else
+        testExecutable = std::filesystem::absolute(argv0);
+#endif
 	}
 
 	const std::filesystem::path &testExecutablePath() {
@@ -77,7 +100,11 @@ public:
         suite_failed_tests_ = 0;
     }
 
-    void OnTestStart(const ::testing::TestInfo&) override {
+    void OnTestStart(const ::testing::TestInfo& info) override {
+        if (std::getenv("ZYX_CI_CASE_TRACE")) {
+            std::fprintf(stderr, "CI_CASE_BEGIN %s.%s\n", info.test_suite_name(), info.name());
+            std::fflush(stderr);
+        }
         captured_stdout_.str(""); captured_stdout_.clear();
         captured_stderr_.str(""); captured_stderr_.clear();
         current_test_failures_.clear();
@@ -98,6 +125,11 @@ public:
     }
 
     void OnTestEnd(const ::testing::TestInfo& test_info) override {
+        if (std::getenv("ZYX_CI_CASE_TRACE")) {
+            std::fprintf(stderr, "CI_CASE_END %s.%s failed=%d skipped=%d\n", test_info.test_suite_name(), test_info.name(),
+                int(test_info.result()->Failed()), int(test_info.result()->Skipped()));
+            std::fflush(stderr);
+        }
         std::cout.rdbuf(old_stdout_buf_);
         std::cerr.rdbuf(old_stderr_buf_);
 
@@ -163,9 +195,37 @@ public:
 };
 
 int main(int argc, char **argv) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    if (!graph::test::ci_diagnostics::initialize() || !graph::test::ci_quota_stack::initialize()) {
+        std::fputs("CI_DIAGNOSTICS fork initialization failed\n",stderr);
+        return 2;
+    }
+#endif
 	if (argc == 5 && std::string_view(argv[1]) == "--zyx-relocatable-crash-child") {
 		return graph::test::runRelocatableCrashChild(argv[2], argv[3], argv[4]);
 	}
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    if (std::getenv("ZYX_CI_LAYOUT_TRACE")) graph::test::ci_diagnostics::traceLayout();
+#endif
+#ifdef _WIN32
+    if (std::getenv("ZYX_CI_CASE_TRACE")) {
+        std::set_terminate([]() noexcept {
+            std::fputs("CI_PROCESS_TERMINATE\n", stderr);
+            if (const auto error = std::current_exception()) {
+                try { std::rethrow_exception(error); }
+                catch (const std::exception &e) { std::fprintf(stderr, "CI_PROCESS_EXCEPTION %s\n", e.what()); }
+                catch (...) { std::fputs("CI_PROCESS_EXCEPTION non-std\n", stderr); }
+            }
+            void *frames[48]{};
+            const auto count = CaptureStackBackTrace(0, 48, frames, nullptr);
+            const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+            for (unsigned i = 0; i < count; ++i)
+                std::fprintf(stderr, "CI_PROCESS_FRAME index=%u address=%p executable_base=%p\n", i, frames[i], reinterpret_cast<void *>(base));
+            std::fflush(stderr);
+            std::abort();
+        });
+    }
+#endif
 	graph::test::initializeTestExecutablePath(argc > 0 ? argv[0] : nullptr);
     ::testing::InitGoogleTest(&argc, argv);
 
@@ -180,5 +240,9 @@ int main(int argc, char **argv) {
 	const bool verboseSuiteProgress = std::getenv("ZYX_TEST_TERSE_OUTPUT") == nullptr;
     listeners.Append(new TerseSuitePrinter(verboseSuiteProgress));
 
-    return RUN_ALL_TESTS();
+    const int result=RUN_ALL_TESTS();
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    if(!graph::test::ci_quota_stack::finish(result))return 2;
+#endif
+    return result;
 }

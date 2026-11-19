@@ -19,6 +19,7 @@
 #include <span>
 #include <system_error>
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/debug/StaticPerfTimer.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 
@@ -482,20 +483,30 @@ namespace graph::storage {
 					portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
 #endif
 #ifdef _WIN32
+            DWORD readError = bytesRead < 0 ? ::GetLastError() : ERROR_SUCCESS;
             // The old byte-zero lease denies a second handle, including an
             // independently opened read-only backend in this process.
-            if (bytesRead < 0 && offset == 0U && ::GetLastError() == ERROR_LOCK_VIOLATION
+            if (bytesRead < 0 && offset == 0U && readError == ERROR_LOCK_VIOLATION
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
                 && !nativeReadHookForTesting
 #endif
             ) {
                 const auto borrowed = detail::WindowsLeaseReadBridge::readLockedByte(readFd_, buf, size);
                 // A lease may have ended between the failed read and lookup.
-                bytesRead = borrowed ? *borrowed : portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+                if (borrowed) { bytesRead = borrowed->bytes; readError = borrowed->error; }
+                else {
+                    bytesRead = portable_pread(readFd_, buf, size, static_cast<int64_t>(offset));
+                    readError = bytesRead < 0 ? ::GetLastError() : ERROR_SUCCESS;
+                }
             }
 #endif
 			if (bytesRead < 0) {
-				throw std::runtime_error("StorageIO::readAt pread failed at offset " + std::to_string(offset));
+				#ifdef _WIN32
+                const std::error_code error(static_cast<int>(readError), std::system_category());
+#else
+                const std::error_code error(errno, std::generic_category());
+#endif
+                throw std::system_error(error, "StorageIO::readAt pread failed at offset " + std::to_string(offset));
 			}
 			return static_cast<size_t>(bytesRead);
 		}
@@ -592,7 +603,7 @@ namespace graph::storage {
 	}
 
 	uint64_t StorageIO::fileSizeUncached() const {
-		debug::ScopedPerfTimer sizeTimer("storage_io.file_size");
+		debug::StaticPerfTimer sizeTimer(debug::StaticPerfLabel{"storage_io.file_size"});
 		debug::PerfTrace::addValue("storage_io.file_size_calls", 1);
 		file_handle_t nativeHandle = writeFd_ != INVALID_FILE_HANDLE ? writeFd_ : readFd_;
 		if (nativeHandle != INVALID_FILE_HANDLE) {

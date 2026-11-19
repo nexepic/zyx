@@ -78,7 +78,7 @@ namespace {
 		bool disable_native_candidate_stream = false;
 		bool enable_native_ref_scans = false;
         bool enable_non_null_probes = false;
-		bool enable_property_admission = false;
+		bool enable_property_admission = true;
 		bool truncate_node_property_columns = false;
 		std::shared_ptr<size_t> admitted_property_copies;
 		bool enable_native_adjacent_topology = false;
@@ -258,6 +258,16 @@ namespace {
 
 		[[nodiscard]] std::vector<std::vector<PropertyValue>> readEdgePropertyColumnsSorted(
 				std::span<const uint64_t> edgeIds, std::span<const std::string_view> keys) const override {
+			return readEdgeColumns(edgeIds, keys, nullptr);
+		}
+		[[nodiscard]] std::vector<std::vector<PropertyValue>> readEdgePropertyColumnsSortedWithAdmission(
+				std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+				const std::function<void(size_t)> &admission) const override {
+			return readEdgeColumns(ids, keys, &admission);
+		}
+		std::vector<std::vector<PropertyValue>> readEdgeColumns(
+				std::span<const uint64_t> edgeIds, std::span<const std::string_view> keys,
+				const std::function<void(size_t)> *admission) const {
 			if (data_.edge_property_column_read_count) {
 				++*data_.edge_property_column_read_count;
 			}
@@ -273,6 +283,8 @@ namespace {
 					}
 					const auto property = std::ranges::find(found->second.properties, key,
 							&LogicalGraphPropertyEntry::key);
+					if (property != found->second.properties.end() && admission != nullptr)
+						(*admission)(graph::storage::CanonicalPropertyValueCodec::encodedSize(property->value) + sizeof(uint32_t));
 					values.push_back(property == found->second.properties.end() ? PropertyValue() : property->value);
 				}
 				columns.push_back(std::move(values));
@@ -518,6 +530,9 @@ namespace {
 			if (data_.node_property_column_batch_sizes) {
 				data_.node_property_column_batch_sizes->push_back(nodeIds.size());
 			}
+			// Fault injection returns a malformed shape without allocating payloads.
+			if (data_.truncate_node_property_columns && !nodeIds.empty())
+				return std::vector<std::vector<PropertyValue>>(keys.size());
 			std::vector<std::vector<PropertyValue>> columns;
 			columns.reserve(keys.size());
 			for (const std::string_view key: keys) {

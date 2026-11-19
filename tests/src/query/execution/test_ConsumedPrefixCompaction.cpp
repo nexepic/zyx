@@ -1,0 +1,284 @@
+#include <gtest/gtest.h>
+#include <memory>
+#include "query/execution/ConsumedPrefixCompaction.hpp"
+
+using namespace graph;
+using namespace graph::query::execution;
+using graph::query::execution::detail::compactConsumedPrefix;
+namespace {
+class TrackingBudget final : public utils::UnmanagedAllocationResource {
+public:
+    explicit TrackingBudget(size_t maximum) : budget_(maximum) {}
+    TrackingBudget(size_t maximum, std::shared_ptr<graph::query::execution::detail::ResourceAccount> account)
+        : budget_(maximum, std::move(account)) {}
+    size_t used() const { return budget_.used(); }
+    size_t peak() const { return peak_; }
+    bool fail_next = false;
+    void reserveUnmanaged(size_t bytes) override {
+        if (std::exchange(fail_next, false)) throw std::bad_alloc();
+        budget_.reserveUnmanaged(bytes);
+        peak_ = (std::max)(peak_, budget_.used());
+    }
+    void releaseUnmanaged(size_t bytes) noexcept override { budget_.releaseUnmanaged(bytes); }
+private:
+    void *do_allocate(size_t bytes, size_t alignment) override {
+        if (std::exchange(fail_next, false)) throw std::bad_alloc();
+        void *result = budget_.allocate(bytes, alignment);
+        peak_ = (std::max)(peak_, budget_.used());
+        return result;
+    }
+    void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+        budget_.deallocate(pointer, bytes, alignment);
+    }
+    bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    MaterializedByteBudget budget_;
+    size_t peak_ = 0U;
+};
+}
+
+TEST(ConsumedPrefixCompactionTest, ChargesOverlappingBuffersAndPreservesPayloadIdentity) {
+    using Row = std::unique_ptr<int>;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(Row));
+    {
+        utils::OwnedVector<Row> rows{utils::OwnedPmrAllocator<Row>(budget)};
+        rows.reserve(4U);
+        for (int id = 0; id < 4; ++id) rows.push_back(std::make_unique<int>(id));
+        auto *third = rows[2].get(); auto *fourth = rows[3].get();
+        rows[0].reset(); rows[1].reset();
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(Row) - 1U));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows.capacity(), 4U);
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(Row)));
+        EXPECT_EQ(first, 0U); ASSERT_EQ(rows.size(), 2U);
+        EXPECT_EQ(rows.capacity(), 2U);
+        EXPECT_EQ(rows[0].get(), third); EXPECT_EQ(rows[1].get(), fourth);
+        EXPECT_EQ(budget->peak(), 6U * sizeof(Row));
+        EXPECT_EQ(budget->used(), 2U * sizeof(Row));
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, AllocatorRejectionLeavesSourceAndRetryIntact) {
+    auto budget = std::make_shared<MaterializedByteBudget>(6U * sizeof(int) - 1U);
+    {
+        utils::OwnedVector<int> rows{utils::OwnedPmrAllocator<int>(budget)};
+        rows.reserve(4U); for (int id = 0; id < 4; ++id) rows.push_back(id);
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows.size(), 4U);
+        EXPECT_EQ(rows[2], 2); EXPECT_EQ(rows[3], 3);
+        EXPECT_EQ(budget->used(), 4U * sizeof(int));
+        // No payload was moved before reserve failed; the original path remains usable.
+        rows.erase(rows.begin(), rows.begin() + 2);
+        EXPECT_EQ(rows[0], 2); EXPECT_EQ(rows[1], 3);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, GeometricCompactionBoundsTotalMoves) {
+    struct Row {
+        int id; size_t *moves;
+        Row(int value, size_t &counter) : id(value), moves(&counter) {}
+        Row(Row &&other) noexcept : id(other.id), moves(other.moves) { ++*moves; }
+    };
+    utils::OwnedVector<Row> rows; rows.reserve(64U);
+    size_t moves = 0U, first = 0U;
+    for (int id = 0; id < 64; ++id) rows.emplace_back(id, moves);
+    for (int expected = 0; expected < 64; ++expected, ++first) {
+        compactConsumedPrefix(rows, first, SIZE_MAX);
+        ASSERT_EQ(rows[first].id, expected);
+    }
+    EXPECT_GT(moves, 0U);
+    EXPECT_LT(moves, 3U * 64U);
+}
+
+TEST(ConsumedPrefixCompactionTest, ReclaimsBackingBeforeRetainedOutputsConsumeTheTemporaryHeadroom) {
+    auto budget = std::make_shared<TrackingBudget>(16U * sizeof(int));
+    void *output = budget->allocate(2U * sizeof(int), alignof(int));
+    {
+        utils::OwnedVector<int> rows{utils::OwnedPmrAllocator<int>(budget)};
+        rows.reserve(8U); for (int id = 0; id < 8; ++id) rows.push_back(id);
+        size_t first = 2U;
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 6U * sizeof(int)));
+        EXPECT_EQ(budget->peak(), 16U * sizeof(int));
+        EXPECT_EQ(budget->used(), 8U * sizeof(int));
+        ASSERT_EQ(rows.size(), 6U); EXPECT_EQ(rows.front(), 2); EXPECT_EQ(rows.back(), 7);
+    }
+    EXPECT_EQ(budget->used(), 2U * sizeof(int));
+    budget->deallocate(output, 2U * sizeof(int), alignof(int));
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, AllocationFailureFallsBackWithoutMovingAndAllowsRetry) {
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(int));
+    {
+        utils::OwnedVector<int> rows{utils::OwnedPmrAllocator<int>(budget)};
+        rows.reserve(4U); for (int id = 0; id < 4; ++id) rows.push_back(id);
+        size_t first = 2U; budget->fail_next = true;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_FALSE(budget->fail_next);
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows[2], 2); EXPECT_EQ(rows[3], 3);
+        EXPECT_EQ(budget->used(), 4U * sizeof(int));
+        EXPECT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_EQ(first, 0U); EXPECT_EQ(rows[0], 2); EXPECT_EQ(rows[1], 3);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, HierarchicalQuotaRejectionRefundsAndCanRetryAfterCompetingOwnerReleases) {
+    using namespace graph::query::execution::detail;
+    constexpr size_t limit = 6U * sizeof(int);
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(limit));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(limit));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, limit);
+    auto competingAccount = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, limit);
+    ResourceLease competing(competingAccount); competing.set(1U);
+    auto budget = std::make_shared<TrackingBudget>(limit, account);
+    {
+        utils::OwnedVector<int> rows{utils::OwnedPmrAllocator<int>(budget)};
+        rows.reserve(4U); for (int id = 0; id < 4; ++id) rows.push_back(id);
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows[2], 2); EXPECT_EQ(rows[3], 3);
+        EXPECT_EQ(account->used(), 4U * sizeof(int)); EXPECT_EQ(competingAccount->used(), 1U);
+        competing.reset();
+        EXPECT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(int)));
+        EXPECT_EQ(first, 0U); EXPECT_EQ(rows[0], 2); EXPECT_EQ(rows[1], 3);
+        EXPECT_EQ(account->used(), 2U * sizeof(int));
+        EXPECT_EQ(budget->peak(), limit);
+    }
+    EXPECT_EQ(budget->used(), 0U); EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(competingAccount->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, PotentiallyThrowingMovesKeepOriginalStorage) {
+    struct Row {
+        explicit Row(int id) : id(id) {}
+        Row(Row &&other) noexcept(false) : id(other.id) { throw std::runtime_error("move"); }
+        Row(const Row &) = default;
+        int id;
+    };
+    utils::OwnedVector<Row> rows; rows.reserve(2U); rows.emplace_back(1); rows.emplace_back(2);
+    size_t first = 1U;
+    EXPECT_FALSE(compactConsumedPrefix(rows, first, SIZE_MAX));
+    EXPECT_EQ(first, 1U); EXPECT_EQ(rows[1].id, 2);
+}
+
+namespace {
+struct SwapOnlyRow {
+    static inline unsigned defaults = 0U, failDefault = 0U, moves = 0U;
+    static inline bool semanticFailure = false;
+    std::unique_ptr<int> payload;
+    SwapOnlyRow() {
+        if (++defaults == failDefault) {
+            if (semanticFailure) throw std::runtime_error("empty preparation cancelled");
+            throw std::bad_alloc();
+        }
+    }
+    explicit SwapOnlyRow(int value) : payload(std::make_unique<int>(value)) {}
+    SwapOnlyRow(SwapOnlyRow &&) noexcept(false) { ++moves; throw std::runtime_error("unsafe move"); }
+    SwapOnlyRow(const SwapOnlyRow &) = delete;
+    SwapOnlyRow &operator=(const SwapOnlyRow &) = delete;
+    // Boost instantiates assignment paths during resize; executing one is still unsafe.
+    SwapOnlyRow &operator=(SwapOnlyRow &&) noexcept(false) {
+        ++moves; throw std::runtime_error("unsafe move assignment");
+    }
+    friend void swap(SwapOnlyRow &left, SwapOnlyRow &right) noexcept { left.payload.swap(right.payload); }
+};
+}
+
+TEST(ConsumedPrefixCompactionTest, NoThrowSwapTransfersPayloadWhenMoveMayThrow) {
+    static_assert(!std::is_nothrow_move_constructible_v<SwapOnlyRow>);
+    static_assert(std::is_nothrow_swappable_v<SwapOnlyRow>);
+    static_assert(std::is_move_assignable_v<SwapOnlyRow>);
+    static_assert(!std::is_nothrow_move_assignable_v<SwapOnlyRow>);
+    SwapOnlyRow::defaults = SwapOnlyRow::failDefault = SwapOnlyRow::moves = 0U;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
+    {
+        utils::OwnedVector<SwapOnlyRow> rows{utils::OwnedPmrAllocator<SwapOnlyRow>(budget)};
+        rows.reserve(4U);
+        for (int value = 0; value < 4; ++value) rows.emplace_back(value);
+        const auto *third = rows[2].payload.get(), *fourth = rows[3].payload.get();
+        rows[0].payload.reset(); rows[1].payload.reset();
+        size_t first = 2U;
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+        EXPECT_EQ(first, 0U); ASSERT_EQ(rows.size(), 2U);
+        EXPECT_EQ(rows[0].payload.get(), third); EXPECT_EQ(rows[1].payload.get(), fourth);
+        EXPECT_EQ(SwapOnlyRow::moves, 0U);
+        EXPECT_EQ(budget->peak(), 6U * sizeof(SwapOnlyRow));
+        EXPECT_EQ(budget->used(), 2U * sizeof(SwapOnlyRow));
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, FailedEmptyPreparationLeavesAllSourcePayloadsAndAllowsRetry) {
+    SwapOnlyRow::defaults = SwapOnlyRow::moves = 0U; SwapOnlyRow::failDefault = 2U;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
+    {
+        utils::OwnedVector<SwapOnlyRow> rows{utils::OwnedPmrAllocator<SwapOnlyRow>(budget)};
+        rows.reserve(4U); for (int value = 0; value < 4; ++value) rows.emplace_back(value);
+        const auto *third = rows[2].payload.get(), *fourth = rows[3].payload.get();
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows.size(), 4U);
+        EXPECT_EQ(rows[2].payload.get(), third); EXPECT_EQ(rows[3].payload.get(), fourth);
+        EXPECT_EQ(budget->used(), 4U * sizeof(SwapOnlyRow));
+        SwapOnlyRow::failDefault = 0U;
+        ASSERT_TRUE(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)));
+        EXPECT_EQ(rows[0].payload.get(), third); EXPECT_EQ(rows[1].payload.get(), fourth);
+        EXPECT_EQ(SwapOnlyRow::moves, 0U);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, SemanticPreparationFailurePropagatesWithoutChangingTheSource) {
+    SwapOnlyRow::defaults = SwapOnlyRow::moves = 0U; SwapOnlyRow::failDefault = 2U;
+    SwapOnlyRow::semanticFailure = true;
+    struct Restore { ~Restore() { SwapOnlyRow::semanticFailure = false; SwapOnlyRow::failDefault = 0U; } } restore;
+    auto budget = std::make_shared<TrackingBudget>(6U * sizeof(SwapOnlyRow));
+    {
+        utils::OwnedVector<SwapOnlyRow> rows{utils::OwnedPmrAllocator<SwapOnlyRow>(budget)};
+        rows.reserve(4U); for (int value = 0; value < 4; ++value) rows.emplace_back(value);
+        const auto *third = rows[2].payload.get(); size_t first = 2U;
+        EXPECT_THROW(compactConsumedPrefix(rows, first, 2U * sizeof(SwapOnlyRow)), std::runtime_error);
+        EXPECT_EQ(first, 2U); EXPECT_EQ(rows[2].payload.get(), third);
+        EXPECT_EQ(budget->used(), 4U * sizeof(SwapOnlyRow));
+    }
+    EXPECT_EQ(budget->used(), 0U); EXPECT_EQ(SwapOnlyRow::moves, 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, StandardHitsChargeOverlapAndRetryWithoutChangingSource) {
+    const size_t proxy = utils::detail::standardContainerProxyBytes();
+    const size_t oldBytes = utils::detail::standardAllocatorRequestBytes(4U * sizeof(int), alignof(int)) + proxy;
+    const size_t newBytes = utils::detail::standardAllocatorRequestBytes(2U * sizeof(int), alignof(int)) + proxy;
+    auto budget = std::make_shared<TrackingBudget>(oldBytes + newBytes);
+    {
+        utils::OwnedAllocationScope scope(budget);
+        utils::OwnedStdVector<int> hits{0, 1, 2, 3};
+        size_t first = 2U;
+        EXPECT_FALSE(compactConsumedPrefix(hits, first, newBytes - 1U));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(hits.size(), 4U);
+        budget->fail_next = true;
+        ASSERT_FALSE(compactConsumedPrefix(hits, first, newBytes));
+        EXPECT_EQ(first, 2U); EXPECT_EQ(hits[2], 2); EXPECT_EQ(hits[3], 3);
+        EXPECT_EQ(budget->used(), oldBytes);
+        ASSERT_TRUE(compactConsumedPrefix(hits, first, newBytes));
+        EXPECT_EQ(first, 0U); ASSERT_EQ(hits.size(), 2U);
+        EXPECT_EQ(hits[0], 2); EXPECT_EQ(hits[1], 3);
+        EXPECT_EQ(budget->used(), newBytes);
+        EXPECT_EQ(budget->peak(), oldBytes + newBytes);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(ConsumedPrefixCompactionTest, StandardHitsPreserveOrderAcrossGeometricCompactions) {
+    utils::OwnedStdVector<int> hits;
+    for (int id = 0; id < 300; ++id) hits.push_back(id);
+    size_t first = 0U, copied = 0U;
+    for (int expected = 0; expected < 300; ++expected, ++first) {
+        if (compactConsumedPrefix(hits, first, SIZE_MAX)) copied += hits.size();
+        ASSERT_LT(first, hits.size());
+        EXPECT_EQ(hits[first], expected);
+    }
+    EXPECT_GT(copied, 0U); EXPECT_LT(copied, 3U * 300U);
+}

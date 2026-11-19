@@ -235,6 +235,9 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
     add_executable(zyx_transaction_resource_fault_worker EXCLUDE_FROM_ALL
         tests/support/TransactionResourceFaultWorker.cpp)
     target_link_libraries(zyx_transaction_resource_fault_worker PRIVATE zyx::core)
+    add_executable(zyx_perf_timer_allocation_probe EXCLUDE_FROM_ALL
+        tests/support/PerfTimerAllocationProbe.cpp)
+    target_link_libraries(zyx_perf_timer_allocation_probe PRIVATE zyx::core)
     add_executable(zyx_test_suite ${ZYX_TEST_SOURCES})
     target_include_directories(zyx_test_suite
         PRIVATE
@@ -248,6 +251,7 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             zyx::core
             zyx::gtest
             zyx::gmock
+            ${CMAKE_DL_LIBS}
             zyx::cli11
     )
     # The runner creates an isolated process group and reaps its descendants.

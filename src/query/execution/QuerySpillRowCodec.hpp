@@ -1,9 +1,9 @@
 #pragma once
+#include "graph/debug/RssActivity.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <memory_resource>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -19,6 +19,13 @@ namespace graph::query::execution::detail {
 class QuerySpillRowCodec final {
 public:
 	struct Record { LogicalPlanReadRow row;std::vector<PropertyValue> keys;uint64_t ordinal=0; };
+    // Final output owns the row, while the cursor keeps its bounded key
+    // workspace for validation of the next record. Moving the whole record
+    // would allocate and free that vector once per emitted row.
+    [[nodiscard]] static Record takeOutputRow(Record &decoded) {
+        return {std::move(decoded.row), {}, decoded.ordinal};
+    }
+    using Binding = decltype(LogicalPlanReadRow::values)::value_type;
 	static constexpr uint64_t MAGIC=UINT64_C(0x3157525358595A); // ZYXSRW1
 	static constexpr size_t HEADER_BYTES=24U;
 	static size_t encodedSize(const Record &record) {
@@ -35,38 +42,65 @@ public:
 		for(const auto &key:record.keys)total=add(total,storage::CanonicalPropertyValueCodec::encodedSize(key));
 		return total;
 	}
-	static std::vector<std::byte> encode(const Record &record,size_t maximumBytes,std::pmr::memory_resource *resource=std::pmr::get_default_resource()) {
+    static std::vector<std::byte> encode(const Record &record,size_t maximumBytes) {
+        std::vector<std::byte> out;
+        encodeInto(record,maximumBytes,out);
+        return out;
+    }
+    static void encodeInto(const Record &record,size_t maximumBytes,std::vector<std::byte> &out) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_ROW_ENCODE);
+#endif
 		const size_t size=encodedSize(record);if(size>maximumBytes)throw std::runtime_error("query spill row exceeded its encoded byte bound");
-		std::vector<std::byte> out;out.reserve(size);word(out,MAGIC,8);word(out,record.ordinal,8);word(out,record.row.values.size(),4);word(out,record.keys.size(),4);
-		// Canonical binding order is independent of unordered-map allocation/order.
-		using Binding=decltype(record.row.values)::value_type;
-		std::pmr::vector<const Binding *> names(resource);names.reserve(record.row.values.size());for(const auto &binding:record.row.values)names.push_back(&binding);std::ranges::sort(names,[](const auto *a,const auto *b){return a->first<b->first;});
-		for(const auto *binding:names){const auto &name=binding->first;word(out,name.size(),4);for(const char byte:name)out.push_back(static_cast<std::byte>(static_cast<unsigned char>(byte)));
-			const auto &value=binding->second;
+		out.clear();out.reserve(size);word(out,MAGIC,8);word(out,record.ordinal,8);word(out,record.row.values.size(),4);word(out,record.keys.size(),4);
+		// The binding tree already has canonical bytewise key order. No sort
+		// scratch or borrowed-name vector is created for each encoded row.
+		for(const auto &[name,value]:record.row.values){word(out,name.size(),4);for(const char byte:name)out.push_back(static_cast<std::byte>(static_cast<unsigned char>(byte)));
 			if(const auto *primitive=std::get_if<PropertyValue>(&value)){word(out,1,1);storage::CanonicalPropertyValueCodec::append(out,*primitive);}
 			else {const auto &ref=std::get<storage::EntityRef>(value);word(out,2,1);word(out,ref.entity_id,8);word(out,ref.is_edge?1:0,8);word(out,ref.source_node_id,8);word(out,ref.target_node_id,8);word(out,ref.type_token,8);}
 		}
 		for(const auto &key:record.keys)storage::CanonicalPropertyValueCodec::append(out,key);
-		if(out.size()!=size)throw std::logic_error("query spill row size changed while encoding");return out;
+		if(out.size()!=size)throw std::logic_error("query spill row size changed while encoding");
 	}
-	static Record decode(std::span<const std::byte> bytes,size_t maximumBytes) {
+    static Record decode(std::span<const std::byte> bytes,size_t maximumBytes) {
+        Record record;
+        decodeInto(bytes,maximumBytes,record);
+        return record;
+    }
+    // Scratch remains private on failure. Reuse map nodes/outer key storage,
+    // remove absent fields, and release every input-byte borrow before return.
+    static void decodeInto(std::span<const std::byte> bytes,size_t maximumBytes,Record &record) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_ROW_DECODE);
+#endif
 		if(bytes.size()<HEADER_BYTES || bytes.size()>maximumBytes)throw std::invalid_argument("query spill row dimensions are invalid");
 		size_t offset=0;if(read(bytes,offset,8)!=MAGIC)throw std::invalid_argument("query spill row magic/version is invalid");
-		Record record;record.ordinal=read(bytes,offset,8);const auto bindings=read(bytes,offset,4),keys=read(bytes,offset,4);
+		record.ordinal=read(bytes,offset,8);const auto bindingsCount=read(bytes,offset,4),keys=read(bytes,offset,4);
 		// Reject hostile counts before reserve/decoding, even with valid outer CRC.
-		if(bindings>4096U || keys>4096U || bindings>(bytes.size()-offset)/12U || keys>(bytes.size()-offset)/storage::CanonicalPropertyValueCodec::HEADER_BYTES)
+		if(bindingsCount>4096U || keys>4096U || bindingsCount>(bytes.size()-offset)/12U || keys>(bytes.size()-offset)/storage::CanonicalPropertyValueCodec::HEADER_BYTES)
 			throw std::invalid_argument("query spill row counts exceed encoded bounds");
-		std::string previous;
-		for(size_t i=0;i<bindings;++i){const auto count=read(bytes,offset,4);if(count==0 || count>bytes.size()-offset)throw std::invalid_argument("query spill binding is truncated");
-			std::string name(reinterpret_cast<const char *>(bytes.data()+offset),static_cast<size_t>(count));offset+=count;
+        record.keys.clear();
+        record.row.property_cache.clear(); record.row.entity_metadata_cache.clear();
+        record.row.complete_entity_property_cache.clear(); record.row.path_cache.clear();
+        std::string_view previous;
+        auto existing = record.row.values.begin();
+		for(size_t i=0;i<bindingsCount;++i){const auto count=read(bytes,offset,4);if(count==0 || count>bytes.size()-offset)throw std::invalid_argument("query spill binding is truncated");
+			const std::string_view name(reinterpret_cast<const char *>(bytes.data()+offset),static_cast<size_t>(count));offset+=count;
 			if(i!=0 && name<=previous)throw std::invalid_argument("query spill bindings are duplicate or unordered");previous=name;
+            while(existing!=record.row.values.end() && std::string_view(existing->first)<name)
+                existing=record.row.values.erase(existing);
 			const auto kind=read(bytes,offset,1);
-			if(kind==1)record.row.values.emplace(std::move(name),storage::CanonicalPropertyValueCodec::decodeNext(bytes,offset));
-			else if(kind==2){storage::EntityRef ref;ref.entity_id=read(bytes,offset,8);const auto edge=read(bytes,offset,8);if(edge>1)throw std::invalid_argument("query spill entity tag is invalid");ref.is_edge=edge==1;ref.source_node_id=read(bytes,offset,8);ref.target_node_id=read(bytes,offset,8);ref.type_token=read(bytes,offset,8);validate(ref);record.row.values.emplace(std::move(name),ref);}
+            LogicalPlanReadValue decoded;
+			if(kind==1)decoded=storage::CanonicalPropertyValueCodec::decodeNext(bytes,offset);
+			else if(kind==2){storage::EntityRef ref;ref.entity_id=read(bytes,offset,8);const auto edge=read(bytes,offset,8);if(edge>1)throw std::invalid_argument("query spill entity tag is invalid");ref.is_edge=edge==1;ref.source_node_id=read(bytes,offset,8);ref.target_node_id=read(bytes,offset,8);ref.type_token=read(bytes,offset,8);validate(ref);decoded=ref;}
 			else throw std::invalid_argument("query spill binding kind is invalid");
+            if(existing!=record.row.values.end() && std::string_view(existing->first)==name) {
+                existing->second=std::move(decoded); ++existing;
+            } else record.row.values.emplace_hint(existing,std::string(name),std::move(decoded));
 		}
+        record.row.values.erase(existing,record.row.values.end());
 		record.keys.reserve(static_cast<size_t>(keys));for(size_t i=0;i<keys;++i)record.keys.push_back(storage::CanonicalPropertyValueCodec::decodeNext(bytes,offset));
-		if(offset!=bytes.size())throw std::invalid_argument("query spill row has trailing bytes");return record;
+		if(offset!=bytes.size())throw std::invalid_argument("query spill row has trailing bytes");
 	}
 private:
 	static size_t add(size_t a,size_t b){if(b>SIZE_MAX-a)throw std::overflow_error("query spill row size overflowed");return a+b;}

@@ -108,17 +108,57 @@ namespace {
 class BindingFailureResource final : public std::pmr::memory_resource {
 public:
 	size_t remaining = (std::numeric_limits<size_t>::max)();
+	size_t requests = 0U, live = 0U;
 private:
 	void *do_allocate(size_t bytes, size_t alignment) override {
+		++requests;
 		if (remaining == 0U) throw std::bad_alloc();
 		--remaining;
-		return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+		auto *pointer = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+		live += bytes;
+		return pointer;
 	}
 	void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
 		std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+		live -= bytes;
 	}
 	bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
 };
+}
+
+TEST(BoundSlotRegistryTest, EveryGrowthFailurePreservesEarlierNamesAndAllocatorOwnership) {
+	std::vector<std::string> names;
+	for (size_t i = 0; i < 12U; ++i) names.push_back(std::string(80U, 'a' + static_cast<char>(i)));
+	BindingFailureResource baseline;
+	MaterializedByteBudget baselineBudget(1024U * 1024U);
+	{
+		BoundSlotRegistry slots(32U, 4U, 4096U, baselineBudget, &baseline);
+		for (const auto &name : names) (void) slots.declare(slots.root(), name);
+	}
+	ASSERT_EQ(baseline.live, 0U);
+	for (size_t allowed = 0; allowed < baseline.requests; ++allowed) {
+		SCOPED_TRACE(allowed);
+		BindingFailureResource memory;
+		MaterializedByteBudget budget(1024U * 1024U);
+		{
+			BoundSlotRegistry slots(32U, 4U, 4096U, budget, &memory);
+			memory.remaining = allowed;
+			size_t completed = 0U;
+			try {
+				for (; completed < names.size(); ++completed) (void) slots.declare(slots.root(), names[completed]);
+			} catch (const std::bad_alloc &) {
+				EXPECT_EQ(slots.slotCount(), completed);
+				for (size_t i = 0; i < completed; ++i) {
+					const auto id = slots.resolve(slots.root(), names[i]);
+					ASSERT_TRUE(id.has_value()); EXPECT_EQ(slots.name(*id), names[i]);
+				}
+				memory.remaining = (std::numeric_limits<size_t>::max)();
+				for (; completed < names.size(); ++completed) (void) slots.declare(slots.root(), names[completed]);
+			}
+			EXPECT_EQ(slots.slotCount(), names.size());
+		}
+		EXPECT_EQ(memory.live, 0U); EXPECT_EQ(budget.used(), 0U);
+	}
 }
 
 TEST(BoundSlotRegistryTest, AllocationFailureAtEachDeclarationStagePreservesBindingsAndAllowsRetry) {

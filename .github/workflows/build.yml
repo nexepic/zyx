@@ -66,11 +66,20 @@ jobs:
   native-storage-tsan:
     name: Native storage TSan (macOS)
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+
+      - name: Prepare diagnostic evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-evidence"
+          printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
+          # Include cold Conan/build time and the complete TSan gate; reserve
+          # the final five minutes for evidence upload before the job deadline.
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 3300 ))" >> "$GITHUB_ENV"
+        shell: bash
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -78,43 +87,100 @@ jobs:
           python-version: '3.10'
 
       - name: Install Common Tools
-        run: pip install conan ninja
+        run: python scripts/run_ci_evidence.py --name common-tools --timeout 21600 -- pip install conan ninja "pytest>=8,<10"
+
+      # Keep native tests running even if this additional harness check fails;
+      # its own failure is made mandatory after evidence upload below.
+      - name: Validate diagnostic supervisor failure paths
+        id: diagnostic_tests
+        continue-on-error: true
+        run: |
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py tests/test_verify_windows_toolchain.py tests/test_msvc_bigobj.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+        shell: bash
 
       - name: Install Project Dependencies
         run: |
-          conan profile detect --force
-          conan install . --output-folder=build-tsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
+          python scripts/run_ci_evidence.py --name conan-profile --timeout 21600 -- conan profile detect --force
+          python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- conan install . --output-folder=build-tsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
 
       # Keep TSan focused on the real reader/writer/compactor paths. This makes
       # races in snapshot retention, relocation, and native positioned I/O a
       # required macOS gate without turning unrelated tests into sanitizer noise.
       - name: Configure and build native storage TSan tests
         run: |
-          cmake -S . -B build-tsan -G Ninja \
+          python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B build-tsan -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build-tsan/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Debug \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=OFF \
             -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
-          cmake --build build-tsan --target zyx_test_suite
+          python scripts/run_ci_evidence.py --name build --timeout 3600 -- cmake --build build-tsan --target zyx_test_suite
         shell: bash
 
       - name: Run native storage TSan concurrency gates
         run: |
           TSAN_OPTIONS='halt_on_error=1:second_deadlock_stack=1' \
-            ./build-tsan/zyx_test_suite \
-              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied'
+            python scripts/run_ci_evidence.py --name tsan-gate --timeout 1800 --gtest -- ./build-tsan/zyx_test_suite \
+              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied:RelocatableMaintenanceLoopTest.*'
+        shell: bash
+
+      - name: Report actual step outcomes
+        if: always()
+        env:
+          CI_STEP_RESULTS: ${{ toJSON(steps) }}
+        shell: bash
+        run: |
+          python - <<'PYOUTCOME'
+          import json, os
+          steps = json.loads(os.environ['CI_STEP_RESULTS'])
+          print('CI_STEP_OUTCOMES ' + json.dumps(steps, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n| Step | Raw outcome | Conclusion |\n|---|---|---|\n')
+              for name, step in steps.items():
+                  out.write(f"| {name} | {step.get('outcome', 'unknown')} | {step.get('conclusion', 'unknown')} |\n")
+          PYOUTCOME
+
+      - name: Collect diagnostic build metadata
+        if: always()
+        continue-on-error: true
+        run: python scripts/collect_ci_environment.py --output "$RUNNER_TEMP/ci-evidence/environment.json" --build-dir build-tsan --save-crash-symbols
+        shell: bash
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-tsan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require diagnostic supervisor checks
+        if: ${{ always() && steps.diagnostic_tests.outcome == 'failure' }}
+        run: |
+          echo 'Diagnostic supervisor checks failed; inspect diagnostic-tests evidence.'
+          exit 1
         shell: bash
 
   native-storage-asan-ubsan:
     name: Native storage ASan+UBSan (macOS)
     runs-on: macos-latest
-    timeout-minutes: 45
+    # Build #248 used ~49 minutes before its 60-minute gate. Budget the
+    # complete gate plus the separately bounded follow-up diagnostics (~58m)
+    # and evidence upload. Per-command limits and sanitizer checks stay intact.
+    timeout-minutes: 180
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+
+      - name: Prepare diagnostic evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-evidence"
+          printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 10500 ))" >> "$GITHUB_ENV"
+        shell: bash
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -122,59 +188,220 @@ jobs:
           python-version: '3.10'
 
       - name: Install Common Tools
-        run: pip install conan ninja
+        run: python scripts/run_ci_evidence.py --name common-tools --timeout 21600 -- pip install conan ninja "pytest>=8,<10"
+
+      # Keep native tests running even if this additional harness check fails;
+      # its own failure is made mandatory after evidence upload below.
+      - name: Validate diagnostic supervisor failure paths
+        id: diagnostic_tests
+        continue-on-error: true
+        run: |
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py tests/test_verify_windows_toolchain.py tests/test_msvc_bigobj.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+        shell: bash
 
       - name: Install Project Dependencies
         run: |
-          conan profile detect --force
-          conan install . --output-folder=build-asan-ubsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
+          python scripts/run_ci_evidence.py --name conan-profile --timeout 21600 -- conan profile detect --force
+          python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- conan install . --output-folder=build-asan-ubsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
 
       # This group covers the native publication, recovery, and compaction
       # paths under address and undefined-behavior instrumentation. macOS
       # ASan does not support leak detection, so do not request it here.
       - name: Configure and build native storage ASan+UBSan tests
         run: |
-          cmake -S . -B build-asan-ubsan -G Ninja \
+          python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B build-asan-ubsan -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=build-asan-ubsan/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Debug \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=OFF \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
-          cmake --build build-asan-ubsan --target zyx_test_suite
+          python scripts/run_ci_evidence.py --name build --timeout 4800 -- cmake --build build-asan-ubsan --target zyx_test_suite
+        shell: bash
+
+      - name: Record sanitizer test discovery
+        run: python scripts/run_ci_evidence.py --name discovery --timeout 120 -- ./build-asan-ubsan/zyx_test_suite --gtest_list_tests
         shell: bash
 
       - name: Run native storage ASan+UBSan gates
+        id: asan_gate
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
         run: |
-          ASAN_OPTIONS='halt_on_error=1' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
-            ./build-asan-ubsan/zyx_test_suite \
-              --gtest_filter='NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-gate --timeout 3600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='ScopedScalarReadValueTest.*:ResultPropertyMapAdmissionTest.*:NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
+        shell: bash
+
+      - name: Diagnose concurrent publication with ASan+UBSan
+        id: asan_concurrent_diagnostic
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+            --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage' \
+            | grep -F 'BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-publication --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.BlindPropertyRebaseMergesDisjointOwnersOnOnePhysicalPage'
+        shell: bash
+
+      # A separate cold process distinguishes observer overhead from the query.
+      # It retains the same RSS limit and sanitizer settings; the traced run and
+      # mandatory complete sanitizer gate retain their original checks.
+      - name: Diagnose cold RSS without budget or RSS observers
+        id: rss_control
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          unset ZYX_CI_BUDGET_TRACE ZYX_CI_RSS_TRACE ZYX_CI_LAYOUT_TRACE
+          ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+            --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection' \
+            | grep -F 'NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-cold-rss-control --timeout 180 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+        shell: bash
+
+      - name: Diagnose RSS-guarded spill with default ASan+UBSan checks
+        id: rss_cold
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          ./build-asan-ubsan/zyx_test_suite --gtest_list_tests \
+            --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection' \
+            | grep -F 'NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-cold-rss --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+        shell: bash
+
+      - name: Compare sanitizer allocator statistics with a warmed reporting baseline
+        id: rss_warmed
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_RSS_BASELINE_STATS: '1'
+          ZYX_CI_RSS_ATTRIBUTION: '1'
+        run: |
+          # Attribution only: reporting may alter residency before QueryGuard starts.
+          # The two cold controls above and the formal gates remain unchanged.
+          ASAN_OPTIONS='halt_on_error=1:fast_unwind_on_fatal=0' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            python scripts/run_ci_evidence.py --name asan-rss-warmed-statistics --timeout 600 --gtest -- ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection'
+        shell: bash
+
+      # Independent processes reset diagnostic caps for every known failed case.
+      # These additional runs never replace the complete sanitizer gate.
+      - name: Diagnose sanitizer admission cases
+        id: asan_cases
+        if: ${{ !cancelled() && steps.asan_gate.outcome != 'skipped' }}
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
+          ASAN_OPTIONS: 'halt_on_error=1:fast_unwind_on_fatal=0'
+          UBSAN_OPTIONS: 'halt_on_error=1:print_stacktrace=1'
+        run: python scripts/run_ci_evidence.py --name asan-budget-cases --timeout 1500 -- python scripts/diagnose_ci_budget_cases.py --binary build-asan-ubsan/zyx_test_suite --platform asan
+        shell: bash
+
+      - name: Report actual step outcomes
+        if: always()
+        env:
+          CI_STEP_RESULTS: ${{ toJSON(steps) }}
+        shell: bash
+        run: |
+          python - <<'PYOUTCOME'
+          import json, os
+          steps = json.loads(os.environ['CI_STEP_RESULTS'])
+          print('CI_STEP_OUTCOMES ' + json.dumps(steps, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n| Step | Raw outcome | Conclusion |\n|---|---|---|\n')
+              for name, step in steps.items():
+                  out.write(f"| {name} | {step.get('outcome', 'unknown')} | {step.get('conclusion', 'unknown')} |\n")
+          PYOUTCOME
+
+      - name: Collect diagnostic build metadata
+        if: always()
+        continue-on-error: true
+        run: python scripts/collect_ci_environment.py --output "$RUNNER_TEMP/ci-evidence/environment.json" --build-dir build-asan-ubsan --save-crash-symbols
+        shell: bash
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-asan-ubsan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require diagnostic supervisor checks
+        if: ${{ always() && steps.diagnostic_tests.outcome == 'failure' }}
+        run: |
+          echo 'Diagnostic supervisor checks failed; inspect diagnostic-tests evidence.'
+          exit 1
         shell: bash
 
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build on ${{ matrix.os }}${{ matrix.name_suffix }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
+            build_type: Debug
+            coverage: 'ON'
+            name_suffix: ''
+            artifact_suffix: ''
             cc: clang-20
             cxx: clang++-20
             llvm_cov: llvm-cov-20
             llvm_profdata: llvm-profdata-20
           - os: windows-latest
+            build_type: Debug
+            coverage: 'ON'
+            name_suffix: ''
+            artifact_suffix: ''
             cc: clang-cl
             cxx: clang-cl
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
           - os: macos-latest
+            build_type: Debug
+            coverage: 'ON'
+            name_suffix: ''
+            artifact_suffix: ''
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
+          # Keep all existing Debug jobs and their check names unchanged.
+          # Release exercises optimization, NDEBUG and the non-debug MSVC CRT.
+          - os: windows-latest
+            cc: clang-cl
+            cxx: clang-cl
+            llvm_cov: llvm-cov
+            llvm_profdata: llvm-profdata
+            build_type: Release
+            coverage: 'OFF'
+            name_suffix: ' (Release)'
+            artifact_suffix: '-release'
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+
+      - name: Prepare diagnostic evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-evidence"
+          printf 'ZYX_CI_EVIDENCE_DIR=%s\n' "$RUNNER_TEMP/ci-evidence" >> "$GITHUB_ENV"
+          printf 'ZYX_CI_DEADLINE_UNIX=%s\n' "$(( $(date +%s) + 21300 ))" >> "$GITHUB_ENV"
+        shell: bash
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -182,52 +409,151 @@ jobs:
           python-version: '3.10'
 
       - name: Install Common Tools
-        run: pip install conan ninja
+        run: python scripts/run_ci_evidence.py --name common-tools --timeout 21600 -- pip install conan ninja "pytest>=8,<10"
+
+      # Keep native tests running even if this additional harness check fails;
+      # its own failure is made mandatory after evidence upload below.
+      - name: Validate diagnostic supervisor failure paths
+        id: diagnostic_tests
+        continue-on-error: true
+        run: |
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py tests/test_verify_windows_toolchain.py tests/test_msvc_bigobj.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+        shell: bash
+
+      - name: Diagnose fresh string allocations (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python scripts/run_ci_evidence.py --name string-probe-build --timeout 300 -- clang++ -std=c++20 -O0 scripts/diagnose_string_allocations.cpp -o "$RUNNER_TEMP/zyx-string-alloc-diagnostic"
+          python scripts/run_ci_evidence.py --name string-allocations --timeout 300 -- "$RUNNER_TEMP/zyx-string-alloc-diagnostic"
 
       - name: Install System Deps (Linux)
         if: runner.os == 'Linux'
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
-          sudo apt update
-          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+          python scripts/run_ci_evidence.py --name apt-repository --timeout 120 -- sudo add-apt-repository --no-update -y universe
+          python scripts/run_ci_evidence.py --name apt-update --timeout 600 -- sudo apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
+          python scripts/run_ci_evidence.py --name apt-install --timeout 1200 -- sudo apt-get -o Acquire::Retries=3 install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install llvm --version=20.1.4 --force
+          python scripts/run_ci_evidence.py --name llvm-install --timeout 21600 -- choco install llvm --version=22.1.8 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
-        run: pwsh scripts/install_conan_windows.ps1 Debug
+        env:
+          ZYX_VERIFY_WINDOWS_TOOLCHAIN: "1"
+        run: python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- pwsh scripts/install_conan_windows.ps1 ${{ matrix.build_type }}
 
       - name: Install Project Dependencies (Conan) (Unix)
         if: runner.os != 'Windows'
         run: |
-          conan profile detect
-          conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
+          python scripts/run_ci_evidence.py --name conan-profile --timeout 21600 -- conan profile detect
+          python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
         env:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
 
-      - name: Configure and Build
+      - name: Configure
         run: |
-          cmake -S . -B buildDir -G Ninja \
+          release_symbols=()
+          if [[ "${{ matrix.os }}" == windows-latest && "${{ matrix.build_type }}" == Release ]]; then
+            # Keep real Release optimization/NDEBUG/CRT while retaining offline
+            # PDB diagnostics. Do not substitute RelWithDebInfo or disable /OPT.
+            release_symbols+=("-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7")
+            release_symbols+=("-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG /OPT:REF /OPT:ICF")
+          fi
+          python scripts/run_ci_evidence.py --name configure --timeout 600 -- cmake -S . -B buildDir -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=ON \
-            -DZYX_ENABLE_COVERAGE=ON
-          cmake --build buildDir --target zyx_test_suite
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DZYX_ENABLE_COVERAGE=${{ matrix.coverage }} \
+            "${release_symbols[@]}"
+        shell: bash
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
+          # Git Bash otherwise interprets leading /O2 and /DEBUG as paths
+          # before invoking native Python. Do not suppress real path conversion.
+          MSYS2_ARG_CONV_EXCL: '-DCMAKE_CXX_FLAGS_RELEASE=;-DCMAKE_EXE_LINKER_FLAGS_RELEASE='
+
+      - name: Verify Windows Release configuration before build
+        if: runner.os == 'Windows' && matrix.build_type == 'Release'
+        run: python scripts/run_ci_evidence.py --name release-preflight --timeout 60 -- python scripts/verify_windows_release.py --build-dir buildDir --preflight
+
+      - name: Build
+        run: python scripts/run_ci_evidence.py --name build --timeout 7200 -- cmake --build buildDir --target zyx_test_suite
         shell: bash
         env:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
 
+      - name: Verify Windows Release build configuration
+        if: runner.os == 'Windows' && matrix.build_type == 'Release'
+        run: python scripts/run_ci_evidence.py --name release-configuration --timeout 60 -- python scripts/verify_windows_release.py --build-dir buildDir
+
       # Keep the reports and test transcripts outside the build directory so
       # every platform can upload one self-contained Stage 10 audit artifact.
+      - name: Diagnose static timer label allocation requests
+        id: timer_allocation_diagnostic
+        continue-on-error: true
+        run: |
+          cmake --build buildDir --target zyx_perf_timer_allocation_probe
+          timer_binary=./buildDir/zyx_perf_timer_allocation_probe
+          if [[ "$RUNNER_OS" == "Windows" ]]; then timer_binary="$timer_binary.exe"; fi
+          python scripts/run_ci_evidence.py --name static-timer-allocations --timeout 120 -- "$timer_binary"
+        shell: bash
+
+      - name: Validate result owner diagnostics (Linux)
+        id: linux_result_owner_diagnostic
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          export LLVM_PROFILE_FILE="$PWD/buildDir/result-owner-%p.profraw"
+          python scripts/run_ci_evidence.py --name linux-result-owners --timeout 300 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows'
+          python scripts/check_result_owner_trace.py "$ZYX_CI_EVIDENCE_DIR/linux-result-owners/output.log"
+        shell: bash
+
+      - name: Validate sort merge diagnostics (Linux)
+        id: linux_sort_merge_diagnostic
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          ZYX_CI_RSS_TRACE: '1'
+        run: |
+          export LLVM_PROFILE_FILE="$PWD/buildDir/sort-merge-%p.profraw"
+          python scripts/run_ci_evidence.py --name linux-sort-merge --timeout 300 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='ExternalQuerySortTest.MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput'
+          python scripts/check_sort_merge_trace.py "$ZYX_CI_EVIDENCE_DIR/linux-sort-merge/output.log"
+        shell: bash
+
+      # A successful workload can legitimately reject no quota requests. This
+      # short expected-rejection case separately proves that the unwinder runs.
+      - name: Validate native quota stack capture
+        id: native_quota_probe
+        continue-on-error: true
+        run: |
+          binary=buildDir/zyx_test_suite
+          if [[ "$RUNNER_OS" == Windows ]]; then binary+=.exe; fi
+          export LLVM_PROFILE_FILE="$PWD/buildDir/quota-probe-%p.profraw"
+          python scripts/run_ci_evidence.py --name native-quota-stack --timeout 60 --gtest -- python scripts/diagnose_macos_quota.py --binary "$binary" --max-stacks 1 --require-stack --case BatchEnvelopeTest.DirectBorrowedTextFailureDoesNotPublishPartialCellsOrLeakBudget
+        shell: bash
+
+      - name: Diagnose Windows fresh string allocations
+        id: windows_string_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          MSYS_NO_PATHCONV: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name string-probe-build --timeout 300 -- clang-cl /nologo /std:c++20 /EHsc /Od /MDd scripts/diagnose_string_allocations.cpp /FebuildDir/zyx-string-alloc.exe
+          python scripts/run_ci_evidence.py --name string-allocations --timeout 300 -- ./buildDir/zyx-string-alloc.exe
+        shell: bash
+
       - name: Prepare Stage 10 evidence directory
         run: |
           evidence_dir="$RUNNER_TEMP/stage10-evidence"
@@ -256,11 +582,140 @@ jobs:
           printf 'ZYX_STAGE10_ENDURANCE_REPETITIONS=%s\n' "$repetitions" >> "$GITHUB_ENV"
         shell: bash
 
+      - name: Record enabled test discovery
+        run: python scripts/run_ci_evidence.py --name discovery --timeout 120 -- buildDir/zyx_test_suite --gtest_list_tests
+        shell: bash
+
+      # Diagnostics are additional to, and cannot replace, the normal unit gate.
+      - name: Diagnose Windows ingest failures
+        id: windows_ingest_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          python scripts/run_ci_evidence.py --name windows-ingest --timeout 1800 --gtest -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableDriverAbiIngestTest.StreamedIngestRebasesOverASameOwnerEdgePublication:RelocatableDriverAbiIngestRebaseCorruptionTest.StreamedPublicationConflictRollsBackAndReleasesScratch'
+        shell: bash
+
+      - name: Diagnose Windows plan cache failures
+        id: windows_plan_cache_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          python scripts/run_ci_evidence.py --name windows-plan-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/cache/test_PlanCache.cpp --suite PlanCacheTest
+        shell: bash
+
+      - name: Diagnose Windows read session termination
+        id: windows_read_session_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_CASE_TRACE: '1'
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-read-session-cases --timeout 2400 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp --suite NativeReadSessionTokenBudgetTest
+        shell: bash
+
+      - name: Diagnose Windows projection binding allocation failures
+        id: windows_projection_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-projection-binding-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/execution/test_BoundProjectionReferences.cpp --suite BoundProjectionReferencesTest
+        shell: bash
+
+      - name: Diagnose Windows slot allocation failures
+        id: windows_slots_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-slot-binding-cases --timeout 1200 -- python scripts/diagnose_test_cases.py --binary buildDir/zyx_test_suite.exe --source tests/src/query/execution/test_BoundSlotRegistry.cpp --suite BoundSlotRegistryTest
+        shell: bash
+
+      # These additional, bounded diagnostics cannot replace the unit gate.
+      # Each process has its own capped rejection trace; no data values are logged.
+      # Keep the ownership regression separate from the aggregate budget log:
+      # its caller-site evidence must remain visible if that console is capped
+      # or the optional debugger crashes before producing a useful stack.
+      - name: Diagnose Windows retained property and scratch ownership
+        id: windows_ownership_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-retained-ownership --timeout 300 --gtest -- buildDir/zyx_test_suite.exe --gtest_filter='RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose:RelocatableStorageBackendTest.PropertyParameterComparisonKeepsFallbacksNullsAndFailedExecutionOwnership:RelocatableStorageBackendTest.QueryScratchReusesReadSnapshotOnlyUntilTheNextMutation:RelocatableStorageBackendTest.TransferredScalarResultsKeepNestedValuesAndReleaseFailedPartialOutput:RelocatablePhysicalSegmentAllocatorTypedIOTest.PagedScratchReads*:RelocatablePhysicalSegmentAllocatorTypedIOTest.SmallPagedScratchReads*'
+        shell: bash
+
+      - name: Diagnose current Windows budget failures independently
+        id: windows_current_cases_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-current-budget-cases --timeout 900 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows-current
+        shell: bash
+
+      - name: Diagnose bounded Windows admission stacks
+        id: windows_stack_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          status=0
+          python scripts/run_ci_evidence.py --name windows-query-account-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose || status=1
+          python scripts/run_ci_evidence.py --name windows-edge-cell-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case RelocatableStorageBackendTest.NativeEdgeCellsKeepTightAndRetryReadsBounded || status=1
+          python scripts/run_ci_evidence.py --name windows-nested-scope-stack --timeout 300 --gtest -- python scripts/diagnose_macos_quota.py --binary buildDir/zyx_test_suite.exe --max-stacks 3 --case LogicalPlanDirectEdgeRuntimeTest.NestedGraphScopesReadOnlyTheirSelectedEntityProperties || status=1
+          exit "$status"
+        shell: bash
+
+      - name: Diagnose Windows materialization budgets
+        id: windows_budget_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+          ZYX_CI_LAYOUT_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name windows-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite.exe --platform windows
+        shell: bash
+
+      - name: Diagnose Windows final shape duration
+        id: windows_final_shape_diagnostic
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          ZYX_CI_CASE_TRACE=1 python scripts/run_ci_evidence.py --name windows-final-shape --timeout 600 --gtest -- ./buildDir/zyx_test_suite.exe --gtest_filter='FixedShapes/HybridPropertyShapeCostsTest.WholeAllocationAndEveryOwnerSurviveConversionAndReadOnlyReopen/wide4096'
+        shell: bash
+
+      - name: Diagnose macOS materialization budgets
+        id: macos_budget_diagnostic
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        env:
+          ZYX_CI_BUDGET_TRACE: '1'
+        run: |
+          python scripts/run_ci_evidence.py --name macos-budget-cases --timeout 4000 -- python scripts/diagnose_ci_budget_cases.py --binary buildDir/zyx_test_suite --platform macos
+        shell: bash
+
+      # Conversion stack capture is folded into the existing platform budget
+      # replay (its unchanged 1200-second per-case deadline). The full unit case
+      # also remains mandatory; do not add a redundant near-300-second replay.
+
       - name: Run Unit Tests
         id: unit_tests
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
-          python scripts/run_test_tier.py unit --binary buildDir/zyx_test_suite
+          unit_timeout=3600
+          # MSVC iterator-debug ownership tests reached the final shape group
+          # at the previous one-hour deadline. Preserve all cases and a finite
+          # deadline, with identity/timing journals exposing an actual stall.
+          if [[ "$RUNNER_OS" == Windows ]]; then unit_timeout=5400; fi
+          ZYX_CI_CASE_TRACE=1 python scripts/run_ci_evidence.py --name unit --timeout "$((unit_timeout + 60))" -- python scripts/run_test_tier.py unit --timeout "$unit_timeout" --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/unit/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/unit/shards"
         shell: bash
 
       # Preserve the original large-scale correctness and recovery contracts as
@@ -269,25 +724,29 @@ jobs:
         if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stress-%p.profraw"
-          python scripts/run_test_tier.py stress --binary buildDir/zyx_test_suite
+          python scripts/run_ci_evidence.py --name stress --timeout 3660 -- python scripts/run_test_tier.py stress --binary buildDir/zyx_test_suite --xml-dir "$ZYX_CI_EVIDENCE_DIR/stress/xml" --failure-log-dir "$ZYX_CI_EVIDENCE_DIR/stress/shards"
         shell: bash
 
       # Keep the storage-format cutover visible as an explicit cross-platform
       # gate instead of relying on its tests being buried in the full suite.
       - name: Run native format lifecycle gates
+        id: lifecycle
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-%p.profraw"
           set -o pipefail
-          ./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendTest.*:RelocatableDriverAbiIngestTest.*:DriverAbiLifecycleTest.*' 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/native-lifecycle.log"
+          python scripts/run_ci_evidence.py --name lifecycle --timeout 21600 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendTest.*:RelocatableDriverAbiIngestTest.*:DriverAbiLifecycleTest.*' 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/native-lifecycle.log"
         shell: bash
 
       # These deterministic lifecycle tests are repeated to catch state that
       # leaks across reopen, snapshot, compaction, and maintenance cycles.
       - name: Repeat Stage 10 recovery and maintenance gates
+        id: recovery_maintenance
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-recovery-%p.profraw"
           set -o pipefail
-          ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat=5 --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
+          python scripts/run_ci_evidence.py --name recovery-maintenance --timeout 21600 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat=5 --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
         shell: bash
 
       - name: Run requested Stage 10 endurance gate
@@ -298,7 +757,7 @@ jobs:
           fi
           export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-endurance-%p.profraw"
           set -o pipefail
-          ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat="$ZYX_STAGE10_ENDURANCE_REPETITIONS" --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log"
+          python scripts/run_ci_evidence.py --name endurance --timeout 21600 --gtest -- ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat="$ZYX_STAGE10_ENDURANCE_REPETITIONS" --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log"
         shell: bash
 
       # This validates the single-file report schema, threshold-enforcement
@@ -306,6 +765,8 @@ jobs:
       # refines its bounded candidate set, so it also requires exact Recall@1.
       # Its permissive resource limits are not a production baseline.
       - name: Run native storage calibration smoke pipeline
+        id: calibration
+        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
         run: |
           cmake --build buildDir --target zyx_vector_build_calibrate zyx_vector_calibrate zyx_large_value_calibrate zyx_bulk_edge_calibrate
           calibration_dir="$ZYX_STAGE10_EVIDENCE_DIR"
@@ -316,10 +777,10 @@ jobs:
           query_report="$calibration_dir/query-report.json"
           large_value_report="$calibration_dir/large-value-report.json"
           bulk_edge_report="$calibration_dir/bulk-edge-report.json"
-          ./buildDir/zyx-vector-build-calibrate --data "$vector_data_path" --vectors tests/fixtures/vector_calibration/smoke-vectors.tsv --output "$build_report" --database-id 1001 --index calibration_embedding --label CalibrationVector --property embedding --pq-subspaces 2 --pq-centroids 2 --adjacency-degree 3 --adjacency-search-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-build-vectors-per-second 0.000001 --maximum-bytes-per-vector 1000000000000 --maximum-submitted-write-amplification 1000000000000 --maximum-file-growth-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 1.0 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-large-value-calibrate --data "$large_value_data_path" --output "$large_value_report" --database-id 1002 --dataset-label large-value-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --unique-values 4 --value-bytes 8192 --duplicate-passes 1 --range-offset 128 --range-bytes 1024 --range-iterations 1 --maximum-physical-slot 1000 --enforce-gates --minimum-unique-writes-per-second 0.000001 --minimum-dedup-hit-rate 0.000001 --maximum-range-p95-latency-us 1000000000000 --maximum-space-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-bulk-edge-calibrate --data "$bulk_edge_data_path" --output "$bulk_edge_report" --edge-count 100 --dataset-label bulk-edge-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --include-trace-phases --enforce-gates --minimum-ingest-edges-per-second 0.000001 --maximum-bytes-per-edge 1000000000000 --maximum-reopen-and-scan-ms 1000000000000 --maximum-peak-rss-bytes 1099511627776 --maximum-scratch-candidate-segments 1000000000000 --minimum-scratch-source-runs 1 --minimum-scratch-merge-passes 0
+          python scripts/run_ci_evidence.py --name calibration-vector-build --timeout 21600 -- ./buildDir/zyx-vector-build-calibrate --data "$vector_data_path" --vectors tests/fixtures/vector_calibration/smoke-vectors.tsv --output "$build_report" --database-id 1001 --index calibration_embedding --label CalibrationVector --property embedding --pq-subspaces 2 --pq-centroids 2 --adjacency-degree 3 --adjacency-search-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-build-vectors-per-second 0.000001 --maximum-bytes-per-vector 1000000000000 --maximum-submitted-write-amplification 1000000000000 --maximum-file-growth-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python scripts/run_ci_evidence.py --name calibration-vector-query --timeout 21600 -- ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 1.0 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python scripts/run_ci_evidence.py --name calibration-large-value --timeout 21600 -- ./buildDir/zyx-large-value-calibrate --data "$large_value_data_path" --output "$large_value_report" --database-id 1002 --dataset-label large-value-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --unique-values 4 --value-bytes 8192 --duplicate-passes 1 --range-offset 128 --range-bytes 1024 --range-iterations 1 --maximum-physical-slot 1000 --enforce-gates --minimum-unique-writes-per-second 0.000001 --minimum-dedup-hit-rate 0.000001 --maximum-range-p95-latency-us 1000000000000 --maximum-space-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python scripts/run_ci_evidence.py --name calibration-bulk-edge --timeout 21600 -- ./buildDir/zyx-bulk-edge-calibrate --data "$bulk_edge_data_path" --output "$bulk_edge_report" --edge-count 100 --dataset-label bulk-edge-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --include-trace-phases --enforce-gates --minimum-ingest-edges-per-second 0.000001 --maximum-bytes-per-edge 1000000000000 --maximum-reopen-and-scan-ms 1000000000000 --maximum-peak-rss-bytes 1099511627776 --maximum-scratch-candidate-segments 1000000000000 --minimum-scratch-source-runs 1 --minimum-scratch-merge-passes 0
           python -c 'import json, sys; build = json.load(open(sys.argv[1], encoding="utf-8")); query = json.load(open(sys.argv[2], encoding="utf-8")); large_value = json.load(open(sys.argv[3], encoding="utf-8")); bulk_edge = json.load(open(sys.argv[4], encoding="utf-8")); assert build["schema_version"] == 2 and build["gate"]["enforced"] and build["gate"]["passed"]; assert query["schema_version"] == 2 and query["all_measured_searches_used_adjacency"] and query["all_measured_searches_used_pq"] and query["gate"]["enforced"] and query["gate"]["passed"]; assert large_value["schema_version"] == 1 and large_value["storage"]["single_file"] and large_value["gate"]["enforced"] and large_value["gate"]["passed"]; assert bulk_edge["schema_version"] == 3 and bulk_edge["storage"]["single_file"] and bulk_edge["scratch"]["candidate_segments"] > 0 and bulk_edge["scratch"]["source_run_count"] >= 1 and bulk_edge["gate"]["enforced"] and bulk_edge["gate"]["passed"]' "$build_report" "$query_report" "$large_value_report" "$bulk_edge_report"
         shell: bash
 
@@ -351,7 +812,7 @@ jobs:
           p0_dir="$ZYX_STAGE10_EVIDENCE_DIR/p0-bulk-edge-${P0_PROFILE}"
           mkdir -p "$p0_dir"
           cmake --build buildDir --target zyx_bulk_edge_calibrate
-          ./buildDir/zyx-bulk-edge-calibrate \
+          python scripts/run_ci_evidence.py --name p0-bulk-edge --timeout 21600 -- ./buildDir/zyx-bulk-edge-calibrate \
             --data "$p0_dir/bulk-edge-calibration.zyx" \
             --output "$p0_dir/report.json" \
             --edge-count "$p0_edge_count" \
@@ -371,6 +832,9 @@ jobs:
       # This manifest records report hashes, declared labels, and the actual
       # repeat configuration. It deliberately classifies this run as CI smoke.
       - name: Collect native storage evidence manifest
+        # Preserve hashes after unit/lifecycle failures when the required
+        # calibration reports and repeated recovery transcript are complete.
+        if: ${{ !cancelled() && steps.calibration.outcome == 'success' && steps.recovery_maintenance.outcome == 'success' }}
         run: |
           collector_args=(
             --build-report "$ZYX_STAGE10_EVIDENCE_DIR/build-report.json"
@@ -396,7 +860,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: stage10-evidence-${{ matrix.os }}-${{ github.run_attempt }}
+          name: stage10-evidence-${{ matrix.os }}${{ matrix.artifact_suffix }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/stage10-evidence
           if-no-files-found: warn
           retention-days: 30
@@ -416,6 +880,46 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.lcov
+          disable_search: true
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
+
+
+      - name: Report actual step outcomes
+        if: always()
+        env:
+          CI_STEP_RESULTS: ${{ toJSON(steps) }}
+        shell: bash
+        run: |
+          python - <<'PYOUTCOME'
+          import json, os
+          steps = json.loads(os.environ['CI_STEP_RESULTS'])
+          print('CI_STEP_OUTCOMES ' + json.dumps(steps, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n| Step | Raw outcome | Conclusion |\n|---|---|---|\n')
+              for name, step in steps.items():
+                  out.write(f"| {name} | {step.get('outcome', 'unknown')} | {step.get('conclusion', 'unknown')} |\n")
+          PYOUTCOME
+
+      - name: Collect diagnostic build metadata
+        if: always()
+        continue-on-error: true
+        run: python scripts/collect_ci_environment.py --output "$RUNNER_TEMP/ci-evidence/environment.json" --build-dir buildDir --save-crash-symbols
+        shell: bash
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-${{ matrix.os }}${{ matrix.artifact_suffix }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require diagnostic supervisor and trace checks
+        if: ${{ always() && (steps.diagnostic_tests.outcome == 'failure' || steps.linux_result_owner_diagnostic.outcome == 'failure' || steps.linux_sort_merge_diagnostic.outcome == 'failure' || steps.native_quota_probe.outcome == 'failure') }}
+        run: |
+          echo 'Diagnostic checks failed; inspect diagnostic-tests, linux-result-owners, linux-sort-merge and native-quota-stack evidence.'
+          exit 1
+        shell: bash

@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/query/execution/ExecutionBindingContainers.hpp"
 #include "graph/core/GuardedPropertyCopy.hpp"
 #include "graph/core/PropertyHeapRequestBytes.hpp"
 #include "graph/core/PropertyDecodeAllocationScope.hpp"
@@ -51,5 +52,59 @@ PropertyValue::MapType copyPropertyMapGuarded(const PropertyValue::MapType &sour
         scope->admit(bytes);
     }
     return graph::property_copy::copyPropertyMapGuarded(source, checkpoint);
+}
+} // namespace graph::query::execution::detail
+
+namespace graph::query::execution::detail {
+// Internal binding maps use compact node storage; public PropertyValue maps
+// retain their wire/SDK representation. Conversion is explicit and guarded.
+template<class Map,class Checkpoint>
+    requires isExecutionBindingTree<Map>
+PropertyValue::MapType copyPropertyMapGuarded(const Map &source,Checkpoint checkpoint) {
+    checkpoint();
+    if(auto *scope=guardedProcedureCopyScope()) {
+        size_t bytes=utils::detail::standardFreshUnorderedMapHeapUpper<std::string,PropertyValue>(
+            graph::property_copy::freshMapReserveCount(source.size()));
+        const std::function<void()> check=std::ref(checkpoint);
+        for(const auto &[key,value]:source) {
+            bytes=utils::detail::addStandardHeapBytes(bytes,utils::detail::standardFreshStringHeapUpper(key.size()));
+            bytes=utils::detail::addStandardHeapBytes(bytes,
+                storage::CanonicalPropertyValueCodec::guardedCopyHeapUpper(value,check));
+        }
+        scope->admit(bytes);
+    }
+    PropertyValue::MapType result;
+    result.reserve(graph::property_copy::freshMapReserveCount(source.size()));
+    for(const auto &[key,value]:source) {
+        checkpoint();
+        result.emplace(graph::property_copy::copyPropertyStringGuarded(key,checkpoint),
+            graph::property_copy::copyPropertyValueGuarded(value,checkpoint));
+    }
+    checkpoint();return result;
+}
+
+template<class Map,class Checkpoint>
+ExecutionBindingMap<std::string,PropertyValue> copyBindingPropertyMapGuarded(const Map &source,Checkpoint checkpoint) {
+    using Result = ExecutionBindingMap<std::string,PropertyValue>;
+    checkpoint();
+    if(auto *scope=guardedProcedureCopyScope()) {
+        if(source.size() > (std::numeric_limits<size_t>::max)()/executionBindingNodeBytes<Result>())
+            throw std::overflow_error("copied binding metadata overflowed");
+        size_t bytes=source.size()*executionBindingNodeBytes<Result>();
+        const std::function<void()> check=std::ref(checkpoint);
+        for(const auto &[key,value]:source) {
+            bytes=utils::detail::addStandardHeapBytes(bytes,utils::detail::standardFreshStringHeapUpper(key.size()));
+            bytes=utils::detail::addStandardHeapBytes(bytes,
+                storage::CanonicalPropertyValueCodec::guardedCopyHeapUpper(value,check));
+        }
+        scope->admit(bytes);
+    }
+    Result result;
+    for(const auto &[key,value]:source) {
+        checkpoint();
+        result.emplace(graph::property_copy::copyPropertyStringGuarded(key,checkpoint),
+            graph::property_copy::copyPropertyValueGuarded(value,checkpoint));
+    }
+    checkpoint();return result;
 }
 } // namespace graph::query::execution::detail

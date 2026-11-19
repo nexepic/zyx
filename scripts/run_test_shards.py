@@ -15,8 +15,40 @@ import tempfile
 import time
 from typing import Sequence
 
+from run_test_process import _darwin_group_has_live_members
+
 
 PROCESS_REAP_TIMEOUT_SECONDS = 5.0
+
+
+def shard_result(index, process, log_path):
+    result = {"index": index, "pid": process.pid, "raw_exit_code": process.poll(),
+              "journal_available": False, "status_details_available": False}
+    try:
+        # Successful shard logs are retained but not replayed. Publish their
+        # observed counts too; missing journals must remain unknown, not zero.
+        with log_path.open('rb') as stream:
+            stream.seek(max(0, log_path.stat().st_size - 1024 * 1024))
+            tail = stream.read(1024 * 1024)
+        for line in reversed(tail.splitlines()):
+            if not line.startswith(b'CI_CASE_JOURNAL '):
+                continue
+            journal = json.loads(line[len(b'CI_CASE_JOURNAL '):])
+            counts = {key: journal[key] for key in ('started', 'completed', 'failed')}
+            if not all(type(value) is int and value >= 0 for value in counts.values()):
+                break
+            details = {key: journal.get(key) for key in ('passed', 'skipped', 'unclassified_completed')}
+            if all(type(value) is int and value >= 0 for value in details.values()):
+                counts.update(details)
+                result['status_details_available'] = True
+            result.update(journal_available=True, observed_counts=counts)
+            for key in ('last_started', 'last_completed'):
+                if isinstance(journal.get(key), str):
+                    result[key] = journal[key][:512]
+            break
+    except (OSError, ValueError, KeyError, TypeError):
+        pass  # Diagnostic absence cannot replace the actual test exit status.
+    return result
 
 
 def _linux_group_has_live_members(process_group_id: int) -> bool:
@@ -62,6 +94,15 @@ def process_tree_is_active(process: subprocess.Popen[bytes]) -> bool:
     except ProcessLookupError:
         return False
     except PermissionError:
+        if sys.platform == 'darwin' and not _darwin_group_has_live_members(process.pid):
+            # ps is not atomic. A live member missed by its snapshot must not
+            # override a successful kernel group probe after that snapshot.
+            try:
+                os.killpg(process.pid, 0)
+            except (ProcessLookupError, PermissionError):
+                return False
+        return True
+    if sys.platform == 'darwin':
         return True
     return _linux_group_has_live_members(process.pid) if sys.platform.startswith('linux') else True
 
@@ -176,7 +217,9 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
     try:
         for index in range(jobs):
             workdir, temporary_directory = make_isolated_workdir(source_root, shard_root, index)
-            log_path = shard_root / f"shard-{index}.log"
+            log_directory = failure_log_dir if failure_log_dir is not None else shard_root
+            log_directory.mkdir(parents=True, exist_ok=True)
+            log_path = log_directory / f"shard-{index}.log"
             environment = os.environ.copy()
             environment["GTEST_TOTAL_SHARDS"] = str(jobs)
             environment["GTEST_SHARD_INDEX"] = str(index)
@@ -190,8 +233,15 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
             environment["TMP"] = str(temporary_directory)
             environment["TEMP"] = str(temporary_directory)
             log_file = log_path.open("wb")
+            launched = list(command)
+            if failure_log_dir is not None and environment.get("ZYX_CI_EVIDENCE_DIR"):
+                # The existing bounded relay saves the complete prefix/tail,
+                # while this shard's supervisor transcript also stays bounded.
+                launched = [sys.executable, str(Path(__file__).with_name("run_ci_evidence.py").resolve()),
+                            "--root", str((failure_log_dir / "bounded").resolve()),
+                            "--name", f"shard-{index}", "--timeout", str(timeout_seconds), "--", *command]
             process = subprocess.Popen(
-                list(command),
+                launched,
                 cwd=workdir,
                 env=environment,
                 stdin=subprocess.DEVNULL,
@@ -227,12 +277,16 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
                         contents = log_path.read_text(errors="replace")
                         print(contents, file=sys.stderr)
                         if failure_log_dir is not None:
-                            (failure_log_dir / f"shard-{index}.log").write_text(contents)
+                            if log_path.resolve() != (failure_log_dir / f"shard-{index}.log").resolve():
+                                (failure_log_dir / f"shard-{index}.log").write_text(contents)
                     except OSError as error:
                         print(f"Unable to read shard log {log_path}: {error}", file=sys.stderr)
                 if failure_log_dir is not None:
                     print(f"Failed shard logs retained at: {failure_log_dir.resolve()}", file=sys.stderr)
-                exit_code = 1
+                # An inner evidence supervisor may reach the same timeout
+                # before this loop does. Preserve that status regardless of
+                # which timer wins, including mixed failure/timeout shards.
+                exit_code = 124 if any(process.returncode == 124 for _, process, _ in failed) else 1
             else:
                 print(f"All {jobs} isolated GoogleTest shards passed.")
     finally:
@@ -241,6 +295,21 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
         remaining = terminate_and_reap_processes(processes, reason="runner finalization")
         if remaining and exit_code == 0:
             exit_code = 125
+        shard_results = [shard_result(index, process, log_path) for index, process, log_path, _ in processes]
+        for result in shard_results:
+            print('CI_SHARD_RESULT ' + json.dumps(result), flush=True)
+        retained = failure_log_dir
+        if exit_code != 0 and retained is None:
+            retained = Path(tempfile.mkdtemp(prefix="zyx-retained-shard-logs-"))
+        if retained is not None:
+            retained.mkdir(parents=True, exist_ok=True)
+            for index, process, log_path, _ in processes:
+                if log_path.is_file() and log_path.resolve() != (retained / f"shard-{index}.log").resolve():
+                    shutil.copyfile(log_path, retained / f"shard-{index}.log")
+            (retained / "status.json").write_text(json.dumps({
+                "exit_code": exit_code, "interrupted": interrupted,
+                "shards": shard_results}, indent=2) + "\n")
+            print(f"Shard evidence retained at: {retained.resolve()}", flush=True)
         if all(not process_tree_is_active(process) for _, process, _, _ in processes):
             shutil.rmtree(shard_root, ignore_errors=True)
         else:

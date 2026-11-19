@@ -321,3 +321,31 @@ TEST(RelocatablePropertyValueCodecBytesTest, HeaderOnlyNullInspectionValidatesEn
 	bytes[2] = std::byte{1};
 	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size() + 1U)); }, FormatError::FERR_INVALID_HEADER);
 }
+
+TEST(RelocatablePropertyValueCodecBytesTest, InPlaceAppendPreservesPrefixAndRollsBackNestedFailureForBothAllocators) {
+    const std::vector<std::byte> prefix{std::byte{0x41},std::byte{0x42},std::byte{0x43}};
+    std::vector<std::byte> ordinary(prefix);
+    std::pmr::vector<std::byte> admitted(prefix.begin(),prefix.end());
+    const std::vector<PropertyValue> values{PropertyValue(),PropertyValue(true),PropertyValue(int64_t{9}),
+        PropertyValue(1.5),PropertyValue(std::vector<PropertyValue>{PropertyValue("text"),PropertyValue(bytes())}),
+        PropertyValue(PropertyValue::MapType{{"z",PropertyValue(2)},{"a",PropertyValue("first")}})};
+    for(const auto &value:values) {
+        const auto offset=ordinary.size();
+        CanonicalPropertyValueCodec::append(ordinary,value);
+        CanonicalPropertyValueCodec::append(admitted,value);
+        EXPECT_EQ(std::vector<std::byte>(admitted.begin(),admitted.end()),ordinary);
+        size_t consumed=offset;
+        EXPECT_EQ(CanonicalPropertyValueCodec::decodeNext(ordinary,consumed),value);
+        EXPECT_EQ(consumed,ordinary.size());
+    }
+    const auto accepted=ordinary;
+    PropertyValue nested(7);
+    for(size_t depth=0;depth<66U;++depth) nested=PropertyValue(std::vector<PropertyValue>{std::move(nested)});
+    EXPECT_THROW(CanonicalPropertyValueCodec::append(ordinary,nested),FormatException);
+    EXPECT_THROW(CanonicalPropertyValueCodec::append(admitted,nested),FormatException);
+    EXPECT_EQ(ordinary,accepted);
+    EXPECT_EQ(std::vector<std::byte>(admitted.begin(),admitted.end()),accepted);
+    CanonicalPropertyValueCodec::append(ordinary,PropertyValue(42));
+    CanonicalPropertyValueCodec::append(admitted,PropertyValue(42));
+    EXPECT_EQ(std::vector<std::byte>(admitted.begin(),admitted.end()),ordinary);
+}
