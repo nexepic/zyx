@@ -453,7 +453,7 @@ jobs:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
 
-      - name: Configure and Build
+      - name: Configure
         run: |
           release_symbols=()
           if [[ "${{ matrix.os }}" == windows-latest && "${{ matrix.build_type }}" == Release ]]; then
@@ -470,7 +470,20 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DZYX_ENABLE_COVERAGE=${{ matrix.coverage }} \
             "${release_symbols[@]}"
-          python scripts/run_ci_evidence.py --name build --timeout 7200 -- cmake --build buildDir --target zyx_test_suite
+        shell: bash
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
+          # Git Bash otherwise interprets leading /O2 and /DEBUG as paths
+          # before invoking native Python. Do not suppress real path conversion.
+          MSYS2_ARG_CONV_EXCL: '-DCMAKE_CXX_FLAGS_RELEASE=;-DCMAKE_EXE_LINKER_FLAGS_RELEASE='
+
+      - name: Verify Windows Release configuration before build
+        if: runner.os == 'Windows' && matrix.build_type == 'Release'
+        run: python scripts/run_ci_evidence.py --name release-preflight --timeout 60 -- python scripts/verify_windows_release.py --build-dir buildDir --preflight
+
+      - name: Build
+        run: python scripts/run_ci_evidence.py --name build --timeout 7200 -- cmake --build buildDir --target zyx_test_suite
         shell: bash
         env:
           CC: ${{ matrix.cc || '' }}

@@ -7,7 +7,14 @@ import re
 import shlex
 
 
-def verify(build):
+def verify_link_flags(flags, source):
+    flags = {flag.upper() for flag in flags.split()}
+    if (not {'/DEBUG', '/OPT:REF', '/OPT:ICF'} <= flags
+            or {'/OPT:NOREF', '/OPT:NOICF', '/DEBUG:NONE'} & flags):
+        raise ValueError(f'{source}: Release PDB linking must preserve REF/ICF optimization')
+
+
+def verify(build, *, preflight=False):
     cache = {}
     for line in (build / 'CMakeCache.txt').read_text().splitlines():
         match = re.fullmatch(r'([^:#]+):[^=]+=(.*)', line)
@@ -16,12 +23,18 @@ def verify(build):
     for key, expected in [('CMAKE_BUILD_TYPE', 'Release'), ('ZYX_ENABLE_COVERAGE', 'OFF')]:
         if cache.get(key) != expected:
             raise ValueError(f'{key} must be {expected}, got {cache.get(key)!r}')
-    link_flags = cache.get('CMAKE_EXE_LINKER_FLAGS_RELEASE', '').split()
-    if (not {'/DEBUG', '/OPT:REF', '/OPT:ICF'} <= set(link_flags)
-            or {'/OPT:NOREF', '/OPT:NOICF', '/DEBUG:NONE'} & set(link_flags)):
-        raise ValueError('Release PDB linking must preserve REF/ICF optimization')
-    if not (build / 'zyx_test_suite.pdb').is_file():
-        raise ValueError('missing built Release PDB')
+    verify_link_flags(cache.get('CMAKE_EXE_LINKER_FLAGS_RELEASE', ''), 'CMake cache')
+    ninja = (build / 'build.ninja').read_text(encoding='utf-8')
+    # A single-config Ninja build emits the real executable and its variables
+    # in one stanza. Check that stanza as well as the CMake cache.
+    matches = re.findall(r'^build zyx_test_suite\.exe: CXX_EXECUTABLE_LINKER[^\n]*\n((?: +[^\n]*\n)*)',
+                         ninja, re.MULTILINE)
+    if len(matches) != 1:
+        raise ValueError('expected one generated zyx_test_suite.exe linker rule')
+    link_flags = re.search(r'^ +LINK_FLAGS = (.+)$', matches[0], re.MULTILINE)
+    if link_flags is None:
+        raise ValueError('missing generated zyx_test_suite.exe LINK_FLAGS')
+    verify_link_flags(link_flags[1], 'Ninja linker rule')
     commands = json.loads((build / 'compile_commands.json').read_text())
     production = tests = 0
     test_main = core_runtime = False
@@ -72,7 +85,9 @@ def verify(build):
         production += is_production
     if not tests or not production or not test_main or not core_runtime:
         raise ValueError('missing test or production compile commands')
-    return {'build_type': 'Release', 'coverage': False, 'crt': 'MD',
+    if not preflight and not (build / 'zyx_test_suite.pdb').is_file():
+        raise ValueError('missing built Release PDB')
+    return {'phase': 'preflight' if preflight else 'post-build', 'build_type': 'Release', 'coverage': False, 'crt': 'MD',
             'optimization': 'O2', 'ndebug': True,
             'test_compile_commands': tests, 'production_compile_commands': production}
 
@@ -80,9 +95,10 @@ def verify(build):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-dir', type=Path, required=True)
+    parser.add_argument('--preflight', action='store_true', help='Audit generated configuration before building the PDB')
     args = parser.parse_args()
     try:
-        print('CI_WINDOWS_RELEASE ' + json.dumps(verify(args.build_dir), sort_keys=True))
+        print('CI_WINDOWS_RELEASE ' + json.dumps(verify(args.build_dir, preflight=args.preflight), sort_keys=True))
         return 0
     except (OSError, ValueError, KeyError, TypeError) as error:
         print('CI_WINDOWS_RELEASE_INVALID ' + str(error))
