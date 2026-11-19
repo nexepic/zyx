@@ -260,3 +260,98 @@ TEST(ScalarResultHandoffTest, ParentDenialAfterGrowthPreservesExistingRowsAndThe
     result = QueryResult{}; charge.reset();
     EXPECT_EQ(account->used(), 0U);
 }
+
+TEST(ScalarResultHandoffTest, RejectsEmptyAppendTargetWithoutChargingOrInvokingCallbacks) {
+    MaterializedByteBudget budget(4096U);
+    MaterializedByteReservation charge(&budget);
+    QueryResult result;
+    size_t callbacks = 0U;
+    EXPECT_THROW(ScalarResultHandoff::appendInteger(result, "value", 1, budget, charge,
+        [&] { ++callbacks; }, [&](size_t, size_t) { ++callbacks; }), std::logic_error);
+    EXPECT_EQ(callbacks, 0U);
+    EXPECT_TRUE(result.getRows().empty());
+    EXPECT_EQ(result.getRows().capacity(), 0U);
+    EXPECT_EQ(charge.bytes(), 0U);
+    EXPECT_EQ(budget.used(), 0U);
+    charge = ScalarResultHandoff::appendFirstInteger(result, "value", 1, budget, [] {});
+    ScalarResultHandoff::appendInteger(result, "value", 2, budget, charge, [] {});
+    ASSERT_EQ(result.rowCount(), 2U);
+    result = QueryResult{}; charge.reset();
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+namespace {
+void exerciseGrowthAdmissionRace(bool parentPressure) {
+    using namespace graph::query::execution::detail;
+    using namespace graph::utils::detail;
+    constexpr size_t LIMIT = 16384U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(LIMIT));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(LIMIT));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, LIMIT);
+    MaterializedByteBudget budget(LIMIT, account);
+    QueryResult result;
+    auto charge = ScalarResultHandoff::appendFirstInteger(result, "value", 1, budget, [] {});
+    ScalarResultHandoff::appendInteger(result, "value", 2, budget, charge, [] {});
+    ASSERT_EQ(result.getRows().size(), 2U);
+    ASSERT_EQ(result.getRows().capacity(), 2U);
+    const size_t retainedBefore = charge.bytes();
+    const size_t relocation = graph::query::detail::resultRowsRelocationHeapUpper(result.getRows());
+    const auto growthExtra = [&](size_t slots) {
+        return standardAllocatorRequestBytes(slots * sizeof(QueryResult::Row), alignof(QueryResult::Row)) + relocation;
+    };
+    const size_t exactExtra = growthExtra(3U);
+    ASSERT_GT(growthExtra(4U), exactExtra);
+    ASSERT_GT(budget.availableWithParent(), growthExtra(4U));
+    MaterializedByteReservation localCompetitor(&budget);
+    ResourceLease parentCompetitor(account);
+    size_t calls = 0U;
+    ScalarResultHandoff::appendInteger(result, "value", 3, budget, charge, [] {},
+        [&](size_t requested, size_t previous) {
+            ++calls;
+            if (calls == 1U) {
+                // Pressure arrives after optional doubling was selected, before
+                // its admission. This is a real reservation, not a thrown fake.
+                EXPECT_EQ(previous, retainedBefore);
+                EXPECT_EQ(requested - previous, growthExtra(4U));
+                if (parentPressure) parentCompetitor.set(LIMIT - account->used() - exactExtra);
+                else localCompetitor.set(budget.available() - exactExtra);
+                EXPECT_EQ(budget.availableWithParent(), exactExtra);
+            } else if (calls == 2U) {
+                // The failed doubling must leave the old rows and authority
+                // untouched when the exact-capacity retry enters admission.
+                EXPECT_EQ(previous, retainedBefore);
+                EXPECT_EQ(requested - previous, exactExtra);
+                EXPECT_EQ(result.getRows().capacity(), 2U);
+                EXPECT_EQ(charge.bytes(), retainedBefore);
+                EXPECT_EQ(budget.used(), charge.bytes() + localCompetitor.bytes());
+                EXPECT_EQ(account->used(), budget.used() + parentCompetitor.bytes());
+            } else {
+                // The competing owner finishes after relocation, before the
+                // separately admitted new map; only its own credit is freed.
+                EXPECT_EQ(calls, 3U);
+                EXPECT_EQ(previous, 0U);
+                EXPECT_EQ(result.getRows().capacity(), 3U);
+                localCompetitor.reset(); parentCompetitor.reset();
+            }
+        });
+    EXPECT_EQ(calls, 3U);
+    ASSERT_EQ(result.rowCount(), 3U);
+    EXPECT_EQ(result.getRows().capacity(), 3U);
+    for (size_t index = 0U; index < result.rowCount(); ++index)
+        EXPECT_EQ(result.getRows()[index].at("value").asPrimitive(), PropertyValue(static_cast<int64_t>(index + 1U)));
+    EXPECT_EQ(charge.bytes(), retainedIntegerRows(result, "value"));
+    EXPECT_EQ(budget.used(), charge.bytes());
+    EXPECT_EQ(account->used(), charge.bytes());
+    result = QueryResult{}; charge.reset();
+    EXPECT_EQ(budget.used(), 0U);
+    EXPECT_EQ(account->used(), 0U);
+}
+}
+
+TEST(ScalarResultHandoffTest, LocalPressureAfterSizingRetriesMinimumCapacityWithoutLosingRows) {
+    exerciseGrowthAdmissionRace(false);
+}
+
+TEST(ScalarResultHandoffTest, ParentPressureAfterSizingRetriesMinimumCapacityWithoutLosingRows) {
+    exerciseGrowthAdmissionRace(true);
+}
