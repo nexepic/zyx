@@ -938,7 +938,7 @@
         bool appendTransferredScalarResultRow(QueryResult &result, LogicalPlanReadRow &row,
                 const std::vector<std::string> &columns, ExecutionState &state,
                 MaterializedByteReservation &sourceReservation) {
-            if (columns.size() == 1U && result.getRows().empty() && result.getRows().capacity() == 0U) {
+            if (columns.size() == 1U && (!result.getRows().empty() || result.getRows().capacity() == 0U)) {
                 const auto binding = row.values.find(columns.front());
                 const auto *property = binding == row.values.end() ? nullptr : std::get_if<PropertyValue>(&binding->second);
                 if (property && property->getType() == PropertyType::INTEGER) {
@@ -947,10 +947,18 @@
                     stagedBytes.set(sizeof(int64_t));
                     const int64_t staged = std::get<int64_t>(property->getVariant());
                     retireResultSourceRow(row, state, sourceReservation);
-                    auto output = detail::ScalarResultHandoff::appendFirstInteger(result, columns.front(), staged,
-                        state.shared.materialized_budget, [&] { checkGuardNow(state); });
-                    state.shared.final_result_bytes = output.bytes();
-                    state.shared.final_result_reservation.absorb(std::move(output));
+                    if (result.getRows().empty()) {
+                        auto output = detail::ScalarResultHandoff::appendFirstInteger(result, columns.front(), staged,
+                            state.shared.materialized_budget, [&] { checkGuardNow(state); });
+                        state.shared.final_result_reservation.absorb(std::move(output));
+                    } else {
+                        detail::ScalarResultHandoff::appendInteger(result, columns.front(), staged,
+                            state.shared.materialized_budget, state.shared.final_result_reservation,
+                            [&] { checkGuardNow(state); }, [&](size_t requested, size_t previous) {
+                                reclaimResultCaches(state, requested, previous, [](bool, uint64_t) { return false; });
+                            });
+                    }
+                    state.shared.final_result_bytes = state.shared.final_result_reservation.bytes();
                     debug::PerfTrace::addValue("logical_plan.result.in_place_integer_cells", 1);
                     return true;
                 }
