@@ -1291,6 +1291,28 @@ namespace graph::query {
 
 
 
+    TEST_F(LogicalVectorPropertyBatchTest, OversizedQueryVectorUsesTypedQuotaFailureBeforeOpeningSnapshot) {
+        // Make the numeric vector itself exceed the limit, independently of
+        // STL string/proxy sizes or which owner rejects the tiny-envelope case.
+        constexpr size_t BUDGET = 4096U;
+        constexpr size_t COORDINATES = BUDGET / sizeof(float) + 1U;
+        logical::LogicalCallProcedure call("db.index.vector.queryNodes",
+            std::vector<PropertyValue>{PropertyValue("memory_embedding"), PropertyValue(3),
+                PropertyValue(std::vector<PropertyValue>(COORDINATES, PropertyValue(1.0)))});
+        options.bounds.maximum_materialized_bytes = BUDGET;
+        try {
+            static_cast<void>(execute(call));
+            FAIL() << "oversized query vector was admitted";
+        } catch (const execution::detail::ProcedureByteBoundExceeded &error) {
+            EXPECT_STREQ(error.what(),
+                "db.index.vector.queryNodes query vector exceeded its materialized byte bound");
+        }
+        EXPECT_EQ(backend->search_snapshot_opens, 0U);
+        EXPECT_EQ(backend->state->search_cancellation_checks, 0U);
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
+        EXPECT_EQ(backend->state->node_batch_reads, 0U);
+    }
+
 	TEST_F(LogicalVectorPropertyBatchTest, RejectsOversizedSearchHitBufferBeforeReadingNodes) {
         // Preserve the original tiny-envelope rejection without assuming the
         // same STL-dependent owner is necessarily first to refuse.

@@ -200,13 +200,13 @@
 			}
 			const size_t queryBytes = value.getList().size() * sizeof(float);
 			if (queryBytes > maximumMaterializedBytes) {
-				throw std::runtime_error("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
+				throw detail::ProcedureByteBoundExceeded("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 			}
 			context.checkGuardNow();
 			utils::OwnedStdVector<float> query;
 			query.reserve(value.getList().size());
 			if (checkedProcedureSizeMul(query.capacity(), sizeof(float)) > maximumMaterializedBytes) {
-				throw std::runtime_error("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
+				throw detail::ProcedureByteBoundExceeded("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 			}
 			size_t coordinateIndex = 0U;
 			for (const PropertyValue &coordinate: value.getList()) {
