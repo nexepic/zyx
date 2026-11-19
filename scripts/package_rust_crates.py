@@ -54,7 +54,8 @@ def validate(root, output, lib_dir):
         patches = []
         for name in ("zyx-src", "zyxdb-sys"):
             patches += ["--config", f'patch.crates-io.{name}.path={json.dumps(str(extracted / (name + "-" + versions[name])))}']
-        subprocess.run(["cargo", "test", "--manifest-path", str(extracted / ("zyxdb-" + versions["zyxdb"]) / "Cargo.toml"), "--no-default-features", "--features", "system", *patches], cwd=stage, env=env, check=True)
+        # Match source binding smoke isolation; do not compete for process quotas.
+        subprocess.run(["cargo", "test", "--manifest-path", str(extracted / ("zyxdb-" + versions["zyxdb"]) / "Cargo.toml"), "--no-default-features", "--features", "system", *patches, "--", "--test-threads=1"], cwd=stage, env=env, check=True)
         output.mkdir(parents=True)
         for name, version in versions.items():
             archive = extracted / f"{name}-{version}.crate"

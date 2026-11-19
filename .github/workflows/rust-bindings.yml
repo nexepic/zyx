@@ -121,8 +121,13 @@ jobs:
           echo "${{ github.workspace }}\buildDir\Release" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
+      # These binding contract tests each open independent databases. Isolate
+      # their process-wide admission budgets: 64 MiB cache per database shares
+      # a 512 MiB process limit with 16 MiB protected maintenance headroom.
+      # Native concurrency tests remain separate; this does not repair or
+      # validate concurrent admission behavior.
       - name: Run Rust tests
-        run: cargo test --manifest-path bindings/rust/Cargo.toml --workspace --no-default-features --features system
+        run: cargo test --manifest-path bindings/rust/Cargo.toml --workspace --no-default-features --features system -- --test-threads=1
         env:
           ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
 

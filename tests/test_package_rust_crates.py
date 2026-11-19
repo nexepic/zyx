@@ -77,6 +77,7 @@ class PackageRustCratesTest(unittest.TestCase):
         with patch.object(m.subprocess, "run", side_effect=run):
             m.validate(self.root, output, self.root)
         self.assertEqual([c[1] for c in calls], ["package", "test"])
+        self.assertEqual(calls[1][-2:], ["--", "--test-threads=1"])
         self.assertIn("target/package/zyxdb-0.1.29/Cargo.toml", calls[1][3])
         self.assertEqual(len(list(output.glob("*.crate"))), 3)
 
