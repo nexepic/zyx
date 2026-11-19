@@ -12,9 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(os.name == 'nt', reason='Linux dependency shell contract')
 
 
-def invoke(tmp_path, fail_update):
-    text = (ROOT / '.github/workflows/build.yml').read_text()
-    block = text.split('      - name: Install System Deps (Linux)\n', 1)[1]
+def invoke(tmp_path, fail_update, workflow='build', occurrence=1):
+    text = (ROOT / f'.github/workflows/{workflow}.yml').read_text()
+    name = 'Install System Deps (Linux)' if workflow == 'build' else 'Install system deps (Linux)'
+    block = text.split(f'      - name: {name}\n')[occurrence]
     block = block.split('      - name:', 1)[0].split('        run: |\n', 1)[1]
     script = textwrap.dedent(block)
     directory = tmp_path / 'bin'; directory.mkdir()
@@ -55,3 +56,21 @@ def test_success_keeps_required_packages_and_passes_bounded_retry_configuration(
     assert all('Acquire::Retries=3' in command for command in commands[1:])
     assert commands[-1][-4:] == ['clang-20', 'llvm-20', 'libc++-20-dev', 'libc++abi-20-dev']
     assert json.loads((tmp_path / 'evidence/apt-install/result.json').read_text())['exit_code'] == 0
+
+
+@pytest.mark.parametrize('workflow,occurrence', [
+    ('nodejs-bindings', 1), ('nodejs-bindings', 2), ('rust-bindings', 1),
+])
+@pytest.mark.parametrize('fail_update', [False, True])
+def test_bindings_native_universe_install_contract(tmp_path, workflow, occurrence, fail_update):
+    result, commands = invoke(tmp_path, fail_update, workflow, occurrence)
+    assert result.returncode == (100 if fail_update else 0)
+    assert commands[0] == ['add-apt-repository', '--no-update', '-y', 'universe']
+    assert commands[1] == ['apt-get', '-o', 'Acquire::Retries=3', '-o',
+                           'APT::Update::Error-Mode=any', 'update']
+    if fail_update:
+        assert len(commands) == 2
+    else:
+        assert commands[2] == ['apt-get', '-o', 'Acquire::Retries=3', 'install', '-y',
+                               'clang-20', 'llvm-20', 'libc++-20-dev', 'libc++abi-20-dev']
+        assert len(commands) == 3
