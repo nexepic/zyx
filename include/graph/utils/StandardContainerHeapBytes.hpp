@@ -8,6 +8,10 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 namespace graph::utils::detail {
 
@@ -61,13 +65,34 @@ namespace graph::utils::detail {
     if (count <= 15U) return proxy;
     const auto bytes = addStandardHeapBytes(count, 1U);
 #elif defined(_LIBCPP_VERSION)
-    if (count <= sizeof(std::string) - 2U) return proxy;
+    if (sizeof(std::string) == 24U && count <= 22U) return proxy;
+#if _LIBCPP_VERSION >= 190000 && _LIBCPP_VERSION < 220000 && __cplusplus <= 202002L
+    // Audited libc++ 19--21 basic_string::__recommend uses 8-byte
+    // alignment, with a special correction at the SSO boundary. A 16-byte
+    // rounded allocation dominates both string layouts/endian factors, and
+    // retains a small margin instead of doubling every selected value.
+    // LLVM llvmorg-{19.1.7,20.1.8,21.1.6}/libcxx/include/string.
+    // Keep the old conservative policy for unaudited versions/layout sizes.
+    const auto bytes = sizeof(std::string) == 24U
+        ? addStandardHeapBytes(count, 16U) & ~size_t{15U}
+        : addStandardHeapBytes(addStandardHeapBytes(count, count), 1U);
+#else
     const auto bytes = addStandardHeapBytes(addStandardHeapBytes(count, count), 1U);
+#endif
 #else
     const size_t bytes = 0U;
     throw std::logic_error("admitted string construction requires a supported standard string ABI");
 #endif
-    return addStandardHeapBytes(proxy, standardAllocatorRequestBytes(bytes, alignof(char)));
+    const auto admitted = addStandardHeapBytes(proxy, standardAllocatorRequestBytes(bytes, alignof(char)));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+    static thread_local unsigned reported = 0;
+    if (count >= 64U && reported < 40U && std::getenv("ZYX_CI_BUDGET_TRACE") != nullptr) {
+        ++reported;
+        std::fprintf(stderr, "CI_STRING_BOUND characters=%zu raw_upper=%zu proxy=%zu admitted=%zu\n", count, bytes, proxy, admitted);
+        std::fflush(stderr);
+    }
+#endif
+    return admitted;
 }
 
 template<class T>
@@ -78,6 +103,21 @@ template<class T>
         standardAllocatorRequestBytes(values.capacity() * sizeof(T), alignof(T)));
 }
 
+template<class Entry>
+[[nodiscard]] constexpr size_t standardHashNodeBytes() noexcept {
+#if defined(_MSVC_STL_VERSION)
+    // MSVC xhash owns std::list nodes: _Next, _Prev, then _Myval.
+    // Let the compiler include actual leading/tail padding instead of adding
+    // alignment-1 to every already-aligned node (including the sentinel).
+    // Default std::allocator uses raw node pointers. Iterator proxies are
+    // separate allocations and remain charged by the table model below.
+    struct Layout { void *next; void *previous; Entry value; };
+    return sizeof(Layout);
+#else
+    return sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+#endif
+}
+
 // Fresh default map followed by reserve(count), before any insertion. Supported
 // STLs use prime/power-of-two buckets below 2*count+1 (MSVC minimum eight).
 // This is a bound for the visible fresh table, not an opaque adopted capacity.
@@ -86,7 +126,7 @@ template<class Key, class Value>
     // Keep default-load-factor arithmetic exact even in float-based STLs.
     if (count > (size_t{1U} << 24U)) throw std::length_error("fresh map admission exceeds its element bound");
     using Entry = std::pair<const Key, Value>;
-    constexpr size_t nodeBytes = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+    constexpr size_t nodeBytes = standardHashNodeBytes<Entry>();
     const auto bucketCount = (std::max)(size_t{8U}, addStandardHeapBytes(addStandardHeapBytes(count, count), 1U));
 #if defined(_MSVC_STL_VERSION)
     const auto nodes = addStandardHeapBytes(count, 1U);
@@ -117,7 +157,7 @@ template<class Key, class Value, class Hash, class Equal>
 [[nodiscard]] inline size_t standardUnorderedMapStructuralHeapBytes(
         const std::unordered_map<Key, Value, Hash, Equal> &map) {
     using Entry = typename std::unordered_map<Key, Value, Hash, Equal>::value_type;
-    constexpr size_t nodeBytes = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+    constexpr size_t nodeBytes = standardHashNodeBytes<Entry>();
 #if defined(_MSVC_STL_VERSION)
     const size_t nodes = addStandardHeapBytes(map.size(), 1U);
     constexpr size_t bucketWidth = 2U * sizeof(void *);

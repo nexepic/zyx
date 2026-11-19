@@ -988,7 +988,7 @@ private:
             uint64_t io_epoch = 0;
             bool valid = false;
         };
-        explicit MembershipCache(std::pmr::memory_resource *memory, size_t count) : columns(memory) { columns.resize(count); }
+        explicit MembershipCache(std::pmr::memory_resource *memory, size_t count) : columns(size_t{0U}, memory) { columns.resize(count); }
         std::pmr::vector<ColumnEntry> columns;
         size_t column_cursor = 0;
         size_t column_lookup_cursor = 0;

@@ -9,12 +9,19 @@
 #include <limits>
 #include <memory_resource>
 #include <optional>
+#include <source_location>
 #include "graph/query/execution/ResourceCoordinator.hpp"
 #include "graph/utils/UnmanagedAllocationResource.hpp"
 #include "graph/utils/OwnedHeapReservation.hpp"
 #include <stdexcept>
 #include <utility>
 #include "graph/debug/PerfTrace.hpp"
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+#include "graph/debug/CiBudgetTrace.hpp"
+#include "graph/debug/CiQuotaStack.hpp"
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 namespace graph::query::execution {
 	// Optional execution kernels may decline admission without swallowing an
@@ -57,6 +64,9 @@ namespace graph::query::execution {
                 throw std::invalid_argument("materialized budget requires an accountable parent");
             owned_parent_.emplace(std::move(owner));
         }
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        ~MaterializedByteBudget() override { ciTrace().summary(used_bytes_, peak_bytes_, maximum_bytes_, parent_ ? parent_->bytes() : 0U); }
+#endif
 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
 		MaterializedByteBudget &operator=(const MaterializedByteBudget &) = delete;
 		[[nodiscard]] size_t available() const noexcept { return maximum_bytes_ - used_bytes_; }
@@ -105,8 +115,12 @@ namespace graph::query::execution {
 			used_bytes_ -= bytes;
 			return result;
 		}
-		void replace(size_t previousBytes, size_t nextBytes, bool transferReservation = false) {
+		void replace(size_t previousBytes, size_t nextBytes, bool transferReservation = false,
+                std::source_location site = std::source_location::current()) {
 			if (nextBytes > previousBytes && nextBytes - previousBytes > available()) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+				diagnosticRejection("replace", previousBytes, nextBytes, 0U, site);
+#endif
 				throw MaterializedByteLimitExceeded();
 			}
 			const size_t total = used_bytes_ - previousBytes + nextBytes;
@@ -116,10 +130,33 @@ namespace graph::query::execution {
                 release_sink_(release_context_, std::move(released));
                 return;
             }
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+			try {
+				if (parent_) parent_->set(total);
+                if (owned_parent_) owned_parent_->set(total);
+			} catch (...) {
+				diagnosticRejection("parent", previousBytes, nextBytes, 0U, site);
+				throw;
+			}
+#else
 			if (parent_) parent_->set(total);
             if (owned_parent_) owned_parent_->set(total);
+#endif
 			used_bytes_ = total; observePeak();
 		}
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+		void diagnosticRejection(const char *operation, size_t previous, size_t requested, size_t embedded,
+                std::source_location site = std::source_location::current()) const noexcept {
+            debug::captureCiQuotaStack();
+			if (ciTrace().allow()) {
+                const char *file = site.file_name();
+                for (const char *cursor = file; *cursor; ++cursor)
+                    if (*cursor == '/' || *cursor == '\\') file = cursor + 1;
+				std::fprintf(stderr, "CI_BUDGET owner=%zu account_id=%zu operation=%s requested=%zu previous=%zu embedded=%zu used=%zu peak=%zu maximum=%zu available=%zu parent_charge=%zu parent_maximum=%zu owned_parent_charge=%zu site_file=%.128s site_line=%u\n", ciTrace().id(), parent_ ? parent_->diagnosticAccountId() : 0U, operation, requested, previous, embedded, used_bytes_, peak_bytes_, maximum_bytes_, available(), parent_ ? parent_->bytes() : 0U, parent_ ? parent_->accountMaximum() : 0U, owned_parent_ ? owned_parent_->bytes() : 0U, file, static_cast<unsigned>(site.line()));
+				std::fflush(stderr);
+			}
+		}
+#endif
 
         void observePeak() noexcept {
             if (used_bytes_ <= peak_bytes_) return;
@@ -149,6 +186,9 @@ namespace graph::query::execution {
 		size_t used_bytes_ = 0U;
         size_t peak_bytes_ = 0U;
 		std::pmr::memory_resource *upstream_;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        debug::CiBudgetTrace ciTrace() const noexcept { return {this,"materialized"}; }
+#endif
 	};
 
 	class MaterializedByteReservation final {
@@ -211,14 +251,14 @@ namespace graph::query::execution {
 		}
 
 
-		void set(size_t bytes) {
-			setAccounting(bytes,std::min(embedded_bytes_,bytes));
+		void set(size_t bytes, std::source_location site = std::source_location::current()) {
+			setAccounting(bytes,std::min(embedded_bytes_,bytes),site);
 		}
 		// Logical size may include a parent already owned by a charged PMR vector.
 		// Keep the public size while charging that parent's storage exactly once.
-		void setAccounting(size_t bytes,size_t embedded) {
+		void setAccounting(size_t bytes,size_t embedded, std::source_location site = std::source_location::current()) {
 			if(embedded>bytes)throw std::logic_error("embedded materialization exceeds logical size");
-			if(budget_)budget_->replace(bytes_-embedded_bytes_,bytes-embedded,true);
+			if(budget_)budget_->replace(bytes_-embedded_bytes_,bytes-embedded,true,site);
 			bytes_=bytes;embedded_bytes_=embedded;
 		}
 
@@ -226,8 +266,12 @@ namespace graph::query::execution {
 			if (budget_ != nullptr) budget_->replace(bytes_-embedded_bytes_, 0U,true);
 			bytes_ = 0U;embedded_bytes_=0U;
 		}
-		[[nodiscard]] bool wouldExceed(size_t nextBytes) const noexcept {
-			return budget_ != nullptr && nextBytes-std::min(embedded_bytes_,nextBytes)>bytes_-embedded_bytes_ && nextBytes-std::min(embedded_bytes_,nextBytes)-(bytes_-embedded_bytes_)>budget_->available();
+		[[nodiscard]] bool wouldExceed(size_t nextBytes, std::source_location site = std::source_location::current()) const noexcept {
+			const bool exceeded = budget_ != nullptr && nextBytes-std::min(embedded_bytes_,nextBytes)>bytes_-embedded_bytes_ && nextBytes-std::min(embedded_bytes_,nextBytes)-(bytes_-embedded_bytes_)>budget_->available();
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+			if (exceeded) budget_->diagnosticRejection("wouldExceed", bytes_, nextBytes, embedded_bytes_,site);
+#endif
+			return exceeded;
 		}
 
 	private:

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "graph/utils/AdmissionPmrContainers.hpp"
+
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +40,7 @@ namespace graph::query::execution {
 			if (this != &other) {
 				// Preserve the destination resource and old selection on admission
 				// failure. Old/new buffers overlap and are both charged until swap.
-				std::pmr::vector<uint64_t> replacement(other.words_, words_.get_allocator());
+				utils::AdmissionPmrVector<uint64_t> replacement(other.words_, words_.get_allocator());
 				words_.swap(replacement);
 				size_ = other.size_;
 				selected_count_ = other.selected_count_;
@@ -53,7 +55,7 @@ namespace graph::query::execution {
 			if (this != &other) {
 				if (words_.get_allocator() == other.words_.get_allocator()) words_ = std::move(other.words_);
 				else {
-					std::pmr::vector<uint64_t> replacement(other.words_, words_.get_allocator());
+					utils::AdmissionPmrVector<uint64_t> replacement(other.words_, words_.get_allocator());
 					words_.swap(replacement);
 				}
 				size_ = std::exchange(other.size_, 0U);
@@ -177,7 +179,7 @@ namespace graph::query::execution {
 			return (size + BITS_PER_WORD - 1U) / BITS_PER_WORD;
 		}
 		size_t size_ = 0U;
-		std::pmr::vector<uint64_t> words_;
+		utils::AdmissionPmrVector<uint64_t> words_;
 		size_t selected_count_ = 0U;
 	};
 

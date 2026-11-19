@@ -1,4 +1,5 @@
 #pragma once
+#include "query/execution/TrivialBudgetBuffer.hpp"
 
 #include <variant>
 #include "query/execution/BoundColumnLayout.hpp"
@@ -143,8 +144,8 @@ public:
 	void validateProgram(uint64_t program) const { if (program != program_) throw std::invalid_argument("batch belongs to another execution program"); }
 	void release() noexcept {
 		identity_.invalidate(); published_ = false; rows_ = 0U;
-		std::pmr::vector<BatchColumnSource>(&memory_).swap(columns_);
-		std::pmr::vector<uint32_t>(&memory_).swap(selected_); std::pmr::vector<uint64_t>(&memory_).swap(ordinals_);
+		columns_.release();
+		selected_.release(); ordinals_.release();
 	}
 private:
 	template<class Guard, class Name>
@@ -167,9 +168,9 @@ private:
 			source.validate(source.owner, source.version);
 		}
 		for (uint32_t row : selected) { guard(); if (row >= rows) throw std::out_of_range("batch selection exceeds rows"); }
-		std::pmr::vector<BatchColumnSource> nextColumns(&memory_);
-		std::pmr::vector<uint32_t> nextSelected(&memory_);
-		std::pmr::vector<uint64_t> nextOrdinals(&memory_);
+		TrivialBudgetBuffer<BatchColumnSource> nextColumns(&memory_);
+		TrivialBudgetBuffer<uint32_t> nextSelected(&memory_);
+		TrivialBudgetBuffer<uint64_t> nextOrdinals(&memory_);
 		guard(); nextColumns.assign(sources.begin(), sources.end()); guard(); nextSelected.assign(selected.begin(), selected.end());
 		guard(); nextOrdinals.assign(originalOrdinals.begin(), originalOrdinals.end());
 		// Every column is validated before publication or any consumer effects.
@@ -218,8 +219,8 @@ private:
 	const MaterializedByteBudget *budget_;
 	BatchIdentity identity_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<BatchColumnSource> columns_;
-	std::pmr::vector<uint32_t> selected_;
-	std::pmr::vector<uint64_t> ordinals_;
+	TrivialBudgetBuffer<BatchColumnSource> columns_;
+	TrivialBudgetBuffer<uint32_t> selected_;
+	TrivialBudgetBuffer<uint64_t> ordinals_;
 };
 }

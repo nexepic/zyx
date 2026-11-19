@@ -165,9 +165,7 @@ namespace graph::storage {
 											 size_t maximumCacheBytes, size_t maximumCacheEntries,
                                          std::shared_ptr<std::pmr::memory_resource> cacheMemoryOwner) :
 		segments_(segments), metadata_(metadata), maximum_cache_bytes_(maximumCacheBytes),
-		maximum_cache_entries_(maximumCacheEntries), cache_memory_owner_(std::move(cacheMemoryOwner)),
-        cache_recency_(cache_memory_owner_ ? cache_memory_owner_.get() : std::pmr::get_default_resource()),
-        cache_(cache_memory_owner_ ? cache_memory_owner_.get() : std::pmr::get_default_resource()) {
+		maximum_cache_entries_(maximumCacheEntries), cache_memory_owner_(std::move(cacheMemoryOwner)) {
 		if ((maximum_cache_bytes_ == 0U) != (maximum_cache_entries_ == 0U)) {
 			throw std::invalid_argument(
 					"relocatable Vector Codebook cache byte and entry bounds must both be zero or both be positive");
@@ -364,13 +362,13 @@ namespace graph::storage {
 		const CacheKey key{codebookId, immutableManifest.header.generation.value()};
 		if (maximum_cache_entries_ != 0U) {
 			std::lock_guard lock(cache_mutex_);
-			const auto cached = cache_.find(key);
-			if (cached != cache_.end()) {
+			const auto cached = cache_ ? cache_->entries.find(key) : std::pmr::map<CacheKey, CacheEntry>::iterator{};
+			if (cache_ && cached != cache_->entries.end()) {
 				if (cached->second.codebook->header != immutableManifest.header) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable Vector Codebook cache identity disagrees with the snapshot manifest");
 				}
-				cache_recency_.splice(cache_recency_.begin(), cache_recency_, cached->second.recency);
+				cache_->recency.splice(cache_->recency.begin(), cache_->recency, cached->second.recency);
 				return cached->second.codebook;
 			}
 		}
@@ -405,9 +403,9 @@ namespace graph::storage {
 			return loaded;
 		}
 		std::lock_guard lock(cache_mutex_);
-		const auto raced = cache_.find(key);
-		if (raced != cache_.end()) {
-			cache_recency_.splice(cache_recency_.begin(), cache_recency_, raced->second.recency);
+		const auto raced = cache_ ? cache_->entries.find(key) : std::pmr::map<CacheKey, CacheEntry>::iterator{};
+		if (cache_ && raced != cache_->entries.end()) {
+			cache_->recency.splice(cache_->recency.begin(), cache_->recency, raced->second.recency);
 			return raced->second.codebook;
 		}
 		if (cached_payload_bytes_ > maximum_cache_bytes_) { // ZYX_COV_EXCL_LINE: this private counter changes only
@@ -418,34 +416,39 @@ namespace graph::storage {
         // A failed map allocation must not leave an orphan recency node.
         for (;;) {
             try {
-                cache_recency_.push_front(key);
-                try { cache_.emplace(key, CacheEntry{loaded, cache_recency_.begin()}); }
-                catch (...) { cache_recency_.pop_front(); throw; }
+                if (!cache_) cache_.emplace(cache_memory_owner_ ? cache_memory_owner_.get() : std::pmr::get_default_resource());
+                cache_->recency.push_front(key);
+                try { cache_->entries.emplace(key, CacheEntry{loaded, cache_->recency.begin()}); }
+                catch (...) { cache_->recency.pop_front(); throw; }
                 break;
             } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                if (cache_ && cache_->entries.empty()) cache_.reset();
                 if (!evictCacheEntryLocked()) throw;
+            } catch (...) {
+                if (cache_ && cache_->entries.empty()) cache_.reset();
+                throw;
             }
         }
         // Compare the old byte count without adding first: the sum can overflow
         // size_t for callers with very large explicit bounds.
-        while (cache_.size() > maximum_cache_entries_ ||
+        while (cache_->entries.size() > maximum_cache_entries_ ||
                payloadBytes > maximum_cache_bytes_ - cached_payload_bytes_) {
-            const CacheKey victim = cache_recency_.back();
-            const auto existing = cache_.find(victim);
+            const CacheKey victim = cache_->recency.back();
+            const auto existing = cache_->entries.find(victim);
             cached_payload_bytes_ -= existing->second.codebook->payload.size();
-            cache_.erase(existing);
-            cache_recency_.pop_back();
+            cache_->entries.erase(existing);
+            cache_->recency.pop_back();
         }
         cached_payload_bytes_ += payloadBytes;
 		return loaded;
 	}
 
     bool VectorCodebookStore::evictCacheEntryLocked() const {
-        if (cache_recency_.empty()) return false;
-        const auto existing = cache_.find(cache_recency_.back());
+        if (!cache_ || cache_->recency.empty()) return false;
+        const auto existing = cache_->entries.find(cache_->recency.back());
         cached_payload_bytes_ -= existing->second.codebook->payload.size();
-        cache_.erase(existing);
-        cache_recency_.pop_back();
+        cache_->entries.erase(existing);
+        cache_->recency.pop_back();
         return true;
     }
 

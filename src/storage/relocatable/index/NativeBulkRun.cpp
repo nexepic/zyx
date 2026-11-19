@@ -670,7 +670,8 @@ namespace graph::storage {
 		if (!location.isValid()) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable native bulk-run location is invalid");
 		}
-		PhysicalSegmentContents contents = physical_.read(snapshot, location.segment_id);
+        PhysicalSegmentContents contents = options_.scratch_kind == SegmentKind::SGK_QUERY_SCRATCH
+            ? physical_.readPaged(snapshot, location.segment_id) : physical_.read(snapshot, location.segment_id);
 		const uint8_t invalid = static_cast<uint8_t>(contents.entry.kind != options_.scratch_kind) |
 								static_cast<uint8_t>(contents.entry.owner_id != location.transaction_id) |
 								static_cast<uint8_t>(contents.entry.generation != location.generation);
@@ -680,6 +681,10 @@ namespace graph::storage {
 		}
 		return std::move(contents.payload);
 	}
+
+    MetadataSnapshotPin NativeBulkRunStore::openPayloadReadSnapshot() const {
+        return metadata_.openSnapshot();
+    }
 
 	NativeBulkRunPayloadReader NativeBulkRunStore::openOpaquePayloadReader() const {
 		auto snapshot = std::make_shared<MetadataSnapshotPin>(metadata_.openSnapshot());

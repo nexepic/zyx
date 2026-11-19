@@ -12,6 +12,16 @@
 
 using namespace relocatable_storage_backend_test;
 
+namespace {
+size_t emptyNodeCreateSlotBytes() {
+    const LogicalGraphNodeCreateRequest request;
+    // sizeof covers the vector objects, not their live MSVC debug proxies.
+    // Keep those real nested allocations charged until the request is freed.
+    return sizeof(request) + utils::detail::standardVectorHeapBufferBytes(request.labels) +
+        utils::detail::standardVectorHeapBufferBytes(request.properties);
+}
+}
+
 TEST_F(RelocatableStorageBackendTest, NativeQueryOutputRetainsItsMemoryDomainAfterClose) {
 	materializeNativeDatabase();
 	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
@@ -137,8 +147,14 @@ TEST_F(RelocatableStorageBackendTest, RepeatedNativeReopenReturnsCacheAndOutputC
         if (iteration != 0U) EXPECT_EQ(domain, weak.lock());
         weak = domain;
         query::QueryEngine engine(backend);
-        auto result = engine.execute("RETURN 42 AS value");
-        retained = std::move(result);
+        {
+            auto result = engine.execute("RETURN 42 AS value");
+            retained = std::move(result);
+            // A moved-from MSVC vector still owns its iterator proxy. Both
+            // live results must remain charged until the source is destroyed.
+            EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_QUERY)],
+                retained.retainedResourceBytes() + result.retainedResourceBytes());
+        }
         EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_QUERY)], retained.retainedResourceBytes());
         backend->close();
         EXPECT_GT(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_CACHE)], 0U);
@@ -206,6 +222,12 @@ TEST_F(RelocatableStorageBackendTest, CoordinatedPropertyPrefetchReleasesSelecte
     query::QueryContext context;
     context.resource_account = account;
     const std::string cypher = "MATCH (n:Prefetch) WHERE n.payload = $wanted RETURN n.payload AS payload";
+    size_t borrowedComparisons = 0U;
+    graph::debug::PerfTrace::ScopedObserver observe(&borrowedComparisons,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (!duration && key == "logical_plan.property.parameter_comparison_borrows")
+                *static_cast<size_t *>(p) += static_cast<size_t>(value);
+        });
     for (const bool matches : {true, false, true}) {
         SCOPED_TRACE(matches);
         context.parameters.insert_or_assign("wanted", PropertyValue(std::string(1000U, matches ? 'a' : 'z')));
@@ -217,6 +239,7 @@ TEST_F(RelocatableStorageBackendTest, CoordinatedPropertyPrefetchReleasesSelecte
         }
         EXPECT_EQ(account->used(), 0U);
     }
+    EXPECT_GT(borrowedComparisons, 0U);
     engine.resetEphemeralState();
     backend->close();
     EXPECT_EQ(domain->usage().total, 0U);
@@ -239,12 +262,24 @@ TEST_F(RelocatableStorageBackendTest, NativeReadFallbackInheritsTheSnapshotGrant
         EXPECT_EQ(memory->used(), baseline);
         auto &created = selectNativeReadSession(pin, nullptr, fallback);
         EXPECT_TRUE(fallback.has_value());
-        EXPECT_GT(memory->used(), baseline);
+		EXPECT_EQ(created.memoryOwner().get(), memory.get());
+		// An empty standard container may allocate lazily on some platforms.
+		EXPECT_GE(memory->used(), baseline);
         const size_t createdBytes = memory->used();
         EXPECT_EQ(&selectNativeReadSession(pin, nullptr, fallback), &created);
         EXPECT_EQ(memory->used(), createdBytes);
-        created.putPropertyToken(std::string(4096U, 'p'), 1U);
-        EXPECT_GT(memory->used(), createdBytes + 8192U);
+        std::string key(4096U, 'p');
+        created.putPropertyToken(key, 1U);
+        // One owned key is required; the FIFO borrows that immutable key.
+        // Reject a return to duplicated 4 KiB name buffers while preserving
+        // the real ownership lower bound and complete refund below.
+        EXPECT_GT(memory->used(), createdBytes + key.size());
+        EXPECT_LT(memory->used(), createdBytes + 2U * key.size());
+        const size_t retainedBytes = memory->used();
+        key.assign(key.size(), 'q');
+        EXPECT_FALSE(created.propertyToken(key).has_value());
+        EXPECT_EQ(created.propertyToken(std::string(key.size(), 'p')), 1U);
+        EXPECT_EQ(memory->used(), retainedBytes);
     }
     EXPECT_EQ(memory->used(), baseline);
     snapshot.release();
@@ -312,7 +347,7 @@ TEST_F(RelocatableStorageBackendTest, IssuedIdBuffersUseWriteQuotaAndDeniedStage
     LogicalGraphMutationBatch first; first.node_creates.resize(1U);
     const auto firstResult = transaction->stageMutationBatch(std::move(first));
     ASSERT_EQ(firstResult.created_node_ids.size(), 1U);
-    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + sizeof(LogicalGraphNodeCreateRequest));
+    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + emptyNodeCreateSlotBytes());
     const size_t retained = domain->usage().classes[kind];
     const size_t maximum = ProcessResourceDomains::databaseDefaults().classes[kind];
     auto pressureAccount = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, maximum);
@@ -328,7 +363,7 @@ TEST_F(RelocatableStorageBackendTest, IssuedIdBuffersUseWriteQuotaAndDeniedStage
     const auto nextResult = transaction->stageMutationBatch(std::move(retry));
     ASSERT_EQ(nextResult.created_node_ids.size(), 1U);
     EXPECT_EQ(nextResult.created_node_ids.front(), firstResult.created_node_ids.front() + 1U);
-    EXPECT_EQ(domain->usage().classes[kind], objectBytes + 2U * (sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + sizeof(LogicalGraphNodeCreateRequest)));
+    EXPECT_EQ(domain->usage().classes[kind], objectBytes + 2U * (sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + emptyNodeCreateSlotBytes()));
     const auto committed = transaction->commit();
     EXPECT_EQ(committed.created_node_ids, (std::vector<uint64_t>{firstResult.created_node_ids.front(), nextResult.created_node_ids.front()}));
     EXPECT_EQ(domain->usage().classes[kind], objectBytes);
@@ -377,7 +412,7 @@ TEST_F(RelocatableStorageBackendTest, PreviewRangeQuotaFailureDoesNotPublishAnIn
     pressure.reset();
     const auto staged = transaction->stageMutationBatch(batch);
     EXPECT_EQ(staged, preview);
-    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + sizeof(LogicalGraphNodeCreateRequest));
+    EXPECT_EQ(domain->usage().classes[kind], objectBytes + sizeof(uint64_t) + sizeof(NativeGraphLogicalIdLeaseRange) + emptyNodeCreateSlotBytes());
     transaction->rollback();
     EXPECT_EQ(domain->usage().classes[kind], objectBytes);
     transaction.reset(); backend->close();
@@ -1826,4 +1861,86 @@ TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceSmallFixture) {
     RelocatableStorageBackend reader(backendOptions()); reader.open();
     ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
     reader.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, PropertyParameterComparisonKeepsFallbacksNullsAndFailedExecutionOwnership) {
+    using namespace execution::detail;
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    const PropertyValue payload(std::string(1000U, 'p'));
+    backend->createLogicalNodes({{{"BorrowCompare"}, {{"payload", payload}, {"other", payload}}}});
+    query::QueryEngine engine(backend); auto domain = backend->queryResourceDomain();
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 64U * 1024U);
+    query::QueryContext context; context.resource_account = account;
+    context.parameters.emplace("wanted", payload);
+    size_t borrows = 0U;
+    graph::debug::PerfTrace::ScopedObserver observe(&borrows,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (!duration && key == "logical_plan.property.parameter_comparison_borrows")
+                *static_cast<size_t *>(p) += static_cast<size_t>(value);
+        });
+    const auto run = [&](const std::string &expression, const PropertyValue &expected, bool filtered = false) {
+        {
+            auto result = engine.execute(std::string("MATCH (n:BorrowCompare) ") +
+                (filtered ? "WHERE n.payload = $wanted " : "") + "RETURN " + expression + " AS answer", context);
+            ASSERT_EQ(result.rowCount(), 1U);
+            EXPECT_EQ(result.getRows()[0].at("answer").asPrimitive(), expected);
+            EXPECT_EQ(account->used(), result.retainedResourceBytes());
+        }
+        EXPECT_EQ(account->used(), 0U);
+    };
+    run("n.payload = $wanted", PropertyValue(true), true);
+    ASSERT_GT(borrows, 0U);
+    const auto beforeGeneralRhs = borrows;
+    run("n.payload = n.other", PropertyValue(true));
+    EXPECT_EQ(borrows, beforeGeneralRhs); // RHS evaluation may mutate caches.
+    run("n.absent = $wanted", PropertyValue());
+    context.parameters.clear();
+    EXPECT_THROW(static_cast<void>(engine.execute(
+        "MATCH (n:BorrowCompare) RETURN n.payload = $wanted AS answer", context)), std::runtime_error);
+    EXPECT_EQ(account->used(), 0U);
+    context.parameters.emplace("wanted", PropertyValue(std::string(1000U, 'q')));
+    run("n.payload = $wanted", PropertyValue(false));
+    engine.resetEphemeralState(); backend->close();
+    EXPECT_EQ(domain->usage().total, 0U);
+}
+
+TEST_F(RelocatableStorageBackendTest, TransferredScalarResultsKeepNestedValuesAndReleaseFailedPartialOutput) {
+    using namespace execution::detail;
+    materializeNativeDatabase(); auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    query::QueryEngine engine(backend); auto domain = backend->queryResourceDomain();
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 64U * 1024U);
+    query::QueryContext context; context.resource_account = account;
+    context.parameters.emplace("payload", PropertyValue(std::string(1000U, 'v')));
+    size_t transferred = 0U, retired = 0U;
+    auto counters = std::pair{&transferred, &retired};
+    graph::debug::PerfTrace::ScopedObserver observe(&counters,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            const auto &counts = *static_cast<const std::pair<size_t *, size_t *> *>(p);
+            if (!duration && key == "logical_plan.result.transferred_scalar_cells") *counts.first += static_cast<size_t>(value);
+            if (!duration && key == "logical_plan.result.retired_source_bytes") *counts.second += static_cast<size_t>(value);
+        });
+    const auto verify = [&] {
+        {
+            const auto result = engine.execute("UNWIND range(1,4) AS x RETURN {payload:$payload,nested:[$payload,x]} AS value", context);
+            ASSERT_EQ(result.rowCount(), 4U);
+            for (size_t i = 0; i < 4U; ++i) {
+                const auto &map = result.getRows()[i].at("value").asPrimitive().getMap();
+                EXPECT_EQ(map.at("payload"), context.parameters.at("payload"));
+                ASSERT_EQ(map.at("nested").getList().size(), 2U);
+                EXPECT_EQ(map.at("nested").getList()[0], context.parameters.at("payload"));
+                EXPECT_EQ(map.at("nested").getList()[1], PropertyValue(i + 1U));
+            }
+            EXPECT_EQ(account->used(), result.retainedResourceBytes());
+        }
+        EXPECT_EQ(account->used(), 0U);
+    };
+    verify(); ASSERT_GT(transferred, 0U); ASSERT_GT(retired, 0U);
+    const size_t beforeFailure = transferred;
+    EXPECT_THROW(static_cast<void>(engine.execute(
+        "UNWIND range(1,100) AS x RETURN {payload:CASE WHEN x < 20 THEN '' ELSE $payload END,nested:[x]} AS value", context)), ResourceAdmissionDenied);
+    EXPECT_GT(transferred, beforeFailure); // Failure follows real partial-output transfers.
+    EXPECT_EQ(account->used(), 0U);
+    verify(); engine.resetEphemeralState(); backend->close(); EXPECT_EQ(domain->usage().total, 0U);
 }

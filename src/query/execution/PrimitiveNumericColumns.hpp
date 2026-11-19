@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -21,9 +22,9 @@ class PrimitiveNumericColumns final {
 		NumericColumnKind kind = NumericColumnKind::NCK_DYNAMIC;
 		bool prepared = false;
 		const std::vector<PropertyValue> *source = nullptr;
-		std::pmr::vector<int64_t> integers;
-		std::pmr::vector<double> doubles;
-		std::pmr::vector<uint8_t> present;
+		utils::AdmissionPmrVector<int64_t> integers;
+		utils::AdmissionPmrVector<double> doubles;
+		utils::AdmissionPmrVector<uint8_t> present;
 		explicit Column(std::pmr::memory_resource *memory) : integers(memory), doubles(memory), present(memory) {}
 		Column(const Column &) = delete;
 		Column &operator=(const Column &) = delete;
@@ -65,7 +66,7 @@ public:
 				columns_.back().source = &column;
 			}
 		} catch (const MaterializedByteLimitExceeded &) {
-			std::pmr::vector<Column>(&memory_).swap(columns_);
+			utils::AdmissionPmrVector<Column>(&memory_).swap(columns_);
 			return false;
 		}
 		for (size_t ordinal : requested) {
@@ -140,7 +141,7 @@ public:
 		identity_.invalidate();
 		prepared_ = false;
 		rows_ = 0U;
-		std::pmr::vector<Column>(&memory_).swap(columns_);
+		utils::AdmissionPmrVector<Column>(&memory_).swap(columns_);
 	}
 	[[nodiscard]] BatchRowId rowId(size_t index) const {
 		if (!prepared_) throw std::logic_error("numeric batch has no published rows");
@@ -205,7 +206,7 @@ private:
 	size_t rows_ = 0U;
 	bool prepared_ = false;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<Column> columns_;
+	utils::AdmissionPmrVector<Column> columns_;
 	const MaterializedByteBudget *budget_;
 };
 

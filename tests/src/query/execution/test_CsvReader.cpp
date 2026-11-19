@@ -298,7 +298,10 @@ TEST_F(CsvReaderTest, CancellationInterruptsLongRecordReadingAndParsing) {
 
 TEST_F(CsvReaderTest, SharesByteAllowanceBetweenRawRecordsAndDecodedFieldSlots) {
 	const auto path = createTempFile("abcd\n");
-	const size_t exact = 8U + sizeof(std::string);
+	// The raw record, completed field and reusable parse field coexist.
+    // MSVC debug strings each retain a real proxy even for SSO contents.
+    const size_t exact = (std::max)(8U + sizeof(std::string),
+        sizeof(std::string) + 3U * graph::utils::detail::standardContainerProxyBytes());
 	CsvReader exactReader(path, ",", {16U, 4U, 16U, exact});
 	EXPECT_EQ(exactReader.nextRow(), (std::vector<std::string>{"abcd"}));
 	CsvReader shortReader(path, ",", {16U, 4U, 16U, exact - 1U});
@@ -343,7 +346,8 @@ TEST_F(CsvReaderTest, BufferedAllowanceChangesOnlyAfterConsumingThePeekedRow) {
 	ASSERT_TRUE(reader.hasNext());
 	EXPECT_THROW(reader.setMaximumBufferedBytes(64U), std::runtime_error);
 	EXPECT_EQ(reader.nextRow(), (std::vector<std::string>{"a"}));
-	reader.setMaximumBufferedBytes(8U + sizeof(std::string));
+	reader.setMaximumBufferedBytes((std::max)(8U + sizeof(std::string),
+        sizeof(std::string) + 3U * graph::utils::detail::standardContainerProxyBytes()));
 	EXPECT_EQ(reader.nextRow(), (std::vector<std::string>{"bbbb"}));
 	EXPECT_THROW(reader.setMaximumBufferedBytes(0U), std::runtime_error);
 }
@@ -478,10 +482,12 @@ TEST_F(CsvReaderTest, SmallExternalStringBuffersCannotEscapeTheByteAllowance) {
 
 TEST_F(CsvReaderTest, SharedStringAccountingIncludesSmallExternalAndRetainedBuffers) {
 	const std::string external(23U, 'x');
-	EXPECT_EQ(detail::dynamicStringBufferBytes(external), external.capacity() + 1U);
+	EXPECT_EQ(detail::dynamicStringBufferBytes(external),
+        external.capacity() + 1U + graph::utils::detail::standardContainerProxyBytes());
 	std::string retained(128U, 'x');
 	retained.resize(1U);
-	EXPECT_EQ(detail::dynamicStringBufferBytes(retained), retained.capacity() + 1U);
+	EXPECT_EQ(detail::dynamicStringBufferBytes(retained),
+        retained.capacity() + 1U + graph::utils::detail::standardContainerProxyBytes());
 	EXPECT_GT(detail::dynamicStringBufferBytes(retained), retained.size());
 }
 
@@ -508,7 +514,7 @@ TEST_F(CsvReaderTest, RetainedPropertyAccountingObservesCopiedContainerCapacity)
 		original.getList().capacity() * sizeof(graph::PropertyValue));
 	EXPECT_EQ(detail::retainedPropertyValueBytes(copied), std::max(
 		graph::property_utils::getPropertyValueSize(copied),
-		copied.getList().capacity() * sizeof(graph::PropertyValue)));
+		copied.getList().capacity() * sizeof(graph::PropertyValue) + graph::utils::detail::standardContainerProxyBytes()));
 }
 
 TEST_F(CsvReaderTest, RetainedPropertyMapAccountsForEmptyReservedBucketsAndNestedSlots) {

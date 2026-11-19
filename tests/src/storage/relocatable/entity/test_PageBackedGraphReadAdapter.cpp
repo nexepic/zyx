@@ -1045,6 +1045,26 @@ TEST_F(PageBackedGraphReadAdapterTest, ConvertsNativeRecordsToDirectOwnerKeyedLo
 			snapshot, 8U, [&scanSession](uint64_t edgeId, const EdgeEntityRecord &) {
 				return scanSession.edge(edgeId).has_value();
 			}, &scanSession));
+    // Singleton routing must retain the general path's error precedence.
+    const std::array<uint64_t, 1> owner{1001U};
+    const std::array<std::string_view, 1> existingKey{"name"}, absentKey{"missing"};
+    const PropertyColumnBatchReadSinks invalidBatches;
+    size_t admitted = 0U, delivered = 0U;
+    const LogicalGraphReadSnapshot::PropertyCellSink sink =
+        [&](size_t, size_t, std::optional<graph::PropertyValue>) { ++delivered; };
+    const SelectedPropertyReadAdmission reject = [](size_t) { throw std::domain_error("admission first"); };
+    const SelectedPropertyReadAdmission accept = [&](size_t bytes) { admitted += bytes; };
+    EXPECT_THROW(adapter.readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE,
+        owner, existingKey, sink, nullptr, &reject, nullptr, nullptr, &invalidBatches), std::domain_error);
+    EXPECT_NO_THROW(adapter.readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE,
+        owner, absentKey, sink, nullptr, &accept, nullptr, nullptr, &invalidBatches));
+    EXPECT_EQ(admitted, sizeof(uint32_t));
+    EXPECT_THROW(adapter.readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE,
+        owner, existingKey, sink, nullptr, &accept, nullptr, nullptr, &invalidBatches), std::invalid_argument);
+    EXPECT_EQ(delivered, 0U);
+    EXPECT_NO_THROW(adapter.readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE,
+        owner, existingKey, sink, nullptr, &accept));
+    EXPECT_EQ(delivered, 1U);
 	TestPageBackedGraphNameResolver duplicateNames(true);
 	PageBackedLogicalGraphReadAdapter duplicateAdapter(pages, duplicateNames);
 	EXPECT_THROW(static_cast<void>(duplicateAdapter.readNode(snapshot, 1001U)), FormatException);

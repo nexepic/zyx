@@ -1,4 +1,6 @@
+#include "graph/utils/OwnedVector.hpp"
 #include "query/execution/OrderByComparison.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 /**
  * @file LogicalPlanProcedureRuntime.cpp
  * @brief Implementation of bounded logical stored procedures.
@@ -9,6 +11,8 @@
 
 #include "graph/query/execution/StringBufferBytes.hpp"
 #include "query/execution/ProcedurePayloadAdmission.hpp"
+#include "query/execution/ConsumedPrefixCompaction.hpp"
+#include "query/execution/ProcedureByteBoundExceeded.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
 
 #include <algorithm>
@@ -364,7 +368,6 @@ namespace graph::query::execution {
 
 			ProcedureRows rows;
 			utils::OwnedStringVector defaultColumns;
-			size_t retainedProcedureSourceBytes = 0U;
 			std::unique_ptr<gds::PreparedLogicalProjectionCatalogMutation> deferredCatalogMutation;
 			switch (procedure->kind) {
 				case NativeProcedureKind::NPK_GDS_GRAPH_PROJECT: {
@@ -733,7 +736,6 @@ namespace graph::query::execution {
 							offset += count;
 						}
 					} // Authentication buffers unwind before output row allocation.
-					retainedProcedureSourceBytes = retainedPathBytes;
 					const size_t outputByteAllowance = reserveBoundedProcedureRows(
 							rows, path.node_ids.size(), readBounds, retainedPathBytes);
 					size_t retainedBytes = 0U;
@@ -774,7 +776,9 @@ namespace graph::query::execution {
 				result = makeProcedureResult(std::move(rows), defaultColumns, readBounds, context);
 			} else {
 				result = executeBufferedProcedure(std::move(rows), *snapshot, operations, root, readBounds, context,
-						retainedProcedureSourceBytes, operations.empty() && procedure->kind == NativeProcedureKind::NPK_GDS_DIJKSTRA
+						// The algorithm's path belongs to the completed switch scope.
+						// Buffered rows own their IDs/costs; no source path survives here.
+						0U, operations.empty() && procedure->kind == NativeProcedureKind::NPK_GDS_DIJKSTRA
 								? &defaultColumns
 								: nullptr,
 					true);
@@ -919,22 +923,23 @@ namespace graph::query::execution {
 		QueryGuardCancellationCheckpoint cancellation(context);
         // Loans are declared before the public request: its borrowed buffers
         // die before these admission owners. The request is immutable in search.
-        utils::OwnedStdString requestNameLoan = requireIndexName(arguments[0]);
-        utils::OwnedStdVector<float> queryVectorLoan;
+        std::optional<utils::OwnedStdString> requestNameLoan(requireIndexName(arguments[0]));
+        std::optional<utils::OwnedStdVector<float>> queryVectorLoan;
         // Empty public containers and moved-from debug proxies overlap the
         // already-funded loan buffers on MSVC; the reservation dies last.
         utils::OwnedHeapReservation requestProxyLoan(utils::sharedAllocationOwner(),
             4U * utils::detail::standardContainerProxyBytes());
-		storage::LogicalGraphVectorSearchRequest request;
-		request.index_name = std::move(static_cast<std::string &>(requestNameLoan));
+		std::optional<storage::LogicalGraphVectorSearchRequest> requestStorage(std::in_place);
+        auto &request = *requestStorage;
+		request.index_name = std::move(static_cast<std::string &>(*requestNameLoan));
 		request.top_k = requireTopK(arguments[1]);
 		size_t retainedRequestBytes = retainedVectorRequestBytes(request);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");
 		}
-		queryVectorLoan = requireQueryVector(arguments[2],
-				readBounds.maximum_materialized_bytes - retainedRequestBytes, context);
-        request.query_vector = std::move(static_cast<std::vector<float> &>(queryVectorLoan));
+		queryVectorLoan.emplace(requireQueryVector(arguments[2],
+				readBounds.maximum_materialized_bytes - retainedRequestBytes, context));
+        request.query_vector = std::move(static_cast<std::vector<float> &>(*queryVectorLoan));
 		retainedRequestBytes = retainedVectorRequestBytes(request);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");
@@ -982,15 +987,22 @@ namespace graph::query::execution {
 		if (hits.size() > request.top_k) {
 			throw std::runtime_error("logical Vector procedure backend exceeded its requested result bound");
 		}
-		const size_t retainedHitBytes = checkedProcedureSizeMul(
-			hits.capacity(), sizeof(storage::LogicalGraphVectorSearchHit));
+        // Search is synchronous and the returned hit vector owns its storage.
+        // Destroy request buffers before refunding their loans; downstream row
+        // materialization must not compete with an already-consumed query vector.
+        requestStorage.reset();
+        queryVectorLoan.reset();
+        requestNameLoan.reset();
+        requestProxyLoan.set(0U);
+        retainedRequestBytes = 0U;
+		const size_t retainedHitBytes = detail::standardVectorHeapBufferBytes(hits);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");
 		}
 		if (retainedHitBytes > readBounds.maximum_materialized_bytes - retainedRequestBytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure hit buffer exceeded its materialized byte bound");
 		}
-		const size_t retainedVectorSourceBytes = checkedProcedureSizeAdd(retainedRequestBytes, retainedHitBytes);
+		size_t retainedVectorSourceBytes = checkedProcedureSizeAdd(retainedRequestBytes, retainedHitBytes);
 		if (!hits.empty() && retainedVectorSourceBytes >= readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure hit buffer leaves no output materialization budget");
 		}
@@ -1028,25 +1040,170 @@ namespace graph::query::execution {
 				candidateCount = nextCandidateCount;
 			}
 		}
+        auto finalRowCount = exactProcedureResultRows(operations, hits.size());
+        if (finalRowCount && *finalRowCount > readBounds.maximum_rows) finalRowCount.reset();
 		if (std::ranges::any_of(operations, [](const logical::LogicalOperator *operation) {
 				return operation->getType() == logical::LogicalOpType::LOP_SORT;
 			})) {
 			return executeBufferedVectorProcedure(hits, *snapshot, operations, root, readBounds, context,
 					retainedRequestBytes);
 		}
+        const auto releaseConsumedHits = [&] {
+            const size_t before = retainedVectorSourceBytes;
+            // Every selected id/score is now owned by private buffered rows.
+            // Destroy the old array before refunding its local source charge;
+            // OwnedStdVector transfers/refunds the originating account credit.
+            try {
+                {
+                    utils::OwnedStdVector<storage::LogicalGraphVectorSearchHit> empty;
+                    empty.swap(searchResult.hits);
+                }
+            } catch (const MaterializedByteLimitExceeded &) { return; }
+              catch (const detail::ResourceAdmissionDenied &) { return; }
+              catch (const std::bad_alloc &) { return; }
+            retainedVectorSourceBytes = checkedProcedureSizeAdd(retainedRequestBytes,
+                detail::standardVectorHeapBufferBytes(hits));
+            if (before > retainedVectorSourceBytes)
+                graph::debug::PerfTrace::addValue("logical_procedure.vector_source_bytes_released",
+                    static_cast<int64_t>(std::min(before - retainedVectorSourceBytes,
+                        static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
+        };
+
+        size_t firstRetainedHit = 0U;
+        const bool prepareFirstOperator = !operations.empty() &&
+            (operations.front()->getType() == logical::LogicalOpType::LOP_PROJECT ||
+             operations.front()->getType() == logical::LogicalOpType::LOP_FILTER);
+        const auto prepareInputRows = [&](size_t offset, size_t &count, size_t end,
+                const QueryResult &output) -> ProcedureRows {
+            context.checkGuard();
+            // Completed batches cannot be replayed. Reclaim their hit records
+            // before growing output consumes the temporary copy's headroom.
+            size_t consumed = offset - firstRetainedHit;
+            const size_t retained = checkedProcedureSizeAdd(retainedVectorSourceBytes,
+                procedureQueryResultBytes(output));
+            const size_t headroom = retained < readBounds.maximum_materialized_bytes
+                ? readBounds.maximum_materialized_bytes - retained : 0U;
+            if (detail::compactConsumedPrefix(searchResult.hits, consumed, headroom)) {
+                firstRetainedHit = offset;
+                const size_t before = retainedVectorSourceBytes;
+                retainedVectorSourceBytes = checkedProcedureSizeAdd(retainedRequestBytes,
+                    detail::standardVectorHeapBufferBytes(hits));
+                graph::debug::PerfTrace::addValue("logical_procedure.vector_source_prefix_compacted", 1);
+                graph::debug::PerfTrace::addValue("logical_procedure.vector_source_bytes_released",
+                    static_cast<int64_t>(before - retainedVectorSourceBytes));
+            }
+            for (;;) {
+                context.checkGuard();
+                [[maybe_unused]] const char *preparationPhase = "build_rows";
+                try {
+                    auto prepared = makeBufferedVectorProcedureRows(
+                        std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(offset - firstRetainedHit, count), context);
+                    // A final single row cannot split further, so it needs no
+                    // retry source. Larger final batches retain hits until
+                    // preparation succeeds, keeping every quota retry valid.
+                    if (count == 1U && offset + count == end) releaseConsumedHits();
+                    preparationPhase = "source_budget";
+                    LogicalPlanReadRuntimeBounds sourceBounds = readBounds;
+                    const size_t retained = checkedProcedureSizeAdd(retainedVectorSourceBytes,
+                        procedureQueryResultBytes(output));
+                    if (retained >= sourceBounds.maximum_materialized_bytes)
+                        throw ProcedureByteBoundExceeded("logical procedure source leaves no preparation headroom");
+                    sourceBounds.maximum_materialized_bytes -= retained;
+                    if (prepareFirstOperator) {
+                        utils::OwnedStdVector<const expressions::Expression *> expressions;
+                        if (operations.front()->getType() == logical::LogicalOpType::LOP_PROJECT) {
+                            for (const auto &item : dynamic_cast<const logical::LogicalProject &>(*operations.front()).getItems())
+                                expressions.push_back(item.expression.get());
+                        } else expressions.push_back(dynamic_cast<const logical::LogicalFilter &>(*operations.front()).getPredicate().get());
+                        // The first operator already prefetches this exact set
+                        // before executing any row. Prepare it privately so
+                        // owner quota pressure can shrink the batch without
+                        // replaying output, DISTINCT, SKIP or LIMIT state.
+                        preparationPhase = "prefetch";
+                        prefetchProcedureProperties(prepared, expressions, *snapshot, sourceBounds, context);
+                        for (auto &row : prepared) row.reconcilePayloadCredit();
+                        if (count > 1U && operations.front()->getType() == logical::LogicalOpType::LOP_PROJECT) {
+                            // Do not fill the owner so completely that the first
+                            // projected binding cannot be allocated beside its
+                            // source. Probe a row frame, its declared bindings
+                            // and operator counters; all real allocations still
+                            // admit independently after this probe unwinds.
+                            preparationPhase = "handoff";
+                            size_t handoff = checkedProcedureSizeAdd(sizeof(LogicalPlanReadRow),
+                                utils::detail::standardContainerProxyBytes());
+                            handoff = checkedProcedureSizeAdd(handoff,
+                                utils::detail::standardAllocatorRequestBytes(
+                                    checkedProcedureSizeMul(operations.size(), sizeof(uint64_t)), alignof(uint64_t)));
+                            for (const auto &item : dynamic_cast<const logical::LogicalProject &>(*operations.front()).getItems()) {
+                                handoff = checkedProcedureSizeAdd(handoff,
+                                    detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow::values)>());
+                                handoff = checkedProcedureSizeAdd(handoff,
+                                    utils::detail::standardFreshStringHeapUpper(item.alias.size()));
+                            }
+                            // Expressions can construct an independent value beside
+                            // the source before the binding node is inserted (keys(),
+                            // for example, owns its list and string storage). Leave
+                            // room for one complete independent source payload as
+                            // well as the projected frame, instead of counting only
+                            // headers. This is a batching preference, not a refund;
+                            // every real allocation still admits independently.
+                            handoff = checkedProcedureSizeAdd(handoff,
+                                detail::procedurePayloadHeapUpper<true>(prepared.front().row));
+                            handoff = checkedProcedureSizeAdd(handoff,
+                                detail::procedurePayloadHeapUpper<true>(prepared.front().node_properties));
+                            const auto owner = utils::sharedAllocationOwner();
+                            const auto *budget = dynamic_cast<const MaterializedByteBudget *>(owner.get());
+                            if (budget && handoff > budget->availableWithParent())
+                                throw ProcedureByteBoundExceeded("vector batch leaves no projection handoff headroom");
+                        }
+                    }
+                    preparationPhase = "release_hits";
+                    if (offset + count == end && !hits.empty()) releaseConsumedHits();
+                    return prepared;
+                } catch (const ProcedureByteBoundExceeded &) { if (count == 1U) throw; }
+                  catch (const MaterializedByteLimitExceeded &) { if (count == 1U) throw; }
+                  catch (const detail::ResourceAdmissionDenied &) {
+                    if (count == 1U) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                        // Reserve a separate bounded channel: general quota tracing may already be exhausted.
+                        static std::atomic<unsigned> phaseReports{0U};
+                        if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                            const auto report = phaseReports.fetch_add(1U, std::memory_order_relaxed);
+                            if (report < 16U) {
+                                std::fprintf(stderr, "CI_VECTOR_PREPARATION_REJECT phase=%s offset=%zu count=%zu end=%zu result_rows=%zu\n",
+                                preparationPhase, offset, count, end, output.rowCount());
+                                std::fflush(stderr);
+                            }
+                            else if (report == 16U) {
+                                std::fputs("CI_VECTOR_PREPARATION_REJECT_TRUNCATED process_limit=16\n", stderr);
+                                std::fflush(stderr);
+                            }
+                        }
+#endif
+                        throw;
+                    }
+                }
+                // All prepared rows and temporary source grants have unwound;
+                // semantic, cancellation, lock and allocation errors escape.
+                count = std::max<size_t>(1U, count / 2U);
+                graph::debug::PerfTrace::addValue("logical_procedure.vector_batch_quota_split", 1);
+            }
+        };
+
 		if (const std::optional<size_t> prefix = vectorProcedurePrefixThroughLimit(operations, hits.size());
 				prefix.has_value()) {
-			const auto hitPrefix = std::span<storage::LogicalGraphVectorSearchHit>(hits).first(*prefix);
-			validateVectorSearchHits(hitPrefix, readBounds, context);
+			const size_t selectedHitCount = *prefix;
+			validateVectorSearchHits(std::span<storage::LogicalGraphVectorSearchHit>(hits).first(selectedHitCount), readBounds, context);
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
 			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
-			for (size_t offset = 0U; offset < hitPrefix.size(); offset += capacity) {
-				context.checkGuard();
-				const auto batch = hitPrefix.subspan(offset, std::min(capacity, hitPrefix.size() - offset));
-				if (!appendBufferedProcedureRows(makeBufferedVectorProcedureRows(batch, context), *snapshot,
-						operations, readBounds, context, result, nullptr, &operatorRowCounts, retainedVectorSourceBytes, true)) {
+			for (size_t offset = 0U; offset < selectedHitCount;) {
+                size_t count = std::min(capacity, selectedHitCount - offset);
+                auto rows = prepareInputRows(offset, count, selectedHitCount, result);
+                offset += count;
+                if (!appendBufferedProcedureRows(std::move(rows), *snapshot,
+						operations, readBounds, context, result, nullptr, &operatorRowCounts, retainedVectorSourceBytes, true, finalRowCount, prepareFirstOperator)) {
 					break;
 				}
 			}
@@ -1065,15 +1222,16 @@ namespace graph::query::execution {
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
-			std::vector<ProcedureDistinctRows, utils::OwnedPmrAllocator<ProcedureDistinctRows>> distinctRowsByOperation(operations.size());
+			utils::OwnedVector<ProcedureDistinctRows> distinctRowsByOperation(operations.size());
 			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
-			for (size_t offset = 0U; offset < hits.size(); offset += capacity) {
-				context.checkGuard();
-				const auto batch = std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(
-						offset, std::min(capacity, hits.size() - offset));
-				if (!appendBufferedProcedureRows(makeBufferedVectorProcedureRows(batch, context), *snapshot,
+			const size_t hitCount = hits.size();
+            for (size_t offset = 0U; offset < hitCount;) {
+                size_t count = std::min(capacity, hitCount - offset);
+                auto rows = prepareInputRows(offset, count, hitCount, result);
+                offset += count;
+                if (!appendBufferedProcedureRows(std::move(rows), *snapshot,
 						operations, readBounds, context, result, &distinctRowsByOperation, &operatorRowCounts,
-						retainedVectorSourceBytes, true)) {
+						retainedVectorSourceBytes, true, finalRowCount, prepareFirstOperator)) {
 					break;
 				}
 			}
@@ -1085,12 +1243,13 @@ namespace graph::query::execution {
 		result.setColumns({"node", "score"});
 		validateVectorSearchHits(hits, readBounds, context);
 		const size_t capacity = procedureNodeBatchCapacity(outputBounds);
-		for (size_t offset = 0U; offset < hits.size(); offset += capacity) {
-			context.checkGuard();
-			const auto batch = std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(
-					offset, std::min(capacity, hits.size() - offset));
-			if (!appendBufferedProcedureRows(makeBufferedVectorProcedureRows(batch, context), *snapshot, {},
-					readBounds, context, result, nullptr, nullptr, retainedVectorSourceBytes, true)) {
+		const size_t hitCount = hits.size();
+        for (size_t offset = 0U; offset < hitCount;) {
+            size_t count = std::min(capacity, hitCount - offset);
+            auto rows = prepareInputRows(offset, count, hitCount, result);
+            offset += count;
+            if (!appendBufferedProcedureRows(std::move(rows), *snapshot, {},
+					readBounds, context, result, nullptr, nullptr, retainedVectorSourceBytes, true, finalRowCount, prepareFirstOperator)) {
 				break;
 			}
 		}

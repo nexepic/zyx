@@ -52,6 +52,8 @@ namespace graph::storage {
 
 	void RelocatableMaintenanceLoop::start() {
 		std::lock_guard lock(mutex_);
+		if (last_failure_ && metrics_.state != RelocatableMaintenanceLoopState::VMLS_STOPPED)
+			throw std::logic_error("relocatable maintenance loop can start only from a clean stopped state");
 		if (metrics_.state == RelocatableMaintenanceLoopState::VMLS_RUNNING ||
 			metrics_.state == RelocatableMaintenanceLoopState::VMLS_PAUSED) {
 			return;
@@ -89,6 +91,8 @@ namespace graph::storage {
 
 	void RelocatableMaintenanceLoop::resume() {
 		std::lock_guard lock(mutex_);
+		if (last_failure_)
+			throw std::logic_error("relocatable maintenance loop can resume only from an operator pause");
 		if (metrics_.state == RelocatableMaintenanceLoopState::VMLS_RUNNING) {
 			return;
 		}
@@ -138,7 +142,8 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable maintenance loop requires a task executor");
 		}
 		std::lock_guard lock(mutex_);
-		if (metrics_.state == RelocatableMaintenanceLoopState::VMLS_FAULTED ||
+		if ((last_failure_ && metrics_.state != RelocatableMaintenanceLoopState::VMLS_STOPPED) ||
+			metrics_.state == RelocatableMaintenanceLoopState::VMLS_FAULTED ||
 			metrics_.state == RelocatableMaintenanceLoopState::VMLS_STOPPING) {
 			throw std::runtime_error("relocatable maintenance loop does not accept work after a failure or during shutdown");
 		}
@@ -280,29 +285,29 @@ namespace graph::storage {
 	}
 
 	void RelocatableMaintenanceLoop::failTask(const QueuedTask &task, std::exception_ptr failure) noexcept {
-		RelocatableMaintenanceFailureHandler handler;
-		{
-			std::lock_guard lock(mutex_);
-			--metrics_.in_flight_tasks;
-			if (task.deduplication_key != 0U) {
-				active_deduplication_keys_.erase(task.deduplication_key);
-			}
-			outstanding_rewrite_bytes_ -= task.maximum_rewrite_bytes;
-			saturatingAdd(metrics_.failed_tasks, 1U);
-			metrics_.outstanding_rewrite_bytes = outstanding_rewrite_bytes_;
-			metrics_.state = RelocatableMaintenanceLoopState::VMLS_FAULTED;
-			last_failure_ = failure;
-			handler = failure_handler_;
-			idle_condition_.notify_all();
-		}
-		if (handler) {
-			try {
-				handler(failure);
-			} catch (...) {
-				// Failure reporting must never terminate the storage worker.
-			}
-		}
-	}
+        {
+            std::lock_guard lock(mutex_);
+            // Reject admission immediately, but retain the in-flight lease and
+            // defer FAULTED/idle publication until the failure handler finishes.
+            // Backend handlers install the reopen-required write fence.
+            last_failure_ = failure;
+        }
+        if (failure_handler_) {
+            try {
+                failure_handler_(failure); // outside the mutex: observers may inspect metrics
+            } catch (...) {
+                // Failure reporting must never terminate the storage worker.
+            }
+        }
+        std::lock_guard lock(mutex_);
+        --metrics_.in_flight_tasks;
+        if (task.deduplication_key != 0U) active_deduplication_keys_.erase(task.deduplication_key);
+        outstanding_rewrite_bytes_ -= task.maximum_rewrite_bytes;
+        saturatingAdd(metrics_.failed_tasks, 1U);
+        metrics_.outstanding_rewrite_bytes = outstanding_rewrite_bytes_;
+        if (!stop_requested_) metrics_.state = RelocatableMaintenanceLoopState::VMLS_FAULTED;
+        idle_condition_.notify_all();
+    }
 
 	void RelocatableMaintenanceLoop::cancelQueuedTasksLocked() {
 		for (const QueuedTask &task: queue_) {

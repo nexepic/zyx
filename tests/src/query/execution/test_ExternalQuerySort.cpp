@@ -7,20 +7,23 @@ using namespace graph;
 using namespace graph::query::execution;
 using namespace graph::query::execution::detail;
 namespace {
-struct ScratchState {std::map<uint64_t,std::vector<std::byte>> bytes;uint64_t next=1;size_t opened=0,writes=0,finished=0;bool readonly=false,corrupt=false,failRead=false,failRelease=false;size_t failWrite=0;};
+struct ScratchState {std::map<uint64_t,std::vector<std::byte>> bytes;uint64_t next=1;size_t opened=0,writes=0,finished=0;bool readonly=false,corrupt=false,failRead=false,failRelease=false;size_t failWrite=0;size_t reads=0,firstReadWrites=0;bool duplicateHeadOrdinal=false;size_t failReadAt=0;};
 class Scratch final:public storage::LogicalQueryScratchSession {
 public:
 	Scratch(ScratchState &state,size_t bytes,size_t fragments):state_(state),maximum_(bytes/storage::RSS_SEGMENT_SIZE),fragments_(fragments){++state_.opened;}
 	~Scratch(){finish();}
 	uint64_t write(std::span<const std::byte> bytes) override {if(state_.failWrite && state_.writes+1==state_.failWrite)throw std::runtime_error("write failed");if(state_.bytes.size()>=maximum_ || state_.bytes.size()>=fragments_)throw std::runtime_error("disk exhausted");const auto id=state_.next++;state_.bytes.emplace(id,std::vector<std::byte>(bytes.begin(),bytes.end()));++state_.writes;return id;}
-	std::vector<std::byte> read(uint64_t id) override {if(state_.failRead)throw std::runtime_error("read failed");auto result=state_.bytes.at(id);if(state_.corrupt)for(size_t i=8;i<12;++i)result[i]=std::byte{0xFF};return result;}
+	std::vector<std::byte> read(uint64_t id) override {if(state_.failRead || (state_.failReadAt && state_.reads+1U==state_.failReadAt))throw std::runtime_error("read failed");if(state_.reads++==0)state_.firstReadWrites=state_.writes;
+        auto result=state_.bytes.at(id);
+        if(state_.duplicateHeadOrdinal)for(size_t i=28U;i<36U;++i)result.at(i)=std::byte{0};
+        if(state_.corrupt)for(size_t i=8;i<12;++i)result[i]=std::byte{0xFF};return result;}
 	void release(uint64_t id) override {if(state_.failRelease)throw std::runtime_error("release failed");if(state_.bytes.erase(id)!=1)throw std::logic_error("foreign handle");}
 	void finish() override {if(!finished_){state_.bytes.clear();++state_.finished;finished_=true;}}
 	size_t maximumFragmentBytes() const override{return storage::RSS_SEGMENT_SIZE-storage::RSS_ENVELOPE_BYTES;}
 private:ScratchState &state_;size_t maximum_,fragments_;bool finished_=false;
 };
 class Provider final:public storage::LogicalQueryScratchProvider {public:mutable ScratchState state;std::unique_ptr<storage::LogicalQueryScratchSession> openQueryScratchSession(size_t bytes,size_t fragments) const override {if(state.readonly)return nullptr;return std::make_unique<Scratch>(state,bytes,fragments);}};
-size_t size(const QuerySpillRowCodec::Record &record){size_t bytes=sizeof(record)+record.row.values.bucket_count()*sizeof(void *)+record.keys.capacity()*sizeof(PropertyValue);for(const auto &[name,value]:record.row.values){bytes+=sizeof(decltype(record.row.values)::value_type)+32U+name.capacity();if(const auto *primitive=std::get_if<PropertyValue>(&value))bytes+=propertyHeapBufferBytes(*primitive);}for(const auto &key:record.keys)bytes+=propertyHeapBufferBytes(key);return bytes;}
+size_t size(const QuerySpillRowCodec::Record &record){size_t bytes=sizeof(record)+executionBindingStructuralBytes(record.row.values)+record.keys.capacity()*sizeof(PropertyValue);for(const auto &[name,value]:record.row.values){bytes+=dynamicStringBufferBytes(name);if(const auto *primitive=std::get_if<PropertyValue>(&value))bytes+=propertyHeapBufferBytes(*primitive);}for(const auto &key:record.keys)bytes+=propertyHeapBufferBytes(key);return bytes;}
 QuerySpillRowCodec::Record row(size_t id){QuerySpillRowCodec::Record record;record.row.values.emplace("id",PropertyValue(static_cast<int64_t>(id)));record.keys={id%17==0?PropertyValue():PropertyValue(static_cast<int64_t>(id%11))};return record;}
 }
 TEST(ExternalQuerySortTest, MemoryPathPreservesStableNullOrderWithoutOpeningScratch) {
@@ -36,6 +39,85 @@ TEST(ExternalQuerySortTest, MultipleRunsMergeCompleteValuesStableTiesAndRefundOw
 	std::vector<size_t> actual;EXPECT_TRUE(sort.finish([&](auto record,auto charge){actual.push_back(static_cast<size_t>(std::get<int64_t>(std::get<PropertyValue>(record.row.values.at("id")).getVariant())));return true;}));
 	std::vector<size_t> expected(12000);std::iota(expected.begin(),expected.end(),0);std::stable_sort(expected.begin(),expected.end(),[](auto a,auto b){return orderByPrecedes(row(a).keys[0],row(b).keys[0],true);});EXPECT_EQ(actual,expected);EXPECT_TRUE(sort.spilled());EXPECT_GT(provider.state.writes,2U);EXPECT_TRUE(provider.state.bytes.empty());}
 	EXPECT_EQ(budget.used(),0U);
+}
+
+TEST(ExternalQuerySortTest, MoreRunsReuseFundedCapacityAndReleaseItBeforeEscapingOutput) {
+    class CountingUpstream final : public std::pmr::memory_resource {
+    public:
+        size_t large_requests = 0U;
+        size_t live_run_array_bytes = 0U;
+    private:
+        void *do_allocate(size_t bytes, size_t alignment) override {
+            void *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+            if (bytes >= 1024U * sizeof(QuerySpillRowCodec::Record)) {
+                ++large_requests;live_run_array_bytes+=bytes;
+            }
+            return result;
+        }
+        void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+            if (bytes >= 1024U * sizeof(QuerySpillRowCodec::Record)) live_run_array_bytes-=bytes;
+            std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    };
+    const auto run = [&](size_t count) {
+        Provider provider; CountingUpstream upstream;
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8U * 1024U * 1024U));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4U * 1024U * 1024U);
+        MaterializedByteBudget budget(4U * 1024U * 1024U, account, &upstream);
+        const std::array<uint8_t,1> ascending{1};
+        std::vector<bool> seen(count, false);size_t delivered = 0U;
+        {
+            ExternalQuerySort sort(provider,budget,40000U,4U*1024U*1024U,ascending,size,[]{});
+            for (size_t i = 0U; i < count; ++i) sort.append(row(i),MaterializedByteReservation(&budget));
+            EXPECT_GT(upstream.live_run_array_bytes,0U);
+            EXPECT_TRUE(sort.finish([&](auto record,auto charge) {
+                EXPECT_EQ(upstream.live_run_array_bytes,0U);
+                const auto id = static_cast<size_t>(std::get<int64_t>(std::get<PropertyValue>(record.row.values.at("id")).getVariant()));
+                EXPECT_LT(id,count);if(id>=count)return false;
+                EXPECT_FALSE(seen[id]);seen[id]=true;++delivered;
+                EXPECT_LE(account->used(),4U*1024U*1024U);return true;
+            }));
+            EXPECT_TRUE(sort.spilled());EXPECT_GT(provider.state.writes,2U);
+            EXPECT_TRUE(provider.state.bytes.empty());EXPECT_EQ(delivered,count);
+        }
+        EXPECT_EQ(budget.used(),0U);EXPECT_EQ(account->used(),0U);
+        return upstream.large_requests;
+    };
+    const auto first = run(12000U);
+    EXPECT_GT(first,0U);
+    const auto longer=run(30000U);
+    RecordProperty("sort_run_array_large_requests_short",first);
+    RecordProperty("sort_run_array_large_requests_long",longer);
+    EXPECT_EQ(longer,first);
+}
+
+TEST(ExternalQuerySortTest, ReclaimsRunCapacityBeforeWiderInputCompetesWithAnotherOwner) {
+    Provider provider;MaterializedByteBudget budget(4U*1024U*1024U);
+    MaterializedByteReservation competing(&budget);
+    const std::array<uint8_t,1> ascending{1};size_t count=0U;
+    {
+        ExternalQuerySort sort(provider,budget,40000U,4U*1024U*1024U,ascending,size,[]{});
+        while(provider.state.writes==0U && count<12000U)sort.append(row(count++),MaterializedByteReservation(&budget));
+        ASSERT_GT(provider.state.writes,0U);ASSERT_GT(budget.available(),1024U);
+        competing.set(budget.available()-1024U);
+        auto wider=row(count++);
+        wider.row.values.emplace("blob",PropertyValue(std::string(3000U,'b')));
+        EXPECT_NO_THROW(sort.append(std::move(wider),MaterializedByteReservation(&budget)));
+        competing.reset();
+        size_t delivered=0U,wide=0U;
+        EXPECT_TRUE(sort.finish([&](auto record,auto charge){
+            ++delivered;
+            if(const auto found=record.row.values.find("blob");found!=record.row.values.end()) {
+                ++wide;
+                EXPECT_EQ(std::get<std::string>(std::get<PropertyValue>(found->second).getVariant()).size(),3000U);
+            }
+            return true;
+        }));
+        EXPECT_EQ(delivered,count);EXPECT_EQ(wide,1U);EXPECT_TRUE(provider.state.bytes.empty());
+    }
+    EXPECT_EQ(budget.used(),0U);
 }
 TEST(ExternalQuerySortTest, CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults) {
 	for(bool readonly:{false,true}){Provider provider;provider.state.readonly=readonly;provider.state.corrupt=!readonly;MaterializedByteBudget budget(4U*1024U*1024U);const std::array<uint8_t,1> ascending{1};
@@ -93,4 +175,140 @@ TEST(ExternalQuerySortTest, UnsupportedOrderingAfterSealedRunsFailsWithoutReplay
 		EXPECT_EQ(produced,12001U);
 	}
 	EXPECT_EQ(budget.used(),0U);EXPECT_TRUE(provider.state.bytes.empty());EXPECT_EQ(provider.state.finished,1U);
+}
+
+TEST(ExternalQuerySortTest, ProtectedWorkspaceRunSizingBoundsMemoryAndWriteAmplification) {
+    constexpr size_t limit=4U*1024U*1024U;
+    size_t peak=0U;
+    graph::debug::PerfTrace::ScopedObserver observer(&peak,[](void *owner,std::string_view name,int64_t value,bool duration) noexcept {
+        if(!duration && name=="logical_plan.materialized_budget_peak_bytes" && value>0)
+            *static_cast<size_t *>(owner)=(std::max)(*static_cast<size_t *>(owner),static_cast<size_t>(value));
+    });
+    Provider provider;MaterializedByteBudget budget(limit);const std::array<uint8_t,1U> ascending{1U};
+    {
+        ExternalQuerySort sort(provider,budget,30000U,limit,ascending,size,[]{});
+        for(size_t i=0;i<12000U;++i) sort.append(row(i),MaterializedByteReservation(&budget));
+        std::vector<bool> seen(12000U,false);size_t delivered=0U;
+        ASSERT_TRUE(sort.finish([&](auto record,auto) {
+            const auto id=static_cast<size_t>(std::get<int64_t>(std::get<PropertyValue>(record.row.values.at("id")).getVariant()));
+            if(id>=seen.size() || seen[id]) return false;
+            seen[id]=true;++delivered;return true;
+        }));
+        EXPECT_EQ(delivered,12000U);EXPECT_TRUE(sort.spilled());
+        // Fixed regression ceiling: <=4 MiB of 128 KiB fragment writes for
+        // this <0.7 MiB encoded input, including all intermediate merge runs.
+        // It is independent of the observed count and of allocator estimates.
+        EXPECT_LE(provider.state.writes,32U);
+        RecordProperty("fragment_writes",std::to_string(provider.state.writes));
+    }
+    EXPECT_GT(peak,0U);EXPECT_LE(peak,limit);EXPECT_EQ(budget.used(),0U);
+    EXPECT_TRUE(provider.state.bytes.empty());RecordProperty("logical_peak_bytes",std::to_string(peak));
+}
+
+TEST(ExternalQuerySortTest, FinalTwoRunsStreamWithoutRewritingAndPreserveStableOrder) {
+    for(const bool stopEarly : {false,true}) {
+        Provider provider;MaterializedByteBudget budget(4U*1024U*1024U);
+        const std::array<uint8_t,1> ascending{1};size_t count=0U;
+        {
+            ExternalQuerySort sort(provider,budget,12000U,4U*1024U*1024U,ascending,size,[]{});
+            while(provider.state.writes==0U && count<12000U)
+                sort.append(row(count++),MaterializedByteReservation(&budget));
+            ASSERT_GT(provider.state.writes,0U);
+            std::vector<size_t> actual;
+            EXPECT_EQ(sort.finish([&](auto record,auto charge) {
+                EXPECT_GT(charge.bytes(),0U);
+                actual.push_back(static_cast<size_t>(std::get<int64_t>(std::get<PropertyValue>(record.row.values.at("id")).getVariant())));
+                return !stopEarly;
+            }),!stopEarly);
+            std::vector<size_t> expected(count);std::iota(expected.begin(),expected.end(),0U);
+            std::stable_sort(expected.begin(),expected.end(),[](auto a,auto b){return orderByPrecedes(row(a).keys[0],row(b).keys[0],true);});
+            if(stopEarly)expected.resize(1U);
+            EXPECT_EQ(actual,expected);
+            EXPECT_EQ(provider.state.writes,provider.state.firstReadWrites);
+            EXPECT_TRUE(provider.state.bytes.empty());
+            EXPECT_EQ(provider.state.finished,1U);
+        }
+        EXPECT_EQ(budget.used(),0U);
+    }
+}
+TEST(ExternalQuerySortTest, FinalMergeRejectsCrossRunDuplicateOrdinalAndRefundsVisitorFailure) {
+    for(const bool corrupt : {false,true}) {
+        Provider provider;MaterializedByteBudget budget(4U*1024U*1024U);
+        const std::array<uint8_t,1> ascending{1};size_t count=0U,delivered=0U;
+        {
+            ExternalQuerySort sort(provider,budget,12000U,4U*1024U*1024U,ascending,size,[]{});
+            while(provider.state.writes==0U && count<12000U) {
+                auto record=row(count++);record.keys[0]=PropertyValue(7);
+                sort.append(std::move(record),MaterializedByteReservation(&budget));
+            }
+            ASSERT_GT(provider.state.writes,0U);
+            provider.state.duplicateHeadOrdinal=corrupt;
+            const auto visit=[&](auto,auto) {
+                ++delivered;
+                if(!corrupt)throw std::domain_error("final merge visitor failed");
+                return true;
+            };
+            if(corrupt)EXPECT_THROW(sort.finish(visit),std::invalid_argument);
+            else EXPECT_THROW(sort.finish(visit),std::domain_error);
+            EXPECT_EQ(delivered,1U);
+        }
+        EXPECT_EQ(budget.used(),0U);EXPECT_TRUE(provider.state.bytes.empty());
+        EXPECT_EQ(provider.state.finished,1U);
+    }
+}
+
+TEST(ExternalQuerySortTest, ThreeRunsStreamWideKeysInsideTheOriginalWorkspace) {
+    for(const bool wide : {false,true}) for(const bool stopEarly : {false,true}) {
+        SCOPED_TRACE(wide);
+        SCOPED_TRACE(stopEarly);
+        Provider provider;MaterializedByteBudget budget(4U*1024U*1024U);
+        const std::array<uint8_t,1> ascending{1};size_t count=0U,sealed=0U;
+        {
+            ExternalQuerySort sort(provider,budget,12000U,4U*1024U*1024U,ascending,size,[]{});
+            while(sealed<2U && count<12000U) {
+                auto record=row(count);
+                record.keys[0]=wide ? PropertyValue(std::string(1800U,'a')+char('a'+count%7U)) : PropertyValue(int64_t(count%7U));
+                const auto before=provider.state.writes;
+                sort.append(std::move(record),MaterializedByteReservation(&budget));++count;
+                if(provider.state.writes>before)++sealed;
+            }
+            ASSERT_EQ(sealed,2U);std::vector<size_t> actual;
+            EXPECT_EQ(sort.finish([&](auto record,auto charge) {
+                EXPECT_GT(charge.bytes(),0U);
+                actual.push_back(size_t(std::get<int64_t>(std::get<PropertyValue>(record.row.values.at("id")).getVariant())));
+                return !stopEarly;
+            }),!stopEarly);
+            std::vector<size_t> expected(count);std::iota(expected.begin(),expected.end(),0U);
+            std::stable_sort(expected.begin(),expected.end(),[](auto a,auto b){return a%7U<b%7U;});
+            if(stopEarly)expected.resize(1U);
+            EXPECT_EQ(actual,expected);
+            EXPECT_EQ(provider.state.writes,provider.state.firstReadWrites);
+            if(!stopEarly)EXPECT_EQ(provider.state.reads,provider.state.writes);
+            EXPECT_TRUE(provider.state.bytes.empty());
+        }
+        EXPECT_EQ(budget.used(),0U);EXPECT_EQ(provider.state.finished,1U);
+    }
+}
+
+TEST(ExternalQuerySortTest, ThirdCursorAndStreamingVisitorFailuresRefundAllRuns) {
+    for(const bool readFailure : {false,true}) {
+        Provider provider;MaterializedByteBudget budget(4U*1024U*1024U);
+        const std::array<uint8_t,1> ascending{1};size_t count=0U,sealed=0U,delivered=0U;
+        {
+            ExternalQuerySort sort(provider,budget,12000U,4U*1024U*1024U,ascending,size,[]{});
+            while(sealed<2U && count<12000U) {
+                const auto before=provider.state.writes;
+                sort.append(row(count++),MaterializedByteReservation(&budget));
+                if(provider.state.writes>before)++sealed;
+            }
+            ASSERT_EQ(sealed,2U);
+            provider.state.failReadAt=readFailure ? 3U : 0U;
+            const auto visit=[&](auto,auto) {if(++delivered==4U)throw std::domain_error("stream consumer failed");return true;};
+            if(readFailure)EXPECT_THROW(sort.finish(visit),std::runtime_error);
+            else EXPECT_THROW(sort.finish(visit),std::domain_error);
+            EXPECT_EQ(delivered,readFailure ? 0U : 4U);
+        }
+        EXPECT_EQ(budget.used(),0U);EXPECT_TRUE(provider.state.bytes.empty());
+        EXPECT_EQ(provider.state.finished,1U);
+    }
 }

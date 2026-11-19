@@ -1,3 +1,4 @@
+#include "graph/utils/OwnedVector.hpp"
 #include "NativeGraphWritePlannerContext.hpp"
 
 namespace graph::storage {
@@ -2076,7 +2077,7 @@ namespace graph::storage {
                         {}, base.generation, {}, {}, {}, {}, {}, std::nullopt, std::nullopt, &proof);
                     return result;
                 }
-                std::vector<EntityPropertyKey, utils::OwnedPmrAllocator<EntityPropertyKey>> topologyPropertyOwners;
+                utils::OwnedVector<EntityPropertyKey> topologyPropertyOwners;
                 std::optional<NativeHybridTopologyPublication> topologyProof;
                 utils::OwnedVector<scan_candidate_detail::ScanNodeChange> scanChanges;
                 {

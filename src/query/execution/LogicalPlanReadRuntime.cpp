@@ -1,4 +1,6 @@
 #include "graph/storage/LogicalGraphNodeScan.hpp"
+#include <exception>
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #ifndef ZYX_EXPERIMENTAL_STREAMING_COUNT
 #define ZYX_EXPERIMENTAL_STREAMING_COUNT 0
 #endif
@@ -27,11 +29,13 @@
  **/
 
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "ResultPropertyMapAdmission.hpp"
 #include "query/execution/GuardedIdGather.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
 #include "query/execution/BoundProjectionReferences.hpp"
 #include "query/execution/BoundExecutionProgram.hpp"
 #include "query/execution/BoundExpressionInputs.hpp"
+#include "query/execution/ScopedScalarReadValue.hpp"
 #include "query/execution/BatchEnvelope.hpp"
 #include "query/execution/BoundNodeScanBatch.hpp"
 #include "query/execution/BoundColumnLayout.hpp"
@@ -40,6 +44,10 @@
 #include "query/execution/BorrowedGroupKey.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
 #include "query/execution/ExternalQuerySort.hpp"
+#include "query/execution/CellScratchVector.hpp"
+#include "query/execution/CellKeySelection.hpp"
+#include "query/execution/ReleaseEmptyMapStorage.hpp"
+#include "query/execution/ScalarResultHandoff.hpp"
 #include "query/execution/ExternalQueryKeySet.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
@@ -47,6 +55,7 @@
 #include "graph/query/execution/GuardedRowCopy.hpp"
 #include "graph/query/execution/GuardedEntityCopy.hpp"
 
+#include <atomic>
 #include <algorithm>
 #include <bit>
 #include <cctype>
@@ -122,7 +131,7 @@ namespace graph::query::execution {
 
 	namespace {
 
-		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
+		using PropertyMap = decltype(LogicalPlanReadRow::property_cache)::mapped_type;
 		using InternalVisitor = std::function<bool(LogicalPlanReadRow)>;
 		using ChargedRowVisitor = std::function<bool(LogicalPlanReadRow, MaterializedByteReservation)>;
 #include "read_runtime/ExecutionStateAndBudgets.inc"
@@ -181,7 +190,7 @@ namespace graph::query::execution {
             if (!state.shared.snapshot.bindingSchemaIdentity()) return;
             bindProgramWithHeadroom(state.shared, [&] {
                 detail::BudgetMemoryResource memory(state.shared.materialized_budget);
-                std::pmr::vector<std::string_view> names(&memory);
+                utils::AdmissionPmrVector<std::string_view> names(&memory);
                 for (const auto &[name, value] : row.values) { checkGuardNow(state); names.push_back(name); }
                 std::ranges::sort(names);
                 state.shared.bound_program.emplace(root, state.shared.snapshot, state.shared.materialized_budget,
@@ -374,7 +383,7 @@ namespace graph::query::execution {
 				checkpoint();
 				if (invalidatedCache(alias)) continue;
 				destination.emplace(detail::copyPropertyStringGuarded(alias, checkpoint),
-					detail::copyPropertyMapGuarded(properties, checkpoint));
+					detail::copyBindingPropertyMapGuarded(properties, checkpoint));
 			}
 		};
 		copyCache(inputRow.property_cache, refreshed.property_cache);
@@ -682,8 +691,8 @@ namespace graph::query::execution {
 					return executeInternal(backend_, root, executionBounds, finalVisitor, nullptr, true, &finalizer,
 										   true, residentOutputBatchBytes);
 				},
-				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
-					appendLogicalResultRow(result, row, columns, state);
+				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state, MaterializedByteReservation &sourceReservation) {
+					appendLogicalResultRow(result, row, columns, state, sourceReservation);
 					return true;
 				},
 				false, false));
@@ -729,8 +738,8 @@ namespace graph::query::execution {
 					return executeInternal(backend_, root, executionBounds, finalVisitor, &context, true, &retainOutput,
 										   true, residentOutputBatchBytes);
 				},
-				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
-					appendLogicalResultRow(result, row, columns, state);
+				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state, MaterializedByteReservation &sourceReservation) {
+					appendLogicalResultRow(result, row, columns, state, sourceReservation);
 					return true;
 				},
 				false, false, &context));

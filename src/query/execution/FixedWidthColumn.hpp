@@ -1,4 +1,5 @@
 #pragma once
+#include "query/execution/TrivialBudgetBuffer.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -67,12 +68,7 @@ public:
 		states_.resize(count);
 	}
 	void clear() noexcept { values_.clear(); states_.clear(); }
-	void release() noexcept {
-		std::pmr::vector<StorageType> values(&memory_);
-		std::pmr::vector<ColumnCellState> states(&memory_);
-		values_.swap(values);
-		states_.swap(states);
-	}
+	void release() noexcept { values_.release(); states_.release(); }
 
 private:
 	void appendCell(StorageType value, ColumnCellState state) {
@@ -93,8 +89,8 @@ private:
 
 	size_t maximum_rows_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<StorageType> values_;
-	std::pmr::vector<ColumnCellState> states_;
+	TrivialBudgetBuffer<StorageType> values_;
+	TrivialBudgetBuffer<ColumnCellState> states_;
 };
 
 } // namespace graph::query::execution::detail

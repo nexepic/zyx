@@ -1,4 +1,7 @@
+#include "graph/query/QueryGuard.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "CypherParserImpl.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
 #include "graph/query/logical/operators/LogicalSkip.hpp"
@@ -41,7 +44,31 @@ namespace graph::query::execution {
 		EXPECT_TRUE(graph.node_read_ids.empty());
 	}
 
+	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateRequiresSourceAdmissionBeforeReading) {
+		DirectEdgeGraph graph = directGraph(); graph.enable_property_read_admission = false;
+		DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+		graph::parser::cypher::CypherParserImpl parser;
+		const auto plan = parser.parseToLogical("MATCH (n {rank: 1}) RETURN id(n) AS id");
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(*plan.root, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::logic_error);
+		EXPECT_EQ(delivered, 0U); EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+		graph.enable_property_read_admission = true;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})));
+		EXPECT_EQ(delivered, 1U); EXPECT_GT(graph.node_property_column_admission_reads, 0U);
+	}
+
 	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation) {
+        size_t deferredRows = 0U;
+        graph::debug::PerfTrace::ScopedObserver observe(&deferredRows,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.node_predicate.deferred_binding_rows")
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 		DirectEdgeGraph graph = directGraph();
 		graph.node_ref_scan_order = {3U, 1U, 2U};
 		for (auto &[id, node]: graph.nodes)
@@ -61,8 +88,11 @@ namespace graph::query::execution {
 				return !stop;
 			})));
 			EXPECT_EQ(ids, stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2}));
-			EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+			if (stop) EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+			else EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+			EXPECT_GE(graph.node_property_column_admission_reads, graph.node_property_column_batch_reads);
 		}
+        EXPECT_GT(deferredRows, 0U);
 		graph.nodes.at(1U).properties.pop_back();
 		std::vector<int64_t> ids;
 		static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) {
@@ -250,6 +280,26 @@ namespace graph::query::execution {
 		EXPECT_EQ(graph.edge_property_point_reads, 0U);
 	}
 
+	TEST(LogicalPlanDirectEdgeRuntimeTest, EdgePredicateRequiresSourceAdmissionBeforeReading) {
+		DirectEdgeGraph graph = directGraph(); graph.enable_adjacency_reference_pages = true;
+		graph.enable_property_read_admission = false;
+		DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"),
+			"a", "r", "b", "KNOWS", "out", {}, {},
+			PropertyValue::MapType{{"weight", PropertyValue(7)}});
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})), std::logic_error);
+		EXPECT_EQ(delivered, 0U); EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+		EXPECT_EQ(graph.edge_property_point_reads, 0U);
+		graph.enable_property_read_admission = true;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(traversal, directBounds(), [&](const LogicalPlanReadRow &) {
+			++delivered; return true;
+		})));
+		EXPECT_EQ(delivered, 2U); EXPECT_GT(graph.edge_property_column_admission_reads, 0U);
+	}
+
 	TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsOversizedAnchoredEdgePredicateBatchBeforeFullEdgeRead) {
 		DirectEdgeGraph graph = directGraph();
 		graph.enable_adjacency_reference_pages = true;
@@ -270,7 +320,8 @@ namespace graph::query::execution {
 		EXPECT_THROW(
 				static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
 				std::runtime_error);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
+		EXPECT_GT(graph.edge_property_column_admission_reads, 0U);
+		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
 		EXPECT_EQ(graph.edge_shaped_reads, 0U);
 	}
 
@@ -517,8 +568,9 @@ namespace graph::query::execution {
 		EXPECT_THROW(
 				static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
 				std::runtime_error);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_read_ids, (std::vector<uint64_t>{10U, 11U, 12U}));
+		EXPECT_GT(graph.edge_property_column_admission_reads, 0U);
+		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+		EXPECT_TRUE(graph.edge_read_ids.empty());
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, EnforcesMaterializedByteBoundAtPublicEntityResultBoundary) {
@@ -1184,6 +1236,12 @@ namespace graph::query::execution {
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, NestedSortPrefetchesOuterPropertyAndTransfersRows) {
+        size_t retiredCaches = 0U;
+        graph::debug::PerfTrace::ScopedObserver observe(&retiredCaches,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_plan.result.retired_cache_bytes")
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 		DirectEdgeGraph graph = directGraph();
 		graph.enable_property_tokens = true;
 		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
@@ -1199,9 +1257,12 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "priority"), true);
 		logical::LogicalSort outer(std::move(inner), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Include buffered/source/output row frames and key/Property slots.
-		constrained.maximum_materialized_bytes =
-				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
+        // Fixed efficiency envelope, independent of sizeof(empty row maps).
+        // The pre-compaction GNU layout allowed 4758 bytes here. Freeze a
+        // smaller 4608-byte cap, including destination-cache admission and
+        // old/new public vector coexistence. Complete ordering and exactly
+        // one fetch per owner remain mandatory.
+        constrained.maximum_materialized_bytes = 4608U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
@@ -1214,6 +1275,7 @@ namespace graph::query::execution {
         EXPECT_EQ(fetched, (std::vector<uint64_t>{1U, 2U, 3U}));
         for (const auto &keys : graph.node_property_column_batch_keys)
             EXPECT_EQ(keys, (std::vector<std::string>{"priority"}));
+        EXPECT_GT(retiredCaches, 0U);
 		EXPECT_EQ(graph.node_property_point_reads, 0U);
 	}
 
@@ -1236,7 +1298,10 @@ namespace graph::query::execution {
 		// Include buffered/source/output row frames and key/Property slots.
 		constrained.maximum_materialized_bytes =
 				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
-        constrained.maximum_materialized_bytes += 8U * 3U * sizeof(LogicalPlanReadRow);
+        // The carrier heuristic includes the owned binding node, not just
+        // the empty row header. This is the explicitly ample-batch case.
+        constrained.maximum_materialized_bytes += 8U * 3U *
+            (sizeof(LogicalPlanReadRow) + detail::executionBindingNodeBytes<decltype(LogicalPlanReadRow{}.values)>());
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
@@ -1300,9 +1365,12 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("m", "priority"), true);
 		logical::LogicalSort outer(std::move(projected), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Include buffered/source/output row frames and key/Property slots.
-		constrained.maximum_materialized_bytes =
-				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
+        // Fixed efficiency envelope, independent of sizeof(empty row maps).
+        // The pre-compaction GNU layout allowed 4758 bytes here. Freeze a
+        // smaller 4608-byte cap, including destination-cache admission and
+        // old/new public vector coexistence. Complete ordering and exactly
+        // one fetch per owner remain mandatory.
+        constrained.maximum_materialized_bytes = 4608U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 2U);
@@ -1361,9 +1429,10 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
 		logical::LogicalSort outer(std::move(filtered), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Include buffered/source/output row frames and key/Property slots.
-		constrained.maximum_materialized_bytes =
-				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U;
+		// Freeze the pre-compaction 280-byte frame envelope; shrinking an
+        // empty private map must not also shrink this successful-query cap.
+        static_assert(sizeof(LogicalPlanReadRow) <= 280U);
+        constrained.maximum_materialized_bytes = 8U * 280U + 12U * sizeof(PropertyValue) + 824U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 2U);
 		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 1U);
@@ -1410,10 +1479,11 @@ namespace graph::query::execution {
 		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("item"), true);
 		logical::LogicalSort outer(std::move(expanded), std::move(outerKeys));
 		auto constrained = directBounds();
-		// Six expanded rows coexist with retained source frames, sorting keys
-		// and result publication. Account for actual platform slot sizes.
-		constrained.maximum_materialized_bytes =
-				16U * sizeof(LogicalPlanReadRow) + 24U * sizeof(PropertyValue) + 3648U;
+		// Six expanded rows coexist with retained source frames and keys.
+        // Keep the original fixed frame envelope as an efficiency gate,
+        // independent of the newly compact empty private-map headers.
+        static_assert(sizeof(LogicalPlanReadRow) <= 280U);
+        constrained.maximum_materialized_bytes = 16U * 280U + 24U * sizeof(PropertyValue) + 3648U;
 		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
 		ASSERT_EQ(result.rowCount(), 6U);
 		for (size_t index = 0U; index < 6U; ++index) {
@@ -1715,5 +1785,63 @@ namespace graph::query::execution {
 			EXPECT_EQ(delivered, 1U);
 		}
 	}
+
+    TEST(LogicalPlanDirectEdgeRuntimeTest, TerminalReferencePressureRetiresCachesAndPreservesCompleteResults) {
+        // Find a genuine pressure window across STL layouts. This does not alter
+        // the fixed native regression quotas above: every successful result is
+        // checked, and at least one must actually reclaim an owned cache entry.
+        bool sawPressure = false, reclaimedSuccess = false;
+        for (size_t limit = 2048U; limit <= 8192U && !reclaimedSuccess; limit += 32U) {
+            SCOPED_TRACE(limit);
+            DirectEdgeGraph graph = directGraph();
+            for (auto &[id, node] : graph.nodes)
+                node.properties.emplace_back("payload", PropertyValue(std::string(80U, static_cast<char>('a' + id))));
+            DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+            graph::parser::cypher::CypherParserImpl parser;
+            auto plan = parser.parseToLogical("MATCH (n) RETURN n ORDER BY id(n)");
+            auto bounds = directBounds(); bounds.maximum_materialized_bytes = limit;
+            size_t reclaimed = 0U;
+            graph::debug::PerfTrace::ScopedObserver observe(&reclaimed,
+                [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                    if (!duration && key == "logical_plan.result.reclaimed_entity_cache_bytes")
+                        *static_cast<size_t *>(p) += static_cast<size_t>(value);
+                });
+            try {
+                const auto result = runtime.executeToQueryResult(*plan.root, bounds);
+                ASSERT_EQ(result.rowCount(), graph.nodes.size());
+                size_t index = 0U;
+                for (const auto &[id, node] : graph.nodes) {
+                    const auto &actual = result.getRows()[index++].at("n").asLogicalNode();
+                    EXPECT_EQ(actual.node_id, id);
+                    EXPECT_EQ(actual.labels, node.labels);
+                    ASSERT_EQ(actual.properties.size(), node.properties.size());
+                    for (const auto &property : node.properties)
+                        EXPECT_EQ(actual.properties.at(property.key), property.value);
+                }
+                reclaimedSuccess = reclaimed != 0U;
+                if (reclaimedSuccess) {
+                    bool cancel = false;
+                    QueryGuard guard(0, 1, [&] { if (cancel) throw std::domain_error("cache retirement cancelled"); return size_t{0}; });
+                    QueryContext context; context.guard = &guard;
+                    {
+                        graph::debug::PerfTrace::ScopedObserver cancelOnRetirement(&cancel,
+                            [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+                                if (!duration && key == "logical_plan.result.reclaimed_entity_cache_bytes")
+                                    *static_cast<bool *>(p) = true;
+                            });
+                        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, bounds, context)), std::domain_error);
+                    }
+                    EXPECT_TRUE(cancel);
+                    EXPECT_EQ(runtime.executeToQueryResult(*plan.root, bounds).rowCount(), graph.nodes.size());
+                }
+            } catch (const std::runtime_error &error) {
+                const std::string message = error.what();
+                EXPECT_TRUE(message.find("bound") != std::string::npos || message.find("budget") != std::string::npos) << message;
+                sawPressure = true;
+            }
+        }
+        EXPECT_TRUE(sawPressure);
+        EXPECT_TRUE(reclaimedSuccess);
+    }
 
 } // namespace graph::query::execution

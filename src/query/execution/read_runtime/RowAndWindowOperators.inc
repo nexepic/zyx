@@ -167,6 +167,11 @@
 						} else {
 							retainedSource.set(inputBytes);
 						}
+						// The opened reader owns its file handle; the URI and path strings
+						// are needed only while resolving and opening it. Keep their charge
+						// until those temporaries have actually been destroyed.
+						const size_t retainedInputBytes = retainedSource.bytes();
+						auto reader = [&]() -> CsvReader {
 						PropertyValue uri;
 						{ ScopedBoundInputs scopedInputs(state, boundInputs, input);
 							uri = scalarValue(evaluateExpression(*loadCsv.getUrlExpr(), input, state)); }
@@ -199,12 +204,15 @@
 								checkedSizeAdd(pathBytes, sourcePathBytes, "logical LOAD CSV retained size overflowed"),
 								"logical LOAD CSV retained size overflowed");
 						retainedSource.set(retainedInputSourcePathBytes);
-						CsvReader reader(sourcePath, delimiter,
+						return CsvReader(sourcePath, delimiter,
 										 CsvReaderLimits{state.shared.context->csv_import_policy.maximum_record_bytes,
 														 state.shared.context->csv_import_policy.maximum_columns,
 														 state.shared.context->csv_import_policy.maximum_field_bytes,
 														 state.shared.materialized_budget.available()},
 										 [&state] { state.shared.context->checkGuardNow(); });
+						}();
+						retainedSource.set(retainedInputBytes);
+						reader.setMaximumBufferedBytes(state.shared.materialized_budget.available());
 
 						std::vector<std::string> headers;
 						size_t headerBytes = 0U;
@@ -474,7 +482,7 @@
 								"logical-plan UNION children must declare the same nonempty output columns");
 					}
 					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
-					std::pmr::unordered_set<std::string_view> uniqueColumns(state.shared.bound_program
+					utils::AdmissionPmrUnorderedSet<std::string_view> uniqueColumns(state.shared.bound_program
 						? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource());
 					uniqueColumns.reserve(columns.size());
 					for (const std::string &column: columns) {
@@ -484,7 +492,7 @@
 					}
 
 					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
-					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					utils::AdmissionPmrUnorderedSet<std::pmr::string> distinctRows{&distinctMemory};
 					std::optional<detail::ExternalQueryKeySet> externalDistinct;
 					if (!unionOperator.isAll() && state.shared.allow_cross_row_entity_batches &&
 					        state.shared.bounds.maximum_materialized_bytes >= detail::ExternalQueryKeySet::MINIMUM_QUERY_BYTES) {
@@ -557,11 +565,11 @@
 
 					struct DecoratedRow {
 						LogicalPlanReadRow row;
-						std::vector<PropertyValue> keys;
+						std::optional<std::vector<PropertyValue>> keys;
 					};
 					const auto decoratedRowBytes = [&state](const DecoratedRow &decorated) {
 						size_t bytes = logicalReadRowBytes(decorated.row, state.shared.context);
-						for (const PropertyValue &key: decorated.keys) {
+						if (decorated.keys) for (const PropertyValue &key: *decorated.keys) {
 							bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(key, state),
 												   "logical-plan Sort materialization size overflowed");
 						}
@@ -619,14 +627,47 @@
 						throw std::runtime_error(
 								"logical-plan Sort could not prove that its materialized input was exhausted");
 					}
+                    // No expression evaluation or cache mutation occurs while
+                    // sorting bare scalar bindings. Their row owners stay live
+                    // and charged throughout comparisons and stable reordering.
+                    // Bound descriptors retain the established validation path.
+                    bool borrowedKeys = rows.size() > 1U && !state.shared.bound_program;
+                    for (const auto &item : items) {
+                        if (!borrowedKeys) break;
+                        const auto *ref = dynamic_cast<const expressions::VariableReferenceExpression *>(item.expression.get());
+                        if (!ref || ref->hasProperty()) { borrowedKeys = false; break; }
+                        for (const auto &entry : rows.values()) {
+                            checkGuard(state);
+                            const auto value = entry.row.values.find(ref->getVariableName());
+                            if (value == entry.row.values.end() || !std::holds_alternative<PropertyValue>(value->second)) {
+                                borrowedKeys = false; break;
+                            }
+                        }
+                    }
+                    if (borrowedKeys) {
+                        std::stable_sort(rows.values().begin(), rows.values().end(), [&](const DecoratedRow &left, const DecoratedRow &right) {
+                            checkGuard(state);
+                            for (const auto &item : items) {
+                                const auto &ref = static_cast<const expressions::VariableReferenceExpression &>(*item.expression);
+                                const auto &a = std::get<PropertyValue>(left.row.values.at(ref.getVariableName()));
+                                const auto &b = std::get<PropertyValue>(right.row.values.at(ref.getVariableName()));
+                                if (a == b) continue;
+                                return detail::orderByPrecedes(a, b, item.ascending);
+                            }
+                            return false;
+                        });
+                        debug::PerfTrace::addValue("logical_plan.sort.borrowed_scalar_rows", static_cast<int64_t>(rows.size()));
+                    }
 					size_t slotsPerRow = 0U;
-					if (rows.size() > 1U) {
+					if (rows.size() > 1U && !borrowedKeys) {
 						std::optional<detail::BoundExpressionInputs> boundInputs;
 						if (state.shared.bound_program) boundInputs.emplace(*state.shared.bound_program,
 							state.shared.bound_program->id(op), sortCandidates, state.shared.snapshot, state.shared.materialized_budget,
 							[&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
-						slotsPerRow = checkedSizeMul(items.size(), sizeof(PropertyValue),
-													 "logical-plan Sort key-slot size overflowed");
+						slotsPerRow = checkedSizeAdd(detail::standardContainerProxyBytes(),
+                            utils::detail::standardAllocatorRequestBytes(checkedSizeMul(items.size(), sizeof(PropertyValue),
+                                "logical-plan Sort key-slot size overflowed"), alignof(PropertyValue)),
+                            "logical-plan Sort key-slot size overflowed");
 						size_t keySlotBytes =
 								checkedSizeMul(rows.size(), slotsPerRow, "logical-plan Sort key-slot size overflowed");
 						if (keySlotBytes > state.shared.bounds.maximum_materialized_bytes -
@@ -634,14 +675,21 @@
 							keySlotBytes > state.shared.materialized_budget.available()) {
 							// Diagnostics must not change the budget rejection if tracing fails.
 							try { debug::PerfTrace::addValue("query.sort.key_slot_admission_rejected", 1); } catch (...) {}
-							throw MaterializedByteLimitExceeded();
+							#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 						}
 						keySlots.set(keySlotBytes);
 						size_t additionalEnrichmentBytes = 0U;
 						for (DecoratedRow &row: rows.values()) {
-							row.keys.reserve(items.size());
-							const size_t actualSlots = checkedSizeMul(row.keys.capacity(), sizeof(PropertyValue),
-									"logical-plan Sort key-slot size overflowed");
+							row.keys.emplace();
+                            row.keys->reserve(items.size());
+							const size_t actualSlots = detail::standardVectorHeapBufferBytes(*row.keys);
 							const size_t extraSlots = actualSlots - slotsPerRow;
 							const size_t retainedBytes = checkedSizeAdd(
 								checkedSizeAdd(rows.bytes(), keySlotBytes,
@@ -650,7 +698,14 @@
 							if (extraSlots > state.shared.bounds.maximum_materialized_bytes -
 									std::min(retainedBytes, state.shared.bounds.maximum_materialized_bytes) ||
 								extraSlots > state.shared.materialized_budget.available()) {
-								throw MaterializedByteLimitExceeded();
+								#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 							}
 							keySlotBytes = checkedSizeAdd(keySlotBytes, extraSlots,
 								"logical-plan Sort key-slot size overflowed");
@@ -676,20 +731,32 @@
 																   additionalEnrichmentBytes,
 																   "logical-plan Sort materialization size overflowed"),
 													state.shared.bounds.maximum_materialized_bytes)) {
-									throw std::runtime_error(
-											"logical-plan Sort exceeded its materialization byte bound");
+									#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 								}
 								if (enrichmentBytes >
 									state.shared.materialized_budget.available()) {
-									throw std::runtime_error(
-											"logical-plan Sort keys exceeded the shared materialized byte bound");
+									#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                                    std::fprintf(stderr,"CI_SORT_REJECTION line=%u rows=%zu retained=%zu key_slots=%zu used=%zu available=%zu\n",
+                                        __LINE__,rows.size(),rows.bytes(),keySlots.bytes(),state.shared.materialized_budget.used(),state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                                throw MaterializedByteLimitExceeded();
 								}
 								additionalEnrichmentBytes =
 										checkedSizeAdd(additionalEnrichmentBytes, enrichmentBytes,
 													   "logical-plan Sort materialization size overflowed");
 								enrichmentPayload.set(additionalEnrichmentBytes);
 								accountedRowBytes = std::max(accountedRowBytes, currentRowBytes);
-								row.keys.push_back(std::move(key));
+								row.keys->push_back(std::move(key));
 							}
 						}
 						rows.recalculateBytes(std::move(enrichmentPayload));
@@ -697,10 +764,10 @@
 										 [&](const DecoratedRow &left, const DecoratedRow &right) {
 											 checkGuard(state);
 											 for (size_t index = 0U; index < items.size(); ++index) {
-												 if (left.keys[index] == right.keys[index]) {
+												 if ((*left.keys)[index] == (*right.keys)[index]) {
 													 continue;
 												 }
-												 return detail::orderByPrecedes(left.keys[index], right.keys[index], items[index].ascending);
+												 return detail::orderByPrecedes((*left.keys)[index], (*right.keys)[index], items[index].ascending);
 											 }
 											 return false;
 										 });
@@ -712,9 +779,8 @@
 						checkGuard(state);
 						if (chargedReceiver != nullptr) {
 							auto charged = rows.popBackCharged();
-							const size_t releasedSlots = checkedSizeMul(charged.value.keys.capacity(), sizeof(PropertyValue),
-								"logical-plan Sort key-slot size overflowed");
-							std::vector<PropertyValue>().swap(charged.value.keys);
+							const size_t releasedSlots = charged.value.keys ? detail::standardVectorHeapBufferBytes(*charged.value.keys) : 0U;
+                            charged.value.keys.reset();
 							keySlots.set(keySlots.bytes() - releasedSlots);
 							charged.reservation.set(logicalReadRowBytes(charged.value.row, state.shared.context));
 							if (!(*chargedReceiver)(std::move(charged.value.row), std::move(charged.reservation))) {
@@ -722,9 +788,8 @@
 							}
 						} else {
 							DecoratedRow row = rows.popBack();
-							const size_t releasedSlots = checkedSizeMul(row.keys.capacity(), sizeof(PropertyValue),
-								"logical-plan Sort key-slot size overflowed");
-							std::vector<PropertyValue>().swap(row.keys);
+							const size_t releasedSlots = row.keys ? detail::standardVectorHeapBufferBytes(*row.keys) : 0U;
+                            row.keys.reset();
 							keySlots.set(keySlots.bytes() - releasedSlots);
 							if (!visitor(std::move(row.row))) {
 								return false;

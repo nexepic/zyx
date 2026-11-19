@@ -236,13 +236,11 @@
 												   "logical-plan pattern Property source size overflowed"));
 				};
 				const bool sourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
+				if (!sourceAdmission)
+					throw std::logic_error("bounded pattern Properties require source admission");
 				auto columns =
-						edgeRecords ? (sourceAdmission ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-																 ids, keyViews, admitProperty)
-													   : state.shared.snapshot.readEdgePropertyColumnsSorted(ids, keyViews))
-									: (sourceAdmission ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-																 ids, keyViews, admitProperty)
-													   : state.shared.snapshot.readNodePropertyColumnsSorted(ids, keyViews));
+						edgeRecords ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(ids, keyViews, admitProperty)
+									: state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(ids, keyViews, admitProperty);
 				if (columns.size() != keyViews.size()) {
 					throw std::runtime_error("logical graph pattern named columns changed column count");
 				}
@@ -418,7 +416,7 @@
 						}
 						if (state.shared.snapshot.supportsNodeExistenceProbes() && !candidates.empty()) {
 							detail::BudgetMemoryResource endpointMemory(state.shared.materialized_budget);
-							std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
+							utils::AdmissionPmrVector<uint64_t> endpointIds{&endpointMemory};
 							endpointIds.reserve(candidates.size());
 							for (const auto *candidate: candidates) {
 								endpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING

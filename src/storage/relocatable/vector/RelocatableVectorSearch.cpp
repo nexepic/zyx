@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/vector/RelocatableVectorSearch.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include "graph/utils/OwnedPmrAllocator.hpp"
@@ -41,6 +42,16 @@
 namespace graph::storage {
 
 	namespace {
+        // Keep the captured resource alive; rejecting admission must unwind
+        // rather than enter MSVC's noexcept hash bucket-vector constructor.
+        using OwnedVectorIdSet =
+#if defined(_MSVC_STL_VERSION)
+            boost::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>,
+#else
+            std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>,
+#endif
+                utils::OwnedPmrAllocator<uint64_t>>;
+
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
@@ -107,7 +118,7 @@ namespace graph::storage {
 		}
 
 		struct VectorDeltaOverlay {
-			std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> erased;
+			OwnedVectorIdSet erased;
 			utils::OwnedStdVector<uint64_t> inserted;
 
 			[[nodiscard]] bool suppresses(uint64_t vectorId) const { return erased.contains(vectorId); }
@@ -545,7 +556,7 @@ namespace graph::storage {
 						"relocatable logical Vector delta inserts exceed the caller-supplied exact-read bound");
 			}
 			const size_t maximumBaseCandidates = request.maximum_raw_vector_reads - overlay.inserted.size();
-			std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> seen;
+			OwnedVectorIdSet seen;
 			seen.reserve(std::min(request.maximum_mapping_entries, request.maximum_raw_vector_reads));
 			std::priority_queue<ApproximateCandidate, utils::OwnedStdVector<ApproximateCandidate>, ApproximateLater> frontier;
 			utils::OwnedStdVector<ExactCandidate> candidates;
@@ -645,7 +656,7 @@ namespace graph::storage {
 					 "relocatable logical Vector search PQ generation has no Manifest page inventory");
 			}
 
-			std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> seen;
+			OwnedVectorIdSet seen;
 			const size_t initialCandidateCapacity =
 					std::min(request.maximum_mapping_entries,
 							 std::max(request.candidate_search_budget, request.candidate_refinement_budget));

@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/debug/StaticPerfTimer.hpp"
 #include "graph/query/execution/ResourceCoordinator.hpp"
 
 #include <algorithm>
@@ -121,7 +122,7 @@ namespace graph::storage {
 			throw std::out_of_range("buffer pool cannot pin a page beyond the end of the database file");
 		}
 		std::unique_lock lock(mutex_, std::defer_lock);
-		{ debug::ScopedPerfTimer waitTimer("storage.buffer_pool.pin_lock_wait"); lock.lock(); }
+		{ debug::StaticPerfTimer waitTimer(debug::StaticPerfLabel{"storage.buffer_pool.pin_lock_wait"}); lock.lock(); }
 		Entry &entry = loadLocked(key, hint);
 		if (entry.private_cow) {
 			throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
@@ -603,7 +604,7 @@ namespace graph::storage {
 	}
 
 	BufferPool::Entry &BufferPool::loadLocked(BufferPoolPageKey key, BufferPoolReadHint hint) {
-		debug::ScopedPerfTimer lookupTimer("storage.buffer_pool.load_locked");
+		debug::StaticPerfTimer lookupTimer(debug::StaticPerfLabel{"storage.buffer_pool.load_locked"});
 		const auto existing = entries_.find(key);
 		if (existing != entries_.end()) {
 			++hits_;

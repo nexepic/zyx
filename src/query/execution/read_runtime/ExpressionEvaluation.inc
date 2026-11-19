@@ -1,3 +1,42 @@
+        // Conservative eligibility: unsupported operations keep the owning
+        // binding path, including full entities, functions and metadata reads.
+        bool patternUsesOnlyProperties(const expressions::Expression *expression, std::string_view variable) {
+            if (!expression) return true;
+            using E = expressions::ExpressionType;
+            switch (expression->getExpressionType()) {
+                case E::LITERAL: case E::PARAMETER: case E::PROPERTY_ACCESS: return true;
+                case E::BINARY_OP: {
+                    const auto &binary = static_cast<const expressions::BinaryOpExpression &>(*expression);
+                    return binary.getLeft() && binary.getRight() && patternUsesOnlyProperties(binary.getLeft(), variable) &&
+                        patternUsesOnlyProperties(binary.getRight(), variable);
+                }
+                case E::UNARY_OP: {
+                    const auto &unary = static_cast<const expressions::UnaryOpExpression &>(*expression);
+                    return unary.getOperand() && patternUsesOnlyProperties(unary.getOperand(), variable);
+                }
+                case E::EXPR_EXISTS: {
+                    const auto &nested = static_cast<const expressions::ExistsExpression &>(*expression);
+                    return nested.hasStructuredPattern() && nested.getTargetVar() != variable &&
+                        patternUsesOnlyProperties(nested.getWhereExpression(), variable);
+                }
+                case E::EXPR_PATTERN_COMPREHENSION: {
+                    const auto &nested = static_cast<const expressions::PatternComprehensionExpression &>(*expression);
+                    return nested.getTargetVar() != variable && nested.getRelationshipVar() != variable &&
+                        nested.getMapExpression() && patternUsesOnlyProperties(nested.getWhereExpression(), variable) &&
+                        patternUsesOnlyProperties(nested.getMapExpression(), variable);
+                }
+                default: return false;
+            }
+        }
+
+        [[nodiscard]] detail::ScopedScalarReadValue evaluateScalarOperand(
+                const expressions::Expression &expression, LogicalPlanReadRow &row, ExecutionState &state,
+                const PropertyValue **borrowedProperty = nullptr) {
+            if (expression.getExpressionType() == expressions::ExpressionType::PARAMETER)
+                return detail::ScopedScalarReadValue(requireScalarParameter(
+                    dynamic_cast<const expressions::ParameterExpression &>(expression), row, state));
+            return detail::ScopedScalarReadValue([&]() { return evaluateExpression(expression, row, state, borrowedProperty); });
+        }
 		[[nodiscard]] PropertyValue evaluateScalarExpression(const expressions::Expression &expression,
 															 LogicalPlanReadRow &row, ExecutionState &state,
 															 ShortestPathResultMode shortestMode) {
@@ -12,9 +51,20 @@
 					return scalarValue(evaluateExpression(expression, row, state));
 				case ExpressionType::BINARY_OP: {
 					const auto &binary = dynamic_cast<const expressions::BinaryOpExpression &>(expression);
-					const PropertyValue left = scalarValue(evaluateExpression(*binary.getLeft(), row, state));
-					MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
-					operandBytes.set(retainedExpressionValueBytes(left, state));
+                    MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
+                    // Do not retain a cache view across a general RHS: it may
+                    // insert into or replace the same row's flat-map storage.
+                    // Parameter lookup is immutable and comparison returns a
+                    // fresh scalar, so this narrowly bounded borrow is safe.
+                    const auto leftType = binary.getLeft()->getExpressionType();
+                    const bool canBorrow = expressions::isComparisonOperator(binary.getOperator()) &&
+                        binary.getRight()->getExpressionType() == ExpressionType::PARAMETER &&
+                        (leftType == ExpressionType::VARIABLE_REFERENCE || leftType == ExpressionType::PROPERTY_ACCESS);
+                    const PropertyValue *borrowedProperty = nullptr;
+                    const auto leftOwner = evaluateScalarOperand(*binary.getLeft(), row, state,
+                        canBorrow ? &borrowedProperty : nullptr);
+                    const PropertyValue &left = borrowedProperty ? *borrowedProperty : leftOwner.get();
+					if (!leftOwner.borrowed() && !borrowedProperty) operandBytes.set(retainedExpressionValueBytes(left, state));
 					const BinaryOperatorType operation = binary.getOperator();
 					if (operation == BinaryOperatorType::BOP_AND || operation == BinaryOperatorType::BOP_OR) {
 						const std::optional<bool> leftBoolean = booleanOrNull(left);
@@ -23,8 +73,9 @@
 							return PropertyValue(*leftBoolean);
 						}
 					}
-					const PropertyValue right = scalarValue(evaluateExpression(*binary.getRight(), row, state));
-					operandBytes.set(checkedSizeAdd(operandBytes.bytes(), retainedExpressionValueBytes(right, state),
+					const auto rightOwner = evaluateScalarOperand(*binary.getRight(), row, state);
+                    const PropertyValue &right = rightOwner.get();
+					if (!rightOwner.borrowed()) operandBytes.set(checkedSizeAdd(operandBytes.bytes(), retainedExpressionValueBytes(right, state),
 													"logical-plan binary operand storage size overflowed"));
 					if (expressions::isArithmeticOperator(operation)) {
 						return arithmetic(operation, left, right);
@@ -488,16 +539,14 @@
 								const LogicalPlanReadValue &binding = requireBinding(row, projection.getVariable());
 								const auto *mapValue = std::get_if<PropertyValue>(&binding);
 								const auto cached = row.property_cache.find(projection.getVariable());
-								const PropertyMap &properties =
-										mapValue != nullptr && cached == row.property_cache.end()
-												? mapValue->getMap()
-												: readBindingProperties(state.shared.snapshot, row, projection.getVariable(),
-																		state);
-								sourceBytes.set(propertyMapBytes(properties,
-																 "logical-plan Map projection source size overflowed"));
-								for (const auto &[key, value]: properties) {
-									insertResult(key, value);
-								}
+                                const auto appendProperties=[&](const auto &properties) {
+                                    sourceBytes.set(propertyMapBytes(properties,
+                                        "logical-plan Map projection source size overflowed"));
+                                    for(const auto &[key,value]:properties) insertResult(key,value);
+                                };
+                                if(mapValue!=nullptr && cached==row.property_cache.end())
+                                    appendProperties(mapValue->getMap());
+                                else appendProperties(readBindingProperties(state.shared.snapshot,row,projection.getVariable(),state));
 								break;
 							}
 						}
@@ -523,13 +572,15 @@
 						}
 					}
 					const storage::LogicalGraphNode sourceNode = patternSourceIdentity(state, source->second);
-					const auto matchesWhere = [&](const storage::LogicalGraphNode *target) {
+					bool borrowTarget = false;
+                    const auto matchesWhere = [&](const storage::LogicalGraphNode *target) {
 						if (target != nullptr && !exists.getTargetVar().empty()) {
 							if (const auto bound = row.values.find(exists.getTargetVar());
 								bound != row.values.end() && nodeBindingId(bound->second, state) != target->node_id) {
 								return false;
 							}
-							ScopedRowBinding binding(row, exists.getTargetVar(), *target, state);
+							ScopedPatternNodeBinding binding(row, exists.getTargetVar(), *target, state,
+                                borrowTarget);
 							return !exists.hasWhereClause() ||
 								   booleanOrNull(scalarValue(
 										   evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
@@ -542,6 +593,8 @@
 					}
 					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
 							exists.getWhereExpression(), nullptr, exists.getTargetVar(), {}, state.shared.snapshot);
+                    borrowTarget = patternShape.has_value() &&
+                        patternUsesOnlyProperties(exists.getWhereExpression(), exists.getTargetVar());
 					bool matched = false;
 					static_cast<void>(visitPatternTargets(
 							sourceNode, exists.getRelType(), exists.getTargetLabel(), exists.getDirection(), state,
@@ -570,7 +623,8 @@
 					MaterializedByteReservation valuesReservation(&state.shared.materialized_budget);
 					std::vector<PropertyValue> values;
 					size_t valuesBytes = sizeof(uint32_t);
-					const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
+					bool borrowTarget = false;
+                    const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
 												 const storage::LogicalGraphNode *target) {
 						const auto appendBoundValue = [&]() {
 							if (comprehension.hasWhereClause() &&
@@ -623,7 +677,8 @@
 								bound != row.values.end() && nodeBindingId(bound->second, state) != target->node_id) {
 								return true;
 							}
-							ScopedRowBinding targetBinding(row, comprehension.getTargetVar(), *target, state);
+							ScopedPatternNodeBinding targetBinding(row, comprehension.getTargetVar(), *target, state,
+                                borrowTarget);
 							if (edge != nullptr && !comprehension.getRelationshipVar().empty()) {
 								ScopedRowBinding relationshipBinding(row, comprehension.getRelationshipVar(), *edge,
 																	 state);
@@ -654,6 +709,9 @@
 					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
 							comprehension.getWhereExpression(), comprehension.getMapExpression(),
 							comprehension.getTargetVar(), comprehension.getRelationshipVar(), state.shared.snapshot);
+                    borrowTarget = patternShape.has_value() &&
+                        patternUsesOnlyProperties(comprehension.getWhereExpression(), comprehension.getTargetVar()) &&
+                        patternUsesOnlyProperties(comprehension.getMapExpression(), comprehension.getTargetVar());
 					static_cast<void>(visitPatternTargets(
 							sourceNode, comprehension.getRelType(), comprehension.getTargetLabel(),
 							comprehension.getDirection(), state,

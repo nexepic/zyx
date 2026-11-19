@@ -210,9 +210,32 @@
 		// is deliberately expressed in terms of logical operator shape rather than a
 		// Cypher string: it removes one B+Tree root descent per intermediate source
 		// while preserving path multiplicity and all query resource bounds.
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+        thread_local const char *variableCountFailurePhase = "none";
+#endif
 		[[nodiscard]] std::optional<bool> tryVisitBatchedVariableLengthCount(const logical::LogicalAggregate &aggregate,
 																			 ExecutionState &state,
 																			 const InternalVisitor &visitor) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            struct FailureStage {
+                const void *owner;
+                const char *previous;
+                int exceptions = std::uncaught_exceptions();
+                explicit FailureStage(const void *value) noexcept
+                    : owner(value), previous(std::exchange(variableCountFailurePhase, "eligibility")) {}
+                ~FailureStage() {
+                    if (std::uncaught_exceptions() > exceptions) {
+                        debug::CiBudgetTrace trace(owner, "variable_count_failure");
+                        if (trace.allow()) {
+                            std::fprintf(stderr, "CI_COUNT_UNWIND phase=%s\n", variableCountFailurePhase);
+                            std::fflush(stderr);
+                        }
+                        trace.discard();
+                    }
+                    variableCountFailurePhase = previous;
+                }
+            } failureStage{&state};
+#endif
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
@@ -326,7 +349,13 @@
 			std::vector<FrontierPath> frontier;
 			size_t frontierBytes = 0U;
 			uint64_t resultCount = 0U;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            variableCountFailurePhase = "source_scan";
+#endif
 			static_cast<void>(visitOperator(sourceScan, state, [&](LogicalPlanReadRow row) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                variableCountFailurePhase = "source_row";
+#endif
 				checkGuard(state);
 				const LogicalPlanReadValue &binding = requireBinding(row, traversal.getSourceVar());
 				const uint64_t sourceId = nodeBindingId(binding, state);
@@ -356,6 +385,9 @@
 					}
 				}
 				FrontierPath path;
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                variableCountFailurePhase = "frontier_seed";
+#endif
 				path.current_node_id = sourceId;
 				path.visited_edge_ids.reserve(1U);
 				// Relationship identity, rather than Node identity, constrains a trail.
@@ -373,8 +405,14 @@
 				if (frontierBytes > state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                variableCountFailurePhase = "source_scan";
+#endif
 				return true;
 			}));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            variableCountFailurePhase = "frontier_expansion";
+#endif
 			std::ranges::sort(frontier, {}, &FrontierPath::current_node_id);
 			if (std::ranges::adjacent_find(frontier, {}, &FrontierPath::current_node_id) != frontier.end()) {
 				throw std::runtime_error("logical-plan variable-length source scan returned a duplicate Node");
@@ -710,52 +748,173 @@
 				}
 			}
 
-			detail::BudgetMemoryResource intermediateMemory(state.shared.materialized_budget);
-			const auto bitBytes = [](size_t capacity) { return capacity / 8U + (capacity % 8U != 0U); };
-			const auto visitBatchRefs = [&](std::span<const uint64_t> sources,
-				storage::LogicalGraphReadDirection direction, size_t bound,
-				const std::function<bool(const storage::EntityRef &)> &consume) {
-				if (state.shared.snapshot.supportsBatchAdjacencyReferenceBufferAdmission()) {
-					MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
-					state.shared.snapshot.visitAdjacentEdgeRefsForNodesWithBufferAdmission(sources, direction, bound, consume,
-						[&](size_t bytes) {
+			uint64_t resultCount = 0U;
+			{
+				detail::BudgetMemoryResource intermediateMemory(state.shared.materialized_budget);
+				const auto bitBytes = [](size_t capacity) { return capacity / 8U + (capacity % 8U != 0U); };
+				const auto visitBatchRefs = [&](std::span<const uint64_t> sources,
+					storage::LogicalGraphReadDirection direction, size_t bound,
+					const std::function<bool(const storage::EntityRef &)> &consume) {
+					if (state.shared.snapshot.supportsBatchAdjacencyReferenceBufferAdmission()) {
+						MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
+						state.shared.snapshot.visitAdjacentEdgeRefsForNodesWithBufferAdmission(sources, direction, bound, consume,
+							[&](size_t bytes) {
+								if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
+								if (sourceBytes.wouldExceed(bytes)) throw storage::LogicalGraphBufferPressure();
+								sourceBytes.set(bytes);
+							});
+					} else {
+						state.shared.snapshot.visitAdjacentEdgeRefsForNodes(sources, direction, bound, consume);
+					}
+				};
+
+				utils::AdmissionPmrVector<uint64_t> seedIds(&intermediateMemory);
+				static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
+					const uint64_t id = nodeBindingId(requireBinding(row, seed.getVariable()), state);
+					if (id == 0U || seedIds.size() == state.shared.bounds.maximum_node_records) {
+						throw std::runtime_error("logical-plan two-hop relationship count exceeded its source Node bound");
+					}
+					seedIds.push_back(id);
+					return true;
+				}));
+				detail::sortUniqueIdsGuarded(seedIds, [&] {
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
+				});
+
+				using Multiplicity = uint64_t;
+				const auto expand = [&](const utils::AdmissionPmrVector<uint64_t> &sources, const std::string &direction,
+										const std::optional<uint64_t> &type,
+										utils::AdmissionPmrUnorderedMap<uint64_t, Multiplicity> *next) {
+					utils::AdmissionPmrUnorderedSet<uint64_t> sourceSet(&intermediateMemory);
+					sourceSet.reserve(sources.size());
+					for (const uint64_t id: sources) {
+						checkGuard(state);
+						sourceSet.insert(id);
+					}
+					utils::AdmissionPmrUnorderedMap<uint64_t, size_t> sourceEdgeCounts(&intermediateMemory);
+					sourceEdgeCounts.reserve(sources.size());
+					utils::AdmissionPmrVector<uint64_t> targetIds(&intermediateMemory);
+					size_t scanned = 0U;
+					const auto consume = [&](const storage::EntityRef &reference) {
+						checkGuard(state);
+						validateEdgeRef(reference,
+										"logical-plan two-hop relationship count received an invalid or Node reference");
+						if (scanned == state.shared.bounds.maximum_edge_records) {
+							throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
+						}
+						++scanned;
+						incrementBounded(state.task.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
+						const bool outgoing = sourceSet.contains(reference.source_node_id);
+						const bool incoming = sourceSet.contains(reference.target_node_id);
+						const auto consumeOne = [&](const uint64_t sourceId, const uint64_t targetId) {
+							if (sourceEdgeCounts[sourceId] == state.shared.bounds.maximum_edges_per_node) {
+								throw std::runtime_error(
+										"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
+							}
+							++sourceEdgeCounts[sourceId];
+							if (type.has_value() && reference.type_token != *type) {
+								return;
+							}
+							if (next != nullptr) {
+								const Multiplicity previous = next->contains(targetId) ? next->at(targetId) : 0U;
+								const Multiplicity increment = sources.empty() ? 0U : 1U;
+								if (previous > std::numeric_limits<Multiplicity>::max() - increment) {
+									throw std::overflow_error("logical-plan two-hop path multiplicity overflowed");
+								}
+								next->insert_or_assign(targetId, previous + increment);
+								// Probe each distinct endpoint once; multiplicity stays in the map.
+								if (previous == 0U) targetIds.push_back(targetId);
+							}
+						};
+						if (direction == "out" || direction == "both") {
+							if (outgoing)
+								consumeOne(reference.source_node_id, reference.target_node_id);
+						}
+						if ((direction == "in" || direction == "both") && incoming &&
+							!(outgoing && reference.source_node_id == reference.target_node_id)) {
+							consumeOne(reference.target_node_id, reference.source_node_id);
+						}
+						return true;
+					};
+					const auto visitDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
+						if (scanned == state.shared.bounds.maximum_edge_records) {
+							throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
+						}
+						const size_t remaining = state.shared.bounds.maximum_edge_records - scanned;
+						const size_t edgeVisitBound =
+								checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
+						visitBatchRefs(sources, adjacencyDirection, edgeVisitBound, consume);
+					};
+					if (direction == "out" || direction == "both") {
+						visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
+					}
+					if (direction == "in" || direction == "both") {
+						visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
+					}
+					if (next != nullptr) {
+						if (next->size() > state.shared.bounds.maximum_node_records) {
+							throw std::runtime_error(
+									"logical-plan two-hop relationship count exceeded its intermediate Node bound");
+						}
+						detail::sortUniqueIdsGuarded(targetIds, [&] {
 							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
-							if (sourceBytes.wouldExceed(bytes)) throw storage::LogicalGraphBufferPressure();
-							sourceBytes.set(bytes);
 						});
-				} else {
-					state.shared.snapshot.visitAdjacentEdgeRefsForNodes(sources, direction, bound, consume);
+						MaterializedByteReservation presentBytes(&state.shared.materialized_budget);
+						presentBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
+							"logical-plan two-hop bit slots overflowed"));
+						const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(targetIds);
+						presentBytes.set(bitBytes(present.capacity()));
+						checkGuard(state);
+						if (present.size() != targetIds.size() ||
+							std::ranges::any_of(present, [](bool value) { return !value; })) {
+							throw std::runtime_error(
+									"logical graph backend returned an Edge topology with a missing endpoint");
+						}
+						const std::vector<std::string> &labels = inner.getTargetLabels();
+						if (!labels.empty()) {
+							MaterializedByteReservation matchesBytes(&state.shared.materialized_budget);
+							matchesBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
+								"logical-plan two-hop bit slots overflowed"));
+							const std::vector<bool> matches = state.shared.snapshot.readNodeLabelMatchesSorted(targetIds, labels);
+							matchesBytes.set(bitBytes(matches.capacity()));
+							checkGuard(state);
+							if (matches.size() != targetIds.size()) {
+								throw std::runtime_error(
+										"logical graph backend changed two-hop intermediate label cardinality");
+							}
+							for (size_t index = 0U; index < targetIds.size(); ++index) {
+								checkGuard(state);
+								if (!matches[index]) {
+									next->erase(targetIds[index]);
+								}
+							}
+						}
+					}
+				};
+				utils::AdmissionPmrUnorderedMap<uint64_t, Multiplicity> intermediate(&intermediateMemory);
+				if (!seedIds.empty()) {
+					expand(seedIds, inner.getDirection(), innerType, &intermediate);
 				}
-			};
-
-			std::pmr::vector<uint64_t> seedIds(&intermediateMemory);
-			static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
-				const uint64_t id = nodeBindingId(requireBinding(row, seed.getVariable()), state);
-				if (id == 0U || seedIds.size() == state.shared.bounds.maximum_node_records) {
-					throw std::runtime_error("logical-plan two-hop relationship count exceeded its source Node bound");
-				}
-				seedIds.push_back(id);
-				return true;
-			}));
-			detail::sortUniqueIdsGuarded(seedIds, [&] {
-				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
-			});
-
-			using Multiplicity = uint64_t;
-			const auto expand = [&](const std::pmr::vector<uint64_t> &sources, const std::string &direction,
-									const std::optional<uint64_t> &type,
-									std::pmr::unordered_map<uint64_t, Multiplicity> *next) {
-				std::pmr::unordered_set<uint64_t> sourceSet(&intermediateMemory);
-				sourceSet.reserve(sources.size());
-				for (const uint64_t id: sources) {
+				// The first-hop sources are no longer needed. Release their backing storage
+				// before allocating the second-hop IDs and validation buffers.
+				utils::AdmissionPmrVector<uint64_t>(&intermediateMemory).swap(seedIds);
+				utils::AdmissionPmrVector<uint64_t> intermediateIds(&intermediateMemory);
+				intermediateIds.reserve(intermediate.size());
+				for (const auto &[id, multiplicity]: intermediate) {
 					checkGuard(state);
-					sourceSet.insert(id);
+					static_cast<void>(multiplicity);
+					intermediateIds.push_back(id);
 				}
-				std::pmr::unordered_map<uint64_t, size_t> sourceEdgeCounts(&intermediateMemory);
-				sourceEdgeCounts.reserve(sources.size());
-				std::pmr::vector<uint64_t> targetIds(&intermediateMemory);
+				detail::sortUniqueIdsGuarded(intermediateIds, [&] {
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
+				});
+				// The second pass retains multiplicity from the first hop.  It uses the same
+				// endpoint/type checks but does not materialize intermediate rows.
+				utils::AdmissionPmrUnorderedMap<uint64_t, size_t> edgeCounts(&intermediateMemory);
+				utils::AdmissionPmrUnorderedMap<uint64_t, Multiplicity> finalCandidates(&intermediateMemory);
+				utils::AdmissionPmrVector<uint64_t> finalTargetIds(&intermediateMemory);
 				size_t scanned = 0U;
-				const auto consume = [&](const storage::EntityRef &reference) {
+				const auto consumeOuterReference = [&](const storage::EntityRef &reference) {
 					checkGuard(state);
 					validateEdgeRef(reference,
 									"logical-plan two-hop relationship count received an invalid or Node reference");
@@ -764,213 +923,92 @@
 					}
 					++scanned;
 					incrementBounded(state.task.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
-					const bool outgoing = sourceSet.contains(reference.source_node_id);
-					const bool incoming = sourceSet.contains(reference.target_node_id);
-					const auto consumeOne = [&](const uint64_t sourceId, const uint64_t targetId) {
-						if (sourceEdgeCounts[sourceId] == state.shared.bounds.maximum_edges_per_node) {
+					const bool outgoing = intermediate.contains(reference.source_node_id);
+					const bool incoming = intermediate.contains(reference.target_node_id);
+					const auto consume = [&](uint64_t sourceId, uint64_t targetId) {
+						if (edgeCounts[sourceId] == state.shared.bounds.maximum_edges_per_node) {
 							throw std::runtime_error(
 									"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
 						}
-						++sourceEdgeCounts[sourceId];
-						if (type.has_value() && reference.type_token != *type) {
+						++edgeCounts[sourceId];
+						if ((outerType.has_value() && reference.type_token != *outerType))
 							return;
+						const uint64_t multiplicity = intermediate.at(sourceId);
+						const auto [entry, inserted] = finalCandidates.try_emplace(targetId, 0U);
+						if (entry->second > std::numeric_limits<uint64_t>::max() - multiplicity) {
+							throw std::overflow_error("logical-plan two-hop relationship count overflowed");
 						}
-						if (next != nullptr) {
-							const Multiplicity previous = next->contains(targetId) ? next->at(targetId) : 0U;
-							const Multiplicity increment = sources.empty() ? 0U : 1U;
-							if (previous > std::numeric_limits<Multiplicity>::max() - increment) {
-								throw std::overflow_error("logical-plan two-hop path multiplicity overflowed");
-							}
-							next->insert_or_assign(targetId, previous + increment);
-							// Probe each distinct endpoint once; multiplicity stays in the map.
-							if (previous == 0U) targetIds.push_back(targetId);
-						}
+						entry->second += multiplicity;
+						if (inserted) finalTargetIds.push_back(targetId);
 					};
-					if (direction == "out" || direction == "both") {
+					if (outer.getDirection() == "out" || outer.getDirection() == "both") {
 						if (outgoing)
-							consumeOne(reference.source_node_id, reference.target_node_id);
+							consume(reference.source_node_id, reference.target_node_id);
 					}
-					if ((direction == "in" || direction == "both") && incoming &&
+					if ((outer.getDirection() == "in" || outer.getDirection() == "both") && incoming &&
 						!(outgoing && reference.source_node_id == reference.target_node_id)) {
-						consumeOne(reference.target_node_id, reference.source_node_id);
+						consume(reference.target_node_id, reference.source_node_id);
 					}
 					return true;
 				};
-				const auto visitDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
+				const auto visitOuterDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
 					if (scanned == state.shared.bounds.maximum_edge_records) {
 						throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 					}
 					const size_t remaining = state.shared.bounds.maximum_edge_records - scanned;
 					const size_t edgeVisitBound =
 							checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
-					visitBatchRefs(sources, adjacencyDirection, edgeVisitBound, consume);
-				};
-				if (direction == "out" || direction == "both") {
-					visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
-				}
-				if (direction == "in" || direction == "both") {
-					visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
-				}
-				if (next != nullptr) {
-					if (next->size() > state.shared.bounds.maximum_node_records) {
-						throw std::runtime_error(
-								"logical-plan two-hop relationship count exceeded its intermediate Node bound");
-					}
-					detail::sortUniqueIdsGuarded(targetIds, [&] {
-						if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
-					});
-					MaterializedByteReservation presentBytes(&state.shared.materialized_budget);
-					presentBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
-						"logical-plan two-hop bit slots overflowed"));
-					const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(targetIds);
-					presentBytes.set(bitBytes(present.capacity()));
-					checkGuard(state);
-					if (present.size() != targetIds.size() ||
-						std::ranges::any_of(present, [](bool value) { return !value; })) {
-						throw std::runtime_error(
-								"logical graph backend returned an Edge topology with a missing endpoint");
-					}
-					const std::vector<std::string> &labels = inner.getTargetLabels();
-					if (!labels.empty()) {
-						MaterializedByteReservation matchesBytes(&state.shared.materialized_budget);
-						matchesBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
-							"logical-plan two-hop bit slots overflowed"));
-						const std::vector<bool> matches = state.shared.snapshot.readNodeLabelMatchesSorted(targetIds, labels);
-						matchesBytes.set(bitBytes(matches.capacity()));
-						checkGuard(state);
-						if (matches.size() != targetIds.size()) {
-							throw std::runtime_error(
-									"logical graph backend changed two-hop intermediate label cardinality");
-						}
-						for (size_t index = 0U; index < targetIds.size(); ++index) {
-							checkGuard(state);
-							if (!matches[index]) {
-								next->erase(targetIds[index]);
-							}
-						}
-					}
-				}
-			};
-			std::pmr::unordered_map<uint64_t, Multiplicity> intermediate(&intermediateMemory);
-			if (!seedIds.empty()) {
-				expand(seedIds, inner.getDirection(), innerType, &intermediate);
-			}
-			std::pmr::vector<uint64_t> intermediateIds(&intermediateMemory);
-			intermediateIds.reserve(intermediate.size());
-			for (const auto &[id, multiplicity]: intermediate) {
-				checkGuard(state);
-				static_cast<void>(multiplicity);
-				intermediateIds.push_back(id);
-			}
-			detail::sortUniqueIdsGuarded(intermediateIds, [&] {
-				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
-			});
-			uint64_t resultCount = 0U;
-			// The second pass retains multiplicity from the first hop.  It uses the same
-			// endpoint/type checks but does not materialize intermediate rows.
-			std::pmr::unordered_set<uint64_t> sourceSet(&intermediateMemory);
-			sourceSet.reserve(intermediate.size());
-			for (const uint64_t id: intermediateIds) {
-				checkGuard(state);
-				sourceSet.insert(id);
-			}
-			std::pmr::unordered_map<uint64_t, size_t> edgeCounts(&intermediateMemory);
-			std::pmr::unordered_map<uint64_t, Multiplicity> finalCandidates(&intermediateMemory);
-			std::pmr::vector<uint64_t> finalTargetIds(&intermediateMemory);
-			size_t scanned = 0U;
-			const auto consumeOuterReference = [&](const storage::EntityRef &reference) {
-				checkGuard(state);
-				validateEdgeRef(reference,
-								"logical-plan two-hop relationship count received an invalid or Node reference");
-				if (scanned == state.shared.bounds.maximum_edge_records) {
-					throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
-				}
-				++scanned;
-				incrementBounded(state.task.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
-				const bool outgoing = sourceSet.contains(reference.source_node_id);
-				const bool incoming = sourceSet.contains(reference.target_node_id);
-				const auto consume = [&](uint64_t sourceId, uint64_t targetId) {
-					if (edgeCounts[sourceId] == state.shared.bounds.maximum_edges_per_node) {
-						throw std::runtime_error(
-								"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
-					}
-					++edgeCounts[sourceId];
-					if ((outerType.has_value() && reference.type_token != *outerType))
-						return;
-					const uint64_t multiplicity = intermediate.at(sourceId);
-					const auto [entry, inserted] = finalCandidates.try_emplace(targetId, 0U);
-					if (entry->second > std::numeric_limits<uint64_t>::max() - multiplicity) {
-						throw std::overflow_error("logical-plan two-hop relationship count overflowed");
-					}
-					entry->second += multiplicity;
-					if (inserted) finalTargetIds.push_back(targetId);
+					visitBatchRefs(intermediateIds, adjacencyDirection, edgeVisitBound,
+																 consumeOuterReference);
 				};
 				if (outer.getDirection() == "out" || outer.getDirection() == "both") {
-					if (outgoing)
-						consume(reference.source_node_id, reference.target_node_id);
+					visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
 				}
-				if ((outer.getDirection() == "in" || outer.getDirection() == "both") && incoming &&
-					!(outgoing && reference.source_node_id == reference.target_node_id)) {
-					consume(reference.target_node_id, reference.source_node_id);
+				if (outer.getDirection() == "in" || outer.getDirection() == "both") {
+					visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
 				}
-				return true;
-			};
-			const auto visitOuterDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
-				if (scanned == state.shared.bounds.maximum_edge_records) {
-					throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
-				}
-				const size_t remaining = state.shared.bounds.maximum_edge_records - scanned;
-				const size_t edgeVisitBound =
-						checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
-				visitBatchRefs(intermediateIds, adjacencyDirection, edgeVisitBound,
-															 consumeOuterReference);
-			};
-			if (outer.getDirection() == "out" || outer.getDirection() == "both") {
-				visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
-			}
-			if (outer.getDirection() == "in" || outer.getDirection() == "both") {
-				visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
-			}
-			detail::sortUniqueIdsGuarded(finalTargetIds, [&] {
-				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
-			});
-			MaterializedByteReservation finalPresentBytes(&state.shared.materialized_budget);
-			finalPresentBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
-				"logical-plan two-hop bit slots overflowed"));
-			const std::vector<bool> finalPresent = state.shared.snapshot.containsNodesSorted(finalTargetIds);
-			finalPresentBytes.set(bitBytes(finalPresent.capacity()));
-			checkGuard(state);
-			if (finalPresent.size() != finalTargetIds.size() ||
-				std::ranges::any_of(finalPresent, [](bool value) { return !value; })) {
-				throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
-			}
-			MaterializedByteReservation finalLabelBytes(&state.shared.materialized_budget);
-			std::vector<bool> finalLabels;
-			if (!outer.getTargetLabels().empty()) {
-				finalLabelBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
-					"logical-plan two-hop label bit slots overflowed"));
-				finalLabels = state.shared.snapshot.readNodeLabelMatchesSorted(finalTargetIds, outer.getTargetLabels());
-				finalLabelBytes.set(bitBytes(finalLabels.capacity()));
+				detail::sortUniqueIdsGuarded(finalTargetIds, [&] {
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
+				});
+				MaterializedByteReservation finalPresentBytes(&state.shared.materialized_budget);
+				finalPresentBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
+					"logical-plan two-hop bit slots overflowed"));
+				const std::vector<bool> finalPresent = state.shared.snapshot.containsNodesSorted(finalTargetIds);
+				finalPresentBytes.set(bitBytes(finalPresent.capacity()));
 				checkGuard(state);
-				if (finalLabels.size() != finalTargetIds.size()) {
-					throw std::runtime_error("logical graph backend changed two-hop target label cardinality");
+				if (finalPresent.size() != finalTargetIds.size() ||
+					std::ranges::any_of(finalPresent, [](bool value) { return !value; })) {
+					throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
+				}
+				MaterializedByteReservation finalLabelBytes(&state.shared.materialized_budget);
+				std::vector<bool> finalLabels;
+				if (!outer.getTargetLabels().empty()) {
+					finalLabelBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
+						"logical-plan two-hop label bit slots overflowed"));
+					finalLabels = state.shared.snapshot.readNodeLabelMatchesSorted(finalTargetIds, outer.getTargetLabels());
+					finalLabelBytes.set(bitBytes(finalLabels.capacity()));
+					checkGuard(state);
+					if (finalLabels.size() != finalTargetIds.size()) {
+						throw std::runtime_error("logical graph backend changed two-hop target label cardinality");
+					}
+				}
+				for (const auto &[targetId, multiplicity]: finalCandidates) {
+					checkGuard(state);
+					const auto position = std::ranges::lower_bound(finalTargetIds, targetId);
+					if (position == finalTargetIds.end() ||
+						(!finalLabels.empty() && !finalLabels[static_cast<size_t>(position - finalTargetIds.begin())])) {
+						continue;
+					}
+					if (resultCount > std::numeric_limits<uint64_t>::max() - multiplicity) {
+						throw std::overflow_error("logical-plan two-hop relationship count overflowed");
+					}
+					resultCount += multiplicity;
+					if (resultCount > state.shared.bounds.maximum_rows) {
+						throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+					}
 				}
 			}
-			for (const auto &[targetId, multiplicity]: finalCandidates) {
-				checkGuard(state);
-				const auto position = std::ranges::lower_bound(finalTargetIds, targetId);
-				if (position == finalTargetIds.end() ||
-					(!finalLabels.empty() && !finalLabels[static_cast<size_t>(position - finalTargetIds.begin())])) {
-					continue;
-				}
-				if (resultCount > std::numeric_limits<uint64_t>::max() - multiplicity) {
-					throw std::overflow_error("logical-plan two-hop relationship count overflowed");
-				}
-				resultCount += multiplicity;
-				if (resultCount > state.shared.bounds.maximum_rows) {
-					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
-				}
-			}
+
 			LogicalPlanReadRow result;
 			if (resultCount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
 				throw std::overflow_error("logical-plan two-hop relationship count exceeds integer result range");
@@ -1214,9 +1252,9 @@
 									targetPropertyReadBytes.set(checkedSizeAdd(targetPropertyReadBytes.bytes(), bytes,
 										"logical-plan anchored target Property batch size overflowed"));
 								};
-								resolvedPropertyColumns = state.shared.snapshot.supportsPropertyReadAdmission()
-									? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission)
-									: state.shared.snapshot.readNodePropertyColumnsSorted(uncachedPropertyIds, keyViews);
+								if (!state.shared.snapshot.supportsPropertyReadAdmission())
+									throw std::logic_error("bounded traversal target Properties require source admission");
+								resolvedPropertyColumns = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission);
 								if (resolvedPropertyColumns.size() != targetPropertyKeys.size())
 									throw std::runtime_error("logical graph backend changed anchored target Property column cardinality");
 								for (const auto &column: resolvedPropertyColumns)
@@ -1948,11 +1986,9 @@
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
-						const auto sortedColumns =
-								state.shared.snapshot.supportsPropertyReadAdmission()
-										? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-												  edgeIds, edgePropertyKeys, admission)
-										: state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded traversal Edge Properties require source admission");
+						const auto sortedColumns = state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, edgePropertyKeys, admission);
 						if (sortedColumns.size() != edgePredicates.size()) {
 							throw std::runtime_error("logical graph backend changed Edge Property column cardinality");
 						}
@@ -2209,11 +2245,10 @@
 														   "logical-plan source Property payload size overflowed"));
 				};
 				const bool supportsSourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
-				std::vector<std::vector<PropertyValue>> sourceValues =
-						supportsSourceAdmission
-								? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-										  sourceIds, sourcePropertyKeyViews, admitSourceProperty)
-								: state.shared.snapshot.readNodePropertyColumnsSorted(sourceIds, sourcePropertyKeyViews);
+				if (!supportsSourceAdmission)
+					throw std::logic_error("bounded traversal source Properties require source admission");
+				std::vector<std::vector<PropertyValue>> sourceValues = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
+						sourceIds, sourcePropertyKeyViews, admitSourceProperty);
 				if (sourceValues.size() != sourcePropertyKeys.size()) {
 					throw std::runtime_error("logical graph backend changed source Node Property column cardinality");
 				}
@@ -2375,7 +2410,7 @@
 			const size_t edgeBatchCapacity = std::min(desiredEdgeBatchCapacity,
 					std::max<size_t>(1U, state.shared.materialized_budget.available() / (8U * sizeof(PendingEdge))));
 			detail::BudgetMemoryResource pendingMemory(state.shared.materialized_budget);
-			std::pmr::vector<PendingEdge> pending{&pendingMemory};
+			utils::AdmissionPmrVector<PendingEdge> pending{&pendingMemory};
 			pending.reserve(edgeBatchCapacity);
 			const auto flushPending = [&]() {
 				if (pending.empty()) {
@@ -2467,11 +2502,9 @@
 							}
 							selectedPropertyBytes.set(next);
 						};
-						auto sortedColumns =
-								state.shared.snapshot.supportsPropertyReadAdmission()
-										? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
-												  edgeIds, edgePropertyKeys, admission)
-										: state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded traversal Edge Properties require source admission");
+						auto sortedColumns = state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(edgeIds, edgePropertyKeys, admission);
 						const size_t selectedEdgeBytes = propertyColumnBytes(
 								sortedColumns, edgePropertyKeys,
 								"logical-plan direct traversal Edge Property batch size overflowed", state.shared.context);
@@ -2665,11 +2698,10 @@
 							}
 							targetPropertyBytes.set(next);
 						};
-						auto targetValues = state.shared.snapshot.supportsPropertyReadAdmission()
-													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-															  targetIds, targetPropertyKeyViews, targetAdmission)
-													: state.shared.snapshot.readNodePropertyColumnsSorted(
-															  targetIds, targetPropertyKeyViews);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded traversal target Properties require source admission");
+						auto targetValues = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
+								targetIds, targetPropertyKeyViews, targetAdmission);
 						const size_t selectedTargetPayloadBytes =
 								propertyColumnBytes(targetValues, targetPropertyKeyViews,
 													"logical-plan direct target Property batch size overflowed", state.shared.context);

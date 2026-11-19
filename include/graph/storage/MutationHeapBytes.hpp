@@ -143,7 +143,7 @@ inline size_t movedPropertyHeaderHeapUpper(const PropertyValue &value) {
 #if defined(_MSVC_STL_VERSION)
     if (std::holds_alternative<PropertyValue::MapType>(value.getVariant())) {
         using Entry = PropertyValue::MapType::value_type;
-        constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+        constexpr size_t node = utils::detail::standardHashNodeBytes<Entry>();
         return addPropertyBufferBytes(2U * standardContainerProxyBytes(),
             addPropertyBufferBytes(standardAllocatorRequestBytes(node, alignof(Entry)),
                 standardAllocatorRequestBytes(16U * sizeof(void *), alignof(void *))));

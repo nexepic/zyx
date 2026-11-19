@@ -1959,3 +1959,31 @@ TEST_F(RelocatablePhysicalSegmentAllocatorTest, NativeRecoveryAuthenticatesWhole
     EXPECT_THROW((void)reopened->reserveNativeGraphLogicalIds(1, 0), FormatException);
     EXPECT_EQ(reopened->openSnapshot().superblock(), before);
 }
+
+TEST_F(RelocatablePhysicalSegmentAllocatorTest, PreparedPagesPreserveCrossPageHeadersPayloadAndZeroTail) {
+    auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+    PhysicalSegmentAllocator allocator(io, *store);
+    for (size_t ordinal = 0; ordinal < 3U; ++ordinal) {
+        const size_t headerBytes = ordinal == 0U ? RSS_ENVELOPE_BYTES : RSS_PAGE_SIZE + 24U;
+        const size_t payloadBytes = ordinal == 2U ? RSS_SEGMENT_SIZE - headerBytes : RSS_PAGE_SIZE * 2U + 37U;
+        std::vector<std::byte> payload(payloadBytes);
+        for (size_t i = 0; i < payload.size(); ++i) payload[i] = static_cast<std::byte>(i % 251U);
+        auto input = request(ordinal + 1U, payload);
+        input.header_bytes = static_cast<uint16_t>(headerBytes);
+        input.header_extension.resize(headerBytes - RSS_ENVELOPE_BYTES, std::byte{0xB7});
+        const auto slot = PhysicalSlotId(40U + ordinal);
+        const auto allocation = allocator.allocate(input, slot, slot, LogSequenceNumber(2U + ordinal));
+        ASSERT_TRUE(allocation.has_value());
+        auto snapshot = store->openSnapshot();
+        const auto contents = allocator.read(snapshot, input.segment_id);
+        EXPECT_EQ(contents.header_extension, input.header_extension);
+        EXPECT_EQ(contents.payload, payload);
+        const auto offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, slot);
+        std::vector<std::byte> image(RSS_SEGMENT_SIZE);
+        ASSERT_EQ(io->readAt(offset, image.data(), image.size()), image.size());
+        const auto encoded = SegmentEnvelopeCodec::encode(contents.envelope);
+        EXPECT_TRUE(std::equal(encoded.begin(), encoded.end(), image.begin()));
+        EXPECT_TRUE(std::all_of(image.begin() + static_cast<std::ptrdiff_t>(headerBytes + payloadBytes), image.end(),
+            [](std::byte value) { return value == std::byte{0}; }));
+    }
+}

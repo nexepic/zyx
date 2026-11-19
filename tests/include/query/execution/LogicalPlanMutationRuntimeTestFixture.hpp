@@ -641,7 +641,7 @@ namespace graph::query {
 			TestInlinePropertyMode property_mode_ = TestInlinePropertyMode::TIPM_VALID;
 			TestTopologyMode topology_mode_ = TestTopologyMode::TTM_VALID;
 			TestPropertyColumnMode property_column_mode_ = TestPropertyColumnMode::TPCM_VALID;
-			bool property_admission_ = false;
+			bool property_admission_ = true;
 			 size_t remaining_mutation_conflicts_ = 0U;
 		};
 

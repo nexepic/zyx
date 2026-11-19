@@ -170,10 +170,9 @@ namespace graph::query {
                     const auto names = root.getOutputVariables();
                     if (names.empty() || names.size() > 64U) return std::nullopt;
                     uint64_t width = sizeof(execution::LogicalPlanReadRow);
-                    // Match logicalReadRowBytes for reference-only rows. Hash
-                    // allocator capacity/RSS and unknown property payloads are
-                    // deliberately outside this model; runtime admission remains
-                    // authoritative and includes the actual retained allocations.
+                    // Logical reference-only estimate. Runtime admission also
+                    // checks retained binding nodes and payload allocations;
+                    // this planning estimate is not a memory reservation.
                     for (const auto &name : names) {
                         const uint64_t binding = sizeof(execution::LogicalPlanReadValue) + sizeof(storage::EntityRef);
                         if (name.empty() || name.size() > std::numeric_limits<uint64_t>::max() - binding ||

@@ -36,7 +36,7 @@
 				referenceCount = checkedProcedureSizeAdd(referenceCount, 1U);
 			});
 			referenceBytes.set(checkedProcedureSizeMul(referenceCount, sizeof(ProcedureNodeOutputReference)));
-			std::vector<ProcedureNodeOutputReference, utils::OwnedPmrAllocator<ProcedureNodeOutputReference>> references;
+			utils::OwnedVector<ProcedureNodeOutputReference> references;
 			references.reserve(referenceCount);
 			referenceBytes.set(checkedProcedureSizeMul(references.capacity(), sizeof(ProcedureNodeOutputReference)));
 			visitOutputReferences([&](const ProcedureNodeOutputReference &reference) {
@@ -173,10 +173,13 @@
 								 const std::vector<const logical::LogicalOperator *> &operations,
 								 const LogicalPlanReadRuntimeBounds &readBounds,
 								 const QueryContext &context, QueryResult &result,
-								 std::vector<ProcedureDistinctRows, utils::OwnedPmrAllocator<ProcedureDistinctRows>> *distinctRowsByOperation = nullptr,
+								 utils::OwnedVector<ProcedureDistinctRows> *distinctRowsByOperation = nullptr,
 								 std::vector<uint64_t> *operatorRowCounts = nullptr,
 								 const size_t retainedSourceBytes = 0U,
-								 const bool accountOutputTransition = false) {
+								 const bool accountOutputTransition = false,
+                std::optional<size_t> finalRowCount = std::nullopt, bool firstOperatorPrefetched = false) {
+            const char *allocationPhase = "batch_state";
+            try {
 			LogicalPlanReadRuntimeBounds batchBounds = readBounds;
 			const size_t retainedBytes = checkedProcedureSizeAdd(
 					retainedSourceBytes, procedureQueryResultBytes(result));
@@ -205,11 +208,13 @@
 				switch (operation->getType()) {
 					case logical::LogicalOpType::LOP_PROJECT: {
 						const auto &projection = dynamic_cast<const logical::LogicalProject &>(*operation);
+                        if (!firstOperatorPrefetched || operationIndex != 0U) {
 						utils::OwnedStdVector<const expressions::Expression *> propertyExpressions;
 						for (const auto &item: projection.getItems()) {
 							propertyExpressions.push_back(item.expression.get());
 						}
 						prefetchProcedureProperties(rows, propertyExpressions, snapshot, batchBounds, context);
+                        }
                         for (auto &row : rows) row.reconcilePayloadCredit();
 						ProcedureDistinctRows localDistinctRows;
 						ProcedureDistinctRows *distinctRows = nullptr;
@@ -231,8 +236,13 @@
 						}
 						size_t retainedOutputBytes = 0U;
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+							allocationPhase = "project_row";
 							BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
+                            // The old cache is destroyed by row replacement.
+                            // Settle its grants after projected temporaries die,
+                            // rather than retaining them until the whole batch.
+                            const ProcedurePayloadReconcileGuard reconcile{buffered};
 							const size_t currentSourceBytes = bufferedProcedureRowBytes(buffered);
 							if (currentSourceBytes > pendingSourceBytes) {
 								throw std::logic_error("logical procedure pending source-byte accounting underflowed");
@@ -262,7 +272,9 @@
 					}
 					case logical::LogicalOpType::LOP_FILTER: {
 						const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*operation);
+                        if (!firstOperatorPrefetched || operationIndex != 0U) {
 						prefetchProcedureProperties(rows, {filter.getPredicate().get()}, snapshot, batchBounds, context);
+                        }
 						size_t outputCount = 0U;
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 							context.checkGuard();
@@ -337,7 +349,7 @@
 						retainedKeys.set(checkedProcedureSizeMul(rows.size(), checkedProcedureSizeAdd(
 							sizeof(DecoratedRow),
 							checkedProcedureSizeMul(items.size(), sizeof(PropertyValue)))));
-						std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> decoratedRows;
+						utils::OwnedVector<DecoratedRow> decoratedRows;
 						decoratedRows.reserve(rows.size());
 						retainedKeys.set(checkedProcedureSizeAdd(retainedKeys.bytes(),
 							checkedProcedureSizeMul(decoratedRows.capacity() - rows.size(), sizeof(DecoratedRow))));
@@ -409,19 +421,29 @@
 						throw std::logic_error("logical Vector procedure runtime received an unsupported operation");
 				}
 			}
+            allocationPhase = "hydrate_output";
 			materializeProcedureNodeOutputs(rows, result.getColumns(), snapshot, batchBounds, context);
             for (auto &row : rows) row.reconcilePayloadCredit();
 			validateBufferedProcedureBytes(rows, batchBounds.maximum_materialized_bytes);
+            if (accountOutputTransition)
+                reserveInitialProcedureResult(result, rows, readBounds.maximum_materialized_bytes, retainedSourceBytes, finalRowCount);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+                allocationPhase = "publish_output";
+				context.checkGuard();
+                if (accountOutputTransition)
+                    compactConsumedProcedureRows(result, rows, rowIndex,
+                        readBounds.maximum_materialized_bytes, retainedSourceBytes);
 				BufferedProcedureRow &buffered = rows[rowIndex];
             detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
-				context.checkGuard();
 				const ProcedurePayloadReconcileGuard reconcile{buffered};
                 detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
                 QueryResult::Row output;
                 detail::procedureMapReserve(output, buffered.row.values.size());
 				for (const std::string &column: result.getColumns()) {
+                    context.checkGuard();
+                    if (tryStageProcedureScalarOutput(result, rows, rowIndex, output, column,
+                            readBounds.maximum_materialized_bytes, retainedSourceBytes, accountOutputTransition)) continue;
 					const auto value = buffered.row.values.find(column);
                     detail::procedureAdmitMapNode(output, column);
 					if (value == buffered.row.values.end() || // ZYX_COV_EXCL_LINE: output variables are derived from
@@ -432,6 +454,8 @@
 						throw std::logic_error(
 								"logical Vector procedure projection did not bind a declared output column");
 					}
+                    consumeProcedureOutputBinding(result, rows, rowIndex, output, column,
+                        readBounds.maximum_materialized_bytes, retainedSourceBytes, accountOutputTransition);
 				}
 				if (accountOutputTransition) {
 					appendProcedureResultRow(result, rows, rowIndex, std::move(output),
@@ -441,6 +465,32 @@
 				}
 			}
 			return continueInput;
+            } catch (const detail::ResourceAdmissionDenied &) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                // Emit the phase before optional heap geometry: computing a
+                // diagnostic bound may itself fail under the exhausted owner.
+                // Reserve a separate bounded channel: general quota tracing may already be exhausted.
+                static std::atomic<unsigned> phaseReports{0U};
+                if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                    const auto report = phaseReports.fetch_add(1U, std::memory_order_relaxed);
+                    if (report < 16U) {
+                        std::fprintf(stderr, "CI_PROCEDURE_FAILURE_PHASE phase=%s source_rows=%zu result_rows=%zu\n",
+                        allocationPhase, rows.size(), result.rowCount());
+                        std::fflush(stderr);
+                    }
+                    else if (report == 16U) {
+                        std::fputs("CI_PROCEDURE_FAILURE_PHASE_TRUNCATED process_limit=16\n", stderr);
+                        std::fflush(stderr);
+                    }
+                }
+#endif
+                try {
+                    reportProcedurePublicationPressure(result, rows, allocationPhase, retainedSourceBytes,
+                        publicationSourceBytes(rows, 0U), procedureQueryResultBytes(result), 0U,
+                        readBounds.maximum_materialized_bytes);
+                } catch (...) { /* Diagnostics must preserve the original quota error. */ }
+                throw;
+            }
 		}
 
 		[[nodiscard]] QueryResult
@@ -798,7 +848,7 @@
 				size_t storage_bytes = 0U;
 			};
 			std::map<size_t, RetainedDistinctInfo, std::less<>, utils::OwnedPmrAllocator<std::pair<const size_t, RetainedDistinctInfo>>> retainedDistinctRows;
-			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> retained;
+			utils::OwnedVector<DecoratedRow> retained;
 			size_t retainedBytes = 0U;
 			const auto decoratedBytes = [](const DecoratedRow &row) {
 				size_t bytes = checkedProcedureSizeAdd(sizeof(DecoratedRow) - sizeof(BufferedProcedureRow), bufferedProcedureRowBytes(row.row));
@@ -1022,7 +1072,7 @@
 			retainedDistinctKeys.clear();
 			retainedDistinctRows.clear();
 			heapBytes.reset();
-			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>>().swap(retained);
+			utils::OwnedVector<DecoratedRow>().swap(retained);
 			heapSlotSlackBytes.reset();
 			outputRowSlots.reset();
 			const size_t suffixOffset = earlyProjection != nullptr ? projectIndex + 2U

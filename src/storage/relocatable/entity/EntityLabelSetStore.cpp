@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 
@@ -253,7 +254,7 @@ namespace graph::storage {
 			admit(0U);
 		};
 		LabelIndexMemoryResource indexMemory(retained, admit);
-		std::pmr::unordered_map<uint64_t, size_t> loadedPages(&indexMemory);
+		utils::AdmissionPmrUnorderedMap<uint64_t, size_t> loadedPages(&indexMemory);
 		// Page storage grows only for unique overflow pages. Moving owners preserves
 		// their heap payload or Buffer Pool pin; views never borrow owner objects.
 		std::vector<SharedPagePoolContents> pages;
@@ -312,7 +313,7 @@ namespace graph::storage {
 		std::vector<SlottedPageReadView>().swap(views);
 		std::vector<SharedPagePoolPinnedView>().swap(pins);
 		std::vector<SharedPagePoolContents>().swap(pages);
-		{ std::pmr::unordered_map<uint64_t, size_t> empty(&indexMemory); loadedPages.swap(empty); }
+		{ utils::AdmissionPmrUnorderedMap<uint64_t, size_t> empty(&indexMemory); loadedPages.swap(empty); }
 		retained -= cacheSlots;
 		retained -= heldPageBytes;
 		admit(0U);

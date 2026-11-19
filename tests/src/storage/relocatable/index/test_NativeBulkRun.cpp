@@ -1499,7 +1499,7 @@ TEST_F(NativeBulkRunStoreTest, RejectsAnUnadvanceableCheckpointBeforeAllocatingS
 TEST(NativeBulkRunMergerTest, OrderedSourceFailsClosedForInvalidAndIncoherentInputCursors) {
 	const OrderedBTreeEntrySource first = source({entry(0x10U, 11U), entry(0x20U, 22U)});
 	const OrderedBTreeEntrySource second = source({entry(0x30U, 33U)});
-	const OrderedBTreeEntrySource noSource;
+	const OrderedBTreeEntrySource noSource{};
 	const OrderedBTreeEntrySource noCursor = [] { return OrderedBTreeEntryCursor{}; };
 	const std::array<OrderedBTreeEntrySource, 0U> noInputs{};
 	expectFormatError(

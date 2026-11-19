@@ -95,7 +95,7 @@
 				keyViews.reserve(propertyKeys.size());
 				for (const auto &key: propertyKeys)
 					keyViews.push_back(key);
-				struct NodeColumnBytePressure {};
+				struct NodeColumnBytePressure { unsigned line; size_t used, available; };
 				std::function<bool(size_t, size_t)> processRange;
 				processRange = [&](size_t begin, size_t end) -> bool {
 					try {
@@ -103,7 +103,7 @@
 						const size_t scratch = checkedSizeMul(end - begin, sizeof(uint64_t) + 2U * sizeof(size_t),
 															  "logical-plan Node column lookup size overflowed");
 						if (lookupBytes.wouldExceed(scratch))
-							throw NodeColumnBytePressure{};
+							throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
 						lookupBytes.set(scratch);
                         std::vector<size_t> lookupOrdinals(end - begin);
                         std::vector<uint64_t> ownedNodeIds;
@@ -173,10 +173,10 @@
                                 }
                             } catch (const MaterializedByteLimitExceeded &) {
                                 if (guardFailed) throw;
-                                throw NodeColumnBytePressure{};
+                                throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
                             } catch (const storage::LogicalGraphBufferPressure &) {
                                 if (guardFailed) throw;
-                                if (nodeIds.size() > 1U) throw NodeColumnBytePressure{};
+                                if (nodeIds.size() > 1U) throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
                                 // An indivisible source retains the established owning fallback.
                             }
                             if (accepted) {
@@ -240,7 +240,7 @@
                                             // Split private batches first. An indivisible large value
                                             // retains the existing general owning path and query budget;
                                             // it is not admitted as a bounded certified-source batch.
-                                            if (nodeIds.size() > 1U) throw NodeColumnBytePressure{};
+                                            if (nodeIds.size() > 1U) throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
                                             direct.reset();
                                             sourceScratch.reset();
                                             direct.emplace(state.shared.snapshot, nodeIds.size(), keyViews.size(),
@@ -269,9 +269,9 @@
 										directLayout.emplace(propertyKeys, state.shared.materialized_budget,
 											std::pmr::get_default_resource(), directGuard);
 										detail::BudgetMemoryResource metadataMemory(state.shared.materialized_budget);
-										std::pmr::vector<detail::BatchColumnSource> sources(&metadataMemory);
-										std::pmr::vector<uint32_t> selectedRows(&metadataMemory);
-										std::pmr::vector<uint64_t> originalOrdinals(nodeIds.size(), 0U, &metadataMemory);
+										utils::AdmissionPmrVector<detail::BatchColumnSource> sources(&metadataMemory);
+										utils::AdmissionPmrVector<uint32_t> selectedRows(&metadataMemory);
+										utils::AdmissionPmrVector<uint64_t> originalOrdinals(nodeIds.size(), 0U, &metadataMemory);
 										for (size_t c = 0; c < propertyKeys.size(); ++c) sources.push_back(detail::BatchColumnSource::direct(*direct, c));
 										for (size_t original = 0; original < lookupOrdinals.size(); ++original) {
 											directGuard(); const auto sorted = lookupOrdinals[original]; originalOrdinals[sorted] = original;
@@ -290,7 +290,7 @@
 							} catch (const MaterializedByteLimitExceeded &) {
 								if (guardFailed) throw;
 								// Private construction only: there have been no consumer effects.
-								throw NodeColumnBytePressure{};
+								throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
 							}
 							debug::PerfTrace::addValue("logical_plan.direct_property.batches", 1);
 							debug::PerfTrace::addValue("logical_plan.direct_property.rows", static_cast<int64_t>(direct->size()));
@@ -300,15 +300,19 @@
 						}
 						MaterializedByteReservation rowBytes(&state.shared.materialized_budget);
 						LogicalPlanReadRow row;
+                        // A single owning row can consume its column matrix
+                        // before allocating the entity binding. Never defer a
+                        // batch receiver's published binding/layout contract.
+                        const bool deferredBinding = !columnReceiver && end - begin == 1U;
 						const auto prepareRow = [&](const storage::EntityRef &reference) {
-							row.values.emplace(scan.getVariable(), reference);
+                            if (!deferredBinding) row.values.emplace(scan.getVariable(), reference);
 							for (const auto &key: propertyKeys)
 								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
 						};
 						if (!columnReceiver) prepareRow(referenceAt(begin));
 						size_t structuralBytes = columnReceiver ? 0U : logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes.wouldExceed(structuralBytes))
-							throw NodeColumnBytePressure{};
+							throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
 						rowBytes.set(structuralBytes);
 						MaterializedByteReservation columnBytes(&state.shared.materialized_budget);
 						const std::function<void(size_t)> admission = [&](size_t bytes) {
@@ -316,17 +320,16 @@
 							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
 															   "logical-plan Node source size overflowed");
 							if (columnBytes.wouldExceed(next))
-								throw NodeColumnBytePressure{};
+								throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
 							columnBytes.set(next);
 							graph::debug::PerfTrace::addValue(
 									"logical_plan.node_predicate_source_bytes",
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
-						auto columns = state.shared.snapshot.supportsPropertyReadAdmission()
-											   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-														 nodeIds, keyViews, admission)
-											   : state.shared.snapshot.readNodePropertyColumnsSorted(nodeIds, keyViews);
+						if (!state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded Node Property predicates require source admission");
+						auto columns = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(nodeIds, keyViews, admission);
 						if (columns.size() != propertyKeys.size()) {
 							throw std::runtime_error("logical graph backend changed Node Property column cardinality");
 						}
@@ -336,10 +339,23 @@
 										"logical graph backend changed sorted Node Property result cardinality");
 							}
 						}
+                        PropertyColumnByteParts columnParts;
 						const size_t retained =
-								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.shared.context);
-						if (columnBytes.wouldExceed(retained))
-							throw NodeColumnBytePressure{};
+								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.shared.context, &columnParts);
+						if (columnBytes.wouldExceed(retained)) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                            debug::CiBudgetTrace trace(&columnBytes, "node_retained_columns");
+                            if (trace.allow()) {
+                                std::fprintf(stderr, "CI_NODE_RETAINED_REJECT rows=%zu columns=%zu row_structural=%zu admitted_source=%zu returned_columns=%zu column_outer=%zu column_inner=%zu column_keys=%zu column_cells=%zu used=%zu available=%zu\n",
+                                    end - begin, propertyKeys.size(), structuralBytes, columnBytes.bytes(), retained,
+                                    columnParts.outer, columnParts.inner, columnParts.keys, columnParts.cells,
+                                    state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                                std::fflush(stderr);
+                            }
+                            trace.discard();
+#endif
+							throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
+                        }
 						columnBytes.set(retained);
 						std::optional<detail::BoundNodeColumnPredicates> boundPredicates;
 						try {
@@ -408,7 +424,7 @@
 						if (columnReceiver) {
 							prepareRow(referenceAt(begin));
 							structuralBytes = logicalReadRowBytes(row, state.shared.context);
-							if (rowBytes.wouldExceed(structuralBytes)) throw NodeColumnBytePressure{};
+							if (rowBytes.wouldExceed(structuralBytes)) throw NodeColumnBytePressure{__LINE__, state.shared.materialized_budget.used(), state.shared.materialized_budget.available()};
 							rowBytes.set(structuralBytes);
 						}
 						// No byte-pressure retry is issued after a row is delivered: only
@@ -422,14 +438,57 @@
 								prepareRow(referenceAt(index));
 								rowBytes.set(structuralBytes);
 							}
-							for (size_t column = 0U; column < propertyKeys.size(); ++column) {
-								const size_t valueBytes = detail::retainedPropertyValueBytes(columns[column][sorted], [&] { checkGuardNow(state); });
-								columnBytes.set(columnBytes.bytes() - valueBytes);
-								rowBytes.set(checkedSizeAdd(rowBytes.bytes() - 1U, valueBytes,
-															"logical-plan Node row size overflowed"));
-								row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) =
-										std::move(columns[column][sorted]);
-							}
+                            for (size_t column = 0U; column < propertyKeys.size(); ++column) {
+                                auto &source = columns[column][sorted];
+                                const size_t valueBytes = detail::retainedPropertyValueBytes(source, [&] { checkGuardNow(state); });
+                                size_t moveBytes = 1U; // source keeps a NULL cell after the transfer
+                                if (source.getType() == PropertyType::MAP)
+                                    moveBytes = checkedSizeAdd(moveBytes,
+                                        utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(0U),
+                                        "logical-plan Node move size overflowed");
+                                else if (source.getType() == PropertyType::STRING || source.getType() == PropertyType::LIST ||
+                                        source.getType() == PropertyType::BYTES)
+                                    moveBytes = checkedSizeAdd(moveBytes, detail::standardContainerProxyBytes(),
+                                        "logical-plan Node move size overflowed");
+                                MaterializedByteReservation moveScratch(&state.shared.materialized_budget);
+                                moveScratch.set(moveBytes);
+                                row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) = std::move(source);
+                                source = PropertyValue(); // destroy moved-from proxies before refund
+                                rowBytes.absorb(columnBytes.splitOff(valueBytes - 1U));
+                                rowBytes.set(logicalReadRowBytes(row, state.shared.context));
+                            }
+                            if (deferredBinding) {
+                                // Keep the borrowed key allowance until this range
+                                // ends. Release actual matrix buffers/proxies first,
+                                // accounting the temporary empty vector's proxy.
+                                MaterializedByteReservation emptyMatrix(&state.shared.materialized_budget);
+                                emptyMatrix.set(detail::standardContainerProxyBytes());
+                                std::vector<std::vector<PropertyValue>>().swap(columns);
+                                columnBytes.set(checkedSizeAdd(detail::standardVectorHeapBufferBytes(columns),
+                                    columnParts.keys, "logical-plan Node empty column size overflowed"));
+                                emptyMatrix.reset();
+                                const size_t logicalBinding = checkedSizeAdd(scan.getVariable().size(),
+                                    sizeof(LogicalPlanReadValue) + sizeof(storage::EntityRef),
+                                    "logical-plan Node binding size overflowed");
+                                const size_t physicalBinding = checkedSizeAdd(
+                                    detail::executionBindingNodeBytes<decltype(row.values)>(),
+                                    utils::detail::standardFreshStringHeapUpper(scan.getVariable().size()),
+                                    "logical-plan Node binding size overflowed");
+                                rowBytes.set(checkedSizeAdd(rowBytes.bytes(), (std::max)(logicalBinding, physicalBinding),
+                                    "logical-plan Node binding size overflowed"));
+                                row.values.emplace(scan.getVariable(), referenceAt(index));
+                                rowBytes.set(logicalReadRowBytes(row, state.shared.context));
+                                debug::PerfTrace::addValue("logical_plan.node_predicate.deferred_binding_rows", 1);
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                                static std::atomic<unsigned> reports{0U};
+                                if (std::getenv("ZYX_CI_BUDGET_TRACE") && reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                                    std::fprintf(stderr, "CI_NODE_DEFERRED_BINDING row_charge=%zu column_charge=%zu used=%zu available=%zu reports_limit=20\n",
+                                        rowBytes.bytes(), columnBytes.bytes(), state.shared.materialized_budget.used(),
+                                        state.shared.materialized_budget.available());
+                                    std::fflush(stderr);
+                                }
+#endif
+                            }
 							if (selection.has_value() || nodeRefScanMatches(state.shared.snapshot, row, scan.getVariable(), scan, parameterPredicates,
 												   state, true)) {
 								rowBytes.reset();
@@ -440,7 +499,18 @@
 							}
 						}
 						return continueVisitor;
-					} catch (const NodeColumnBytePressure &) {
+					} catch (const NodeColumnBytePressure &pressure) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                        static std::atomic<unsigned> reports{0U};
+                        if (std::getenv("ZYX_CI_BUDGET_TRACE") && reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                            std::fprintf(stderr, "CI_NODE_COLUMN_PRESSURE line=%u rows=%zu columns=%zu used_at_rejection=%zu available_at_rejection=%zu local_maximum=%zu bound_maximum=%zu reports_limit=20\n",
+                                pressure.line, end - begin, propertyKeys.size(), pressure.used, pressure.available,
+                                pressure.used + pressure.available, state.shared.bounds.maximum_materialized_bytes);
+                            std::fflush(stderr);
+                        }
+#else
+                        (void)pressure;
+#endif
 						if (end - begin == 1U)
 							throw std::runtime_error("logical-plan Node Property batch exceeded its byte bound");
 					}
@@ -458,7 +528,7 @@
                 state.shared.snapshot.hasImmutableReadIdentity()) {
                 MaterializedByteReservation batchSourceBytes(&state.shared.materialized_budget);
                 detail::BudgetMemoryResource sourceKeyMemory(state.shared.materialized_budget);
-                std::pmr::vector<std::string_view> sourceKeys(&sourceKeyMemory);
+                utils::AdmissionPmrVector<std::string_view> sourceKeys(&sourceKeyMemory);
                 bool emittedBatch = false;
                 std::optional<bool> result;
                 try {
@@ -682,10 +752,10 @@
 													  "logical-plan indexed Node batch capacity overflowed"),
 									   "logical-plan indexed Node batch capacity overflowed");
 				const size_t byteBatchCapacity =
-						std::max<size_t>(1U, state.shared.bounds.maximum_materialized_bytes / minimumCandidateBytes);
-				// Adapt the row cap before reading. Admission-capable readers reserve
-				// payload bytes at the source; compatibility readers are checked on
-				// return. Pre-delivery pressure can further split these ranges.
+						std::max<size_t>(1U, state.shared.materialized_budget.available() / minimumCandidateBytes);
+				// Previously visited candidate IDs remain charged across producer pages.
+				// Size this page from the remaining allowance, not the original limit.
+				// Source admission can further split ranges before delivery.
 				const size_t candidateBatchCapacity =
 						std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_node_records,
 								  state.shared.bounds.maximum_rows, byteBatchCapacity});
@@ -739,11 +809,10 @@
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
+						if (!propertyKeys.empty() && !state.shared.snapshot.supportsPropertyReadAdmission())
+							throw std::logic_error("bounded indexed Node Property predicates require source admission");
 						auto columns = propertyKeys.empty() ? std::vector<std::vector<PropertyValue>>{}
-									   : state.shared.snapshot.supportsPropertyReadAdmission()
-											   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
-														 batchIds, keyViews, admission)
-											   : state.shared.snapshot.readNodePropertyColumnsSorted(batchIds, keyViews);
+									   : state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(batchIds, keyViews, admission);
 						if (columns.size() != propertyKeys.size() ||
 							std::ranges::any_of(columns, [&](const auto &column) { return column.size() != count; }))
 							throw std::runtime_error(

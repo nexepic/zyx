@@ -142,7 +142,7 @@ public:
     void publishColumns(QueryResult &result) {
         // Keep original columns/order, append discoverable PROFILE fields.
         // Borrow names until setColumnViews has built its admitted owning copy.
-        std::pmr::vector<std::string_view> columns(&*budget_);
+        std::pmr::vector<std::string_view> columns(size_t{0U}, &*budget_);
         columns.reserve(result.getColumns().size() + 10U);
         for (const auto &name : result.getColumns()) columns.push_back(name);
         for (const auto name : {"phase", "total_time_ms", "calls", "actual_output_rows",

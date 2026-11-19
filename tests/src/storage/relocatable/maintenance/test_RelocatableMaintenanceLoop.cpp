@@ -342,3 +342,42 @@ TEST(RelocatableMaintenanceLoopTest, ExecutesTheCycleTaskLimitBeforeStartingAnot
 	EXPECT_EQ(loop.metrics().attempted_cycles, 1U);
 	loop.stop();
 }
+
+TEST(RelocatableMaintenanceLoopTest, PublishesFaultOnlyAfterTheFailureHandlerAndRetainsAdmissionUntilThen) {
+    for (const bool throwingHandler : {false, true}) {
+        SCOPED_TRACE(throwingHandler);
+        std::atomic_bool entered{false}, release{false}, reported{false};
+        std::atomic_uint64_t observedInFlight{0U};
+        RelocatableMaintenanceLoop *owner = nullptr;
+        RelocatableMaintenanceLoop loop(testPolicy(), [&](std::exception_ptr) {
+            observedInFlight.store(owner->metrics().in_flight_tasks);
+            entered.store(true);
+            while (!release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            reported.store(true);
+            if (throwingHandler) throw std::domain_error("reporting failed");
+        });
+        struct ReleaseOnExit { std::atomic_bool &flag; ~ReleaseOnExit() { flag.store(true); } } cleanup{release};
+        owner = &loop;
+        loop.start();
+        static_cast<void>(loop.submit(1024U, []() -> RelocatableMaintenanceTaskResult {
+            throw std::runtime_error("original task failure");
+        }));
+        ASSERT_TRUE(waitUntil([&] { return entered.load(); }));
+        EXPECT_EQ(observedInFlight.load(), 1U);
+        EXPECT_NE(loop.metrics().state, RelocatableMaintenanceLoopState::VMLS_FAULTED);
+        EXPECT_EQ(loop.metrics().in_flight_tasks, 1U);
+        EXPECT_EQ(loop.metrics().outstanding_rewrite_bytes, 1024U);
+        EXPECT_THROW(static_cast<void>(loop.submit(1U, [] { return RelocatableMaintenanceTaskResult{}; })), std::runtime_error);
+        EXPECT_THROW(loop.start(), std::logic_error);
+        EXPECT_THROW(loop.resume(), std::logic_error);
+        release.store(true);
+        ASSERT_TRUE(waitUntil([&] { return loop.metrics().state == RelocatableMaintenanceLoopState::VMLS_FAULTED; }));
+        EXPECT_TRUE(reported.load());
+        EXPECT_EQ(loop.metrics().in_flight_tasks, 0U);
+        EXPECT_EQ(loop.metrics().outstanding_rewrite_bytes, 0U);
+        ASSERT_NE(loop.lastFailure(), nullptr);
+        try { std::rethrow_exception(loop.lastFailure()); }
+        catch (const std::runtime_error &error) { EXPECT_STREQ(error.what(), "original task failure"); }
+        loop.stop();
+    }
+}

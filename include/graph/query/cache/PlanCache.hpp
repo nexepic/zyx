@@ -6,6 +6,7 @@
 #pragma once
 
 #include <list>
+#include <map>
 #include <functional>
 #include <memory>
 #include <memory_resource>
@@ -145,6 +146,16 @@ private:
 		bool operator()(std::string_view first, std::string_view second) const noexcept { return first == second; }
 	};
 	using Entries = std::pmr::list<std::pair<std::pmr::string, QueryPlan>>;
+#if defined(_MSVC_STL_VERSION) && _ITERATOR_DEBUG_LEVEL > 0
+    // MSVC's debug unordered-map bucket vector constructs an iterator proxy
+    // inside a noexcept allocator constructor. A quota failure there invokes
+    // terminate instead of preserving put()'s exception guarantee. The tree
+    // constructor propagates allocator failures, retaining borrowed keys and
+    // the same LRU ownership; release builds keep the hash index.
+    using Index = std::pmr::map<std::string_view, Entries::iterator, std::less<>>;
+#else
+    using Index = std::pmr::unordered_map<std::string_view, Entries::iterator, StringHash, StringEqual>;
+#endif
     struct State : utils::OwnedPmrObject {
         explicit State(std::shared_ptr<std::pmr::memory_resource> owner)
             : memory_owner_(std::move(owner)),
@@ -155,7 +166,7 @@ private:
         Entries entries_;
         // List keys remain stable across LRU splices. Destroy the borrowed
         // index before the owning entries, and erase its key before eviction.
-        std::pmr::unordered_map<std::string_view, Entries::iterator, StringHash, StringEqual> index_;
+        Index index_;
     };
     static std::unique_ptr<State> makeState(std::shared_ptr<std::pmr::memory_resource> owner) {
         auto allocationOwner = owner;

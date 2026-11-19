@@ -80,7 +80,7 @@ TEST_F(WideIdPropertyReadTest, TaggedPropertyDomainDoesNotHideWidePrimaryNodesOr
     const auto combined = graph->readNodePropertyColumnsAndCountsSorted(snapshot, nodes, tokens);
     EXPECT_EQ(combined.second, counts); EXPECT_EQ(combined.first, columns);
     size_t cells = 0, present = 0;
-    graph->readNodePropertyCellsSorted(snapshot, nodes, tokens,
+    graph->readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE, nodes, tokens,
         [&](size_t row, size_t column, std::optional<graph::PropertyValue> value) {
             ++cells; if (value) { ++present; EXPECT_EQ(row, 0U); EXPECT_EQ(column, 0U); }
         }, nullptr, nullptr);
@@ -105,10 +105,10 @@ TEST_F(WideIdPropertyReadTest, WideAbsenceKeepsSnapshotOrderingAndTokenValidatio
     size_t emitted = 0;
     const std::function<void(size_t, size_t, std::optional<graph::PropertyValue>)> sink =
         [&](size_t, size_t, auto) { ++emitted; };
-    EXPECT_THROW(graph->readNodePropertyCellsSorted(snapshot, bad, tokens, sink, nullptr, nullptr), FormatException);
+    EXPECT_THROW(graph->readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE, bad, tokens, sink, nullptr, nullptr), FormatException);
     EXPECT_EQ(emitted, 0U);
     const std::array<uint64_t, 1> terminal{UINT64_MAX}; const std::array<uint32_t, 1> invalidToken{0};
-    EXPECT_THROW(graph->readNodePropertyCellsSorted(snapshot, terminal, invalidToken, sink, nullptr, nullptr), FormatException);
+    EXPECT_THROW(graph->readEntityPropertyCellsSorted(snapshot, EntityPropertyOwnerKind::EPOK_NODE, terminal, invalidToken, sink, nullptr, nullptr), FormatException);
     EXPECT_EQ(emitted, 0U);
     EXPECT_THROW(static_cast<void>(graph->readNodePropertyColumnsAndCountsSorted(snapshot, terminal, invalidToken)), FormatException);
 }

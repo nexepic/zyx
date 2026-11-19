@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -393,7 +394,7 @@ namespace graph::storage {
 		std::vector<StagedInitialScalarIndexMutation> initial_scalar_index_mutations_;
         struct StagedHybridVectors {
             utils::OwnedHeapReservation credit;
-            std::vector<NativeVectorMutation, utils::OwnedPmrAllocator<NativeVectorMutation>> semantics;
+            utils::OwnedVector<NativeVectorMutation> semantics;
         };
         std::optional<StagedHybridVectors> hybrid_vectors_;
         bool hybrid_vector_pending_ = false;

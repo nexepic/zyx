@@ -12,7 +12,7 @@
 					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
 					auto *nameAllocator = state.shared.bound_program ? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource();
 					const auto validateColumns = [nameAllocator](const std::vector<std::string> &columns) {
-						std::pmr::unordered_set<std::string_view> declaredColumns(nameAllocator);
+						utils::AdmissionPmrUnorderedSet<std::string_view> declaredColumns(nameAllocator);
 						declaredColumns.reserve(columns.size());
 						for (const std::string &column: columns) {
 							if (column.empty() || !declaredColumns.insert(column).second) {
@@ -29,9 +29,9 @@
 							&state.shared.materialized_budget,
                             state.shared.context && state.shared.context->resource_account, sizeof(LogicalPlanReadRow));
 					rightRows.reserve(state.shared.bounds.maximum_rows);
-					std::pmr::vector<const std::string *> sharedColumns(nameAllocator);
+					utils::AdmissionPmrVector<const std::string *> sharedColumns(nameAllocator);
 					sharedColumns.reserve(std::min(leftColumns.size(), rightColumns.size()));
-					std::pmr::unordered_set<std::string_view> rightColumnSet(nameAllocator);
+					utils::AdmissionPmrUnorderedSet<std::string_view> rightColumnSet(nameAllocator);
 					rightColumnSet.reserve(rightColumns.size());
 					for (const std::string &column: rightColumns) {
 						rightColumnSet.insert(column);
@@ -45,7 +45,7 @@
 					// shared columns intentionally retains Cartesian semantics by using
 					// the same candidate list for every left row.
 					detail::BudgetMemoryResource rightIndexMemory(state.shared.materialized_budget);
-					std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> rightRowsByKey{&rightIndexMemory};
+					utils::AdmissionPmrUnorderedMap<std::pmr::string, utils::AdmissionPmrVector<size_t>> rightRowsByKey{&rightIndexMemory};
 					const bool rightCompleted = visitOperator(*right, state, [&](LogicalPlanReadRow row) {
 						if (rightRows.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error(
@@ -148,16 +148,16 @@
 					const auto patternColumns = boundOutputNames(*pattern, state, patternNameBytes);
 					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
 					auto *nameAllocator = state.shared.bound_program ? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource();
-					std::pmr::unordered_set<std::string_view> inputColumnSet(nameAllocator);
+					utils::AdmissionPmrUnorderedSet<std::string_view> inputColumnSet(nameAllocator);
 					inputColumnSet.reserve(inputColumns.size());
 					for (const std::string &column: inputColumns) {
 						if (column.empty() || !inputColumnSet.insert(column).second) {
 							throw std::invalid_argument("logical-plan OptionalMatch input has invalid output columns");
 						}
 					}
-					std::pmr::unordered_set<std::string_view> patternColumnSet(nameAllocator);
+					utils::AdmissionPmrUnorderedSet<std::string_view> patternColumnSet(nameAllocator);
 					patternColumnSet.reserve(patternColumns.size());
-					std::pmr::vector<const std::string *> sharedColumns(nameAllocator);
+					utils::AdmissionPmrVector<const std::string *> sharedColumns(nameAllocator);
 					sharedColumns.reserve(std::min(inputColumns.size(), patternColumns.size()));
 					for (const std::string &column: patternColumns) {
 						if (column.empty() || !patternColumnSet.insert(column).second) {
@@ -176,7 +176,7 @@
 					}
 
 					detail::BudgetMemoryResource patternIndexMemory(state.shared.materialized_budget);
-					std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> patternRowsByKey{&patternIndexMemory};
+					utils::AdmissionPmrUnorderedMap<std::pmr::string, utils::AdmissionPmrVector<size_t>> patternRowsByKey{&patternIndexMemory};
 					BoundedBatch<LogicalPlanReadRow> patternRows(
 							state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
 							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
@@ -327,14 +327,14 @@
 							injected.values.emplace(variable, detail::copyLogicalReadValueGuarded(value->second, [&] { checkGuardNow(state); }));
 							if (const auto properties = retainedInput.property_cache.find(variable);
 								properties != retainedInput.property_cache.end()) {
-								injected.property_cache.emplace(variable, detail::copyPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
+								injected.property_cache.emplace(variable, detail::copyBindingPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
 								if (retainedInput.complete_entity_property_cache.contains(variable)) {
 									injected.complete_entity_property_cache.insert(variable);
 								}
 							}
 							if (const auto metadata = retainedInput.entity_metadata_cache.find(variable);
 								metadata != retainedInput.entity_metadata_cache.end()) {
-								injected.entity_metadata_cache.emplace(variable, detail::copyPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
+								injected.entity_metadata_cache.emplace(variable, detail::copyBindingPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
 							}
 							if (const auto path = retainedInput.path_cache.find(variable);
 								path != retainedInput.path_cache.end()) {

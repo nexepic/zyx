@@ -4,7 +4,16 @@
  */
 #include "query/api/LogicalVectorProcedureBatchFixture.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "query/execution/ProcedureByteBoundExceeded.hpp"
 namespace graph::query {
+    namespace {
+        void expectProcedureQuotaFailure(const std::runtime_error &error) {
+            EXPECT_TRUE(dynamic_cast<const execution::detail::ProcedureByteBoundExceeded *>(&error) ||
+                dynamic_cast<const execution::MaterializedByteLimitExceeded *>(&error) ||
+                dynamic_cast<const execution::detail::ResourceAdmissionDenied *>(&error)) << error.what();
+        }
+    }
+
 	TEST_F(LogicalVectorPropertyBatchTest, ProjectExpressionsShareRetainedProcedureOutputBudget) {
 		backend->state->search_result.hits = {{1U, 0.0F}};
 		const auto list = [] {
@@ -22,7 +31,7 @@ namespace graph::query {
 			static_cast<void>(execute(pair));
 			FAIL() << "the second procedure projection ignored the retained first List";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		options.bounds.maximum_materialized_bytes = 20000U;
 		const QueryResult result = execute(pair);
@@ -91,6 +100,9 @@ namespace graph::query {
         options.bounds.maximum_materialized_bytes = 1024U * 1024U;
 		const QueryResult result = execute(acrossBatches);
 		ASSERT_EQ(result.rowCount(), 600U);
+        // The cardinality is known before publication. Retain no unused row
+        // slots and avoid MSVC's deep copies of already-published maps.
+        EXPECT_LE(result.getRows().capacity(), result.rowCount());
         EXPECT_GT(backend->state->property_column_reads, 1U);
 		for (size_t index = 0U; index < result.rowCount(); ++index) {
 			EXPECT_EQ(result.getRows()[index].at("rank").asPrimitive(),
@@ -108,13 +120,23 @@ namespace graph::query {
 					{PropertyValue(3), PropertyValue(2), PropertyValue(2)});
 		};
 		options.bounds.maximum_materialized_bytes = 16U * 1024U;
+        // Require denial from a real final-result lower bound, independently
+        // of unused entity padding or a particular transient copy strategy.
+        const size_t pairFloor = 9U * sizeof(QueryResult::Row::value_type);
+        const size_t bodyBytes = (options.bounds.maximum_materialized_bytes -
+            std::min(options.bounds.maximum_materialized_bytes, pairFloor)) / 3U + 1U;
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(bodyBytes, 'x'));
+
 		try {
 			static_cast<void>(execute(call()));
 			FAIL() << "direct shortestPath output ignored concurrently retained result rows";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(4096U, 'x'));
 		options.bounds.maximum_materialized_bytes = 64U * 1024U;
 		const QueryResult result = execute(call());
 		ASSERT_EQ(result.getColumns(), (std::vector<std::string>{"step", "node", "path_length"}));
@@ -142,11 +164,19 @@ namespace graph::query {
 			return logical::LogicalCallProcedure("gds.shortestPath.dijkstra.stream",
 					{PropertyValue("bounded_path"), PropertyValue(3), PropertyValue(2)});
 		};
-		const auto executeGds = [&](const size_t maximumBytes) {
+		const auto executeGds = [&](const size_t maximumBytes, bool wideOutput = false) {
 			auto bounds = options.bounds;
 			bounds.maximum_materialized_bytes = maximumBytes;
 			bounds.maximum_adjacency_page_records = 1U;
-			return runtime.execute(call(), bounds, options.maximum_vector_mapping_entries,
+            std::unique_ptr<logical::LogicalOperator> plan = std::make_unique<logical::LogicalCallProcedure>(call());
+            if (wideOutput) {
+                // Three independently owned output keys alone exceed 16 KiB,
+                // even on libc++ after unused entity padding was removed.
+                auto id = std::make_shared<expressions::VariableReferenceExpression>("nodeId");
+                plan = std::make_unique<logical::LogicalProject>(std::move(plan),
+                    std::vector<logical::LogicalProjectItem>{{id, std::string(16U * 1024U / 3U + 1U, 'n')}});
+            }
+			return runtime.execute(*plan, bounds, options.maximum_vector_mapping_entries,
 					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
@@ -155,10 +185,10 @@ namespace graph::query {
 
 		EXPECT_THROW(static_cast<void>(executeGds(80U)), std::runtime_error);
 		try {
-			static_cast<void>(executeGds(16U * 1024U));
+			static_cast<void>(executeGds(16U * 1024U, true));
 			FAIL() << "the buffered Node rows and retained Dijkstra QueryResult exceeded their shared budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		const QueryResult result = executeGds(24U * 1024U);
 		ASSERT_EQ(result.rowCount(), 3U);
@@ -258,6 +288,34 @@ namespace graph::query {
 
 
 
+	TEST_F(LogicalVectorPropertyBatchTest, SelectedProcedureColumnsRequireSourceAdmissionBeforeReading) {
+		backend->state->enable_property_admission = false;
+		const auto rank = std::make_shared<expressions::VariableReferenceExpression>("node", "rank");
+		logical::LogicalProject project(search(), {{rank, "rank"}});
+		EXPECT_THROW(static_cast<void>(execute(project)), std::logic_error);
+		EXPECT_EQ(backend->state->property_column_reads, 0U);
+		EXPECT_EQ(backend->state->node_point_reads, 0U);
+		backend->state->enable_property_admission = true;
+		const auto result = execute(project);
+		EXPECT_EQ(result.rowCount(), 3U);
+		EXPECT_GT(backend->state->property_column_reads, 0U);
+	}
+
+	TEST_F(LogicalVectorPropertyBatchTest, ProcedureFixtureAdmitsEdgePayloadBeforeCopy) {
+		backend->state->edges = {{11U, 1U, 2U, "LINK", {{"weight", PropertyValue(std::string(1000U, 'w'))}}}};
+		auto snapshot = backend->openLogicalGraphReadSnapshot();
+		const std::array<uint64_t, 1U> ids{11U}; const std::array<std::string_view, 1U> keys{"weight"};
+		EXPECT_THROW(static_cast<void>(snapshot->readEdgePropertyColumnsSortedWithAdmission(ids, keys,
+			[](size_t) { throw std::runtime_error("denied"); })), std::runtime_error);
+		EXPECT_EQ(backend->state->admitted_property_copies, 0U);
+		size_t admitted = 0U;
+		const auto columns = snapshot->readEdgePropertyColumnsSortedWithAdmission(ids, keys,
+			[&](size_t bytes) { admitted += bytes; });
+		ASSERT_EQ(columns.size(), 1U); ASSERT_EQ(columns[0].size(), 1U);
+		EXPECT_GT(admitted, 1000U); EXPECT_EQ(backend->state->admitted_property_copies, 1U);
+		EXPECT_EQ(columns[0][0], PropertyValue(std::string(1000U, 'w')));
+	}
+
 	TEST_F(LogicalVectorPropertyBatchTest, BatchesSelectedProjectionAndRestoresScoreOrderWithMissingFields) {
 		backend->state->nodes.at(1U).properties.erase(backend->state->nodes.at(1U).properties.begin());
 		const auto score = std::make_shared<expressions::VariableReferenceExpression>("score");
@@ -296,18 +354,20 @@ namespace graph::query {
 			logical::LogicalProject project(
 				std::make_unique<logical::LogicalSort>(search(), std::vector<logical::LogicalSortItem>{{score, true}}),
 				{{size, "size"}, {score, "score"}});
-			// Keep room for three final payloads and one temporary column, but
-			// not three temporary slots. Derive the row base from public types
-			// so the pressure contract does not depend on the platform ABI.
+			if (!admission) {
+				const size_t readsBefore = backend->state->property_column_reads;
+				EXPECT_THROW(static_cast<void>(execute(project)), std::logic_error);
+				EXPECT_EQ(backend->state->property_column_reads, readsBefore);
+				continue;
+			}
+			// Preserve the established scalar-projection efficiency ceiling. The
+			// result here owns sizes, not the three 1000-byte source strings; this
+			// estimate cannot define an ABI-independent rejection boundary.
 			const size_t rowBase = sizeof(execution::LogicalPlanReadRow) +
 				sizeof(std::unordered_map<uint64_t, PropertyValue>) + 9U +
 				2U * sizeof(execution::LogicalPlanReadValue) + sizeof(storage::EntityRef) + sizeof(double);
-			options.bounds.maximum_materialized_bytes = 3U * rowBase + 3483U +
+			options.bounds.maximum_materialized_bytes = 3U * rowBase + 3783U +
 				backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
-			options.bounds.maximum_materialized_bytes = 3U * rowBase + 3283U +
-				backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
-			EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
-			options.bounds.maximum_materialized_bytes += 500U;
 			backend->state->property_column_ids.clear();
 			const auto result = execute(project);
 			ASSERT_EQ(result.rowCount(), 3U);
@@ -319,6 +379,49 @@ namespace graph::query {
 			EXPECT_EQ(result.getRows()[2].at("score").asPrimitive(), PropertyValue(double{2}));
 			EXPECT_EQ(backend->state->property_column_ids.size(), 1U);
 			for (const auto &ids: backend->state->property_column_ids) EXPECT_TRUE(std::ranges::is_sorted(ids));
+
+			// Exercise retained output with actual owned strings, rather than
+			// inferring their lifetime from size()'s eight-byte scalar results.
+			const auto body = std::make_shared<expressions::VariableReferenceExpression>("node", "body");
+			logical::LogicalProject ownedProject(
+				std::make_unique<logical::LogicalSort>(search(), std::vector<logical::LogicalSortItem>{{score, true}}),
+				{{body, "body"}, {score, "score"}});
+			using namespace execution::detail;
+			auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+			auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+			QueryContext ownedContext;
+			options.bounds.maximum_materialized_bytes = 3U * 1000U - 1U;
+			auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY,
+				options.bounds.maximum_materialized_bytes);
+			ownedContext.resource_account = account;
+			try {
+				static_cast<void>(execute(ownedProject, ownedContext));
+				FAIL() << "three owned strings cannot fit below their payload-byte lower bound";
+			} catch (const std::runtime_error &error) { expectProcedureQuotaFailure(error); }
+			EXPECT_EQ(account->used(), 0U);
+			// A separate, fixed ceiling for this additional owning-result workload;
+			// it is not derived from the implementation's observed consumption.
+			options.bounds.maximum_materialized_bytes = 16U * 1024U;
+			account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY,
+				options.bounds.maximum_materialized_bytes);
+			ownedContext.resource_account = account;
+			backend->state->property_column_ids.clear();
+			{
+				const QueryResult owned = execute(ownedProject, ownedContext);
+				ASSERT_EQ(owned.rowCount(), 3U);
+				const std::array<uint64_t, 3> orderedIds{3U, 1U, 2U};
+				for (size_t index = 0U; index < orderedIds.size(); ++index) {
+					EXPECT_EQ(owned.getRows()[index].at("body").asPrimitive(),
+						PropertyValue(std::string(1000U, static_cast<char>('a' + orderedIds[index]))));
+					EXPECT_EQ(owned.getRows()[index].at("score").asPrimitive(), PropertyValue(double(index)));
+				}
+				EXPECT_GE(account->used(), 3U * 1000U);
+				EXPECT_LE(account->used(), 16U * 1024U);
+			}
+			EXPECT_EQ(account->used(), 0U);
+			EXPECT_EQ(database->usage().total, 0U);
+			ASSERT_EQ(backend->state->property_column_ids.size(), 1U);
+			EXPECT_EQ(backend->state->property_column_ids.front(), (std::vector<uint64_t>{1U, 2U, 3U}));
 			backend->state->nodes.at(1U).properties.pop_back();
 			const auto missing = execute(project);
 			ASSERT_EQ(missing.rowCount(), 3U);
@@ -344,7 +447,12 @@ namespace graph::query {
 		options.bounds.maximum_materialized_bytes = 2200U;
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
 		options.bounds.maximum_materialized_bytes = 5000U;
-		for (int retry = 0; retry < 2; ++retry) {
+		size_t consumed = 0U;
+        debug::PerfTrace::ScopedObserver observe(&consumed,
+            [](void *p, std::string_view key, int64_t, bool duration) noexcept {
+                if (!duration && key == "logical_procedure.output_binding_released") ++*static_cast<size_t *>(p);
+            });
+        for (int retry = 0; retry < 2; ++retry) {
 			const auto result = execute(project);
 			ASSERT_EQ(result.rowCount(), 1U);
 			const auto &leftBody = std::get<std::string>(result.getRows()[0].at("left").asNode().getProperties().at("body").getVariant());
@@ -358,7 +466,8 @@ namespace graph::query {
 				EXPECT_EQ(result.getRows()[0].at(alias).asNode().getProperties().at("body"), PropertyValue(std::string(1000U, 'x')));
 			}
 		}
-		EXPECT_EQ(backend->state->node_point_reads, 0U);
+		EXPECT_EQ(consumed, 4U);
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
 	}
 
 
@@ -530,7 +639,7 @@ namespace graph::query {
 
 
 
-	TEST_F(LogicalVectorPropertyBatchTest, RetainsConvertedQueryVectorThroughResultPublication) {
+	TEST_F(LogicalVectorPropertyBatchTest, ReleasesConvertedQueryVectorBeforeResultPublication) {
 		backend->state->search_result.hits = {{1U, 0.5F}};
 		std::vector<PropertyValue> coordinates(750U, PropertyValue(1.0));
 		const auto call = [&coordinates] {
@@ -539,20 +648,57 @@ namespace graph::query {
 							PropertyValue(coordinates)});
 		};
 		logical::LogicalProject project(call(),
-				{{std::make_shared<expressions::VariableReferenceExpression>("score"), "score"}});
+				{{std::make_shared<expressions::VariableReferenceExpression>("node", "rank"), "rank"}});
 
-		options.bounds.maximum_materialized_bytes = 4096U;
-		try {
-			static_cast<void>(execute(project));
-			FAIL() << "the live converted Vector query and retained result should share the byte bound";
+        // Exercise the authoritative shared owner, not an error-message
+        // accident in the historical logical-size estimate.
+        auto process = std::make_shared<execution::detail::ProcessResourceBudget>(execution::detail::ResourceLimits::uniform(1024U * 1024U));
+        auto database = std::make_shared<execution::detail::DatabaseResourceBudget>(process, execution::detail::ResourceLimits::uniform(1024U * 1024U));
+        std::shared_ptr<execution::detail::ResourceAccount> account;
+        const auto executeOwned = [&] {
+            account = std::make_shared<execution::detail::ResourceAccount>(database, execution::detail::ResourceClass::RCK_QUERY,
+                options.bounds.maximum_materialized_bytes);
+            QueryContext context; context.resource_account = account;
+            execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
+            return runtime.execute(project, options.bounds, options.maximum_vector_mapping_entries,
+                options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
+                options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
+                options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
+                options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
+        };
+        options.bounds.maximum_materialized_bytes = 750U * sizeof(float) - 1U;
+        try {
+			static_cast<void>(executeOwned());
+			FAIL() << "the converted Vector request must be admitted before search";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+            EXPECT_STREQ(error.what(), "db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 		}
 
-		options.bounds.maximum_materialized_bytes = 64U * 1024U;
-		const QueryResult result = execute(project);
-		ASSERT_EQ(result.rowCount(), 1U);
-		EXPECT_EQ(result.getRows().front().at("score").asPrimitive(), PropertyValue(0.5));
+        ASSERT_NE(account, nullptr);
+        EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
+        // Fixed efficiency gate plus an ample retry: neither grows with a
+        // measured peak or an empty private-container header.
+        for (const size_t fundedLimit : {4096U, 64U * 1024U}) {
+        options.bounds.maximum_materialized_bytes = fundedLimit;
+        size_t duringSearch = 0U, beforeProperty = 0U;
+        backend->state->during_vector_search = [&](const storage::LogicalGraphVectorSearchRequest &request) {
+            ASSERT_EQ(request.query_vector.size(), 750U);
+            EXPECT_EQ(request.query_vector.front(), 1.0F);
+            duringSearch = account->used();
+        };
+        backend->state->enable_property_admission = true;
+        backend->state->before_property_admission = [&] { beforeProperty = account->used(); };
+        {
+            const QueryResult result = executeOwned();
+            ASSERT_EQ(result.rowCount(), 1U);
+            EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(10));
+            EXPECT_GT(account->used(), 0U); // escaped output retains its owner
+            ASSERT_GE(duringSearch, 750U * sizeof(float));
+            ASSERT_GT(beforeProperty, 0U);
+            EXPECT_LT(beforeProperty, duringSearch); // consumed request no longer overlaps the row
+        }
+        EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
+        }
 	}
 
 
@@ -602,7 +748,7 @@ namespace graph::query {
 
 
 
-	TEST_F(LogicalVectorPropertyBatchTest, GdsDijkstraPipelineRetainsPathBytesDuringResultPublication) {
+	TEST_F(LogicalVectorPropertyBatchTest, GdsDijkstraPipelineAccountsOwnedResultsAfterPathRelease) {
 		backend->state->edges = {{11U, 3U, 1U, "LINK"}, {12U, 1U, 2U, "LINK"}};
 		gds::LogicalProjectionCatalog catalog;
 		auto snapshot = backend->openLogicalGraphReadSnapshot();
@@ -613,21 +759,46 @@ namespace graph::query {
 				std::vector<PropertyValue>{PropertyValue("yielded_path"), PropertyValue(3), PropertyValue(2)});
 		logical::LogicalProject project(std::move(call), {{
 				std::make_shared<expressions::LiteralExpression>(PropertyValue(std::string(6000U, 'x'))), "payload"}});
+		using namespace execution::detail;
+		auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+		auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+		std::shared_ptr<ResourceAccount> account;
 		const auto executeGds = [&](const size_t maximumBytes) {
 			auto bounds = options.bounds;
 			bounds.maximum_materialized_bytes = maximumBytes;
+			QueryContext context;
+			account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximumBytes);
+			context.resource_account = account;
 			return runtime.execute(project, bounds, options.maximum_vector_mapping_entries,
 					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
 		};
-		EXPECT_THROW(static_cast<void>(executeGds(20U * 1024U)), std::runtime_error);
-		const QueryResult result = executeGds(64U * 1024U);
-		ASSERT_EQ(result.rowCount(), 3U);
-		for (const auto &row: result.getRows()) {
-			EXPECT_EQ(row.at("payload").asPrimitive(), PropertyValue(std::string(6000U, 'x')));
+		// The path dies before projection/publication. A former 20-KiB refusal
+		// relied on charging that dead path and ABI-specific row overhead.
+		// Three independent 6000-byte results cannot fit this lower bound on
+		// any STL; the separate 64-KiB efficiency ceiling remains unchanged.
+		constexpr size_t payloadLowerBound = 3U * 6000U;
+		try {
+			static_cast<void>(executeGds(payloadLowerBound - 1U));
+			FAIL() << "three owned payloads exceeded the available result bytes";
+		} catch (const std::runtime_error &error) {
+			expectProcedureQuotaFailure(error);
 		}
+		ASSERT_NE(account, nullptr);
+		EXPECT_EQ(account->used(), 0U);
+		{
+			const QueryResult result = executeGds(64U * 1024U);
+			ASSERT_EQ(result.rowCount(), 3U);
+			for (const auto &row: result.getRows()) {
+				EXPECT_EQ(row.at("payload").asPrimitive(), PropertyValue(std::string(6000U, 'x')));
+			}
+			EXPECT_GE(account->used(), payloadLowerBound);
+			EXPECT_LE(account->used(), 64U * 1024U);
+		}
+		EXPECT_EQ(account->used(), 0U);
+		EXPECT_EQ(database->usage().total, 0U);
 	}
 
 
@@ -656,7 +827,7 @@ namespace graph::query {
 			static_cast<void>(executeList(8U * 1024U));
 			FAIL() << "gds.graph.list ignored the accumulated catalog result during publication";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		const QueryResult result = executeList(64U * 1024U);
 		ASSERT_EQ(result.rowCount(), 3U);
@@ -720,16 +891,52 @@ namespace graph::query {
 			std::vector<logical::LogicalSortItem>{{score, true}}), {{labels, "labels"}});
 		options.bounds.maximum_materialized_bytes = 6000U;
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
-		options.bounds.maximum_materialized_bytes = 7500U;
+        // This owning result alone exceeds 7500 bytes on Linux; that old
+        // success boundary ignored list element storage and is not portable.
+        options.bounds.maximum_materialized_bytes = 7500U;
+        EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        constexpr size_t SUCCESS_BUDGET = 32U * 1024U;
+        constexpr size_t RETAINED_RESULT_CEILING = 16U * 1024U;
+        options.bounds.maximum_materialized_bytes = SUCCESS_BUDGET;
 		for (int retry = 0; retry < 2; ++retry) {
 			const size_t before = backend->state->node_batch_reads;
 			const auto result = execute(project);
-			ASSERT_EQ(result.rowCount(), 3U);
+            ASSERT_EQ(result.rowCount(), 3U);
+            // Fixed efficiency gates are reviewed independently of the budget:
+            // no observation is multiplied into a larger permitted allowance.
+            EXPECT_LE(result.getRows().capacity(), 4U);
+            EXPECT_LE(result.getColumns().capacity(), 1U);
+            size_t retained = execution::detail::standardVectorHeapBufferBytes(result.getRows());
+            retained += detail::resultStringsHeapBytes(result.getColumns());
+            for (const auto &row : result.getRows()) retained += detail::resultRowHeapBytes(row);
+            EXPECT_LE(retained, RETAINED_RESULT_CEILING);
+            size_t independentLower = result.getRows().capacity() * sizeof(QueryResult::Row) +
+                result.getColumns().capacity() * sizeof(std::string);
+            for (const auto &row : result.getRows()) {
+                independentLower += row.size() * sizeof(QueryResult::Row::value_type);
+                for (const auto &[key, value] : row) {
+                    const auto &list = value.asPrimitive().getList();
+                    independentLower += list.capacity() * sizeof(PropertyValue);
+                    for (const auto &entry : list) {
+                        const auto &text = std::get<std::string>(entry.getVariant());
+                        const auto data = reinterpret_cast<uintptr_t>(text.data());
+                        const auto object = reinterpret_cast<uintptr_t>(&text);
+                        if (data < object || data - object >= sizeof(text)) independentLower += text.capacity() + 1U;
+                    }
+                }
+            }
+            EXPECT_GE(retained, independentLower); // no production-estimator self-proof
+            RecordProperty("retained_result_bytes", static_cast<int>(retained));
+            RecordProperty("independent_result_lower", static_cast<int>(independentLower));
 			const std::array<uint64_t, 3U> order{3U, 1U, 2U};
 			for (size_t row = 0U; row < order.size(); ++row) {
 				std::vector<PropertyValue> expected;
 				for (const auto &label : backend->state->nodes.at(order[row]).labels) expected.emplace_back(label);
-				EXPECT_EQ(result.getRows()[row].at("labels").asPrimitive(), PropertyValue(expected));
+                const auto &actual = result.getRows()[row].at("labels").asPrimitive();
+                EXPECT_EQ(actual, PropertyValue(expected));
+                EXPECT_LE(actual.getList().capacity(), 20U);
+                for (const auto &label : actual.getList())
+                    EXPECT_LE(std::get<std::string>(label.getVariant()).capacity(), 63U);
 			}
 			EXPECT_GE(backend->state->node_batch_reads - before, 1U);
             EXPECT_LE(backend->state->node_batch_reads - before, 3U);
@@ -844,7 +1051,17 @@ namespace graph::query {
 			backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit) + 5000U;
 		const size_t sufficientBytes = options.bounds.maximum_materialized_bytes;
 		options.bounds.maximum_materialized_bytes -= 4000U;
+        const size_t pairFloor = 6U * sizeof(QueryResult::Row::value_type);
+        const size_t deniedBodyBytes = (options.bounds.maximum_materialized_bytes -
+            std::min(options.bounds.maximum_materialized_bytes, pairFloor)) / 3U + 1U;
+        // Six live result pairs plus three independent string backings must
+        // exceed the unchanged denied quota on every supported STL.
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(deniedBodyBytes, 'x'));
+
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(1000U, 'x'));
 		options.bounds.maximum_materialized_bytes = sufficientBytes;
 		for (int retry = 0; retry < 2; ++retry) {
 			const size_t before = backend->state->node_batch_reads;
@@ -1032,7 +1249,7 @@ namespace graph::query {
 			static_cast<void>(execute(empty));
 			FAIL() << "empty procedure output omitted its retained column name from the byte budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 		auto zeroTopKProjection = std::make_unique<logical::LogicalProject>(search(0),
 				std::vector<logical::LogicalProjectItem>{{
@@ -1041,7 +1258,7 @@ namespace graph::query {
 			static_cast<void>(execute(*zeroTopKProjection));
 			FAIL() << "zero-topK procedure output omitted its retained column name from the byte budget";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 
 		options.bounds.maximum_materialized_bytes = 16U * 1024U;
@@ -1074,15 +1291,52 @@ namespace graph::query {
 
 
 
+    TEST_F(LogicalVectorPropertyBatchTest, OversizedQueryVectorUsesTypedQuotaFailureBeforeOpeningSnapshot) {
+        // Make the numeric vector itself exceed the limit, independently of
+        // STL string/proxy sizes or which owner rejects the tiny-envelope case.
+        constexpr size_t BUDGET = 4096U;
+        constexpr size_t COORDINATES = BUDGET / sizeof(float) + 1U;
+        logical::LogicalCallProcedure call("db.index.vector.queryNodes",
+            std::vector<PropertyValue>{PropertyValue("memory_embedding"), PropertyValue(3),
+                PropertyValue(std::vector<PropertyValue>(COORDINATES, PropertyValue(1.0)))});
+        options.bounds.maximum_materialized_bytes = BUDGET;
+        try {
+            static_cast<void>(execute(call));
+            FAIL() << "oversized query vector was admitted";
+        } catch (const execution::detail::ProcedureByteBoundExceeded &error) {
+            EXPECT_STREQ(error.what(),
+                "db.index.vector.queryNodes query vector exceeded its materialized byte bound");
+        }
+        EXPECT_EQ(backend->search_snapshot_opens, 0U);
+        EXPECT_EQ(backend->state->search_cancellation_checks, 0U);
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
+        EXPECT_EQ(backend->state->node_batch_reads, 0U);
+    }
+
 	TEST_F(LogicalVectorPropertyBatchTest, RejectsOversizedSearchHitBufferBeforeReadingNodes) {
-		options.bounds.maximum_materialized_bytes =
-				2U * sizeof(storage::LogicalGraphVectorSearchHit);
+        // Preserve the original tiny-envelope rejection without assuming the
+        // same STL-dependent owner is necessarily first to refuse.
+        options.bounds.maximum_materialized_bytes = 2U * sizeof(storage::LogicalGraphVectorSearchHit);
+        try {
+            static_cast<void>(execute(*search()));
+            FAIL() << "tiny search envelope was not enforced";
+        } catch (const std::runtime_error &error) { expectProcedureQuotaFailure(error); }
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
+        EXPECT_EQ(backend->state->node_batch_reads, 0U);
+        constexpr size_t BUDGET = 4096U;
+        constexpr size_t HIT_COUNT = BUDGET / sizeof(storage::LogicalGraphVectorSearchHit) + 1U;
+        options.bounds.maximum_materialized_bytes = BUDGET;
+        backend->state->search_result.hits.clear();
+        for (size_t i = 0U; i < HIT_COUNT; ++i)
+            backend->state->search_result.hits.push_back({i + 1U, static_cast<float>(i)});
+        backend->state->cancellation_checks_before_throw = 1U;
 		try {
-			static_cast<void>(execute(*search()));
+			static_cast<void>(execute(*search(static_cast<int64_t>(HIT_COUNT))));
 			FAIL() << "the retained Vector hit source exceeded the shared byte bound";
 		} catch (const std::runtime_error &error) {
 			EXPECT_STREQ(error.what(), "logical Vector procedure hit buffer exceeded its materialized byte bound");
 		}
+        EXPECT_EQ(backend->state->search_cancellation_checks, 1U); // search was reached
 		EXPECT_EQ(backend->state->node_point_reads, 0U);
 		EXPECT_EQ(backend->state->node_batch_reads, 0U);
 	}
@@ -1131,12 +1385,19 @@ namespace graph::query {
 		logical::LogicalProject project(call(),
 				{{std::make_shared<expressions::VariableReferenceExpression>("step"), "step"},
 				 {std::make_shared<expressions::VariableReferenceExpression>("path_length"), "length"}});
-		options.bounds.maximum_materialized_bytes = 4096U;
+		// A compact row no longer needs 4096 bytes for this three-step path.
+        // Reject below the independently known live source/binding floor,
+        // rather than treating a layout optimization as a missing charge.
+        using Bindings=decltype(execution::LogicalPlanReadRow::values);
+        using Node=typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+        const size_t minimumSourceAndBindings = sizeof(std::vector<uint64_t>) + 3U*sizeof(uint64_t) +
+            3U*(sizeof(execution::LogicalPlanReadRow)+3U*sizeof(Node));
+        options.bounds.maximum_materialized_bytes = minimumSourceAndBindings - 1U;
 		try {
 			static_cast<void>(execute(project));
-			FAIL() << "shortestPath result publication ignored its live path-ID vector";
+			FAIL() << "shortestPath admitted less than its live source and binding storage";
 		} catch (const std::runtime_error &error) {
-			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+			expectProcedureQuotaFailure(error);
 		}
 
 		options.bounds.maximum_materialized_bytes = 8192U;
@@ -1162,21 +1423,40 @@ namespace graph::query {
 				std::vector<PropertyValue>{PropertyValue("bounded_rank")});
 		logical::LogicalProject project(std::move(call), {{
 				std::make_shared<expressions::LiteralExpression>(PropertyValue(std::string(6000U, 'r'))), "payload"}});
+        using namespace execution::detail;
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+        std::shared_ptr<ResourceAccount> account;
 		const auto executeGds = [&](const size_t maximumBytes) {
 			auto bounds = options.bounds;
 			bounds.maximum_materialized_bytes = maximumBytes;
-			return runtime.execute(project, bounds, options.maximum_vector_mapping_entries,
+			account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximumBytes);
+            QueryContext context; context.resource_account = account;
+            return runtime.execute(project, bounds, options.maximum_vector_mapping_entries,
 					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
 					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
 					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, context);
 		};
-		EXPECT_THROW(static_cast<void>(executeGds(20U * 1024U)), std::runtime_error);
+		// Three independent 6000-byte outputs alone cannot fit, regardless
+        // of private row layout or STL container implementation.
+        EXPECT_THROW(static_cast<void>(executeGds(3U * 6000U - 1U)), std::runtime_error);
+        EXPECT_EQ(account->used(), 0U);
+        EXPECT_EQ(database->usage().total, 0U);
+        {
 		const QueryResult result = executeGds(64U * 1024U);
 		ASSERT_EQ(result.rowCount(), 3U);
 		for (const auto &row: result.getRows()) {
 			EXPECT_EQ(row.at("payload").asPrimitive(), PropertyValue(std::string(6000U, 'r')));
 		}
+        // A fixed efficiency envelope, separate from the rejection boundary.
+        EXPECT_GT(account->used(), 3U * 6000U);
+        EXPECT_LT(account->used(), 32U * 1024U);
+        ResourceLease competing(account);
+        EXPECT_FALSE(competing.trySet(account->maximum()));
+        }
+        EXPECT_EQ(account->used(), 0U);
+        EXPECT_EQ(database->usage().total, 0U);
 	}
 
 
@@ -1240,7 +1520,13 @@ namespace graph::query {
 		backend->state->nodes.at(3U).labels.pop_back();
 		// Correct labels still require space together with all retained rows;
 		// splitting cannot make an insufficient final row allowance succeed.
+        // Payload alone now exceeds 6000; compact map nodes must not make
+        // this intended rejection accidentally depend on object padding.
+        for (auto &[id, node] : backend->state->nodes)
+            node.labels = {std::string(2100U, static_cast<char>('a' + id))};
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        for (auto &[id, node] : backend->state->nodes)
+            node.labels = {std::string(1500U, static_cast<char>('a' + id))};
 		options.bounds.maximum_materialized_bytes = 8000U;
 		EXPECT_EQ(execute(project).rowCount(), 3U);
 	}
@@ -1261,7 +1547,13 @@ namespace graph::query {
 			2U * sizeof(execution::LogicalPlanReadValue) + sizeof(storage::EntityRef) + sizeof(double);
 		options.bounds.maximum_materialized_bytes = 3U * rowBase + 3283U +
 			backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
+        // Keep the denial independent of platform container geometry. Every
+        // individual value fits, but the three escaped strings cannot fit.
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(options.bounds.maximum_materialized_bytes / 3U + 1U, 'x'));
 		EXPECT_THROW(static_cast<void>(execute(project)), std::runtime_error);
+        for (auto &[id, node] : backend->state->nodes)
+            node.properties.back().value = PropertyValue(std::string(1000U, 'x'));
 		options.bounds.maximum_materialized_bytes = 3U * rowBase + 8000U +
 			backend->state->search_result.hits.capacity() * sizeof(storage::LogicalGraphVectorSearchHit);
 		const auto beforeSuccess = backend->state->property_column_ids.size();
@@ -1310,6 +1602,11 @@ namespace graph::query {
 
 
 	TEST_F(LogicalVectorPropertyBatchTest, CompletePropertiesAndLabelsSplitJointRetentionBeforeCachePublication) {
+        size_t transfers = 0U;
+        graph::debug::PerfTrace::ScopedObserver observer(&transfers,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_procedure.map_binding_staged") *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
 		for (auto &[id, node]: backend->state->nodes) {
 			node.labels = {"Person"};
 			node.properties.back().value = PropertyValue(std::string(1000U, 'x'));
@@ -1341,10 +1638,43 @@ namespace graph::query {
 		EXPECT_EQ(backend->state->node_point_reads, 0U);
 		// A fresh execution must reuse no moved payload from the earlier query.
 		EXPECT_EQ(execute(project).rowCount(), 3U);
+        EXPECT_GT(transfers, 0U);
 	}
 
 
 
+
+    TEST_F(LogicalVectorPropertyBatchTest, WideTransferredOutputChecksTheGuardBeforeFinishingTheRow) {
+        backend->state->search_result.hits = {{1U, 0.0F}};
+        constexpr size_t columns = 1100U;
+        std::vector<logical::LogicalProjectItem> items;
+        for (size_t i = 0U; i < columns; ++i)
+            items.emplace_back(std::make_shared<expressions::LiteralExpression>(static_cast<int64_t>(i)),
+                "value" + std::to_string(i));
+        const auto score = std::make_shared<expressions::VariableReferenceExpression>("score");
+        logical::LogicalProject project(std::make_unique<logical::LogicalSort>(search(),
+            std::vector<logical::LogicalSortItem>{{score, true}}), std::move(items));
+        size_t staged = 0U;
+        graph::debug::PerfTrace::ScopedObserver observer(&staged,
+            [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+                if (!duration && key == "logical_procedure.scalar_binding_staged")
+                    *static_cast<size_t *>(p) += static_cast<size_t>(value);
+            });
+        QueryGuard guard(0, 1, [&] { return staged ? 2U * 1024U * 1024U : 0U; });
+        QueryContext context;
+        context.guard = &guard;
+        EXPECT_THROW(static_cast<void>(execute(project, context)), QueryMemoryExceededException);
+        EXPECT_GT(staged, 0U);
+        EXPECT_LT(staged, columns);
+        QueryGuard retryGuard(0, 1, [] { return 0U; });
+        context.guard = &retryGuard;
+        const auto result = execute(project, context);
+        ASSERT_EQ(result.rowCount(), 1U);
+        ASSERT_EQ(result.getColumns().size(), columns);
+        for (size_t i = 0U; i < columns; ++i)
+            EXPECT_EQ(result.getRows().front().at("value" + std::to_string(i)).asPrimitive(),
+                PropertyValue(static_cast<int64_t>(i)));
+    }
 
 	TEST_F(LogicalVectorPropertyBatchTest, CompleteSourceAdmissionRejectsBeforeCopyAndDoesNotRetrySourceErrors) {
 		backend->state->enable_shaped_property_admission = true;
@@ -1529,4 +1859,138 @@ namespace graph::query {
         }
         EXPECT_EQ(funded->used(), 0U);
     }
+TEST_F(LogicalVectorPropertyBatchTest, OwnedProjectionHandoffKeepsRoomUnderVaryingParentHeadroom) {
+    using namespace execution::detail;
+    backend->state->nodes.clear(); backend->state->search_result.hits.clear();
+    for (uint64_t id = 1U; id <= 40U; ++id) {
+        storage::LogicalGraphNode node;
+        node.node_id = id;
+        for (size_t field = 0U; field < 8U; ++field)
+            node.properties.push_back({"rank" + std::to_string(field) + std::string(128U, 'k') + std::to_string(id),
+                PropertyValue(static_cast<int64_t>(id))});
+        backend->state->nodes.emplace(id, std::move(node));
+        backend->state->search_result.hits.push_back({41U - id, static_cast<float>(id)});
+    }
+    std::vector<std::unique_ptr<expressions::Expression>> arguments;
+    arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("node"));
+    auto keys = std::make_shared<expressions::FunctionCallExpression>("keys", std::move(arguments));
+    logical::LogicalProject project(search(40), {{keys, "keys"}});
+    options.bounds.maximum_materialized_bytes = 256U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8U * 1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
+    const auto run = [&](size_t cap) {
+        auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, cap);
+        QueryContext context; context.resource_account = account;
+        size_t retained = 0U;
+        {
+            const auto result = execute(project, context);
+            EXPECT_EQ(result.rowCount(), 40U);
+            for (size_t index = 0U; index < result.rowCount(); ++index) {
+                std::vector<PropertyValue> expected;
+                for (size_t field = 0U; field < 8U; ++field)
+                    expected.emplace_back("rank" + std::to_string(field) + std::string(128U, 'k') + std::to_string(40U - index));
+                EXPECT_EQ(result.getRows()[index].at("keys").asPrimitive(), PropertyValue(std::move(expected)));
+            }
+            retained = account->used();
+            EXPECT_GT(retained, 0U); EXPECT_LE(retained, cap);
+        }
+        EXPECT_EQ(account->used(), 0U); EXPECT_EQ(database->usage().total, 0U);
+        return retained;
+    };
+    const auto retained = run(256U * 1024U);
+    // Enough for the measured complete result plus several single-row
+    // workspaces. Vary the remainder so a batch cannot rely on lucky slack.
+    for (size_t extra = 16384U; extra < 24576U; extra += 257U) {
+        SCOPED_TRACE(extra);
+        EXPECT_NO_THROW(static_cast<void>(run(retained + extra)));
+    }
+}
+
+} // namespace graph::query
+
+namespace graph::query {
+TEST_F(LogicalVectorPropertyBatchTest, ConsumedHitsReleaseBeforeHydrationAndSourceErrorsNeverReplay) {
+    using namespace execution::detail;
+    backend->state->search_result.hits = {{1U, 0.5F}};
+    backend->state->enable_property_admission = true;
+    logical::LogicalProject project(search(),
+        {{std::make_shared<expressions::VariableReferenceExpression>("node", "rank"), "rank"}});
+    options.bounds.maximum_materialized_bytes = 8192U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 8192U);
+    QueryContext context; context.resource_account = account;
+    size_t released = 0U, reads = 0U;
+    debug::PerfTrace::ScopedObserver observe(&released,
+        [](void *p, std::string_view key, int64_t bytes, bool duration) noexcept {
+            if (!duration && key == "logical_procedure.vector_source_bytes_released" && bytes > 0)
+                *static_cast<size_t *>(p) += static_cast<size_t>(bytes);
+        });
+    backend->state->before_property_admission = [&] {
+        ++reads;
+        EXPECT_GE(released, sizeof(storage::LogicalGraphVectorSearchHit));
+        throw std::domain_error("source hydration failed after hit release");
+    };
+    try { static_cast<void>(execute(project, context)); FAIL() << "source failure must propagate"; }
+    catch (const std::domain_error &error) { EXPECT_STREQ(error.what(), "source hydration failed after hit release"); }
+    EXPECT_EQ(reads, 1U);
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(backend->state->search_result.hits.size(), 1U);
+    backend->state->before_property_admission = {};
+    {
+        const auto result = execute(project, context);
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows()[0].at("rank").asPrimitive(), PropertyValue(10));
+        EXPECT_GT(account->used(), 0U);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(database->usage().total, 0U);
+}
+
+TEST_F(LogicalVectorPropertyBatchTest, CompleteThreeHundredRowsKeepTheUnchangedOwnedQueryQuota) {
+    using namespace execution::detail;
+    backend->state->nodes.clear(); backend->state->search_result.hits.clear();
+    for (uint64_t id = 1U; id <= 300U; ++id) {
+        storage::LogicalGraphNode node;
+        node.node_id = id; node.properties = {{"rank" + std::to_string(id), PropertyValue(static_cast<int64_t>(id))}};
+        backend->state->nodes.emplace(id, std::move(node));
+        backend->state->search_result.hits.push_back({301U - id, static_cast<float>(id)});
+    }
+    std::vector<std::unique_ptr<expressions::Expression>> arguments;
+    arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("node"));
+    auto keys = std::make_shared<expressions::FunctionCallExpression>("keys", std::move(arguments));
+    logical::LogicalProject project(search(300), {{keys, "keys"}});
+    options.bounds.maximum_materialized_bytes = 256U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(8U * 1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(8U * 1024U * 1024U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 256U * 1024U);
+    QueryContext context; context.resource_account = account;
+    struct Trace { size_t released = 0U, compactions = 0U; } trace;
+    debug::PerfTrace::ScopedObserver observe(&trace,
+        [](void *p, std::string_view key, int64_t bytes, bool duration) noexcept {
+            if (!duration && key == "logical_procedure.vector_source_bytes_released" && bytes > 0)
+                static_cast<Trace *>(p)->released += static_cast<size_t>(bytes);
+            if (!duration && key == "logical_procedure.vector_source_prefix_compacted")
+                ++static_cast<Trace *>(p)->compactions;
+        });
+    {
+        const auto result = execute(project, context);
+        ASSERT_EQ(result.rowCount(), 300U);
+        for (size_t index = 0U; index < result.rowCount(); ++index)
+            EXPECT_EQ(result.getRows()[index].at("keys").asPrimitive(),
+                PropertyValue(std::vector<PropertyValue>{PropertyValue("rank" + std::to_string(300U - index))}));
+        EXPECT_LE(result.getRows().capacity(), 300U);
+        EXPECT_GT(trace.compactions, 0U);
+        EXPECT_GE(trace.released, 300U * sizeof(storage::LogicalGraphVectorSearchHit));
+        EXPECT_GT(account->used(), 0U);
+        EXPECT_LE(account->used(), 256U * 1024U);
+        RecordProperty("escaped_result_account_bytes", account->used());
+        RecordProperty("released_hit_source_bytes", trace.released);
+        EXPECT_EQ(backend->state->search_result.hits.size(), 300U);
+        EXPECT_EQ(backend->state->node_point_reads, 0U);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(database->usage().total, 0U);
+}
+
 } // namespace graph::query

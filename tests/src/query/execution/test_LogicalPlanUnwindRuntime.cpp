@@ -21,7 +21,9 @@
 #include "graph/core/TemporalTypes.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "query/execution/LogicalPlanUnwindRuntimeTestFixture.hpp"
+#include "query/execution/RetainedResultBudgetTest.hpp"
 #include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
@@ -1830,8 +1832,29 @@ TEST(LogicalPlanReadRuntimeTest, PaginationFlushesUnderBytePressureWithoutChangi
 	constrained.maximum_materialized_bytes = 1000U;
 	// The two retained QueryResult rows now share the cap with both pagination
 	// buffers and the output batch; the former 1000-byte allowance omits them.
-	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained)), std::runtime_error);
+    // Two compact scalar results can now genuinely fit. Keep the original
+    // positive window below, but require six retained maps for this denial
+    // fixture: their live inline pairs/row headers alone exceed 1000 bytes
+    // on supported native STLs, independently of obsolete entity padding.
+    QueryPlan denied = parser.parseToLogical("UNWIND [1,2,3,4,5,6,7,8] AS value RETURN value SKIP 2 LIMIT 6");
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*denied.root, constrained)), std::runtime_error);
 	constrained.maximum_materialized_bytes = 1500U;
+    std::array<int64_t,2U> streamed{};size_t delivered=0U;
+    EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root,constrained,[&](const LogicalPlanReadRow &row) {
+        EXPECT_LT(delivered,streamed.size());if(delivered>=streamed.size())return false;
+        streamed[delivered++]=std::get<int64_t>(std::get<PropertyValue>(row.values.at("value")).getVariant());return true;
+    })));
+    EXPECT_EQ(delivered,2U);EXPECT_EQ(streamed,(std::array<int64_t,2U>{7,8}));
+    const std::array<PropertyValue,2U> expected{PropertyValue(7),PropertyValue(8)};
+    const auto completeBytes=test_support::scalarResultRequests(expected);
+    RecordProperty("complete_result_storage_requests",completeBytes);
+    if(completeBytes>constrained.maximum_materialized_bytes) {
+        graph::query::QueryContext owned;
+        owned.resource_account=test_support::resultAccount(constrained.maximum_materialized_bytes);
+        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root,constrained,owned)),std::runtime_error);
+        EXPECT_EQ(owned.resource_account->used(),0U);
+        return;
+    }
 	const auto result = runtime.executeToQueryResult(*plan.root, constrained);
 	ASSERT_EQ(result.rowCount(), 2U);
 	EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue(7));
@@ -1845,10 +1868,27 @@ TEST(LogicalPlanReadRuntimeTest, SkipStreamsAnExactBudgetRowWithoutSelectionStor
 	auto source = std::make_unique<logical::LogicalUnwind>(
 		std::make_unique<logical::LogicalSingleRow>(), "value", std::vector<PropertyValue>{payload});
 	logical::LogicalSkip skip(std::move(source), 0);
-	auto constrained = bounds();
-	const size_t rowBytes = sizeof(LogicalPlanReadRow) + std::string("value").size() +
-		sizeof(LogicalPlanReadValue) + property_utils::getPropertyValueSize(payload);
-	constrained.maximum_materialized_bytes = rowBytes + sizeof(LogicalPlanReadRow);
+    auto constrained = bounds();
+    // Independently account the allocated binding node, not only its embedded
+    // variant. The visitor owns one separate row slot. Preserve the logical
+    // payload floor as well as the actual retained string request.
+    using Bindings = decltype(LogicalPlanReadRow::values);
+    using Node = typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+    const auto &text = std::get<std::string>(payload.getVariant());
+    const size_t rowBytes = sizeof(LogicalPlanReadRow) + (std::max)(
+        std::string("value").size()+sizeof(LogicalPlanReadValue)+property_utils::getPropertyValueSize(payload),
+        sizeof(Node)+graph::query::execution::detail::dynamicStringBufferBytes(text)+
+            graph::query::execution::detail::dynamicStringBufferBytes(std::string("value")));
+    constrained.maximum_materialized_bytes = rowBytes + sizeof(LogicalPlanReadRow);
+    // A layout regression must not silently expand this success boundary.
+    ASSERT_LE(constrained.maximum_materialized_bytes, 1792U);
+
+    auto insufficient = constrained;
+    --insufficient.maximum_materialized_bytes;
+    size_t rejectedDeliveries = 0U;
+    EXPECT_THROW(static_cast<void>(runtime.execute(skip, insufficient,
+        [&](const LogicalPlanReadRow &) { ++rejectedDeliveries; return true; })), graph::query::execution::MaterializedByteLimitExceeded);
+    EXPECT_EQ(rejectedDeliveries, 0U);
 	size_t delivered = 0U;
 	EXPECT_NO_THROW(static_cast<void>(runtime.execute(skip, constrained, [&](const LogicalPlanReadRow &row) {
 		++delivered;
@@ -1858,7 +1898,7 @@ TEST(LogicalPlanReadRuntimeTest, SkipStreamsAnExactBudgetRowWithoutSelectionStor
 	EXPECT_EQ(delivered, 1U);
 }
 
-TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationChecksTheSharedBudgetBeforeCopying) {
+TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationAccountsTransferredPayloadAndRejectsInsufficientBudget) {
 	NoGraphBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
 	graph::parser::cypher::CypherParserImpl parser;
@@ -1871,16 +1911,40 @@ TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationChecksTheSharedBudgetBef
 	EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, constrained,
 		[&](const LogicalPlanReadRow &) { ++streamed; return true; })));
 	EXPECT_EQ(streamed, 1U);
-	try {
-		static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
-		FAIL() << "the retained input and its public result copy must share one allowance";
-	} catch (const std::runtime_error &error) {
-		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
-	}
-	constrained.maximum_materialized_bytes = 3000U;
-	const QueryResult result = runtime.executeToQueryResult(*plan.root, constrained);
-	ASSERT_EQ(result.rowCount(), 1U);
-	EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
+    const size_t originalLimit = constrained.maximum_materialized_bytes;
+    struct Observed { size_t peak = 0U; size_t transferred = 0U; } observed;
+    graph::debug::PerfTrace::ScopedObserver observer(&observed,
+        [](void *p, std::string_view key, int64_t value, bool duration) noexcept {
+            if (duration || value < 0) return;
+            auto &o = *static_cast<Observed *>(p);
+            if (key == "logical_plan.materialized_budget_peak_bytes")
+                o.peak = std::max(o.peak, static_cast<size_t>(value));
+            if (key == "logical_plan.result.transferred_scalar_cells")
+                o.transferred += static_cast<size_t>(value);
+        });
+    constrained.maximum_materialized_bytes = 3000U;
+    {
+        const QueryResult result = runtime.executeToQueryResult(*plan.root, constrained);
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
+    }
+    ASSERT_GT(observed.peak, 0U);
+    ASSERT_GT(observed.transferred, 0U);
+    // Terminal publication moves the charged payload. Its real peak can fit
+    // the old copy-denial limit on libc++; never require an obsolete copy.
+    // Keep the denial cap no larger than the original and reject just below
+    // the observed required peak when that peak is smaller on this ABI.
+    constrained.maximum_materialized_bytes = std::min(originalLimit, observed.peak - 1U);
+    try {
+        static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
+        FAIL() << "the transferred payload must remain within the shared allowance";
+    } catch (const std::runtime_error &error) {
+        EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+    }
+    constrained.maximum_materialized_bytes = 3000U;
+    const QueryResult retry = runtime.executeToQueryResult(*plan.root, constrained);
+    ASSERT_EQ(retry.rowCount(), 1U);
+    EXPECT_EQ(retry.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
 }
 
 TEST(LogicalPlanReadRuntimeTest, SortPaginationAndSortTransferRowsWithinTheSharedBudget) {

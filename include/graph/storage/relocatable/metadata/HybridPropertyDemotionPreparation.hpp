@@ -253,7 +253,7 @@ private:
                             require(cell.extension, "cold demotion lost its borrowed replacement value"); expected = cell.extension; break;
                         default: require(false, "cold demotion has an invalid final cell");
                     }
-                    std::pmr::vector<std::byte> encoded(memory.get());
+                    std::pmr::vector<std::byte> encoded(size_t{0U}, memory.get());
                     encoded.reserve(CanonicalPropertyValueCodec::encodedSize(*expected));
                     CanonicalPropertyValueCodec::append(encoded, *expected);
                     require(std::ranges::equal(encoded, *bytes), "cold demotion target changes an authenticated final column value");

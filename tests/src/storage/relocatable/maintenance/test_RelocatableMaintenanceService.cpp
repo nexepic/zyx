@@ -1260,17 +1260,20 @@ TEST_F(RelocatableMaintenanceServiceTest, RecoversVectorDebtWhileTheOnlyQueueSlo
 			[&scans](uint64_t afterIndexId, size_t maximumMetadataPages) {
 				EXPECT_EQ(maximumMetadataPages, 2U);
 				const uint32_t scan = scans.fetch_add(1U, std::memory_order_relaxed);
+				// Recovery remains scheduled after reaching the end, so each
+				// exhausted scan starts another pass at zero.
 				if (scan == 0U) {
 					EXPECT_EQ(afterIndexId, 0U);
 					return RelocatableVectorRebuildDebtScan{77U, 77U, 1U, false};
 				}
-				EXPECT_EQ(afterIndexId, 77U);
+				EXPECT_EQ(afterIndexId, scan == 1U ? 77U : 0U);
 				return RelocatableVectorRebuildDebtScan{std::nullopt, 0U, 1U, true};
 			});
 
 	EXPECT_EQ(service.enqueueVectorRebuildRecovery(), 1U);
 	service.start();
 	ASSERT_TRUE(waitUntil([&] { return service.metrics().vector_rebuild_recovery_completed_rebuild_attempts >= 1U; }));
+	ASSERT_TRUE(waitUntil([&] { return scans.load(std::memory_order_relaxed) >= 3U; }));
 	EXPECT_EQ(rebuiltIndex.load(std::memory_order_acquire), 77U);
 	EXPECT_THROW(static_cast<void>(service.enqueueVectorBaseRebuild(99U)), std::length_error);
 	const RelocatableMaintenanceMetrics metrics = service.metrics();

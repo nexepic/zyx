@@ -59,14 +59,14 @@
 			}
 			if (const auto properties = input.property_cache.find(sourceVariable);
 				properties != input.property_cache.end()) {
-				projected.property_cache.emplace(alias, detail::copyPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
+				projected.property_cache.emplace(alias, detail::copyBindingPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
 				if (input.complete_entity_property_cache.contains(sourceVariable)) {
 					projected.complete_entity_property_cache.insert(alias);
 				}
 			}
 			if (const auto metadata = input.entity_metadata_cache.find(sourceVariable);
 				metadata != input.entity_metadata_cache.end()) {
-				projected.entity_metadata_cache.emplace(alias, detail::copyPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
+				projected.entity_metadata_cache.emplace(alias, detail::copyBindingPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
 			}
 		}
 
@@ -137,7 +137,7 @@
                             return owner ? owner.get() : std::pmr::new_delete_resource();
                         } else return std::pmr::new_delete_resource();
 					};
-					std::pmr::vector<const PropertyValue::MapType::value_type *> entries{scratchResource()};
+					utils::AdmissionPmrVector<const PropertyValue::MapType::value_type *> entries{scratchResource()};
 					entries.reserve(map.size());
 					for (const auto &entry: map) {
 						entries.push_back(&entry);
@@ -201,7 +201,7 @@
 
 		[[nodiscard]] std::pmr::string distinctRowKey(const LogicalPlanReadRow &row,
 												 const std::vector<logical::LogicalProjectItem> &items, std::pmr::memory_resource *memory) {
-			std::pmr::string result{memory};
+			auto result=utils::makeEmptyAdmissionPmrString(memory);
 			for (const logical::LogicalProjectItem &item: items) {
 				const auto found = row.values.find(item.alias);
 				if (found == row.values.end()) { // ZYX_COV_EXCL_LINE: Project validates aliases and emplaces every
@@ -268,7 +268,7 @@
 		}
 
 		void mergeCompatibleRowCaches(LogicalPlanReadRow &destination, const LogicalPlanReadRow &source, ExecutionState &state,
-									  const std::pmr::unordered_set<std::string_view> *excludedAliases = nullptr) {
+									  const utils::AdmissionPmrUnorderedSet<std::string_view> *excludedAliases = nullptr) {
 			const auto checkpoint = [&] { checkGuardNow(state); };
 			const auto includeAlias = [excludedAliases](const std::string &alias) {
 				return excludedAliases == nullptr || !excludedAliases->contains(alias);
@@ -283,7 +283,7 @@
 							"logical-plan row combination received incompatible Property cache entries");
 				}
 				if (existing == destination.property_cache.end()) {
-					destination.property_cache.emplace(alias, detail::copyPropertyMapGuarded(properties, checkpoint));
+					destination.property_cache.emplace(alias, detail::copyBindingPropertyMapGuarded(properties, checkpoint));
 				}
 				if (source.complete_entity_property_cache.contains(alias)) {
 					destination.complete_entity_property_cache.insert(alias);
@@ -396,7 +396,7 @@
 													  const std::vector<std::string> &columns,
 			std::pmr::memory_resource *memory = std::pmr::new_delete_resource()) {
 			String result = [&] {
-				if constexpr (std::is_same_v<String, std::pmr::string>) return String{memory};
+				if constexpr (std::is_same_v<String, std::pmr::string>) return utils::makeEmptyAdmissionPmrString(memory);
 				else return String{};
 			}();
 			for (const std::string &column: columns) {
@@ -413,7 +413,7 @@
 
 		[[nodiscard]] std::pmr::string bindingKey(const LogicalPlanReadRow &row,
 			std::span<const std::string *const> columns, std::pmr::memory_resource *memory) {
-			std::pmr::string result{memory};
+			auto result=utils::makeEmptyAdmissionPmrString(memory);
 			for (const auto *name: columns) {
 				const auto &column = *name;
 				const auto value = row.values.find(column);
@@ -504,7 +504,7 @@
 			}
 		};
 		using MaterializedPropertyCache =
-			std::pmr::unordered_map<MaterializedEntityKey, PropertyMap, MaterializedEntityKeyHash>;
+			utils::AdmissionPmrUnorderedMap<MaterializedEntityKey, PropertyMap, MaterializedEntityKeyHash>;
 		using FinalRowVisitor = std::function<bool(LogicalPlanReadRow &, ExecutionState &)>;
 		using BatchSelectionPredicate = std::function<bool(LogicalPlanReadRow &, ExecutionState &)>;
 
@@ -574,14 +574,14 @@
 			return materialized.emplace(cacheKey, std::move(properties)).first->second;
 		}
 
-		[[nodiscard]] PropertyMap copyResultPropertyMap(const PropertyMap &properties, ExecutionState &state) {
+		[[nodiscard]] PropertyValue::MapType copyResultPropertyMap(const PropertyMap &properties, ExecutionState &state) {
 			return detail::copyPropertyMapGuarded(properties, [&] {
 				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 		}
 
 		template<typename Entity>
-		[[nodiscard]] PropertyMap materializeUniqueEntityProperties(const LogicalPlanReadRow &row, const Entity &entity,
+		[[nodiscard]] PropertyValue::MapType materializeUniqueEntityProperties(const LogicalPlanReadRow &row, const Entity &entity,
 																	ExecutionState &state) {
 			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
 						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
@@ -589,18 +589,18 @@
 				return copyResultPropertyMap(*cached, state);
 			if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
 				validateNode(entity, state);
-				return readNodeProperties(state.shared.snapshot, entity, state);
+				return readNodeProperties<PropertyValue::MapType>(state.shared.snapshot, entity, state);
 			} else {
 				validateEdge(entity);
-				return readEdgeProperties(state.shared.snapshot, entity, state);
+				return readEdgeProperties<PropertyValue::MapType>(state.shared.snapshot, entity, state);
 			}
 		}
 
 		template<typename Entity>
-		[[nodiscard]] PropertyMap materializeCompleteEntityProperties(const Entity &entity, ExecutionState &state) {
+		[[nodiscard]] PropertyValue::MapType materializeCompleteEntityProperties(const Entity &entity, ExecutionState &state) {
 			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
 						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
-			PropertyMap properties;
+			PropertyValue::MapType properties;
 			properties.reserve(entity.properties.size());
 			for (const storage::LogicalGraphPropertyEntry &entry: entity.properties) {
 				checkGuard(state);
@@ -616,9 +616,9 @@
 		[[nodiscard]] size_t completeResultPropertyBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 														 ExecutionState &state) {
 			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
-			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
+			utils::AdmissionPmrUnorderedSet<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
-			size_t bytes = sizeof(PropertyMap);
+			size_t bytes = sizeof(PropertyValue::MapType);
 			for (const auto &entry: entries) {
 				checkGuard(state);
 				if (!keys.insert(entry.key).second) {
@@ -629,7 +629,11 @@
 				bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(entry.value, state),
 									   "logical-plan result row size overflowed");
 			}
-			return bytes;
+			const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+            const size_t physical = checkedSizeAdd(sizeof(PropertyValue::MapType),
+                detail::freshResultEntryMapHeapUpper(entries, checkpoint),
+                "logical-plan result map allocation overflowed");
+            return (std::max)(bytes, physical);
 		}
 
 		template<typename Entity>
@@ -648,12 +652,12 @@
 					}
 					bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
 				}
-				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state),
+				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state) - sizeof(PropertyValue::MapType),
 									  "logical-plan result row size overflowed");
 			} else {
 				const size_t bytes = checkedSizeAdd(sizeof(LogicalEdgeResult), std::max(entity.type.size(), detail::dynamicStringBufferBytes(entity.type)),
 													"logical-plan result row size overflowed");
-				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state),
+				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state) - sizeof(PropertyValue::MapType),
 									  "logical-plan result row size overflowed");
 			}
 		}
@@ -669,6 +673,57 @@
 			}
 			reservation.set(nextBytes);
 		}
+
+        // The reference is a small independent value; complete cached records
+        // remain borrowed only until the owning public result has been copied.
+        [[nodiscard]] ResultValue materializeReferenceResultValue(const storage::EntityRef &reference,
+                ExecutionState &state, size_t rowPrefixBytes, size_t columnNameBytes,
+                bool rowPreflighted, MaterializedByteReservation &outputReservation) {
+            const auto copyCheckpoint = [&] { checkGuardNow(state); };
+
+			validateEntityRef(reference);
+			if (reference.is_edge) {
+				MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
+				std::optional<storage::LogicalGraphEdge> loaded;
+				const auto cached = state.shared.edge_cache.find(reference.entity_id);
+				const storage::LogicalGraphEdge *edge = nullptr;
+				if (cached != state.shared.edge_cache.end()) {
+					edge = &cached->second;
+				} else {
+					loaded.emplace(readEdgeCached(state, reference.entity_id));
+					edge = &*loaded;
+				}
+				validateEdgeReferenceRecord(reference, *edge, state, "logical graph Entity reference");
+				const std::optional<size_t> entityBytes =
+						rowPreflighted ? std::nullopt
+									   : std::optional<size_t>(completeEntityResultBytes(*edge, state));
+				if (loaded)
+					loadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));
+				if (entityBytes)
+					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+				PropertyValue::MapType properties = materializeCompleteEntityProperties(*edge, state);
+				return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
+													 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
+			}
+			MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
+			std::optional<storage::LogicalGraphNode> loaded;
+			const auto cached = state.shared.node_cache.find(reference.entity_id);
+			const storage::LogicalGraphNode *node = nullptr;
+			if (cached != state.shared.node_cache.end()) {
+				node = &cached->second;
+			} else {
+				loaded.emplace(readNodeCached(state, reference.entity_id));
+				node = &*loaded;
+			}
+			const std::optional<size_t> entityBytes =
+					rowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));
+			if (loaded)
+				loadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));
+			if (entityBytes)
+				admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+			PropertyValue::MapType properties = materializeCompleteEntityProperties(*node, state);
+			return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
+        }
 
 		[[nodiscard]] ResultValue materializeResultValue(const LogicalPlanReadRow &row,
 														 const LogicalPlanReadValue &value, ExecutionState &state,
@@ -694,55 +749,13 @@
 					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				}));
 			}
-			// Borrow a prefetched complete record while constructing the public
-			// result. Only a cache miss needs a local shaped read.
-			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-				validateEntityRef(*reference);
-				if (reference->is_edge) {
-					MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
-					std::optional<storage::LogicalGraphEdge> loaded;
-					const auto cached = state.shared.edge_cache.find(reference->entity_id);
-					const storage::LogicalGraphEdge *edge = nullptr;
-					if (cached != state.shared.edge_cache.end()) {
-						edge = &cached->second;
-					} else {
-						loaded.emplace(readEdgeCached(state, reference->entity_id));
-						edge = &*loaded;
-					}
-					validateEdgeReferenceRecord(*reference, *edge, state, "logical graph Entity reference");
-					const std::optional<size_t> entityBytes =
-							rowPreflighted ? std::nullopt
-										   : std::optional<size_t>(completeEntityResultBytes(*edge, state));
-					if (loaded)
-						loadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));
-					if (entityBytes)
-						admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
-					PropertyMap properties = materializeCompleteEntityProperties(*edge, state);
-					return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
-														 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
-				}
-				MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
-				std::optional<storage::LogicalGraphNode> loaded;
-				const auto cached = state.shared.node_cache.find(reference->entity_id);
-				const storage::LogicalGraphNode *node = nullptr;
-				if (cached != state.shared.node_cache.end()) {
-					node = &cached->second;
-				} else {
-					loaded.emplace(readNodeCached(state, reference->entity_id));
-					node = &*loaded;
-				}
-				const std::optional<size_t> entityBytes =
-						rowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));
-				if (loaded)
-					loadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));
-				if (entityBytes)
-					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
-				PropertyMap properties = materializeCompleteEntityProperties(*node, state);
-				return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
-			}
+            if (const auto *reference = std::get_if<storage::EntityRef>(&value))
+                return materializeReferenceResultValue(*reference, state, rowPrefixBytes,
+                    columnNameBytes, rowPreflighted, outputReservation);
+
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				if (!repeatedEntity) {
-					PropertyMap properties = materializeUniqueEntityProperties(row, *node, state);
+					PropertyValue::MapType properties = materializeUniqueEntityProperties(row, *node, state);
 					return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
 				}
 				const PropertyMap &properties = materializeEntityProperties(row, *node, state, materialized, &propertyCacheReservation);
@@ -750,7 +763,7 @@
 			}
 			const storage::LogicalGraphEdge &edge = std::get<storage::LogicalGraphEdge>(value);
 			if (!repeatedEntity) {
-				PropertyMap properties = materializeUniqueEntityProperties(row, edge, state);
+				PropertyValue::MapType properties = materializeUniqueEntityProperties(row, edge, state);
 				return ResultValue(LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, detail::copyPropertyStringGuarded(edge.type, copyCheckpoint),
 													 std::move(properties)});
 			}
@@ -765,9 +778,9 @@
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
 			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
-			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
+			utils::AdmissionPmrUnorderedSet<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
-			size_t bytes = sizeof(PropertyMap);
+			size_t bytes = sizeof(PropertyValue::MapType);
 			for (const auto &entry: entries) {
 				checkGuard(state);
 				if (entry.key.empty() || !keys.insert(entry.key).second) {
@@ -778,8 +791,33 @@
 				bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(entry.value, state),
 									   "logical-plan result row size overflowed");
 			}
-			return bytes;
+			const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+            const size_t physical = checkedSizeAdd(sizeof(PropertyValue::MapType),
+                detail::freshResultEntryMapHeapUpper(entries, checkpoint),
+                "logical-plan result map allocation overflowed");
+            return (std::max)(bytes, physical);
 		}
+
+        // A compact internal cache is not the public unordered result map.
+        // Admit the destination layout and copied heap before converting it.
+        [[nodiscard]] size_t copiedResultPropertyBytes(const PropertyMap &properties, ExecutionState &state) {
+            constexpr const char *message = "logical-plan result Property map size overflowed";
+            size_t logical = sizeof(PropertyValue::MapType);
+            size_t physical = checkedSizeAdd(sizeof(PropertyValue::MapType),
+                utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(
+                    graph::property_copy::freshMapReserveCount(properties.size())), message);
+            const std::function<void()> checkpoint = [&] { checkGuardNow(state); };
+            for (const auto &[key, value] : properties) {
+                checkpoint();
+                logical = checkedSizeAdd(logical, checkedSizeAdd(key.size(),
+                    checkedSizeAdd(sizeof(PropertyValue), retainedExpressionValueBytes(value, state), message), message), message);
+                physical = checkedSizeAdd(physical,
+                    utils::detail::standardFreshStringHeapUpper(key.size()), message);
+                physical = checkedSizeAdd(physical,
+                    storage::CanonicalPropertyValueCodec::guardedCopyHeapUpper(value, checkpoint), message);
+            }
+            return (std::max)(logical, physical);
+        }
 
 		[[nodiscard]] size_t predictableEntityResultBytes(const LogicalPlanReadRow &row,
 														  const storage::LogicalGraphNode &node,
@@ -799,9 +837,9 @@
 				bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
 			}
 			return checkedSizeAdd(bytes,
-								  cached != nullptr
-										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.shared.context)
-										  : inlineResultPropertyBytes(node.properties, state),
+								  (cached != nullptr
+										  ? copiedResultPropertyBytes(*cached, state)
+										  : inlineResultPropertyBytes(node.properties, state)) - sizeof(PropertyValue::MapType),
 								  "logical-plan result row size overflowed");
 		}
 
@@ -814,9 +852,9 @@
 			const size_t bytes = checkedSizeAdd(sizeof(LogicalEdgeResult), std::max(edge.type.size(), detail::dynamicStringBufferBytes(edge.type)),
 												"logical-plan result row size overflowed");
 			return checkedSizeAdd(bytes,
-								  cached != nullptr
-										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.shared.context)
-										  : inlineResultPropertyBytes(edge.properties, state),
+								  (cached != nullptr
+										  ? copiedResultPropertyBytes(*cached, state)
+										  : inlineResultPropertyBytes(edge.properties, state)) - sizeof(PropertyValue::MapType),
 								  "logical-plan result row size overflowed");
 		}
 
@@ -852,8 +890,184 @@
 			return std::nullopt;
 		}
 
+        // Only the QueryResult consumer may retire its buffered input. Public
+        // row callbacks retain their original borrowing/early-stop contract.
+        void retireResultSourceRow(LogicalPlanReadRow &row, ExecutionState &state,
+                                   MaterializedByteReservation &sourceReservation) {
+            const size_t before = logicalReadRowBytes(row, state.shared.context);
+            row.values.clear(); row.property_cache.clear(); row.entity_metadata_cache.clear();
+            row.complete_entity_property_cache.clear(); row.path_cache.clear();
+            const size_t after = logicalReadRowBytes(row, state.shared.context);
+            if (after > before || before - after > sourceReservation.bytes())
+                throw std::logic_error("result source retirement exceeded its retained charge");
+            sourceReservation.set(sourceReservation.bytes() - (before - after));
+            debug::PerfTrace::addValue("logical_plan.result.retired_source_bytes", static_cast<int64_t>(before - after));
+        }
+
+        // Terminal scalar/reference output does not evaluate more expressions.
+        // Scalars own their values; reference conversion reads complete records,
+        // not row caches. Concrete shaped entities still require those caches.
+        void retireUnusedResultCaches(LogicalPlanReadRow &row, ExecutionState &state,
+                                      MaterializedByteReservation &sourceReservation) {
+            for (const auto &[name, value] : row.values) {
+                if (!std::holds_alternative<PropertyValue>(value) &&
+                    !std::holds_alternative<storage::EntityRef>(value)) return;
+            }
+            const size_t before = logicalReadRowBytes(row, state.shared.context);
+            row.property_cache.clear(); row.entity_metadata_cache.clear();
+            row.complete_entity_property_cache.clear(); row.path_cache.clear();
+            const size_t after = logicalReadRowBytes(row, state.shared.context);
+            if (after > before || before - after > sourceReservation.bytes())
+                throw std::logic_error("result cache retirement exceeded its retained charge");
+            sourceReservation.set(sourceReservation.bytes() - (before - after));
+            debug::PerfTrace::addValue("logical_plan.result.retired_cache_bytes", static_cast<int64_t>(before - after));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            static std::atomic<unsigned> reports{0U};
+            if (before != after && std::getenv("ZYX_CI_BUDGET_TRACE") &&
+                    reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                std::fprintf(stderr, "CI_RESULT_OWNERSHIP phase=caches_retired row_before=%zu row_after=%zu buffered_source_charge=%zu used=%zu available=%zu cache_nodes=%zu cache_edges=%zu cache_payload=%zu cache_allocator=%zu final_result=%zu reports_limit=20\n",
+                    before, after, sourceReservation.bytes(), state.shared.materialized_budget.used(),
+                    state.shared.materialized_budget.available(), state.shared.node_cache.size(), state.shared.edge_cache.size(),
+                    state.shared.materialized_cache_reservation.bytes(), state.shared.entity_cache_memory.used(),
+                    state.shared.final_result_reservation.bytes());
+                std::fflush(stderr);
+            }
+#endif
+        }
+
+        bool appendTransferredScalarResultRow(QueryResult &result, LogicalPlanReadRow &row,
+                const std::vector<std::string> &columns, ExecutionState &state,
+                MaterializedByteReservation &sourceReservation) {
+            if (columns.size() == 1U && (!result.getRows().empty() || result.getRows().capacity() == 0U)) {
+                const auto binding = row.values.find(columns.front());
+                const auto *property = binding == row.values.end() ? nullptr : std::get_if<PropertyValue>(&binding->second);
+                if (property && property->getType() == PropertyType::INTEGER) {
+                    checkGuardNow(state);
+                    MaterializedByteReservation stagedBytes(&state.shared.materialized_budget);
+                    stagedBytes.set(sizeof(int64_t));
+                    const int64_t staged = std::get<int64_t>(property->getVariant());
+                    retireResultSourceRow(row, state, sourceReservation);
+                    if (result.getRows().empty()) {
+                        auto output = detail::ScalarResultHandoff::appendFirstInteger(result, columns.front(), staged,
+                            state.shared.materialized_budget, [&] { checkGuardNow(state); });
+                        state.shared.final_result_reservation.absorb(std::move(output));
+                    } else {
+                        detail::ScalarResultHandoff::appendInteger(result, columns.front(), staged,
+                            state.shared.materialized_budget, state.shared.final_result_reservation,
+                            [&] { checkGuardNow(state); }, [&](size_t requested, size_t previous) {
+                                reclaimResultCaches(state, requested, previous, [](bool, uint64_t) { return false; });
+                            });
+                    }
+                    state.shared.final_result_bytes = state.shared.final_result_reservation.bytes();
+                    debug::PerfTrace::addValue("logical_plan.result.in_place_integer_cells", 1);
+                    return true;
+                }
+            }
+            constexpr const char *message = "logical-plan scalar result transfer overflowed";
+            size_t logicalShell = sizeof(QueryResult::Row);
+            size_t physicalShell = checkedSizeAdd(sizeof(QueryResult::Row),
+                utils::detail::standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(columns.size()), message);
+            size_t moveScratch = 0U;
+            for (size_t i = 0; i < columns.size(); ++i) {
+                const auto found = row.values.find(columns[i]);
+                if (found == row.values.end() || !std::holds_alternative<PropertyValue>(found->second)) return false;
+                for (size_t j = 0; j < i; ++j) if (columns[j] == columns[i]) return false;
+                logicalShell = checkedSizeAdd(logicalShell, checkedSizeAdd(columns[i].size(), sizeof(ResultValue), message), message);
+                physicalShell = checkedSizeAdd(physicalShell, utils::detail::standardFreshStringHeapUpper(columns[i].size()), message);
+                const auto type = std::get<PropertyValue>(found->second).getType();
+                size_t emptyMove = 0U;
+                if (type == PropertyType::MAP)
+                    emptyMove = utils::detail::standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(0U);
+                else if (type == PropertyType::STRING || type == PropertyType::LIST || type == PropertyType::BYTES)
+                    emptyMove = detail::standardContainerProxyBytes();
+                // try_emplace constructs ResultValue's PropertyValue alternative
+                // directly; MSVC still allocates the empty moved-from container.
+                moveScratch = (std::max)(moveScratch, emptyMove);
+            }
+            MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
+            outputReservation.set(checkedSizeAdd(checkedSizeAdd((std::max)(logicalShell, physicalShell),
+                columns.size(), message), moveScratch, message));
+            QueryResult::Row output;
+            output.reserve(columns.size());
+            for (const auto &column : columns) {
+                checkGuardNow(state);
+                auto &property = std::get<PropertyValue>(row.values.at(column));
+                const size_t before = logicalReadRowBytes(row, state.shared.context);
+                output.try_emplace(column, std::move(property));
+                property = PropertyValue(); // destroy moved-from proxies before their credit changes
+                const size_t after = logicalReadRowBytes(row, state.shared.context);
+                if (after > before || before - after > sourceReservation.bytes())
+                    throw std::logic_error("scalar result transfer lacks its source charge");
+                outputReservation.absorb(sourceReservation.splitOff(before - after));
+            }
+            outputReservation.set(materializedResultRowBytes(output, state));
+            retireResultSourceRow(row, state, sourceReservation);
+            debug::PerfTrace::addValue("logical_plan.result.transferred_scalar_cells", static_cast<int64_t>(columns.size()));
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+            static std::atomic<unsigned> reports{0U};
+            if (std::getenv("ZYX_CI_BUDGET_TRACE") && reports.fetch_add(1U, std::memory_order_relaxed) < 20U) {
+                std::fprintf(stderr, "CI_RESULT_OWNERSHIP phase=scalars_transferred columns=%zu output_charge=%zu buffered_source_charge=%zu move_scratch=%zu used=%zu available=%zu reports_limit=20\n",
+                    columns.size(), outputReservation.bytes(), sourceReservation.bytes(), moveScratch,
+                    state.shared.materialized_budget.used(), state.shared.materialized_budget.available());
+                std::fflush(stderr);
+            }
+#endif
+            appendMaterializedResultRow(result, std::move(output), state, std::move(outputReservation));
+            return true;
+        }
+
+        bool appendTransferredReferenceResultRow(QueryResult &result, LogicalPlanReadRow &row,
+                const std::vector<std::string> &columns, ExecutionState &state,
+                MaterializedByteReservation &sourceReservation) {
+            if (columns.size() != 1U) return false;
+            const auto binding = row.values.find(columns.front());
+            if (binding == row.values.end()) return false;
+            const auto *source = std::get_if<storage::EntityRef>(&binding->second);
+            if (!source) return false;
+            const auto entityBytes = predictableReferenceResultBytes(*source, state);
+            if (!entityBytes) return false;
+            size_t predicted = checkedSizeAdd(sizeof(QueryResult::Row), columns.front().size(),
+                "reference result size overflowed");
+            predicted = checkedSizeAdd(predicted, sizeof(ResultValue), "reference result size overflowed");
+            predicted = checkedSizeAdd(predicted, *entityBytes, "reference result size overflowed");
+            MaterializedByteReservation outputBytes(&state.shared.materialized_budget);
+            std::optional<QueryResult::Row> output;
+            {
+                MaterializedByteReservation stagedBytes(&state.shared.materialized_budget);
+                stagedBytes.set(sizeof(storage::EntityRef));
+                const storage::EntityRef reference = *source;
+                checkGuardNow(state);
+                retireResultSourceRow(row, state, sourceReservation);
+                // Keep the current complete record until its independent result
+                // has been built. Other cache entries are immutable reread hints.
+                reclaimResultCaches(state, predicted, 0U, [&](bool edge, uint64_t id) {
+                    return edge == reference.is_edge && id == reference.entity_id;
+                });
+                // Grow the result array before the incoming owning copy exists.
+                // On MSVC this funds all destination empty maps while both
+                // arrays are live, without overlapping the copied row payload.
+                prepareResultSlotBeforeEntityCopy(result,state,predicted,stagedBytes.bytes(),[&](bool edge,uint64_t id){
+                    return edge==reference.is_edge && id==reference.entity_id;
+                });
+                outputBytes.set(predicted);
+                output.emplace(); output->reserve(1U);
+                output->try_emplace(columns.front(), materializeReferenceResultValue(reference,
+                    state, sizeof(QueryResult::Row), columns.front().size(), true, outputBytes));
+            } // the staged reference is dead before final vector growth
+            const size_t retained = materializedResultRowBytes(*output, state);
+            reclaimResultCaches(state, retained, outputBytes.bytes(), [](bool, uint64_t) { return false; });
+            outputBytes.set(retained);
+            debug::PerfTrace::addValue("logical_plan.result.transferred_entity_refs", 1);
+            appendMaterializedResultRow(result, std::move(*output), state, std::move(outputBytes));
+            return true;
+        }
+
 		void appendLogicalResultRow(QueryResult &result, LogicalPlanReadRow &row,
-								const std::vector<std::string> &columns, ExecutionState &state) {
+								const std::vector<std::string> &columns, ExecutionState &state,
+                MaterializedByteReservation &sourceReservation) {
+            retireUnusedResultCaches(row, state, sourceReservation);
+            if (appendTransferredScalarResultRow(result, row, columns, state, sourceReservation)) return;
+            if (appendTransferredReferenceResultRow(result, row, columns, state, sourceReservation)) return;
 			// Scalars and unique Entities whose complete records are already in
 			// memory have an exact logical result size before payloads are copied.
 			size_t predictableBytes = sizeof(QueryResult::Row);
@@ -906,8 +1120,16 @@
 				if (predictableBytes > state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 				}
-				if (predictableBytes > state.shared.materialized_budget.available()) {
-					throw std::runtime_error("shared materialization exceeded its byte bound");
+                if (predictableBytes > state.shared.materialized_budget.available()) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    if (std::getenv("ZYX_CI_BUDGET_TRACE")) {
+                        std::fprintf(stderr,"CI_RESULT_REJECTION requested=%zu source_row=%zu result_rows=%zu used=%zu available=%zu maximum=%zu\n",
+                            predictableBytes,logicalReadRowBytes(row,state.shared.context),result.rowCount(),
+                            state.shared.materialized_budget.used(),state.shared.materialized_budget.available(),state.shared.bounds.maximum_materialized_bytes);
+                        std::fflush(stderr);
+                    }
+#endif
+                    throw std::runtime_error("shared materialization exceeded its byte bound");
 				}
 				outputReservation.set(predictableBytes);
 			}
@@ -947,6 +1169,7 @@
 				}
 				outputReservation.set(predictable ? std::max(predictableBytes, constructedBytes) : constructedBytes);
 			}
+            retireResultSourceRow(row, state, sourceReservation);
 			appendMaterializedResultRow(result, std::move(output), state, std::move(outputReservation));
 		}
 
@@ -1225,7 +1448,7 @@
                 outputStorage.emplace(allocationAllowance, allocationContext->resource_account);
             MaterializedByteReservation bufferedReservation;
             bool budgetBound = false;
-            std::pmr::vector<LogicalPlanReadRow> rows(outputStorage
+            utils::AdmissionPmrVector<LogicalPlanReadRow> rows(outputStorage
                 ? static_cast<std::pmr::memory_resource *>(&*outputStorage) : std::pmr::get_default_resource());
 			rows.reserve(batchCapacity);
 			const size_t residentOutputBatchBytes = checkedSizeMul(rows.capacity(), sizeof(LogicalPlanReadRow),
@@ -1259,9 +1482,13 @@
 				bufferedBytes = materializedBytes;
 				for (LogicalPlanReadRow &row: rows) {
 					enforceMaterializedRowBound(row, state);
-					const bool keepGoing = preserveVisitorEarlyStop
-						? invokeOutputVisitorChecked(state, [&] { return emit(row, state); })
-						: emit(row, state);
+                    const auto emitRow = [&] {
+                        if constexpr (std::is_invocable_v<Emit &, LogicalPlanReadRow &, ExecutionState &, MaterializedByteReservation &>)
+                            return emit(row, state, bufferedReservation);
+                        else return emit(row, state);
+                    };
+                    const bool keepGoing = preserveVisitorEarlyStop
+                        ? invokeOutputVisitorChecked(state, emitRow) : emitRow();
 					if (!keepGoing) {
 						stoppedByVisitor = true;
 						rows.clear();
@@ -1311,7 +1538,7 @@
 				if (!finalized) {
 					finalized = true;
 					const auto release = [&] {
-						std::pmr::vector<LogicalPlanReadRow>(rows.get_allocator().resource()).swap(rows);
+						utils::AdmissionPmrVector<LogicalPlanReadRow>(rows.get_allocator().resource()).swap(rows);
 						// Detach while the ExecutionState budget is still alive, including zero-charge owners.
 						bufferedReservation = MaterializedByteReservation{};
 					};

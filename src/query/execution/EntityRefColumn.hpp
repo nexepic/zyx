@@ -1,4 +1,5 @@
 #pragma once
+#include "query/execution/TrivialBudgetBuffer.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 #include "query/execution/FixedWidthColumn.hpp"
 #include "query/execution/BatchIdentity.hpp"
@@ -47,10 +48,7 @@ public:
 		} catch (...) { values_.resize(previous); states_.resize(previous); throw; }
 	}
 	void clear() noexcept { identity_.invalidate(); values_.clear(); states_.clear(); published_ = 0U; }
-	void release() noexcept {
-		clear(); std::pmr::vector<storage::EntityRef>(&memory_).swap(values_);
-		std::pmr::vector<ColumnCellState>(&memory_).swap(states_);
-	}
+	void release() noexcept { clear(); values_.release(); states_.release(); }
 private:
 	void validate(BatchRowId row) const { validateBorrowVersion(row); if (row.index >= published_) throw std::out_of_range("entity row exceeds its published prefix"); }
 	size_t maximum_rows_, published_ = 0U;
@@ -60,7 +58,7 @@ private:
 	std::optional<storage::LogicalGraphSchemaIdentity> schema_;
 	BatchIdentity identity_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<storage::EntityRef> values_;
-	std::pmr::vector<ColumnCellState> states_;
+	TrivialBudgetBuffer<storage::EntityRef> values_;
+	TrivialBudgetBuffer<ColumnCellState> states_;
 };
 }

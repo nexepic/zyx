@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <span>
 #include <ranges>
@@ -25,14 +26,14 @@ class DirectPropertyColumns final {
     };
     struct Text { size_t offset = 0, length = 0; };
     struct Column {
-        std::pmr::vector<ColumnCellState> states;
-        std::pmr::vector<PropertyType> types;
-        std::pmr::vector<uint8_t> written, booleans;
-        std::pmr::vector<int64_t> integers;
-        std::pmr::vector<double> doubles;
-        std::pmr::vector<Text> texts;
-        std::pmr::vector<char> bytes;
-        std::pmr::vector<PropertyValue> complex;
+        utils::AdmissionPmrVector<ColumnCellState> states;
+        utils::AdmissionPmrVector<PropertyType> types;
+        utils::AdmissionPmrVector<uint8_t> written, booleans;
+        utils::AdmissionPmrVector<int64_t> integers;
+        utils::AdmissionPmrVector<double> doubles;
+        utils::AdmissionPmrVector<Text> texts;
+        utils::AdmissionPmrVector<char> bytes;
+        utils::AdmissionPmrVector<PropertyValue> complex;
         explicit Column(std::pmr::memory_resource *r) : states(r), types(r), written(r),
             booleans(r), integers(r), doubles(r), texts(r), bytes(r), complex(r) {}
         Column(Column &&) noexcept = default;
@@ -119,8 +120,8 @@ public:
             attempt.complete = true;
             return;
         }
-        std::pmr::vector<size_t> order(&memory_), starts(&memory_);
-        std::pmr::vector<uint64_t> unique(&memory_);
+        utils::AdmissionPmrVector<size_t> order(&memory_), starts(&memory_);
+        utils::AdmissionPmrVector<uint64_t> unique(&memory_);
         order.reserve(rows_); starts.reserve(rows_); unique.reserve(rows_);
         for (size_t i = 0; i < rows_; ++i) {
             guard(); if (ids[i] == 0U) throw std::invalid_argument("direct gather requires nonzero IDs");
@@ -482,7 +483,7 @@ private:
     const MaterializedByteBudget *budget_;
     BudgetMemoryResource memory_;
     MaterializedByteReservation payload_;
-    std::pmr::vector<Column> columns_;
+    utils::AdmissionPmrVector<Column> columns_;
     size_t rows_;
     BatchIdentity identity_;
     bool token_support_;

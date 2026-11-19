@@ -1,3 +1,4 @@
+#include "graph/debug/RssActivity.hpp"
 /**
  * @file RelocatableStorageBackend.cpp
  * @brief File-owning implementation of the relocatable logical read backend.
@@ -13,6 +14,7 @@
 #include "query/execution/ProcessResourceDomains.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/AdmissionPmrContainers.hpp"
 #include "graph/utils/OwnedVector.hpp"
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 #include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
@@ -658,10 +660,14 @@ namespace graph::storage {
 				try {finish();} catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();releasePermit();}
 			}
 			uint64_t write(std::span<const std::byte> bytes) override {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_SCRATCH_WRITE);
+#endif
 				requireActive();
 				if(bytes.empty() || bytes.size()>maximumFragmentBytes() || locations_.size()>=maximum_fragments_ ||
 					RSS_SEGMENT_SIZE>maximum_bytes_-used_bytes_)
 					throw std::runtime_error("query scratch exceeded its fragment or disk bound");
+                reader_snapshot_.reset();
                 std::vector<std::byte> payload(bytes.begin(), bytes.end());
 				// Install bookkeeping before IO so a post-publication allocation failure
 				// cannot lose the only live cleanup route.
@@ -680,17 +686,60 @@ namespace graph::storage {
 				used_bytes_+=RSS_SEGMENT_SIZE;return id;
 			}
 			std::vector<std::byte> read(uint64_t id) override {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                graph::debug::RssActivityScope activity(graph::debug::RssActivityKind::RAK_SCRATCH_READ);
+#endif
 				requireActive();const auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch handle is stale or foreign");
-				const auto reader=store_->openOpaquePayloadReader();return reader(position->second);
+                if (!reader_snapshot_) {
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+                    graph::debug::RssActivityScope snapshotActivity(graph::debug::RssActivityKind::RAK_SCRATCH_SNAPSHOT);
+#endif
+                    reader_snapshot_.emplace(store_->openPayloadReadSnapshot());
+                    graph::debug::PerfTrace::addValue("native_query_scratch.reader_snapshots", 1);
+                }
+                return store_->readOpaquePayload(*reader_snapshot_, position->second);
 			}
 			void release(uint64_t id) override {
 				requireActive();auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch release handle is stale or foreign");
+                reader_snapshot_.reset();
                 auto cleanup = openCleanupWorkspace();
 				try {auto gate=backend_.acquireNativePublicationGate();store_->release(position->second,backend_.nextNativeBulkScratchCheckpointLsn());}
 				catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
 				locations_.erase(position);used_bytes_-=RSS_SEGMENT_SIZE;disk_.release(RSS_SEGMENT_SIZE);
 			}
+            void releaseBatch(std::span<const uint64_t> handles) override {
+                requireActive();
+                if(handles.empty()) return;
+                if(handles.size()>locations_.size())
+                    throw std::invalid_argument("query scratch release batch is stale or duplicated");
+                // Validate the entire request before any durable change. The
+                // session is task-confined and bounds the route count, so this
+                // fixed-storage check needs no fallible cleanup allocation.
+                for(size_t i=0;i<handles.size();++i) {
+                    if(!locations_.contains(handles[i]))
+                        throw std::invalid_argument("query scratch release handle is stale or foreign");
+                    for(size_t j=0;j<i;++j) if(handles[j]==handles[i])
+                        throw std::invalid_argument("query scratch release batch contains duplicates");
+                }
+                reader_snapshot_.reset();
+                auto cleanup=openCleanupWorkspace();
+                for(size_t begin=0;begin<handles.size();) {
+                    std::array<NativeBulkRunFragmentLocation,64U> batch;
+                    const auto count=(std::min)(batch.size(),handles.size()-begin);
+                    for(size_t i=0;i<count;++i) batch[i]=locations_.at(handles[begin+i]);
+                    try {
+                        auto gate=backend_.acquireNativePublicationGate();
+                        store_->releaseBatch(std::span(batch).first(count),backend_.nextNativeBulkScratchCheckpointLsn());
+                    } catch(...) { backend_.requireReopenAfterNativeBulkStagingFailure();throw; }
+                    for(size_t i=0;i<count;++i) locations_.erase(handles[begin+i]);
+                    used_bytes_-=count*RSS_SEGMENT_SIZE;
+                    disk_.release(count*RSS_SEGMENT_SIZE);
+                    begin+=count;
+                }
+            }
+
 			void finish() override {
+                reader_snapshot_.reset();
 				if(!refund_)return;
 				if(backend_.hasIndeterminateWriteOutcome() && !locations_.empty())throw std::logic_error("query scratch cleanup requires writable recovery");
                 auto cleanup = locations_.empty() ? nullptr : openCleanupWorkspace();
@@ -725,6 +774,9 @@ namespace graph::storage {
 			detail::QueryScratchDiskBudget::Session disk_;
             std::weak_ptr<StorageIO> io_;
             size_t cleanup_bytes_;
+            // Inline pin, not an uncharged function/shared_ptr cache. All pin
+            // ownership remains accounted by the metadata snapshot registry.
+            std::optional<MetadataSnapshotPin> reader_snapshot_;
 		};
 
 #include "backend_runtime/LogicalTransaction.inc"

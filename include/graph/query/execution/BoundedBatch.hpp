@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "graph/utils/AdmissionPmrContainers.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -85,8 +87,8 @@ namespace graph::query::execution {
         [[nodiscard]] MaterializedByteReservation &enrichmentReservation() noexcept { return reservation_; }
 		[[nodiscard]] size_t maximumRows() const noexcept { return maximum_rows_; }
 		[[nodiscard]] size_t maximumBytes() const noexcept { return maximum_bytes_; }
-		[[nodiscard]] const std::pmr::vector<T> &values() const noexcept { return values_; }
-		[[nodiscard]] std::pmr::vector<T> &values() noexcept { return values_; }
+		[[nodiscard]] const utils::AdmissionPmrVector<T> &values() const noexcept { return values_; }
+		[[nodiscard]] utils::AdmissionPmrVector<T> &values() noexcept { return values_; }
 		[[nodiscard]] bool wouldExceedBytes(const T &value) const {
 			const size_t valueBytes = size_function_(value);
 			return valueBytes > maximum_bytes_ - std::min(bytes_, maximum_bytes_) ||
@@ -251,8 +253,16 @@ namespace graph::query::execution {
         }
 
 		void releaseEmptyCapacity() noexcept {
-			if(dynamic_cast<MaterializedByteBudget *>(values_.get_allocator().resource())!=nullptr)
-				std::pmr::vector<T>(values_.get_allocator().resource()).swap(values_);
+			if(dynamic_cast<MaterializedByteBudget *>(values_.get_allocator().resource())!=nullptr) {
+                // Empty replacement construction has no hidden proxy request.
+                // Transfer the container itself: element swap would need a
+                // move-assignment operator even for a nonassignable payload.
+                using Values = utils::AdmissionPmrVector<T>;
+                Values empty(values_.get_allocator());
+                static_assert(std::is_nothrow_move_constructible_v<Values>);
+                std::destroy_at(&values_);
+                std::construct_at(&values_,std::move(empty));
+            }
 		}
 		size_t maximum_rows_ = 0U;
 		size_t maximum_bytes_ = 0U;
@@ -260,7 +270,7 @@ namespace graph::query::execution {
 		SizeFunction size_function_;
 		// Values are destroyed before their reservation releases the charge.
 		MaterializedByteReservation reservation_;
-		std::pmr::vector<T> values_;
+		utils::AdmissionPmrVector<T> values_;
 		size_t bytes_ = 0U;
 	};
 

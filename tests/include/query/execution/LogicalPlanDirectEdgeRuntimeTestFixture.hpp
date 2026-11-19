@@ -63,7 +63,9 @@ namespace graph::query::execution::direct_edge_test {
 			bool enable_native_topology_pages = false;
 			bool enable_shaped_property_admission = false;
 			bool enable_adjacency_read_admission = false;
-			bool enable_property_read_admission = false;
+			// The strict reader contract requires source admission before copying
+			// selected payloads; unsupported-reader tests opt out explicitly.
+			bool enable_property_read_admission = true;
 			std::vector<uint64_t> node_read_ids;
 			std::vector<uint64_t> node_ref_scan_order;
 			std::vector<uint64_t> edge_read_ids;
@@ -416,6 +418,13 @@ namespace graph::query::execution::direct_edge_test {
 					std::span<const uint64_t> nodeIds, std::span<const std::string_view> keys,
 					const std::function<void(size_t)> &admission) const override {
 				++graph_.node_property_column_admission_reads;
+				if (graph_.truncate_node_property_batch && !nodeIds.empty() && !keys.empty()) {
+					// Deliberately malformed shape without copying any selected payload.
+					++graph_.node_property_column_batch_reads;
+					graph_.node_property_column_batch_ids.emplace_back(nodeIds.begin(), nodeIds.end());
+					graph_.node_property_column_batch_keys.emplace_back(keys.begin(), keys.end());
+					return std::vector<std::vector<PropertyValue>>(keys.size());
+				}
 				for (const std::string_view key: keys) {
 					for (const uint64_t id: nodeIds) {
 						const PropertyValue *value = findProperty(graph_.nodes.at(id).properties, key);
@@ -429,6 +438,11 @@ namespace graph::query::execution::direct_edge_test {
 					std::span<const uint64_t> edgeIds, std::span<const std::string_view> keys,
 					const std::function<void(size_t)> &admission) const override {
 				++graph_.edge_property_column_admission_reads;
+				if (graph_.truncate_edge_property_batch && !edgeIds.empty() && !keys.empty()) {
+					++graph_.edge_property_column_batch_reads;
+					graph_.edge_property_column_batch_keys.emplace_back(keys.begin(), keys.end());
+					return std::vector<std::vector<PropertyValue>>(keys.size());
+				}
 				for (const std::string_view key: keys) {
 					for (const uint64_t id: edgeIds) {
 						const auto edge = std::ranges::find(graph_.edges, id, &LogicalGraphEdge::edge_id);
@@ -854,6 +868,12 @@ namespace graph::query::execution::direct_edge_test {
 
 		// Keep tight row-transfer tests independent of newly admitted public map
 		// storage. Derive only the extra capacity charge of their actual outputs.
+        inline size_t retainedBindingMetadataDelta() {
+            using Bindings=decltype(LogicalPlanReadRow::values);
+            using Node=typename std::allocator_traits<typename Bindings::stored_allocator_type>::value_type;
+            return sizeof(Node)>sizeof(LogicalPlanReadValue) ? sizeof(Node)-sizeof(LogicalPlanReadValue) : 0U;
+        }
+
 		inline size_t entityCacheMetadataDelta(const DirectEdgeGraph &graph, bool includeEdges = false) {
 			MaterializedByteBudget budget(16U * 1024U * 1024U);
 			detail::BudgetMemoryResource memory(budget);

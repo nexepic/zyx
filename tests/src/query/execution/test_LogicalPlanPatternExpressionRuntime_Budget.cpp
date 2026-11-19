@@ -1,3 +1,4 @@
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "query/execution/LogicalPlanPatternExpressionRuntimeTestFixture.hpp"
 
 TEST(LogicalPlanPatternExpressionRuntimeTest, RetainsEdgeBytesWhileAdmittingPatternTargetBatch) {
@@ -90,7 +91,10 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, RetainsPatternComprehensionValuesA
 	limited.maximum_adjacency_page_records = 1U;
 	const PropertyValue expected(std::vector<PropertyValue>{PropertyValue(payload), PropertyValue(payload)});
 	bool secondPageRejected = false;
-	for (size_t allowance = 4500U; allowance < 12000U; allowance += 64U) {
+	// Begin above the complete logical result, rather than an old allocation
+	// peak: property-only bindings no longer clone the target payload.
+	const size_t minimumAllowance = property_utils::getPropertyValueSize(expected) + 1U;
+	for (size_t allowance = minimumAllowance; allowance < 12000U; allowance += 32U) {
 		limited.maximum_materialized_bytes = allowance;
 		try {
 			const QueryResult control = controlRuntime.executeToQueryResult(*plan.root, limited);
@@ -107,6 +111,7 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, RetainsPatternComprehensionValuesA
 				*faults.adjacency_topology_scan_count >= 2U) {
 				ASSERT_LT(property_utils::getPropertyValueSize(expected), allowance);
 				secondPageRejected = true;
+				RecordProperty("second_page_rejection_budget", std::to_string(allowance));
 				break;
 			}
 		}
@@ -116,4 +121,45 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, RetainsPatternComprehensionValuesA
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, limited);
 	ASSERT_EQ(result.rowCount(), 1U);
 	EXPECT_EQ(result.getRows().front().at("values").asPrimitive(), expected);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, RetainedPatternValueRemainsChargedAtNextPageAndRefundsOnFailure) {
+    using namespace graph::query::execution::detail;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1024U * 1024U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1024U * 1024U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1024U * 1024U);
+    PatternExpressionGraph graph;
+    graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Seed"}, {}});
+    const std::string payload(1000U, 'v');
+    for (uint64_t id : {2U, 3U}) {
+        graph.nodes.emplace(id, LogicalGraphNode{id, {"Target"}, {{"payload", PropertyValue(payload)}}});
+        graph.edges.emplace(id + 8U, LogicalGraphEdge{id + 8U, 1U, id, "R"});
+    }
+    size_t retainedAtNextPage = 0U;
+    PatternExpressionSnapshotFaults faults;
+    faults.before_adjacency_topology_scan = [&](bool continuation) {
+        if (!continuation) return;
+        retainedAtNextPage = account->used();
+        throw std::domain_error("stop before second page");
+    };
+    PatternExpressionBackend backend(std::move(graph), faults);
+    LogicalPlanReadRuntime runtime(backend);
+    QueryContext context; context.resource_account = account;
+    auto limited = bounds(); limited.maximum_adjacency_page_records = 1U;
+    size_t observations[2]{};
+    const char *queries[] = {
+        "MATCH (n:Seed) RETURN [(n)-[:R]->(m) | m.payload = ''] AS values",
+        "MATCH (n:Seed) RETURN [(n)-[:R]->(m) | m.payload] AS values"
+    };
+    for (size_t index = 0U; index < 2U; ++index) {
+        auto plan = parse(queries[index]); ASSERT_NE(plan.root, nullptr);
+        retainedAtNextPage = 0U;
+        EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, limited, context)), std::domain_error);
+        ASSERT_GT(retainedAtNextPage, 0U);
+        observations[index] = retainedAtNextPage;
+        EXPECT_EQ(account->used(), 0U);
+    }
+    // Both executions read the same source property and stop before decoding
+    // page two or publishing a result. Only the retained mapped value differs.
+    EXPECT_GE(observations[1], observations[0] + payload.size());
 }

@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_RelocatableStorageBackendSchema.cpp
  * @brief End-to-end online scalar-index and Vector DDL tests.
@@ -366,7 +367,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, NormalReopenDoesNotScanTheLargeValue
 	{
 		StorageIO::ScopedNativeReadHookForTesting observePayloadReads(
 				[&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
-					const auto count = portable_pread(fd, buffer, size, offset);
+					const auto count = graph::storage::testing::readWithNativeLease(fd, buffer, size, offset);
 					if (count > 0 && offset >= 0)
 						nativeReadRanges.emplace_back(static_cast<uint64_t>(offset), static_cast<uint64_t>(count));
 					if (count >= static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
@@ -441,8 +442,16 @@ TEST_F(RelocatableStorageBackendSchemaTest, ExecutesNativeDbmsConfigurationAndSt
 	auto backend = std::make_shared<RelocatableStorageBackend>(options());
 	backend->open();
 	graph::query::QueryEngine engine(backend, backend);
+    const auto execute = [&](const std::string &query, auto &&...args) {
+        try {
+            return engine.execute(query, std::forward<decltype(args)>(args)...);
+        } catch (const graph::query::QueryTimeoutException &error) {
+            ADD_FAILURE() << "Configuration procedure timed out: " << query << "; " << error.what();
+            throw;
+        }
+    };
 
-	const graph::query::QueryResult set = engine.execute("CALL dbms.setConfig('query.timeout_ms', 45)");
+	const graph::query::QueryResult set = execute("CALL dbms.setConfig('query.timeout_ms', 45)");
 	ASSERT_EQ(set.getColumns(), (std::vector<std::string>{"key", "value", "status"}));
 	ASSERT_EQ(set.rowCount(), 1U);
 	EXPECT_EQ(set.getRows().front().at("key").asPrimitive(), graph::PropertyValue("query.timeout_ms"));
@@ -450,16 +459,16 @@ TEST_F(RelocatableStorageBackendSchemaTest, ExecutesNativeDbmsConfigurationAndSt
 	EXPECT_EQ(set.getRows().front().at("status").asPrimitive(), graph::PropertyValue("OK"));
 
 	const graph::query::QueryResult projected =
-			engine.execute("CALL dbms.getConfig('query.timeout_ms') YIELD key, value RETURN value");
+			execute("CALL dbms.getConfig('query.timeout_ms') YIELD key, value RETURN value");
 	ASSERT_EQ(projected.getColumns(), (std::vector<std::string>{"value"}));
 	ASSERT_EQ(projected.rowCount(), 1U);
 	EXPECT_EQ(projected.getRows().front().at("value").asPrimitive(), graph::PropertyValue(int64_t{45}));
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.getConfig('missing.key')")), std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.setConfig('missing.key', 1)")), std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.setConfig('query.timeout_ms', true)")),
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.getConfig('missing.key')")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.setConfig('missing.key', 1)")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.setConfig('query.timeout_ms', true)")),
 				 std::invalid_argument);
 
-	const graph::query::QueryResult listed = engine.execute("CALL dbms.listConfig()");
+	const graph::query::QueryResult listed = execute("CALL dbms.listConfig()");
 	ASSERT_EQ(listed.getColumns(), (std::vector<std::string>{"key", "value"}));
 	ASSERT_EQ(listed.rowCount(), 6U);
 	EXPECT_EQ(listed.getRows()[0U].at("key").asPrimitive(), graph::PropertyValue("query.max_memory_mb"));
@@ -473,16 +482,16 @@ TEST_F(RelocatableStorageBackendSchemaTest, ExecutesNativeDbmsConfigurationAndSt
 	EXPECT_EQ(listed.getRows()[4U].at("key").asPrimitive(), graph::PropertyValue("query.timeout_ms"));
 	EXPECT_EQ(listed.getRows()[5U].at("key").asPrimitive(), graph::PropertyValue("stats.enabled"));
 	EXPECT_EQ(listed.getRows()[5U].at("value").asPrimitive(), graph::PropertyValue(true));
-	const graph::query::QueryResult statistics = engine.execute("CALL dbms.showStats()");
+	const graph::query::QueryResult statistics = execute("CALL dbms.showStats()");
 	ASSERT_EQ(statistics.getColumns(), (std::vector<std::string>{"category", "metric", "value"}));
 	EXPECT_FALSE(statistics.isEmpty());
-	const graph::query::QueryResult reset = engine.execute("CALL dbms.resetStats()");
+	const graph::query::QueryResult reset = execute("CALL dbms.resetStats()");
 	ASSERT_EQ(reset.getColumns(), (std::vector<std::string>{"result"}));
 	EXPECT_EQ(reset.getRows().front().at("result").asPrimitive(), graph::PropertyValue("Statistics reset"));
 
 	graph::query::QueryContext readOnly;
 	readOnly.execMode = graph::query::ExecMode::EM_READ_ONLY;
-	EXPECT_THROW(static_cast<void>(engine.execute("CALL dbms.setConfig('query.timeout_ms', 60)", readOnly)),
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.setConfig('query.timeout_ms', 60)", readOnly)),
 				 std::runtime_error);
 	backend->close();
 }
@@ -1189,15 +1198,26 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesDurableQueryMemoryPolicyToThe
 	graph::query::QueryEngine engine(backend, backend);
 	static_cast<void>(engine.execute("CALL dbms.setConfig('query.max_memory_mb', 1)"));
 
-	// range() materializes its rows during execution, after QueryGuard captures
-	// the query baseline. This verifies a durable per-query memory policy rather
-	// than rejecting the database process's preexisting resident set.
-	// Keep the successful run below the independent 64 MiB execution materialization limit.
-	const std::string query = "UNWIND range(0, 65536) AS value RETURN value";
+	// Test the durable 1 MiB policy independently of allocator reuse/RSS noise.
+    // Even the final row objects and entries exceed 1 MiB; no allocation
+    // estimator is used to choose this lower bound. 65K MSVC hash-map rows
+    // can exceed the separate 64 MiB execution limit after the policy is reset,
+    // so they do not isolate the setting this test exercises.
+    constexpr size_t rows = 8193U;
+    static_assert(rows * (sizeof(graph::query::QueryResult::Row) +
+        sizeof(graph::query::QueryResult::Row::value_type)) > 1024U * 1024U);
+	const std::string query = "UNWIND range(0, 8192) AS value RETURN value";
 	EXPECT_THROW(static_cast<void>(engine.execute(query)), graph::query::QueryMemoryExceededException);
 
 	static_cast<void>(engine.execute("CALL dbms.setConfig('query.max_memory_mb', 0)"));
-	EXPECT_NO_THROW(static_cast<void>(engine.execute(query)));
+    const auto result = engine.execute(query);
+    ASSERT_EQ(result.rowCount(), rows);
+    EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), graph::PropertyValue(int64_t{0}));
+    EXPECT_EQ(result.getRows().back().at("value").asPrimitive(), graph::PropertyValue(int64_t{8192}));
+    EXPECT_GE(result.retainedResourceBytes(), rows * (sizeof(graph::query::QueryResult::Row) +
+        sizeof(graph::query::QueryResult::Row::value_type)));
+    EXPECT_LE(result.retainedResourceBytes(), 64U * 1024U * 1024U);
+    RecordProperty("retained_result_bytes", result.retainedResourceBytes());
 	backend->close();
 }
 
@@ -1241,7 +1261,7 @@ TEST_F(RelocatableStorageBackendSchemaTest, NativeRecoveryLateCorruptOwnerFailsB
     {
         StorageIO::ScopedNativeReadHookForTesting corruptLateOwner(
             [&](file_handle_t fd, void *buffer, size_t size, pwrite_off_t offset) {
-                const auto result = portable_pread(fd, buffer, size, offset);
+                const auto result = graph::storage::testing::readWithNativeLease(fd, buffer, size, offset);
                 if (result == static_cast<pwrite_ssize_t>(RSS_PAGE_OWNER_HEADER_BYTES)) {
                     try {
                         const auto owner = PageOwnerHeaderCodec::decode(std::span(static_cast<const std::byte *>(buffer), RSS_PAGE_OWNER_HEADER_BYTES));

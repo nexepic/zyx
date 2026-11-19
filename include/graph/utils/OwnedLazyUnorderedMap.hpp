@@ -5,6 +5,9 @@
  */
 #pragma once
 #include <unordered_map>
+#if defined(_MSVC_STL_VERSION)
+#include <boost/unordered_map.hpp>
+#endif
 #include "graph/utils/OwnedSharedPtr.hpp"
 
 namespace graph::utils {
@@ -14,7 +17,14 @@ namespace graph::utils {
 template<class Key, class Value, class Hash = std::hash<Key>, class Equal = std::equal_to<Key>>
 class OwnedLazyUnorderedMap {
     using Entry = std::pair<const Key, Value>;
-    using Map = std::unordered_map<Key, Value, Hash, Equal, OwnedPmrAllocator<Entry>>;
+    // MSVC's empty hash bucket vector allocates a debug proxy inside noexcept.
+    // Lazy construction must still propagate admission failure, not terminate.
+    using Map =
+#if defined(_MSVC_STL_VERSION)
+        boost::unordered_map<Key, Value, Hash, Equal, OwnedPmrAllocator<Entry>>;
+#else
+        std::unordered_map<Key, Value, Hash, Equal, OwnedPmrAllocator<Entry>>;
+#endif
     struct State {
         std::shared_ptr<std::pmr::memory_resource> owner;
         Map values;
@@ -42,10 +52,18 @@ public:
     const_iterator begin() const noexcept { return state_ ? state_->values.cbegin() : const_iterator{}; }
     const_iterator end() const noexcept { return state_ ? state_->values.cend() : const_iterator{}; }
     template<class Query> iterator find(const Query &key) {
+#if defined(_MSVC_STL_VERSION)
+        return state_ ? state_->values.find(key, state_->values.hash_function(), state_->values.key_eq()) : iterator{};
+#else
         return state_ ? state_->values.find(key) : iterator{};
+#endif
     }
     template<class Query> const_iterator find(const Query &key) const {
+#if defined(_MSVC_STL_VERSION)
+        return state_ ? state_->values.find(key, state_->values.hash_function(), state_->values.key_eq()) : const_iterator{};
+#else
         return state_ ? state_->values.find(key) : const_iterator{};
+#endif
     }
     template<class Query> bool contains(const Query &key) const { return find(key) != end(); }
     template<class... Args> std::pair<iterator, bool> emplace(Args &&...args) {

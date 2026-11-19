@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
@@ -879,7 +880,7 @@ TEST_F(RelocatableStorageBackendTest, OwnerMaintenanceFailureAfterDurableRootReq
 #endif
 				return static_cast<pwrite_ssize_t>(-1);
 			}
-			return portable_pread(fd, bytes, count, offset);
+			return graph::storage::testing::readWithNativeLease(fd, bytes, count, offset);
 		});
 		EXPECT_NO_THROW(backend.deleteLogicalNodes({{node, false, 0U}}));
 	}

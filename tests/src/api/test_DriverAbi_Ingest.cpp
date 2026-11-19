@@ -17,6 +17,8 @@
 
 #include <gtest/gtest.h>
 
+#include "api/DatabaseBulkInternal.hpp"
+#include "api/driver_abi/DriverAbiInternal.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -580,11 +582,37 @@ TEST_F(RelocatableDriverAbiIngestTest, ArrowEdgeIngestStagesRowsUntilCommitAndDr
 	EXPECT_EQ(zyx_driver_db_close(reader, &error), ZYX_DRIVER_OK);
 }
 
-TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEdgePublication) {
+TEST_F(RelocatableDriverAbiIngestTest, ActiveStreamedIngestRejectsOrdinaryWriteAndCanStillCommit) {
 	const auto [source, target] = createEndpoints();
-	zyx_driver_db_t *concurrentWriter = nullptr;
-	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
-	ASSERT_NE(concurrentWriter, nullptr);
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"staged"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_STAGED_REL", &schema.root, &ingestor, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+
+	int64_t rejectedEdge = 0;
+	EXPECT_EQ(zyx_driver_db_create_edge(db, source, target, "ABI_BLOCKED_REL", nullptr, &rejectedEdge, &error),
+			  ZYX_DRIVER_TRANSACTION_ERROR);
+	ASSERT_NE(error, nullptr);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(rejectedEdge, 0);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("ABI_STAGED_REL"), 1);
+	EXPECT_EQ(countEdges("ABI_BLOCKED_REL"), 0);
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("ABI_STAGED_REL"), 1);
+	EXPECT_EQ(countEdges("ABI_BLOCKED_REL"), 0);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverASameOwnerEdgePublication) {
+	const auto [source, target] = createEndpoints();
 
 	IngestEdgeSchema schema;
 	// Exceed one sealed scratch run so the rebase covers durable private staging,
@@ -600,13 +628,12 @@ TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEd
 			  ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
 
-	int64_t concurrentEdge = 0;
-	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_CONCURRENT_REL", nullptr,
-								  &concurrentEdge, &error),
-			  ZYX_DRIVER_OK);
+	// Publish through the same writable owner while its ingest is staged. The
+	// public ABI intentionally excludes ordinary writes on an active handle;
+	// this test-only bridge exercises the genuine backend rebase instead.
+	const auto concurrentEdge = zyx::detail::DatabaseBulkInternal::createEdgeOnOwnerForTesting(
+			*db->db, static_cast<uint64_t>(source), static_cast<uint64_t>(target), "ABI_CONCURRENT_REL");
 	EXPECT_GT(concurrentEdge, 0);
-	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
-	concurrentWriter = nullptr;
 
 	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);

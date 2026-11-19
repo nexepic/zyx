@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -271,12 +272,12 @@ private:
 	size_t published_values_ = 0U, published_roots_ = 0U;
 	BatchIdentity identity_;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<Value> values_;
-	std::pmr::vector<std::byte> bytes_;
-	std::pmr::vector<uint64_t> children_;
-	std::pmr::vector<Entry> entries_;
-	std::pmr::vector<TemporalDuration> durations_;
-	std::pmr::vector<uint64_t> roots_;
+	utils::AdmissionPmrVector<Value> values_;
+	utils::AdmissionPmrVector<std::byte> bytes_;
+	utils::AdmissionPmrVector<uint64_t> children_;
+	utils::AdmissionPmrVector<Entry> entries_;
+	utils::AdmissionPmrVector<TemporalDuration> durations_;
+	utils::AdmissionPmrVector<uint64_t> roots_;
 	const MaterializedByteBudget *budget_;
 };
 } // namespace graph::query::execution::detail

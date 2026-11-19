@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_RelocatableStorageBackend_BulkEdgeCorruption.cpp
  * @brief Public fail-closed contracts for streamed bulk Edge scratch sources.
@@ -140,7 +141,7 @@ TEST_F(RelocatableStorageBackendTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting corruptManifestCount([&injected](file_handle_t fd, void *bytes,
 																				 size_t byteCount, pwrite_off_t offset) {
-			const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+			const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 			if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 				return read;
 			}
@@ -234,20 +235,16 @@ TEST_F(RelocatableStorageBackendTest,
 			bulk->appendPersistedBulkEdges({"BULK_REBASED_COUNT_DIVERGENCE", sources, targets, {}});
 	ASSERT_EQ(rejected.size(), 2U);
 
-	RelocatableStorageBackendOptions writerOptions = backendOptions();
-	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
-	RelocatableStorageBackend concurrentWriter(std::move(writerOptions));
-	concurrentWriter.open();
+	// Competing transactions publish through the supported single writable owner.
 	const std::vector<uint64_t> external =
-			concurrentWriter.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
+			backend.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	concurrentWriter.close();
 
 	std::atomic<bool> injected{false};
 	{
 		StorageIO::ScopedNativeReadHookForTesting corruptRebasedManifestCount(
 				[&injected](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) ||
 						injected.load(std::memory_order_relaxed)) {
 						return read;
@@ -340,20 +337,16 @@ TEST_F(RelocatableStorageBackendTest,
 			bulk->appendPersistedBulkEdges({"BULK_REBASED_ORDER_DIVERGENCE", sources, targets, {}});
 	ASSERT_EQ(rejected.size(), 2U);
 
-	RelocatableStorageBackendOptions writerOptions = backendOptions();
-	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
-	RelocatableStorageBackend concurrentWriter(std::move(writerOptions));
-	concurrentWriter.open();
+	// Competing transactions publish through the supported single writable owner.
 	const std::vector<uint64_t> external =
-			concurrentWriter.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
+			backend.createLogicalEdges({{nodes[0], nodes[1], "BULK_REBASED_EXTERNAL", {}}});
 	ASSERT_EQ(external.size(), 1U);
-	concurrentWriter.close();
 
 	std::atomic<bool> injected{false};
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderRebasedRunRecords(
 				[&injected](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-					const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+					const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 					if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) ||
 						injected.load(std::memory_order_relaxed)) {
 						return read;
@@ -457,7 +450,7 @@ TEST_F(RelocatableStorageBackendTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderRunRecords([&injected](file_handle_t fd, void *bytes,
 																							 size_t byteCount, pwrite_off_t offset) {
-			const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+			const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 			if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 				return read;
 			}
@@ -559,7 +552,7 @@ TEST_F(RelocatableStorageBackendTest,
 	{
 		StorageIO::ScopedNativeReadHookForTesting reorderManifestRuns([&injected, &rootManifestReads](file_handle_t fd,
 																												  void *bytes, size_t byteCount, pwrite_off_t offset) {
-			const pwrite_ssize_t read = portable_pread(fd, bytes, byteCount, offset);
+			const pwrite_ssize_t read = graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 			if (read != static_cast<pwrite_ssize_t>(RSS_SEGMENT_SIZE) || injected.load(std::memory_order_relaxed)) {
 				return read;
 			}

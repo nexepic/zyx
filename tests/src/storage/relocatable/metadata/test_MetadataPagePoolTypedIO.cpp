@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_MetadataPagePoolTypedIO.cpp
  * @brief Generation-keyed metadata pool control-page I/O tests.
@@ -291,9 +292,9 @@ TEST_F(RelocatableMetadataPagePoolTest, RejectsShortRawControlPageReadsDuringPoo
 		StorageIO::ScopedNativeReadHookForTesting shortControlPageRead(
 				[](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
 					if (offset == static_cast<pwrite_off_t>(RSS_FILE_BOOTSTRAP_BYTES) && byteCount == RSS_PAGE_SIZE) {
-						return portable_pread(fd, bytes, byteCount - 1U, static_cast<int64_t>(offset));
+						return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount - 1U, static_cast<int64_t>(offset));
 					}
-					return portable_pread(fd, bytes, byteCount, static_cast<int64_t>(offset));
+					return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, static_cast<int64_t>(offset));
 				});
 		expectFormatError([&] { static_cast<void>(MetadataPagePoolAllocator(nativeIo, initial)); },
 						  FormatError::FERR_BUFFER_TOO_SMALL);
@@ -323,9 +324,9 @@ TEST_F(RelocatableMetadataPagePoolTest, RejectsShortTypedControlPageReadsDuringC
 		StorageIO::ScopedNativeReadHookForTesting shortControlPageRead(
 				[](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
 					if (offset == static_cast<pwrite_off_t>(RSS_FILE_BOOTSTRAP_BYTES) && byteCount == RSS_PAGE_SIZE) {
-						return portable_pread(fd, bytes, byteCount - 1U, static_cast<int64_t>(offset));
+						return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount - 1U, static_cast<int64_t>(offset));
 					}
-					return portable_pread(fd, bytes, byteCount, static_cast<int64_t>(offset));
+					return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, static_cast<int64_t>(offset));
 				});
 		expectFormatError(
 				[&] {

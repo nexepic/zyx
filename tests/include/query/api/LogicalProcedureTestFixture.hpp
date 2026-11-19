@@ -49,13 +49,16 @@ namespace graph::query::test {
 			mutable std::vector<std::vector<uint64_t>> property_column_ids;
 			mutable std::vector<std::vector<std::string>> property_column_keys;
 			bool malformed_property_columns = false;
-			bool enable_property_admission = false;
+			// Supported procedure readers must admit selected source payloads.
+			// Unsupported-reader tests explicitly opt out.
+			bool enable_property_admission = true;
 			bool enable_property_presence_probes = false;
 			bool enable_shaped_property_admission = false;
 			mutable size_t shaped_admission_reads = 0U;
 			std::function<void()> before_shaped_property_admission;
 			mutable size_t admitted_property_copies = 0U;
 			std::function<void()> before_property_admission;
+            std::function<void(const storage::LogicalGraphVectorSearchRequest &)> during_vector_search;
 			bool malformed_node_batch_cardinality = false;
 			bool reverse_node_batch = false;
 			mutable size_t batched_existence_scans = 0U;
@@ -151,6 +154,32 @@ namespace graph::query::test {
 					std::span<const uint64_t> nodeIds, std::span<const std::string_view> keys,
 					const std::function<void(size_t)> &admission) const override {
 				return readPropertyColumns(nodeIds, keys, &admission);
+			}
+			[[nodiscard]] std::vector<std::vector<PropertyValue>> readEdgePropertyColumnsSortedWithAdmission(
+					std::span<const uint64_t> edgeIds, std::span<const std::string_view> keys,
+					const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("test Edge Property admission is empty");
+				++state_->property_column_reads;
+				state_->property_column_ids.emplace_back(edgeIds.begin(), edgeIds.end());
+				state_->property_column_keys.emplace_back(keys.begin(), keys.end());
+				std::vector<std::vector<PropertyValue>> columns(keys.size());
+				uint64_t previous = 0U;
+				for (const uint64_t id : edgeIds) {
+					if (id == 0U || id <= previous) throw std::runtime_error("test procedure received invalid sorted Edge IDs");
+					previous = id;
+					const auto edge = std::ranges::find(state_->edges, id, &storage::LogicalGraphEdge::edge_id);
+					if (edge == state_->edges.end()) throw std::runtime_error("test procedure Edge is missing");
+					for (size_t column = 0U; column < keys.size(); ++column) {
+						const auto entry = std::ranges::find(edge->properties, keys[column], &storage::LogicalGraphPropertyEntry::key);
+						if (entry != edge->properties.end()) {
+							if (state_->before_property_admission) state_->before_property_admission();
+							admission(storage::CanonicalPropertyValueCodec::encodedSize(entry->value) + sizeof(uint32_t));
+							++state_->admitted_property_copies;
+						}
+						columns[column].push_back(entry == edge->properties.end() ? PropertyValue() : entry->value);
+					}
+				}
+				return columns;
 			}
 			[[nodiscard]] std::vector<std::vector<PropertyValue>> readPropertyColumns(
 					std::span<const uint64_t> nodeIds, std::span<const std::string_view> keys,
@@ -270,6 +299,7 @@ namespace graph::query::test {
 			}
 			[[nodiscard]] storage::LogicalGraphVectorSearchResult
 			searchLogicalVector(const storage::LogicalGraphVectorSearchRequest &request) const override {
+                if (state_->during_vector_search) state_->during_vector_search(request);
 				if (state_->cancellation_checks_before_throw != 0U) {
 					if (request.cancellation == nullptr) {
 						throw std::logic_error("logical Vector procedure did not receive a cancellation checkpoint");

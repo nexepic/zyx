@@ -1,3 +1,4 @@
+#include "storage/NativeLeaseReadTestHelper.hpp"
 /**
  * @file test_PhysicalSegmentAllocatorTypedIO.cpp
  * @brief Complete-page I/O tests for relocatable whole-segment extents.
@@ -158,9 +159,9 @@ namespace {
 						[&](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
 							if (static_cast<uint64_t>(offset) == segmentOffset && byteCount == RSS_SEGMENT_SIZE) {
 								shortReads.fetch_add(1U, std::memory_order_relaxed);
-								return portable_pread(fd, bytes, byteCount - RSS_PAGE_SIZE, offset);
+								return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount - RSS_PAGE_SIZE, offset);
 							}
-							return portable_pread(fd, bytes, byteCount, offset);
+							return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 						});
 				expectFormatError([&] { static_cast<void>(allocator.read(snapshot, testSegmentId())); },
 								  FormatError::FERR_BUFFER_TOO_SMALL);
@@ -197,7 +198,7 @@ namespace {
 						}
 						extentPageReads.fetch_add(1U, std::memory_order_relaxed);
 					}
-					return portable_pread(fd, bytes, byteCount, offset);
+					return graph::storage::testing::readWithNativeLease(fd, bytes, byteCount, offset);
 				});
 				EXPECT_EQ(allocator.read(snapshot, testSegmentId()).payload,
 						  (std::vector<std::byte>(payload.begin(), payload.end())));
@@ -208,5 +209,120 @@ namespace {
 		}
 		EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 	}
+
+
+    TEST_F(RelocatablePhysicalSegmentAllocatorTypedIOTest, PagedScratchReadsPreserveCrossPageContentsWithoutRetainingScanPages) {
+        const file_handle_t nativeHandle = portable_open_rw(data_path_.string().c_str());
+        ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+        {
+            auto io = std::make_shared<StorageIO>(data_file_, nativeHandle, nativeHandle);
+            auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+            PhysicalSegmentAllocator allocator(io, *metadata);
+            const std::vector<std::byte> header(RSS_PAGE_SIZE + 8U, std::byte{0x71});
+            const std::vector<std::byte> payload(2U * RSS_PAGE_SIZE + 19U, std::byte{0xA5});
+            auto request = extentRequest(payload);
+            request.header_bytes = static_cast<uint16_t>(RSS_ENVELOPE_BYTES + header.size());
+            request.header_extension = header;
+            ASSERT_TRUE(allocator.allocate(request, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U)));
+            const auto snapshot = metadata->openSnapshot();
+            const auto expected = allocator.read(snapshot, testSegmentId());
+            const uint64_t base = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, PhysicalSlotId(40U));
+            io->enableBufferPool(128U * RSS_PAGE_SIZE);
+            size_t reads = 0U, bytesRead = 0U;
+            StorageIO::ScopedNativeReadHookForTesting hook([&](file_handle_t fd, void *bytes, size_t count, pwrite_off_t offset) {
+                if (static_cast<uint64_t>(offset) >= base && static_cast<uint64_t>(offset) < base + RSS_SEGMENT_SIZE) {
+                    EXPECT_EQ(count, RSS_PAGE_SIZE); ++reads; bytesRead += count;
+                }
+                return graph::storage::testing::readWithNativeLease(fd, bytes, count, offset);
+            });
+            for (int iteration = 0; iteration < 2; ++iteration) {
+                const auto actual = allocator.readPaged(snapshot, testSegmentId());
+                EXPECT_EQ(actual.payload, expected.payload); EXPECT_EQ(actual.header_extension, expected.header_extension);
+                EXPECT_EQ(SegmentEnvelopeCodec::encode(actual.envelope), SegmentEnvelopeCodec::encode(expected.envelope));
+                EXPECT_EQ(actual.entry.segment_id, expected.entry.segment_id);
+            }
+            EXPECT_EQ(reads, 2U * RSS_SEGMENT_SIZE / RSS_PAGE_SIZE);
+            EXPECT_EQ(bytesRead, 2U * RSS_SEGMENT_SIZE);
+        }
+        EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+    }
+
+    TEST_F(RelocatablePhysicalSegmentAllocatorTypedIOTest, SmallPagedScratchReadsCoalescePaddingAndStillReadTheWholeTail) {
+        const file_handle_t handle = portable_open_rw(data_path_.string().c_str());
+        ASSERT_NE(handle, INVALID_FILE_HANDLE);
+        {
+            auto io = std::make_shared<StorageIO>(data_file_, handle, handle);
+            auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+            PhysicalSegmentAllocator allocator(io, *metadata);
+            const std::vector<std::byte> payload(64U, std::byte{0x35});
+            ASSERT_TRUE(allocator.allocate(extentRequest(payload), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U)));
+            const auto snapshot = metadata->openSnapshot();
+            const uint64_t base = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, PhysicalSlotId(40U));
+            size_t reads = 0U, bytesRead = 0U;
+            StorageIO::ScopedNativeReadHookForTesting hook([&](file_handle_t fd, void *bytes, size_t count, pwrite_off_t offset) {
+                if (static_cast<uint64_t>(offset) >= base && static_cast<uint64_t>(offset) < base + RSS_SEGMENT_SIZE) {
+                    EXPECT_EQ(static_cast<uint64_t>(offset), base + bytesRead);
+                    EXPECT_LE(count, 4U * RSS_PAGE_SIZE);
+                    if (reads == 0U) EXPECT_EQ(count, RSS_PAGE_SIZE);
+                    ++reads; bytesRead += count;
+                }
+                return graph::storage::testing::readWithNativeLease(fd, bytes, count, offset);
+            });
+            EXPECT_EQ(allocator.readPaged(snapshot, testSegmentId()).payload, payload);
+            EXPECT_EQ(reads, 9U);
+            EXPECT_EQ(bytesRead, RSS_SEGMENT_SIZE);
+        }
+        EXPECT_EQ(portable_close_rw(handle), 0);
+    }
+
+    TEST_F(RelocatablePhysicalSegmentAllocatorTypedIOTest, PagedScratchReadsKeepChecksumMappingAndLateTruncationErrors) {
+        const file_handle_t nativeHandle = portable_open_rw(data_path_.string().c_str());
+        ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+        {
+            auto io = std::make_shared<StorageIO>(data_file_, nativeHandle, nativeHandle);
+            auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+            PhysicalSegmentAllocator allocator(io, *metadata);
+            const std::array payload{std::byte{0x31}, std::byte{0x32}};
+            ASSERT_TRUE(allocator.allocate(extentRequest(payload), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U)));
+            const auto snapshot = metadata->openSnapshot();
+            const uint64_t base = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, PhysicalSlotId(40U));
+            const auto observeError = [&](bool paged, int mode) -> std::optional<FormatError> {
+                StorageIO::ScopedNativeReadHookForTesting hook([&](file_handle_t fd, void *bytes, size_t count, pwrite_off_t offset) {
+                    const uint64_t position = static_cast<uint64_t>(offset);
+                    if (mode == 2 && position >= base && position < base + RSS_SEGMENT_SIZE &&
+                            position + count > base + RSS_SEGMENT_SIZE - RSS_PAGE_SIZE)
+                        // portable_pread rejects a zero-byte request; inject EOF
+                        // directly instead of turning truncation into an I/O error.
+                        return count == RSS_PAGE_SIZE ? pwrite_ssize_t{0} :
+                            graph::storage::testing::readWithNativeLease(fd, bytes, count - RSS_PAGE_SIZE, offset);
+                    const auto result = graph::storage::testing::readWithNativeLease(fd, bytes, count, offset);
+                    if (position == base && result == static_cast<pwrite_ssize_t>(count)) {
+                        auto *image = static_cast<std::byte *>(bytes);
+                        if (mode == 0 || mode == 2) image[0] ^= std::byte{1};
+                        if (mode == 1) image[RSS_ENVELOPE_BYTES] ^= std::byte{1};
+                        if (mode == 3) {
+                            auto envelope = SegmentEnvelopeCodec::decode(std::span<const std::byte>(image, RSS_ENVELOPE_BYTES));
+                            ++envelope.owner_id;
+                            const auto encoded = SegmentEnvelopeCodec::encode(envelope);
+                            std::copy(encoded.begin(), encoded.end(), image);
+                        }
+                    }
+                    return result;
+                });
+                try { (void)(paged ? allocator.readPaged(snapshot, testSegmentId()) : allocator.read(snapshot, testSegmentId())); }
+                catch (const FormatException &error) { return error.error(); }
+                ADD_FAILURE() << "Expected checked physical read failure"; return std::nullopt;
+            };
+            for (int mode = 0; mode < 4; ++mode) {
+                SCOPED_TRACE(mode);
+                const auto original = observeError(false, mode), paged = observeError(true, mode);
+                ASSERT_TRUE(original); EXPECT_EQ(paged, original);
+                if (mode == 1) EXPECT_EQ(paged, FormatError::FERR_CHECKSUM_MISMATCH);
+                if (mode == 2) EXPECT_EQ(paged, FormatError::FERR_BUFFER_TOO_SMALL);
+                if (mode == 3) EXPECT_EQ(paged, FormatError::FERR_INVALID_STATE);
+            }
+        }
+        EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+    }
 
 } // namespace

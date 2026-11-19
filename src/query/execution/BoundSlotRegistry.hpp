@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/AdmissionPmrContainers.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -9,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -69,7 +71,8 @@ public:
 		auto &destination = scope(target);
 		checkName(destination, name);
 		const BoundSlotId slot{static_cast<uint32_t>(slots_.size()), identity_};
-		auto [entry, inserted] = destination.names.emplace(std::pmr::string(name, &memory_), slot);
+		auto [entry, inserted] = destination.names.emplace(std::piecewise_construct,
+			std::forward_as_tuple(name), std::forward_as_tuple(slot));
 		(void) inserted; // checkName already rejected duplicates; no concurrent mutation.
 		try { slots_.emplace_back(name, target, &memory_); }
 		catch (...) { destination.names.erase(entry); throw; }
@@ -95,7 +98,8 @@ public:
 		if (!destination.parent.has_value()) throw std::invalid_argument("root scope has no parent to import");
 		const auto source = resolve(*destination.parent, parentName);
 		if (!source.has_value()) throw std::invalid_argument("correlated import references an unbound parent variable");
-		destination.names.emplace(std::pmr::string(localName, &memory_), *source);
+		destination.names.emplace(std::piecewise_construct,
+			std::forward_as_tuple(localName), std::forward_as_tuple(*source));
 		++bindings_;
 		name_bytes_ += localName.size();
 		return *source; // Alias preserves the parent's slot, never allocates a new one.
@@ -119,13 +123,20 @@ private:
 		Scope(Scope &&) = default;
 		std::optional<BoundScopeId> parent;
 		BindingScopeVisibility visibility;
-		std::pmr::unordered_map<std::pmr::string, BoundSlotId, NameHash, NameEqual> names;
+		utils::AdmissionPmrUnorderedMap<std::pmr::string, BoundSlotId, NameHash, NameEqual> names;
 	};
 	struct SlotInfo {
 		SlotInfo(std::string_view text, BoundScopeId source, std::pmr::memory_resource *resource)
 			: name(text, resource), origin(source) {}
-		SlotInfo(const SlotInfo &) = delete;
+		SlotInfo(const SlotInfo &other)
+			: name(other.name, other.name.get_allocator()), origin(other.origin) {}
+#if !defined(_MSVC_STL_VERSION) || _ITERATOR_DEBUG_LEVEL == 0
 		SlotInfo(SlotInfo &&) = default;
+#endif
+		// MSVC's debug string move allocates a proxy inside noexcept. Rvalue
+		// construction deliberately uses the allocator-preserving copy there:
+		// allocation failures propagate and earlier slots remain unchanged if
+		// a later element fails during vector growth. Other ABIs retain moves.
 		std::pmr::string name;
 		BoundScopeId origin;
 	};
@@ -165,8 +176,8 @@ private:
 	uint64_t identity_ = 0U;
 	bool sealed_ = false;
 	BudgetMemoryResource memory_;
-	std::pmr::vector<Scope> scopes_;
-	std::pmr::vector<SlotInfo> slots_;
+	utils::AdmissionPmrVector<Scope> scopes_;
+	utils::AdmissionPmrVector<SlotInfo> slots_;
 };
 
 } // namespace graph::query::execution::detail
