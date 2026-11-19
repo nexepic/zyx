@@ -95,7 +95,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py tests/test_verify_windows_toolchain.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -196,7 +196,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py tests/test_verify_windows_toolchain.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Install Project Dependencies
@@ -417,7 +417,7 @@ jobs:
         id: diagnostic_tests
         continue-on-error: true
         run: |
-          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
+          python scripts/run_ci_evidence.py --name diagnostic-tests --timeout 180 -- python -m pytest -q tests/test_run_ci_evidence.py tests/test_check_result_owner_trace.py tests/test_check_sort_merge_trace.py tests/test_collect_ci_environment.py tests/test_run_test_process.py tests/test_run_test_tier.py tests/test_diagnose_macos_quota.py tests/test_diagnose_ci_budget_cases.py tests/test_linux_dependencies.py tests/test_verify_windows_release.py tests/test_verify_windows_toolchain.py --junitxml "$ZYX_CI_EVIDENCE_DIR/diagnostic-tests/pytest.xml"
         shell: bash
 
       - name: Diagnose fresh string allocations (macOS)
@@ -436,12 +436,14 @@ jobs:
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
-          python scripts/run_ci_evidence.py --name llvm-install --timeout 21600 -- choco install llvm --version=20.1.4 --force
+          python scripts/run_ci_evidence.py --name llvm-install --timeout 21600 -- choco install llvm --version=22.1.8 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
+        env:
+          ZYX_VERIFY_WINDOWS_TOOLCHAIN: "1"
         run: python scripts/run_ci_evidence.py --name conan-dependencies --timeout 21600 -- pwsh scripts/install_conan_windows.ps1 ${{ matrix.build_type }}
 
       - name: Install Project Dependencies (Conan) (Unix)
