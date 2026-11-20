@@ -18,6 +18,8 @@ NC='\033[0m'
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 EMSDK_DIR="$PROJECT_ROOT/emsdk"
 ANTLR4_WASM_DIR="$EMSDK_DIR/antlr4-wasm"
+EMSDK_VERSION=4.0.20
+ANTLR4_VERSION=4.13.2
 
 # ==============================================================================
 # Step 1: Install Emscripten SDK
@@ -25,7 +27,6 @@ ANTLR4_WASM_DIR="$EMSDK_DIR/antlr4-wasm"
 if [ -f "$EMSDK_DIR/emsdk_env.sh" ]; then
     echo -e "${YELLOW}>>> emsdk already installed, skipping...${NC}"
 else
-    git config http.postBuffer 524288000
     echo -e "${BLUE}>>> [1/3] Cloning Emscripten SDK...${NC}"
     git clone https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
 fi
@@ -33,34 +34,32 @@ fi
 cd "$EMSDK_DIR"
 
 # ==============================================================================
-# Step 2: Install and activate latest version
+# Step 2: Install and activate the compiler used by Playground CI
 # ==============================================================================
-if [ -f "$EMSDK_DIR/upstream/emscripten/emcc" ]; then
-    echo -e "${YELLOW}>>> Emscripten already installed, skipping...${NC}"
-else
-    echo -e "${BLUE}>>> [2/3] Installing and activating latest Emscripten...${NC}"
-    ./emsdk install latest
-    ./emsdk activate latest
-fi
-
-# Source the environment
+echo -e "${BLUE}>>> [2/3] Installing and activating Emscripten ${EMSDK_VERSION}...${NC}"
+./emsdk install "$EMSDK_VERSION"
+./emsdk activate "$EMSDK_VERSION"
 source "$EMSDK_DIR/emsdk_env.sh"
 
 # ==============================================================================
 # Step 3: Build antlr4-cppruntime for WASM
 # ==============================================================================
-if [ -f "$ANTLR4_WASM_DIR/lib/libantlr4-runtime.a" ]; then
+ANTLR4_BUILD_ID="${EMSDK_VERSION}/${ANTLR4_VERSION}"
+ANTLR4_BUILD_STAMP="$ANTLR4_WASM_DIR/.zyx-toolchain"
+if [ -f "$ANTLR4_WASM_DIR/lib/libantlr4-runtime.a" ] &&
+   [ -f "$ANTLR4_BUILD_STAMP" ] &&
+   [ "$(cat "$ANTLR4_BUILD_STAMP")" = "$ANTLR4_BUILD_ID" ]; then
     echo -e "${YELLOW}>>> antlr4-cppruntime for WASM already built, skipping...${NC}"
 else
     echo -e "${BLUE}>>> [3/3] Building antlr4-cppruntime for WASM...${NC}"
 
-    ANTLR4_SRC="$EMSDK_DIR/antlr4-src"
+    ANTLR4_SRC="$EMSDK_DIR/antlr4-src-$ANTLR4_VERSION"
 
     if [ ! -d "$ANTLR4_SRC" ]; then
-        git clone https://github.com/antlr/antlr4.git --branch 4.13.2 --depth 1 "$ANTLR4_SRC"
+        git clone https://github.com/antlr/antlr4.git --branch "$ANTLR4_VERSION" --depth 1 "$ANTLR4_SRC"
     fi
 
-    ANTLR4_BUILD="$EMSDK_DIR/antlr4-build"
+    ANTLR4_BUILD="$EMSDK_DIR/antlr4-build-$EMSDK_VERSION-$ANTLR4_VERSION"
     mkdir -p "$ANTLR4_BUILD"
 
     emcmake cmake -S "$ANTLR4_SRC/runtime/Cpp" -B "$ANTLR4_BUILD" \
@@ -73,8 +72,10 @@ else
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$ANTLR4_WASM_DIR"
 
-    cmake --build "$ANTLR4_BUILD" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
+    build_jobs=${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
+    cmake --build "$ANTLR4_BUILD" --parallel "$build_jobs"
     cmake --install "$ANTLR4_BUILD"
+    printf '%s\n' "$ANTLR4_BUILD_ID" > "$ANTLR4_BUILD_STAMP"
 
     echo -e "${GREEN}>>> antlr4-cppruntime installed to $ANTLR4_WASM_DIR${NC}"
 fi

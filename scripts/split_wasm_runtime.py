@@ -27,12 +27,17 @@ def split_runtime(source: Path):
     start = original.index('  var FS = {\n')
     end = original.index('\n  };', start) + len('\n  };')
     body = original[start:end]
+    # Some Emscripten versions inline this conversion instead of emitting a
+    # helper. Pass it only when the generated FS actually references it.
+    bindings = tuple(name for name in BINDINGS
+                     if name != 'FS_fileDataToTypedArray'
+                     or re.search(r'\bFS_fileDataToTypedArray\b', body))
     if len(re.findall(r'\bHEAP8\b', body)) != 1 or 'writeChunks(stream, HEAP8,' not in body:
         raise ValueError('generated heap access changed; review filesystem binding')
     body = body.replace('writeChunks(stream, HEAP8,', 'writeChunks(stream, getHeap8(),')
     module = ('// Generated filesystem owner; regenerate with scripts/build_wasm.sh.\n'
-              'export function createZyxFilesystem({\n  '+', '.join(BINDINGS)+', getHeap8\n}) {\n'+body+'\n  return FS;\n}\n')
-    arguments = ', '.join(name if name != 'randomFill' else 'randomFill: (...args) => randomFill(...args)' for name in BINDINGS)
+              'export function createZyxFilesystem({\n  '+', '.join(bindings)+', getHeap8\n}) {\n'+body+'\n  return FS;\n}\n')
+    arguments = ', '.join(name if name != 'randomFill' else 'randomFill: (...args) => randomFill(...args)' for name in bindings)
     replacement = '''  // ES module code is cached; filesystem state is private to this invocation.
   var filesystemPath = locateFile('zyx-filesystem.mjs');
   if (ENVIRONMENT_IS_NODE && !isFileURI(filesystemPath))
