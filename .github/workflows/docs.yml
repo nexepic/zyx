@@ -66,6 +66,10 @@ jobs:
         working-directory: ./docs
         run: bun install --frozen-lockfile
 
+      - name: Test Playground UI logic
+        working-directory: ./docs/apps/docs
+        run: bun run test --runInBand --runTestsByPath __tests__/home/playground.test.tsx
+
       - name: Build static site for GitHub Pages
         working-directory: ./docs/apps/docs
         run: bun run build:gh-pages

@@ -11,7 +11,7 @@ interface DatasetSchema {
 interface GdsPanelProps {
   isEn: boolean;
   schema: DatasetSchema;
-  onRunGds: (queries: string[], scope: { nodeLabel: string; edgeType: string }) => void;
+  onRunGds: (plan: GdsRunPlan, scope: { nodeLabel: string; edgeType: string }) => void;
   status: string;
 }
 
@@ -21,6 +21,14 @@ type AlgorithmId =
   | "betweenness"
   | "closeness"
   | "dijkstra";
+
+export interface GdsRunPlan {
+  algorithm: AlgorithmId;
+  exists: string;
+  drop: string;
+  project: string;
+  run: string;
+}
 
 interface AlgorithmDef {
   id: AlgorithmId;
@@ -38,10 +46,13 @@ interface ParamDef {
   labelZh: string;
   placeholder: string;
   required?: boolean;
-  type?: "number" | "text";
+  type: "integer" | "decimal";
+  min: number;
+  max: number;
 }
 
 const PROJ_NAME = "__pg";
+const DEFAULT_PAGERANK_ITERATIONS = 20;
 
 const ALGORITHMS: AlgorithmDef[] = [
   {
@@ -51,13 +62,13 @@ const ALGORITHMS: AlgorithmDef[] = [
     description: "Measures node influence based on link structure",
     descriptionZh: "基于链接结构衡量节点影响力",
     params: [
-      { key: "maxIter", label: "Max iterations", labelZh: "最大迭代数", placeholder: "20" },
-      { key: "damping", label: "Damping factor", labelZh: "阻尼系数", placeholder: "0.85" },
+      { key: "maxIter", label: "Max iterations", labelZh: "最大迭代数", placeholder: String(DEFAULT_PAGERANK_ITERATIONS), type: "integer", min: 1, max: 128 },
+      { key: "damping", label: "Damping factor", labelZh: "阻尼系数", placeholder: "0.85", type: "decimal", min: 0, max: 1 },
     ],
     buildQuery: (g, p) => {
       const parts = [escapeCypherStringLiteral(g)];
-      if (p.maxIter) parts.push(p.maxIter);
-      if (p.maxIter && p.damping) parts.push(p.damping);
+      if (p.maxIter || p.damping) parts.push(p.maxIter ?? String(DEFAULT_PAGERANK_ITERATIONS));
+      if (p.damping) parts.push(p.damping);
       return `CALL gds.pageRank.stream(${parts.join(", ")}) YIELD nodeId, score RETURN nodeId, score ORDER BY score DESC`;
     },
   },
@@ -69,7 +80,7 @@ const ALGORITHMS: AlgorithmDef[] = [
     descriptionZh: "发现连通的节点分组",
     params: [],
     buildQuery: (g) =>
-      `CALL gds.wcc.stream(${escapeCypherStringLiteral(g)}) YIELD nodeId, componentId RETURN componentId, collect(nodeId) AS nodes ORDER BY componentId`,
+      `CALL gds.wcc.stream(${escapeCypherStringLiteral(g)}) YIELD nodeId, componentId RETURN nodeId, componentId ORDER BY componentId, nodeId`,
   },
   {
     id: "betweenness",
@@ -78,7 +89,7 @@ const ALGORITHMS: AlgorithmDef[] = [
     description: "Identifies bridge nodes between communities",
     descriptionZh: "识别社区间的桥接节点",
     params: [
-      { key: "sampling", label: "Sampling size", labelZh: "采样大小", placeholder: "0 (all)" },
+      { key: "sampling", label: "Sampling size", labelZh: "采样大小", placeholder: "0 (all)", type: "integer", min: 0, max: 0xffffffff },
     ],
     buildQuery: (g, p) => {
       const parts = [escapeCypherStringLiteral(g)];
@@ -103,8 +114,8 @@ const ALGORITHMS: AlgorithmDef[] = [
     description: "Weighted shortest path between two nodes",
     descriptionZh: "两节点间的加权最短路径",
     params: [
-      { key: "startId", label: "Start node ID", labelZh: "起始节点 ID", placeholder: "1", required: true, type: "number" },
-      { key: "endId", label: "End node ID", labelZh: "终止节点 ID", placeholder: "10", required: true, type: "number" },
+      { key: "startId", label: "Start node ID", labelZh: "起始节点 ID", placeholder: "1", required: true, type: "integer", min: 1, max: Number.MAX_SAFE_INTEGER },
+      { key: "endId", label: "End node ID", labelZh: "终止节点 ID", placeholder: "10", required: true, type: "integer", min: 1, max: Number.MAX_SAFE_INTEGER },
     ],
     buildQuery: (g, p) =>
       `CALL gds.shortestPath.dijkstra.stream(${escapeCypherStringLiteral(g)}, ${p.startId}, ${p.endId}) YIELD nodeId, cost RETURN nodeId, cost`,
@@ -116,6 +127,7 @@ export function GdsPanel({ isEn, schema, onRunGds, status }: GdsPanelProps) {
   const [selectedAlgo, setSelectedAlgo] = useState<AlgorithmId>("pageRank");
   const [algoParams, setAlgoParams] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
+  const [paramError, setParamError] = useState<string | null>(null);
   const [selectedNodeLabel, setSelectedNodeLabel] = useState("");
   const [selectedEdgeType, setSelectedEdgeType] = useState("");
 
@@ -123,27 +135,40 @@ export function GdsPanel({ isEn, schema, onRunGds, status }: GdsPanelProps) {
 
   const setParam = useCallback((key: string, value: string) => {
     setAlgoParams((prev) => ({ ...prev, [key]: value }));
+    setParamError(null);
   }, []);
 
   const handleRun = useCallback(() => {
     if (status !== "ready") return;
 
-    // Validate required params
+    const params: Record<string, string> = {};
     for (const p of algo.params) {
-      if (p.required && !algoParams[p.key]) return;
+      const input = algoParams[p.key]?.trim() ?? "";
+      if (!input && !p.required) continue;
+      const validSyntax = p.type === "integer" ? /^\d+$/.test(input) : /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(input);
+      const value = Number(input);
+      if (!validSyntax || !Number.isFinite(value) || value < p.min || value > p.max
+          || (p.type === "integer" && !Number.isSafeInteger(value))) {
+        setParamError(isEn
+          ? `${p.label} must be ${p.type === "integer" ? "an integer" : "a number"} between ${p.min} and ${p.max}.`
+          : `${p.label}必须是 ${p.min} 到 ${p.max} 之间的${p.type === "integer" ? "整数" : "数字"}。`);
+        return;
+      }
+      params[p.key] = String(value);
     }
 
-    // Build: drop old → project (with optional scope) → run algorithm
     const graphName = escapeCypherStringLiteral(PROJ_NAME);
-    const queries = [
-      `CALL gds.graph.drop(${graphName})`,
-      `CALL gds.graph.project(${graphName}, ${escapeCypherStringLiteral(selectedNodeLabel)}, ${escapeCypherStringLiteral(selectedEdgeType)})`,
-      algo.buildQuery(PROJ_NAME, algoParams),
-    ];
+    setParamError(null);
     setRunning(true);
-    onRunGds(queries, { nodeLabel: selectedNodeLabel, edgeType: selectedEdgeType });
+    onRunGds({
+      algorithm: algo.id,
+      exists: `CALL gds.graph.exists(${graphName})`,
+      drop: `CALL gds.graph.drop(${graphName})`,
+      project: `CALL gds.graph.project(${graphName}, ${escapeCypherStringLiteral(selectedNodeLabel)}, ${escapeCypherStringLiteral(selectedEdgeType)})`,
+      run: algo.buildQuery(PROJ_NAME, params),
+    }, { nodeLabel: selectedNodeLabel, edgeType: selectedEdgeType });
     setTimeout(() => setRunning(false), 50);
-  }, [status, algo, algoParams, selectedNodeLabel, selectedEdgeType, onRunGds]);
+  }, [status, algo, algoParams, selectedNodeLabel, selectedEdgeType, onRunGds, isEn]);
 
   const scopeDesc = isEn
     ? (selectedNodeLabel || selectedEdgeType
@@ -285,7 +310,7 @@ export function GdsPanel({ isEn, schema, onRunGds, status }: GdsPanelProps) {
             return (
               <button
                 key={a.id}
-                onClick={() => { setSelectedAlgo(a.id); setAlgoParams({}); }}
+                onClick={() => { setSelectedAlgo(a.id); setAlgoParams({}); setParamError(null); }}
                 className={`w-full rounded-md px-3 text-left transition-all border ${
                   active
                     ? "border-[rgba(107,138,156,0.3)] bg-[rgba(107,138,156,0.08)] py-2.5"
@@ -321,7 +346,7 @@ export function GdsPanel({ isEn, schema, onRunGds, status }: GdsPanelProps) {
                   </label>
                   <input
                     type="text"
-                    inputMode={p.type === "number" ? "numeric" : undefined}
+                    inputMode={p.type === "integer" ? "numeric" : "decimal"}
                     value={algoParams[p.key] || ""}
                     onChange={(e) => setParam(p.key, e.target.value)}
                     className="w-full rounded-md border border-[rgba(122,144,170,0.2)] bg-[rgba(11,15,20,0.6)] px-2.5 py-1.5 font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.75rem] text-[#e7edf5] outline-none transition-colors focus:border-[rgba(148,168,190,0.4)] placeholder:text-[#3a4d60]"
@@ -347,6 +372,7 @@ export function GdsPanel({ isEn, schema, onRunGds, status }: GdsPanelProps) {
               ? `Run ${algo.name}`
               : `运行${algo.nameZh}`}
         </button>
+        {paramError && <p role="alert" className="mb-0 mt-2 text-[0.7rem] text-[#c98a8a]">{paramError}</p>}
         <p className="m-0 mt-2 text-center text-[0.6rem] text-[#3a4d60]">
           {scopeDesc}
         </p>

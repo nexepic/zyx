@@ -93,6 +93,12 @@ namespace graph::query::gds {
 	void LogicalGraphProjection::addArc(LogicalGraphProjection &projection, const uint64_t sourceNodeId,
 			const uint64_t targetNodeId, const double weight, const uint64_t relationshipId,
 			const bool syntheticReverse) {
+		// Bound actual arcs, including synthetic reverse arcs, rather than the
+		// theoretical product of two independent scan limits (which can exceed
+		// size_t on wasm32 even for a small graph).
+		if (projection.edge_count_ == std::numeric_limits<size_t>::max()) {
+			throw std::overflow_error("logical projection adjacency count overflows its size domain");
+		}
 		projection.outgoing_[sourceNodeId].push_back({targetNodeId, weight, relationshipId, syntheticReverse});
 		projection.incoming_[targetNodeId].push_back({sourceNodeId, weight, relationshipId, syntheticReverse});
 		++projection.edge_count_;
@@ -135,9 +141,6 @@ namespace graph::query::gds {
 		if (bounds.maximum_nodes == 0U || bounds.maximum_metadata_pages == 0U ||
 				bounds.maximum_edges_per_node == 0U || bounds.maximum_property_bytes == 0U) {
 			throw std::invalid_argument("logical projection requires positive Node, metadata, and Edge bounds");
-		}
-		if (bounds.maximum_nodes > std::numeric_limits<size_t>::max() / bounds.maximum_edges_per_node) {
-			throw std::overflow_error("logical projection adjacency bound overflows its size domain");
 		}
 
 		const auto workspaceOwner = utils::sharedAllocationOwner();

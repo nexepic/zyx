@@ -325,6 +325,24 @@ namespace graph::query::gds {
 
 	} // namespace
 
+	TEST(LogicalGraphProjectionTest, AcceptsSmallGraphWhenIndependentScanLimitsWouldOverflowTheirProduct) {
+		Snapshot snapshot;
+		snapshot.nodes = {{1U, {"Node"}}, {2U, {"Node"}}};
+		snapshot.edges = {{11U, 1U, 2U, "LINK", {}}};
+
+		LogicalGraphProjectionSpec spec;
+		spec.name = "large-scan-limits";
+		spec.default_orientation = LogicalProjectionOrientation::LPO_UNDIRECTED;
+		LogicalProjectionBuildBounds projectionBounds = bounds();
+		projectionBounds.maximum_nodes = std::numeric_limits<size_t>::max();
+		projectionBounds.maximum_edges_per_node = 2U;
+
+		const auto projection = LogicalGraphProjection::build(snapshot, spec, projectionBounds);
+		EXPECT_EQ(projection.nodeCount(), 2U);
+		EXPECT_EQ(projection.edgeCount(), 2U);
+		EXPECT_EQ(projection.csr()->edgeCount(), 2U);
+	}
+
 	TEST(LogicalGraphProjectionTest, BuildsFilteredStableWeightedAdjacencyFromLogicalSnapshot) {
 		Snapshot snapshot;
 		snapshot.nodes = {
@@ -663,10 +681,6 @@ namespace graph::query::gds {
 		invalidBounds.maximum_edges_per_node = 0U;
 		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, invalidBounds)),
 					 std::invalid_argument);
-		invalidBounds = bounds();
-		invalidBounds.maximum_nodes = std::numeric_limits<size_t>::max();
-		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, invalidBounds)),
-					 std::overflow_error);
 
 		LogicalGraphProjectionSpec invalid = spec;
 		invalid.node_labels = {"", "Code"};
