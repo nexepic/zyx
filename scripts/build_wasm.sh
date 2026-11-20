@@ -140,6 +140,8 @@ em++ \
     ]' \
     -sEXPORTED_RUNTIME_METHODS='["ccall","cwrap","FS","HEAPU8","HEAP32","UTF8ToString","getValue"]' \
     -sALLOW_MEMORY_GROWTH=1 \
+    -sSTACK_SIZE=1048576 \
+    -sSTACK_OVERFLOW_CHECK=2 \
     -sNO_EXIT_RUNTIME=1 \
     -sUSE_ZLIB=1 \
     -sMODULARIZE=1 \

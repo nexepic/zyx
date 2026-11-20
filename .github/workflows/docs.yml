@@ -1,42 +1,68 @@
-name: Deploy Documentation
+name: WASM and Playground
 
 on:
+  pull_request:
+    paths: &playground_inputs
+      - 'docs/**'
+      - 'src/**'
+      - 'include/**'
+      - 'lib/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'scripts/setup_emsdk.sh'
+      - 'scripts/*wasm*'
+      - 'tests/test_split_wasm_runtime.py'
+      - '.github/workflows/docs.yml'
   push:
     branches:
       - main
-    paths:
-      - 'docs/**'
-      - '.github/workflows/docs.yml'
+    paths: *playground_inputs
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build WASM and test Playground (Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install WASM build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get -o Acquire::Retries=3 install -y ninja-build libboost-dev
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
           package-manager-cache: false
+
+      - name: Build WASM from this commit
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: '2'
+          ZYX_BOOST_HEADER_DIR: /usr/include
+        run: |
+          bash scripts/setup_emsdk.sh
+          CMAKE_GENERATOR=Ninja bash scripts/build_wasm.sh
+          python3 -m unittest discover -s tests -p test_split_wasm_runtime.py
+          node --experimental-transform-types --experimental-vm-modules scripts/test_wasm_runtime_split.mjs
+          bash scripts/stage_playground_wasm.sh
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install dependencies
+      - name: Install site dependencies
         working-directory: ./docs
         run: bun install --frozen-lockfile
 
@@ -44,18 +70,51 @@ jobs:
         working-directory: ./docs/apps/docs
         run: bun run build:gh-pages
 
-      - name: Upload artifact
+      - name: Install Chromium for Playground tests
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/playground-test" playwright@1.62.1
+          "$RUNNER_TEMP/playground-test/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Verify Playground with the exported site
+        run: |
+          # A real legacy fixture kept outside the shipped site.
+          legacy_commit=57482b56af21fdfbb3bb82eaed05424edd0b95d8
+          git fetch --depth=1 --no-tags origin "$legacy_commit"
+          git show "$legacy_commit:docs/apps/docs/public/data/got.zyx" > "$RUNNER_TEMP/legacy-got.zyx"
+          site=docs/apps/docs/out
+          for file in zyx.js zyx-filesystem.mjs zyx.wasm; do
+            cmp "build_wasm/$file" "$site/wasm/$file"
+          done
+          sha256sum "$site"/wasm/* "$site"/data/*.zyx
+          NODE_PATH="$RUNNER_TEMP/playground-test/node_modules" \
+            node docs/apps/docs/scripts/test-playground.cjs "$site" "$RUNNER_TEMP/legacy-got.zyx" "$RUNNER_TEMP/playground-evidence"
+
+      - name: Upload Playground failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-failure
+          path: ${{ runner.temp }}/playground-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload tested site
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./docs/apps/docs/out
 
   deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy tested site to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

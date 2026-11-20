@@ -408,7 +408,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
   }, [handleRun]);
 
   const handleDatasetSwitch = useCallback((idx: number) => {
-    if (idx === datasetIdx || status === "loading") return;
+    if (status === "loading" || (idx === datasetIdx && status === "ready")) return;
     setDatasetIdx(idx);
     setQuery(DATASETS[idx].initialQuery);
     setUserDbName(null);
@@ -595,6 +595,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
             {DATASETS.map((ds, i) => (
               <button
                 key={ds.label}
+                aria-pressed={i === datasetIdx}
                 onClick={() => handleDatasetSwitch(i)}
                 disabled={status === "loading"}
                 className={`rounded px-3 py-1 text-[0.75rem] transition-colors ${
@@ -832,7 +833,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
           <div className="relative min-h-0 flex-1">
             {error ? (
               <div className="absolute inset-0 flex items-center justify-center p-6">
-                <div className="max-w-lg rounded-md border border-[rgba(163,93,93,0.3)] bg-[rgba(163,93,93,0.1)] px-5 py-4 font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.8rem] text-[#c98a8a] leading-relaxed">
+                <div role="alert" className="max-w-lg rounded-md border border-[rgba(163,93,93,0.3)] bg-[rgba(163,93,93,0.1)] px-5 py-4 font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.8rem] text-[#c98a8a] leading-relaxed">
                   {error}
                 </div>
               </div>

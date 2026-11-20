@@ -14,6 +14,23 @@ Open:
 - `http://localhost:3000/en`
 - `http://localhost:3000/zh`
 
+## Playground engine
+
+The Playground uses a source-built WebAssembly engine. GitHub Actions stages it
+before the Pages export; the generated engine files are not tracked. For local
+Playground development, run these commands from the repository root (requires
+CMake, Ninja, Python 3 and Boost.Container headers):
+
+```bash
+bash scripts/setup_emsdk.sh
+bash scripts/build_wasm.sh
+bash scripts/stage_playground_wasm.sh
+```
+
+Then start the docs dev server from `docs/`. Re-run the build and stage scripts
+after changing the database engine. Ordinary docs development does not need
+these assets unless you open the Playground.
+
 ## Build
 
 ```bash
