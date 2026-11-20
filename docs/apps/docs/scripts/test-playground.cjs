@@ -71,6 +71,10 @@ async function main() {
     const fileInput = page.locator('input[type="file"][accept=".zyx"]');
     const queryRows = page.locator("table tbody tr");
     const analytics = page.locator("aside").filter({ has: page.getByText("Analytics", { exact: true }) });
+    const output = page.locator("section").filter({ has: page.getByText("Output", { exact: true }) });
+    const outputAlerts = output.getByRole("alert");
+    // Next renders its own live region (role=alert) outside the Playground.
+    const playgroundAlerts = outputAlerts.or(analytics.getByRole("alert"));
 
     async function readRows() {
       return queryRows.evaluateAll((trs) => trs.map(
@@ -124,7 +128,7 @@ async function main() {
           const run = analytics.getByRole("button", { name: `Run ${name}`, exact: true });
           await run.click();
           await run.waitFor(); // Wait for the Running label to return to Run.
-          assert.deepEqual(await page.getByRole("alert").allTextContents(), [], scenario);
+          assert.deepEqual(await playgroundAlerts.allTextContents(), [], scenario);
           assert((await editor.inputValue()).startsWith(`CALL gds.${procedure}(`), scenario);
           if (column !== "componentId") {
             assert(await page.getByRole("button", { name: "Graph", exact: true }).isEnabled(), scenario);
@@ -168,7 +172,7 @@ async function main() {
       await end.fill("15"); // GoT nodes 1 and 15 exist but have no directed path.
       await run.click();
       await page.getByText("No path found between the specified nodes.", { exact: true }).waitFor();
-      assert.deepEqual(await page.getByRole("alert").allTextContents(), [], "No path is not an execution error");
+      assert.deepEqual(await playgroundAlerts.allTextContents(), [], "No path is not an execution error");
 
       // Scalar queries do not populate the panel's schema; run a graph query
       // with known labels/types before selecting a non-default scope.
@@ -203,7 +207,7 @@ async function main() {
       await expectCounts(428, 562);
 
       await fileInput.setInputFiles(legacyFile);
-      const error = page.getByRole("alert").filter({ hasText: /not a complete native relocatable database/i });
+      const error = outputAlerts.filter({ hasText: /not a complete native relocatable database/i });
       await error.waitFor();
       assert(await runQuery.isDisabled(), "Rejected file must not offer an active query");
       assert.equal(await got.getAttribute("aria-pressed"), "true");
