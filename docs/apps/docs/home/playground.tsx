@@ -521,7 +521,15 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       const graphNodeList = Array.from(nodeMap.values());
       const hasGraph = graphNodeList.length > 0 && graphEdges.length > 0;
-      setResult({ columns: algoResult.columns, values: algoValues, graphNodes: graphNodeList, graphEdges });
+      setResult({
+        columns: algoResult.columns,
+        values: algoValues,
+        graphNodes: graphNodeList,
+        graphEdges,
+        notice: hasGraph ? undefined : (isEn
+          ? "No relationships in the selected scope."
+          : "当前范围内没有边。"),
+      });
       setDuration(algoDur);
       setViewMode(hasGraph && plan.algorithm !== "wcc" ? "graph" : "table");
     } catch (e: any) {
@@ -852,6 +860,9 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
             ) : result && viewMode === "table" && result.values.length > 0 ? (
               <div className="absolute inset-0 overflow-auto [scrollbar-width:thin] [scrollbar-color:rgba(122,144,170,0.2)_transparent]">
                 <table className="w-full border-collapse text-[0.8rem]">
+                  {result.notice && (
+                    <caption className="px-6 py-3 text-left text-[#8a9bb0]">{result.notice}</caption>
+                  )}
                   <thead>
                     <tr className="sticky top-0 border-b border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.95)] backdrop-blur-sm z-10">
                       {result.columns.map((col, ci) => (
