@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
-import { GdsPanel } from "./gds-panel";
+import { GdsPanel, type GdsRunPlan } from "./gds-panel";
 import { buildScopedGraphMatchQuery } from "./cypherEscape";
 import { WasmDriverAbi, type DriverEdge, type DriverNode, type DriverResult, type DriverValue } from "./wasmDriverAbi";
 
@@ -75,6 +75,7 @@ interface QueryResult {
   values: string[][];
   graphNodes: GraphNode[];
   graphEdges: GraphEdge[];
+  notice?: string;
 }
 
 type Status = "loading" | "ready" | "error";
@@ -105,19 +106,23 @@ const displayLabelForNode = (node: DriverNode): string => {
   return typeof label === "string" || typeof label === "number" ? String(label) : String(node.id);
 };
 
-export function executeGdsPreparationQueries(driver: WasmDriverAbi, txn: number, queries: string[]): void {
-  for (let i = 0; i < queries.length - 1; i += 1) {
-    try {
-      driver.executeReadOnly(txn, queries[i]);
-    } catch (e: any) {
-      const message = String(e?.message || e || "");
-      if (!queries[i].startsWith("CALL gds.graph.drop") || !message.includes("not found")) throw e;
-    }
+export function executeGdsPreparationQueries(
+  driver: Pick<WasmDriverAbi, "executeReadOnly">,
+  txn: number,
+  plan: Pick<GdsRunPlan, "exists" | "drop" | "project">,
+): void {
+  const { columns, rows } = driver.executeReadOnly(txn, plan.exists);
+  const exists = rows[0]?.[columns.indexOf("exists")];
+  if (rows.length !== 1 || typeof exists !== "boolean") {
+    throw new Error("Unexpected graph existence result");
   }
+  if (exists) driver.executeReadOnly(txn, plan.drop);
+  driver.executeReadOnly(txn, plan.project);
 }
 
 export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?: string }) {
   const [datasetIdx, setDatasetIdx] = useState(0);
+  const [databaseSession, setDatabaseSession] = useState(0);
   const [query, setQuery] = useState(DATASETS[0].initialQuery);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +206,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     const txn = driver.beginReadOnly(db);
     txnRef.current = txn;
 
+    setDatabaseSession((previous) => previous + 1);
     setStatus("ready");
     setStatusMsg("");
 
@@ -415,7 +421,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     loadDatabase(idx);
   }, [datasetIdx, status, loadDatabase]);
 
-  const handleGdsQuery = useCallback((queries: string[], scope: { nodeLabel: string; edgeType: string }) => {
+  const handleGdsQuery = useCallback((plan: GdsRunPlan, scope: { nodeLabel: string; edgeType: string }) => {
     if (status !== "ready") return;
     const driver = driverRef.current;
     const txn = txnRef.current;
@@ -423,9 +429,9 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     setError(null);
 
     try {
-      executeGdsPreparationQueries(driver, txn, queries);
+      executeGdsPreparationQueries(driver, txn, plan);
 
-      const algoQuery = queries[queries.length - 1];
+      const algoQuery = plan.run;
       setQuery(algoQuery);
 
       const startedAt = performance.now();
@@ -435,9 +441,8 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       const nodeIdCol = algoResult.columns.indexOf("nodeId");
       const scoreCol = algoResult.columns.indexOf("score");
-      const compCol = algoResult.columns.indexOf("componentId");
       const costCol = algoResult.columns.indexOf("cost");
-      const valueCol = scoreCol >= 0 ? scoreCol : compCol >= 0 ? compCol : costCol;
+      const valueCol = scoreCol >= 0 ? scoreCol : costCol;
 
       const scoreMap = new Map<number, number>();
       for (const row of algoValues) {
@@ -448,11 +453,16 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
         }
       }
 
-      const isDijkstra = algoQuery.includes("shortestPath.dijkstra");
-      if (isDijkstra && scoreMap.size === 0) {
-        setResult({ columns: algoResult.columns, values: algoValues, graphNodes: [], graphEdges: [] });
+      const isDijkstra = plan.algorithm === "dijkstra";
+      if (isDijkstra && algoValues.length === 0) {
+        setResult({
+          columns: algoResult.columns,
+          values: [],
+          graphNodes: [],
+          graphEdges: [],
+          notice: isEn ? "No path found between the specified nodes." : "指定节点之间不存在路径。",
+        });
         setDuration(algoDur);
-        setError(isEn ? "No path found between the specified nodes." : "指定节点之间不存在路径。");
         setViewMode("table");
         return;
       }
@@ -511,9 +521,17 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       const graphNodeList = Array.from(nodeMap.values());
       const hasGraph = graphNodeList.length > 0 && graphEdges.length > 0;
-      setResult({ columns: algoResult.columns, values: algoValues, graphNodes: graphNodeList, graphEdges });
+      setResult({
+        columns: algoResult.columns,
+        values: algoValues,
+        graphNodes: graphNodeList,
+        graphEdges,
+        notice: hasGraph ? undefined : (isEn
+          ? "No relationships in the selected scope."
+          : "当前范围内没有边。"),
+      });
       setDuration(algoDur);
-      setViewMode(hasGraph ? "graph" : "table");
+      setViewMode(hasGraph && plan.algorithm !== "wcc" ? "graph" : "table");
     } catch (e: any) {
       setError(e.message || "Algorithm execution failed");
     }
@@ -842,6 +860,9 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
             ) : result && viewMode === "table" && result.values.length > 0 ? (
               <div className="absolute inset-0 overflow-auto [scrollbar-width:thin] [scrollbar-color:rgba(122,144,170,0.2)_transparent]">
                 <table className="w-full border-collapse text-[0.8rem]">
+                  {result.notice && (
+                    <caption className="px-6 py-3 text-left text-[#8a9bb0]">{result.notice}</caption>
+                  )}
                   <thead>
                     <tr className="sticky top-0 border-b border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.95)] backdrop-blur-sm z-10">
                       {result.columns.map((col, ci) => (
@@ -866,7 +887,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
               </div>
             ) : result && result.values.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center text-[0.85rem] text-[#8a9bb0]">
-                {isEn ? "Query executed successfully (0 rows)" : "查询成功完成（无返回行）"}
+                {result.notice ?? (isEn ? "Query executed successfully (0 rows)" : "查询成功完成（无返回行）")}
               </div>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-[0.85rem] text-[#566b82]">
@@ -880,7 +901,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
         {/* GDS Analytics panel (Middle) */}
         <GdsPanel
-          key={datasetIdx}
+          key={databaseSession}
           isEn={isEn}
           schema={liveSchema}
           onRunGds={handleGdsQuery}
