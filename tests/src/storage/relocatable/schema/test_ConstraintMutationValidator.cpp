@@ -372,8 +372,19 @@ namespace graph::storage {
 			EXPECT_EQ(maximum, 9U);
 			return scan(id, prefix, maximum);
 		};
+		size_t marked = 0;
+		adapter.mark_possible_prefixes = [&](uint64_t id, auto prefixes, auto possible) {
+			EXPECT_EQ(id, 81U);
+			marked += prefixes.size();
+			for (size_t i = 0; i < prefixes.size(); ++i)
+				possible[i] = std::ranges::equal(prefixes[i], ConstraintSupportTree::digest(canonical("wanted")));
+		};
 		ConstraintMutationValidator checking(std::move(adapter), {32U, 8U});
 		EXPECT_EQ(checking.validate(std::array{unique}, batch).size(), 1U);
+		EXPECT_EQ(marked, 0U);
+		batch.node_creates.push_back({{"Person"}, {{"email", PropertyValue("unoccupied")}}});
+		EXPECT_EQ(checking.validate(std::array{unique}, batch).size(), 2U);
+		EXPECT_EQ(marked, 2U);
 		graph.nodes.emplace(2U, node(2U, {7U}, {{"email", PropertyValue("wanted")}}));
 		addSupportEntry(graph, 81U, "wanted", 2U);
 		EXPECT_THROW(static_cast<void>(checking.validate(std::array{unique}, batch)), std::runtime_error);

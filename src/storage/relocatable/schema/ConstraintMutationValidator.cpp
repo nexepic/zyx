@@ -369,9 +369,7 @@ namespace graph::storage {
 						throw std::runtime_error("Constraint violation: '" + definition.name + "' has a duplicate key");
 					}
 				}
-				for (const auto &[reference, transition]: transitions) {
-					if (!transition.new_key.has_value() || transition.old_key == transition.new_key)
-						continue;
+				const auto validateCandidates = [&](const SupportReference &reference, const KeyTransition &transition) {
 					const utils::OwnedStdVector<BTreePageEntry> candidates = adapter_.scan_support_tree(
 							definition.constraint_id, ConstraintSupportTree::digest(*transition.new_key),
 							options_.maximum_support_collisions + 1U);
@@ -418,7 +416,45 @@ namespace graph::storage {
 						}
 						throw std::runtime_error("Constraint violation: '" + definition.name + "' has a duplicate key");
 					}
+				};
+				if (batchOwners.size() > 1 && adapter_.mark_possible_prefixes) {
+					// Bound scratch space independently of transaction size. Sorting by the
+					// routing digest lets adjacent requests reuse an authenticated leaf.
+					struct Probe {
+						std::array<std::byte, RSS_CONSTRAINT_SUPPORT_DIGEST_BYTES> digest;
+						const decltype(transitions)::value_type *transition;
+					};
+					constexpr size_t capacity = 256;
+					utils::OwnedStdVector<Probe> probes;
+					probes.reserve(std::min(capacity, batchOwners.size()));
+					const auto flush = [&] {
+						std::sort(probes.begin(), probes.end(), [](const Probe &a, const Probe &b) {
+							return a.digest < b.digest;
+						});
+						std::array<std::span<const std::byte>, capacity> prefixes;
+						std::array<uint8_t, capacity> possible;
+						for (size_t i = 0; i < probes.size(); ++i) prefixes[i] = probes[i].digest;
+						adapter_.mark_possible_prefixes(definition.constraint_id,
+							std::span(prefixes).first(probes.size()), std::span(possible).first(probes.size()));
+						for (size_t i = 0; i < probes.size(); ++i) {
+							if (possible[i]) validateCandidates(probes[i].transition->first, probes[i].transition->second);
+						}
+						probes.clear();
+					};
+					for (auto it = transitions.cbegin(); it != transitions.cend(); ++it) {
+						const auto &transition = it->second;
+						if (!transition.new_key || transition.old_key == transition.new_key) continue;
+						probes.push_back({ConstraintSupportTree::digest(*transition.new_key), &*it});
+						if (probes.size() == capacity) flush();
+					}
+					if (!probes.empty()) flush();
+				} else {
+					for (const auto &[reference, transition]: transitions) {
+						if (transition.new_key && transition.old_key != transition.new_key)
+							validateCandidates(reference, transition);
+					}
 				}
+
 				for (auto &[reference, transition]: transitions) {
 					if (transition.old_key == transition.new_key)
 						continue;

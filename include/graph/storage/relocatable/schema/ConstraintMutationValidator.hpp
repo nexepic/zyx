@@ -51,6 +51,10 @@ namespace graph::storage {
 		std::function<bool(uint64_t)> has_support_tree;
 		// Probe the ordered candidate run for one SHA-256 digest, not the following keys.
 		std::function<utils::OwnedStdVector<BTreePageEntry>(uint64_t, std::span<const std::byte>, size_t)> scan_support_tree;
+		// Optional negative prefilter. All positive results go through scan_support_tree.
+		std::function<void(uint64_t, std::span<const std::span<const std::byte>>, std::span<uint8_t>)>
+				mark_possible_prefixes;
+
 	};
 
 	struct ConstraintMutationValidatorOptions {

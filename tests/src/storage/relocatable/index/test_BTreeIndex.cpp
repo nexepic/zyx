@@ -497,6 +497,11 @@ TEST_F(RelocatableBTreeIndexTest, PrefixScanFollowsMatchingSeparatorsButDoesNotR
 	EXPECT_TRUE(index.scanPrefix(snapshot, key("m"), 0).empty());
 	EXPECT_TRUE(index.scanPrefix(snapshot, key("b"), 8).empty());
 	EXPECT_TRUE(index.scanPrefix(snapshot, key("n"), 8).empty());
+	const std::array keys{key("b"), key("m"), key("m2"), key("n")};
+	const std::array<std::span<const std::byte>, 4> prefixes{keys[0], keys[1], keys[2], keys[3]};
+	std::array<uint8_t, 4> possible{};
+	index.markPossiblePrefixes(snapshot, prefixes, possible);
+	EXPECT_EQ(possible, (std::array<uint8_t, 4>{0, 1, 1, 0}));
 	expectFormatError([&] { static_cast<void>(index.scanPrefix(snapshot, key("z"), 8)); }, FormatError::FERR_INVALID_STATE);
 }
 

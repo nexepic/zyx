@@ -93,6 +93,10 @@ namespace graph::storage {
 		// An empty prefix matches every key; maximumEntries bounds emitted matches.
 		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> scanPrefix(
 				const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix, size_t maximumEntries) const;
+		// Mark prefixes which may intersect an authenticated leaf or its upper separator.
+		// A positive answer still requires a bounded prefix scan to enumerate candidates.
+		void markPossiblePrefixes(const MetadataSnapshotPin &snapshot,
+				std::span<const std::span<const std::byte>> prefixes, std::span<uint8_t> possible) const;
 		// Opens a true continuation cursor. Unlike repeatedly calling scan() with
 		// the previous key, this descends from the root exactly once.
 		[[nodiscard]] RangeCursor openRangeCursor(

@@ -406,6 +406,36 @@ namespace graph::storage {
 		return scanRange(snapshot, prefix, maximumEntries, BufferPoolReadHint::BPRH_NORMAL, nullptr, false, true);
 	}
 
+	void BTreeIndex::markPossiblePrefixes(const MetadataSnapshotPin &snapshot,
+			std::span<const std::span<const std::byte>> prefixes, std::span<uint8_t> possible) const {
+		if (possible.size() != prefixes.size()) throw std::invalid_argument("prefix batch size mismatch");
+		utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+			: (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+		auto root = resolveRoot(snapshot);
+		if (!root) {
+			std::ranges::fill(possible, 0);
+			return;
+		}
+		LeafRoute route;
+		utils::OwnedStdVector<BTreePageEntry> entries;
+		for (size_t i = 0; i < prefixes.size(); ++i) {
+			const auto prefix = prefixes[i];
+			if (!route.page_id.isValid() || (route.lower_inclusive && lessKey(prefix, *route.lower_inclusive)) ||
+					(route.upper_exclusive && !lessKey(prefix, *route.upper_exclusive))) {
+				static_cast<void>(descendToLeafFromRoot(snapshot, *root, prefix, BufferPoolReadHint::BPRH_NORMAL,
+						nullptr, nullptr, &entries, &route));
+				debug::PerfTrace::addValue("native_graph.read.prefix_batch_leaf_routes", 1);
+			}
+			const auto it = std::lower_bound(entries.begin(), entries.end(), prefix,
+					[](const BTreePageEntry &entry, auto key) { return lessKey(entry.key, key); });
+			const auto startsWith = [prefix](const auto &key) {
+				return key.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), key.begin());
+			};
+			possible[i] = (it != entries.end() && startsWith(it->key)) ||
+					(route.upper_exclusive && startsWith(*route.upper_exclusive));
+		}
+	}
+
 	utils::OwnedStdVector<BTreePageEntry> BTreeIndex::scanRange(
 			const MetadataSnapshotPin &snapshot, std::optional<std::span<const std::byte>> lowerBound,
 			size_t maximumEntries, BufferPoolReadHint initialLeafReadHint, const CancellationCheckpoint *cancellation,

@@ -260,6 +260,11 @@ namespace graph::storage {
 			const BTreeIndex support(constraintId, *indexes_, *metadata_);
 			return support.scanPrefix(*snapshot_, digest, maximum);
 		};
+		result.mark_possible_prefixes = [this](uint64_t id, std::span<const std::span<const std::byte>> prefixes,
+				std::span<uint8_t> possible) {
+			if (checkpoint_) checkpoint_();
+			BTreeIndex(id, *indexes_, *metadata_).markPossiblePrefixes(*snapshot_, prefixes, possible);
+		};
 		return result;
 	}
 
