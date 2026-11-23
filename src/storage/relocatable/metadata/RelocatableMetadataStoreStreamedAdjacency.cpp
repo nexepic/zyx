@@ -2,6 +2,7 @@
 #include "graph/storage/relocatable/metadata/HybridPropertyPoolPlacement.hpp"
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 #include <algorithm>
 
 namespace graph::storage {
@@ -76,18 +77,47 @@ void RelocatableMetadataStore::prepareStreamedAdjacencyImages(MetadataWriteBatch
     utils::OwnedVector<PageLocation> published{utils::OwnedPmrAllocator<PageLocation>(proof.memory_)};
     published.reserve(proof.images_.size());
     utils::OwnedHeapReservation frameCredit(proof.memory_, 2U * RSS_PAGE_SIZE + 1024U);
-    for (const auto &page : proof.images_) {
-        require(page.header().index_id == proof.index_id_, "streamed adjacency image has a foreign namespace");
+    constexpr size_t stagingLimit = 8;
+    for (size_t first = 0; first < proof.images_.size();) {
         const auto pool = placement->allocate(SegmentKind::SGK_INDEX_PAGE_POOL, proof.index_id_, 1);
-        const PageOwnerHeader owner{page.header().page_id, pool.owner_id, PageOwnerKind::POK_INDEX, 0,
-            RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
-        auto rebound = page.rebindOwner(owner);
-        std::array<SharedPagePoolPreparedAppend, 1> appends;
-        appends[0].owner = owner; appends[0].payload = rebound.serialize();
-        appends[0].free_bytes = rebound.slottedPage().stats().contiguous_free_bytes;
-        std::array<PageLocation, 1> locations{{{owner.page_id, pool.segment_id, 0, pool.generation, appends[0].free_bytes}}};
-        placement->write(pool, appends, locations, false); published.push_back(locations[0]);
-        if (owner.page_id == root) rootGeneration = pool.generation;
+        auto &reservations = placement->reservations_;
+        const auto reservation = std::find_if(reservations.begin(), reservations.end(), [&](const auto &item) {
+            return item.pool.segment_id == pool.segment_id;
+        });
+        require(reservation != reservations.end(), "index image destination lost its reservation");
+        const size_t count = std::min(proof.images_.size() - first, 1 + reservation->capacity - reservation->assigned);
+        reservation->assigned += count - 1;
+        debug::PerfTrace::addValue("native_graph.write.index_images.destination_reservations", 1);
+        const size_t end = first + count;
+        while (first < end) {
+            size_t staged = std::min(stagingLimit, end - first);
+            // Preserve the existing per-page control flips for already prepared
+            // fresh pools. An initial fresh allocation is private to this writer.
+            if (reservation->fresh && reservation->prepared != 0) staged = 1;
+            utils::OwnedHeapReservation extra(proof.memory_);
+            if (staged > 1) {
+                try { extra.set((staged - 1) * (RSS_PAGE_SIZE + 128U)); }
+                catch (const query::execution::detail::ResourceAdmissionDenied &) { staged = 1; }
+            }
+            std::array<SharedPagePoolPreparedAppend, stagingLimit> appends;
+            const size_t locationStart = published.size();
+            for (size_t i = 0; i < staged; ++i) {
+                const auto &page = proof.images_[first + i];
+                require(page.header().index_id == proof.index_id_, "streamed adjacency image has a foreign namespace");
+                const PageOwnerHeader owner{page.header().page_id, pool.owner_id, PageOwnerKind::POK_INDEX, 0,
+                    RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, pool.generation, batch.checkpointLsn()};
+                auto rebound = page.rebindOwner(owner);
+                appends[i].owner = owner;
+                appends[i].payload = rebound.serialize();
+                appends[i].free_bytes = rebound.slottedPage().stats().contiguous_free_bytes;
+                published.push_back({owner.page_id, pool.segment_id, 0, pool.generation, appends[i].free_bytes});
+                if (owner.page_id == root) rootGeneration = pool.generation;
+            }
+            placement->write(pool, std::span(appends).first(staged),
+                std::span(published).subspan(locationStart, staged), false);
+            debug::PerfTrace::addValue("native_graph.write.index_images.prepare_batches", 1);
+            first += staged;
+        }
     }
     for (auto &reservation : placement->reservations_) if (reservation.fresh && !reservation.registered) {
         allocator_.prepareSetAllocated(batch, reservation.pool.physical_slot, true);

@@ -64,7 +64,9 @@ class HybridPropertyPoolPlacement final {
             catch (const FormatException &) { if (allocated) throw; ++capacity; continue; }
             const auto route = metadata_.locations_.findPageOptional(current, page->page_id);
             const bool currentFrame = route && route->segment_id == id && route->page_index == frame && route->generation == entry->generation;
-            const bool pinned = visible(page->page_id, id, frame, entry->generation);
+            // A current frame cannot be reused, regardless of older pins.
+            // Query pinned directories only for an otherwise reclaimable frame.
+            const bool pinned = !currentFrame && visible(page->page_id, id, frame, entry->generation);
             require(allocated || (!currentFrame && !pinned), "native placement found a bitmap-hidden current or pinned frame");
             if (allocated) {
                 // Do not mix ROW and native frames in a Property pool, even if
