@@ -186,6 +186,45 @@ async function main() {
       await analytics.getByText("Scope: Entire graph", { exact: true }).waitFor();
     }
 
+    async function expectScopedIMDbGraph() {
+      await editor.fill("MATCH (n:Person) RETURN id(n) AS person");
+      await runQuery.click();
+      await output.getByRole("columnheader", { name: "person", exact: true }).waitFor();
+      const personIds = new Set((await readRows()).map(([id]) => id));
+      assert.equal(personIds.size, 1538);
+      // Populate selectable labels/types from a graph query, after earlier scalar results.
+      await editor.fill("MATCH (a:Person)-[r:DIRECTED]->(b:Movie) RETURN a, r, b LIMIT 1");
+      await runQuery.click();
+      const person = analytics.getByRole("button", { name: "Person", exact: true });
+      const directed = analytics.getByRole("button", { name: "DIRECTED", exact: true });
+      const graph = output.getByRole("button", { name: "Graph", exact: true });
+      const notice = output.getByText("No relationships in the selected scope.", { exact: true });
+      await person.click();
+      await directed.click();
+      await analytics.getByText("Scope: Person + DIRECTED", { exact: true }).waitFor();
+      await analytics.getByText("PageRank", { exact: true }).click();
+      const run = analytics.getByRole("button", { name: "Run PageRank", exact: true });
+      await run.click();
+      await notice.waitFor();
+      assert.deepEqual(await playgroundAlerts.allTextContents(), [], "An edgeless scope is not an error");
+      assert.equal(await graph.isEnabled(), false, "Do not draw Person-to-Movie edges in a Person-only projection");
+      assert.deepEqual(await output.getByRole("columnheader").allTextContents(), ["nodeId", "score"]);
+      const rows = await readRows();
+      assert.equal(rows.length, 1538, "Keep all projected Person nodes in the results table");
+      assert.deepEqual(new Set(rows.map(([id]) => id)), personIds);
+      const scores = rows.map(([, score]) => Number(score));
+      assert(scores.every((score) => Number.isFinite(score) && score > 0));
+      assert(Math.abs(scores.reduce((total, score) => total + score, 0) - 1) < 1e-6);
+
+      // Removing the node filter admits the Person-to-Movie relationships again.
+      await person.click();
+      await analytics.getByText("Scope: All nodes + DIRECTED", { exact: true }).waitFor();
+      await run.click();
+      await notice.waitFor({ state: "hidden" });
+      assert.deepEqual(await playgroundAlerts.allTextContents(), []);
+      assert(await graph.isEnabled(), "The edge-only scope can still be drawn");
+    }
+
     try {
       await page.goto(`${origin}${basePath}en/playground`, { waitUntil: "domcontentloaded" });
       await expectCounts(428, 562);
@@ -197,6 +236,7 @@ async function main() {
         ["edge"], [["1"], ["2"], ["3"]],
       );
       await expectAlgorithms({ dataset: "IMDb", nodes: 1959, components: 3, path: [1193, 1560] });
+      await expectScopedIMDbGraph();
       await got.click();
       await expectCounts(428, 562);
 
@@ -224,7 +264,7 @@ async function main() {
       ]) assert.equal(requests.get(basePath + path), contentType, path);
       assert.deepEqual(missing, [], "Missing same-origin static site assets");
       assert.deepEqual(pageErrors, [], "Uncaught browser errors");
-      console.log("Playground verified: both database counts, ordered query, all five algorithms on both datasets, repeated projection, invalid/no-path inputs, scope reset, current-format import, legacy rejection, same-dataset recovery.");
+      console.log("Playground verified: both database counts, ordered query, all five algorithms on both datasets, repeated projection, invalid/no-path inputs, scope reset, edgeless IMDb scope and graph recovery, current-format import, legacy rejection, same-dataset recovery.");
     } catch (error) {
       await mkdir(evidence, { recursive: true });
       await writeFile(resolve(evidence, "browser.json"), JSON.stringify({

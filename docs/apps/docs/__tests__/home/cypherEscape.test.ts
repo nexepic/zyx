@@ -9,11 +9,18 @@ describe('Cypher playground escaping', () => {
     expect(escapeCypherStringLiteral("proj'\\name")).toBe("'proj\\'\\\\name'")
   })
 
-  it('builds scoped graph queries without interpolating raw labels or types', () => {
-    const query = buildScopedGraphMatchQuery('Label`) MATCH (evil) //', 'TYPE`) DELETE r //')
+  it('matches only edges whose endpoints are in the projection node scope', () => {
+    expect(buildScopedGraphMatchQuery('Person', 'DIRECTED'))
+      .toBe("MATCH (a)-[r]->(b) WHERE 'Person' IN labels(a) AND 'Person' IN labels(b) AND type(r) = 'DIRECTED' RETURN a, r, b")
+    expect(buildScopedGraphMatchQuery('Person', ''))
+      .toBe("MATCH (a)-[r]->(b) WHERE 'Person' IN labels(a) AND 'Person' IN labels(b) RETURN a, r, b")
+    expect(buildScopedGraphMatchQuery('', 'DIRECTED'))
+      .toBe("MATCH (a)-[r]->(b) WHERE type(r) = 'DIRECTED' RETURN a, r, b")
+    expect(buildScopedGraphMatchQuery('', '')).toBe('MATCH (a)-[r]->(b) RETURN a, r, b')
+  })
 
-    expect(query).toBe('MATCH (a:`Label``) MATCH (evil) //`)-[r:`TYPE``) DELETE r //`]->(b) RETURN a, r, b')
-    expect(query).not.toContain('(a:Label`)')
-    expect(query).not.toContain('[r:TYPE`)')
+  it('quotes labels and relationship types as string literals', () => {
+    expect(buildScopedGraphMatchQuery("Director's Cut", "Related's Type"))
+      .toBe("MATCH (a)-[r]->(b) WHERE 'Director\\'s Cut' IN labels(a) AND 'Director\\'s Cut' IN labels(b) AND type(r) = 'Related\\'s Type' RETURN a, r, b")
   })
 })

@@ -68,7 +68,7 @@ jobs:
 
       - name: Test Playground UI logic
         working-directory: ./docs/apps/docs
-        run: bun run test --runInBand --runTestsByPath __tests__/home/playground.test.tsx
+        run: bun run test --runInBand --runTestsByPath __tests__/home/playground.test.tsx __tests__/home/cypherEscape.test.ts
 
       - name: Build static site for GitHub Pages
         working-directory: ./docs/apps/docs
