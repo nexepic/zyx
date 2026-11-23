@@ -1366,7 +1366,7 @@ namespace graph::storage {
         if (!metadata_.ownsSnapshot(snapshot) ||
             !isSystemCatalogIndexDefinitionId(definition.index_id) ||
             (definition.kind != IndexDefinitionKind::IDK_LABEL && definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE) ||
-            !source || !memory || !sink || !operationCount || operationCount > 8192U)
+            !source || !memory || !sink || !operationCount || operationCount > MAXIMUM_NATIVE_DERIVED_IMAGE_OPERATIONS)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "native scalar image preparation requires its authenticated schema and operation bounds");
         return planNativeDerivedIndexImages(snapshot, definition.index_id, operationCount, source, std::move(memory), std::move(sink), cancellation);
     }
@@ -1389,7 +1389,7 @@ namespace graph::storage {
         const CancellationCheckpoint *cancellation) const {
         if (!metadata_.ownsSnapshot(snapshot) ||
             (!isSystemCatalogIndexDefinitionId(indexId) && !isSystemCatalogConstraintDefinitionId(indexId) && indexId != RSS_SYSTEM_CATALOG_INDEX_ID && !isEntityFreeSpaceIndexId(indexId)) ||
-            !source || !memory || !sink || !operationCount || operationCount > 8192U)
+            !source || !memory || !sink || !operationCount || operationCount > MAXIMUM_NATIVE_DERIVED_IMAGE_OPERATIONS)
             throw FormatException(FormatError::FERR_INVALID_HEADER, "native derived images require an owned pin and bounded operation source");
         utils::OwnedAllocationScope scope(memory);
         auto overlay = utils::makeSharedOwned<TransactionBTreeOverlay>(*this, metadata_, snapshot, indexId,

@@ -255,10 +255,10 @@ namespace graph::storage {
 		result.has_support_tree = [this](uint64_t constraintId) {
 			return metadata_->findIndexRootOptional(*snapshot_, constraintId).has_value();
 		};
-		result.scan_support_tree = [this](uint64_t constraintId, std::span<const std::byte> lowerBound,
+		result.scan_support_tree = [this](uint64_t constraintId, std::span<const std::byte> digest,
 										  size_t maximum) {
 			const BTreeIndex support(constraintId, *indexes_, *metadata_);
-			return support.scan(*snapshot_, lowerBound, maximum);
+			return support.scanPrefix(*snapshot_, digest, maximum);
 		};
 		return result;
 	}

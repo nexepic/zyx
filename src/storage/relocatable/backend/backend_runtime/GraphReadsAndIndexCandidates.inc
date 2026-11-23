@@ -439,7 +439,7 @@
 			}
 			const BTreeIndex support(definition.constraint_id, *btree_pages_, *metadata_);
 			const utils::OwnedStdVector<BTreePageEntry> candidates =
-					support.scan(snapshot, ConstraintSupportTree::lowerBound(requestedKey),
+					support.scanPrefix(snapshot, ConstraintSupportTree::digest(requestedKey),
 								 checkedBoundPlusOne(options_.maximum_constraint_support_collisions,
 										"relocatable native exact Node lookup collision bound overflowed"));
 			size_t collisionCount = 0U;
@@ -454,9 +454,6 @@
 			std::vector<uint64_t> candidateNodeIds;
 			candidateNodeIds.reserve(candidates.size());
 			for (const BTreePageEntry &candidate: candidates) {
-				if (!ConstraintSupportTree::matchesDigest(candidate.key, requestedKey)) {
-					break;
-				}
 				if (++collisionCount > options_.maximum_constraint_support_collisions) {
 					throw FormatException(
 							FormatError::FERR_INVALID_STATE,

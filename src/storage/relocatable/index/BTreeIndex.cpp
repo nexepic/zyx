@@ -398,6 +398,21 @@ namespace graph::storage {
 																 std::optional<std::span<const std::byte>> lowerBound,
 																 size_t maximumEntries, BufferPoolReadHint initialLeafReadHint,
 																 const CancellationCheckpoint *cancellation, bool excludeLowerBound) const {
+		return scanRange(snapshot, lowerBound, maximumEntries, initialLeafReadHint, cancellation, excludeLowerBound, false);
+	}
+
+	utils::OwnedStdVector<BTreePageEntry> BTreeIndex::scanPrefix(
+			const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix, size_t maximumEntries) const {
+		return scanRange(snapshot, prefix, maximumEntries, BufferPoolReadHint::BPRH_NORMAL, nullptr, false, true);
+	}
+
+	utils::OwnedStdVector<BTreePageEntry> BTreeIndex::scanRange(
+			const MetadataSnapshotPin &snapshot, std::optional<std::span<const std::byte>> lowerBound,
+			size_t maximumEntries, BufferPoolReadHint initialLeafReadHint, const CancellationCheckpoint *cancellation,
+			bool excludeLowerBound, bool prefixOnly) const {
+		const auto matchesPrefix = [&](std::span<const std::byte> key) {
+			return key.size() >= lowerBound->size() && std::equal(lowerBound->begin(), lowerBound->end(), key.begin());
+		};
         utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
             : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		if (!isSupportedScanLeafReadHint(initialLeafReadHint)) {
@@ -419,8 +434,9 @@ namespace graph::storage {
 		// without rereading the root or unrelated routing pages on every hop.
 		utils::OwnedStdVector<TraversalStep> traversal;
 		utils::OwnedStdVector<BTreePageEntry> entries;
+		LeafRoute route;
 		BTreePage leaf = descendToLeaf(snapshot, std::move(*root), lowerBound, initialLeafReadHint, cancellation,
-									  &traversal, &entries, nullptr, &rootEntries);
+									  &traversal, &entries, prefixOnly ? &route : nullptr, &rootEntries);
 		std::set<PageId> visited;
 		std::optional<utils::OwnedStdVector<std::byte>> previousLeafLastKey;
 		for (;;) {
@@ -455,11 +471,15 @@ namespace graph::storage {
 				if (cancellation != nullptr) {
 					cancellation->check();
 				}
+				if (prefixOnly && !matchesPrefix(position->key)) return result;
 				result.push_back(std::move(*position));
 			}
 			if (result.size() == maximumEntries || !header.right_sibling.isValid()) {
 				return result;
 			}
+			// Every successor is at or above this authenticated separator. If it
+			// is already beyond the prefix, do not fetch even one unrelated leaf.
+			if (prefixOnly && route.upper_exclusive && !matchesPrefix(*route.upper_exclusive)) return result;
 			utils::OwnedStdVector<BTreePageEntry> siblingEntries;
 			BTreePage sibling = pages_.readDecoded(snapshot, header.right_sibling, siblingEntries, BufferPoolReadHint::BPRH_SEQUENTIAL);
 			validateIndexPage(sibling, index_id_);
@@ -476,7 +496,7 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree linked non-root leaf is empty");
 			}
-			const LeafRoute successor = advanceToExpectedSiblingLeaf(snapshot, traversal, cancellation);
+			LeafRoute successor = advanceToExpectedSiblingLeaf(snapshot, traversal, cancellation);
 			if (siblingHeader.page_id != successor.page_id) {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree sibling is outside the routed leaf sequence");
@@ -492,6 +512,7 @@ namespace graph::storage {
 									 "relocatable B+Tree sibling key violates its routed separator range");
 				}
 			}
+			if (prefixOnly) route = std::move(successor);
 			leaf = std::move(sibling);
 			entries = std::move(siblingEntries);
 		}

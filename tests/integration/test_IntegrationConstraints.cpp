@@ -25,6 +25,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
+#include "graph/core/Transaction.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace fs = std::filesystem;
@@ -362,4 +364,39 @@ TEST_F(IntegrationConstraintTest, ConstraintPersistsAcrossRestart) {
 	// Should still allow valid data
 	auto result = execute("CREATE (n:Person {name: 'Alice'})");
 	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationConstraintTest, NodeKeyIncrementalImagesPreservePinnedReaderAndReopen) {
+    (void)execute("CREATE CONSTRAINT item_key FOR (n:Item) REQUIRE (n.id) IS NODE KEY");
+    (void)execute("UNWIND range(0, 999) AS id CREATE (:Item {id: id})");
+    auto reader = db->beginReadOnlyTransaction();
+    const auto count = [](const query::QueryResult &result) {
+        return result.getRows().at(0).at("num").asPrimitive();
+    };
+    EXPECT_EQ(count(reader.execute(*db->getQueryEngine(), "MATCH (n:Item) RETURN count(n) AS num")), PropertyValue(1000));
+    struct RestoreTrace {
+        bool previous = debug::PerfTrace::areValuesEnabled();
+        RestoreTrace() { debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true); }
+        ~RestoreTrace() { debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(previous); }
+    } traceScope;
+    for (int first : {1000, 2000, 3000}) {
+        (void)execute("UNWIND range(" + std::to_string(first) + "," + std::to_string(first + 999) +
+            ") AS id CREATE (:Item {id: id})");
+    }
+    const auto trace = debug::PerfTrace::snapshotAndReset();
+    ASSERT_TRUE(trace.contains("native_graph.write.ordinary_constraint.incremental_plans"));
+    EXPECT_EQ(trace.at("native_graph.write.ordinary_constraint.incremental_plans").totalValue, 3);
+    EXPECT_GT(trace.at("native_graph.write.ordinary_constraint.prepared_images").totalValue, 0);
+    EXPECT_EQ(count(reader.execute(*db->getQueryEngine(), "MATCH (n:Item) RETURN count(n) AS num")), PropertyValue(1000));
+    reader.commit();
+
+    (void)execute("MATCH (n:Item {id: 1000}) SET n.id = 4000");
+    (void)execute("MATCH (n:Item {id: 2000}) DELETE n");
+    db->close();
+    db = std::make_unique<Database>(testDbPath.string());
+    db->open();
+    EXPECT_EQ(count(execute("MATCH (n:Item) RETURN count(n) AS num")), PropertyValue(3999));
+    EXPECT_THROW((void)execute("CREATE (:Item {id: 4000})"), std::runtime_error);
+    (void)execute("CREATE (:Item {id: 1000}), (:Item {id: 2000})");
+    EXPECT_EQ(count(execute("MATCH (n:Item) RETURN count(n) AS num")), PropertyValue(4001));
 }

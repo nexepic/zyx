@@ -434,7 +434,19 @@
 					}
 					utils::AdmissionPmrVector<std::string_view> directKeys(&aggregateIndexMemory);
 					utils::AdmissionPmrVector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
-					struct DirectFilterTerm { size_t column; const expressions::LiteralExpression *literal; detail::ColumnPredicateOp operation; };
+					struct DirectFilterTerm {
+						size_t column;
+						detail::ColumnPredicateOp operation;
+						PropertyValue scalar{};
+						const PropertyValue *borrowed = nullptr;
+						std::optional<std::string_view> literal_text{};
+						[[nodiscard]] const PropertyValue &expected() const { return borrowed ? *borrowed : scalar; }
+						[[nodiscard]] std::optional<std::string_view> text() const {
+							if (literal_text) return literal_text;
+							const auto *value = std::get_if<std::string>(&expected().getVariant());
+							return value ? std::optional<std::string_view>(*value) : std::nullopt;
+						}
+					};
 					utils::AdmissionPmrVector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
 #if ZYX_BUILD_STREAMING_COUNT_PATH
                     utils::AdmissionPmrVector<PropertyValue> countConstants(&aggregateIndexMemory);
@@ -496,7 +508,8 @@
 									if (binary->getOperator() == Op::BOP_AND) return self(self, binary->getLeft()) && self(self, binary->getRight());
 									const auto *ref = directReference(binary->getLeft());
 									const auto *literal = dynamic_cast<const expressions::LiteralExpression *>(binary->getRight());
-									if (!ref || !ref->hasProperty() || !literal) return false;
+									const auto *parameter = dynamic_cast<const expressions::ParameterExpression *>(binary->getRight());
+									if (!ref || !ref->hasProperty() || (!literal && !parameter)) return false;
 									detail::ColumnPredicateOp operation;
 									switch (binary->getOperator()) {
 										case Op::BOP_EQUAL: operation = detail::ColumnPredicateOp::CPO_EQUAL; break;
@@ -507,7 +520,25 @@
 										case Op::BOP_GREATER_EQUAL: operation = detail::ColumnPredicateOp::CPO_GREATER_EQUAL; break;
 										default: return false;
 									}
-									directTerms.push_back({bind(binary->getLeft()), literal, operation}); return true;
+									DirectFilterTerm term{bind(binary->getLeft()), operation};
+									if (parameter) {
+										// QueryContext owns immutable parameters for this execution. Borrow
+										// the actual value, not a literal or a cached plan's previous value.
+										if (!state.shared.context) return false;
+										const auto &parameters = state.shared.context->parameters;
+										const auto found = parameters.find(parameter->getParameterName());
+										// Let the row evaluator retain its missing-parameter error timing.
+										if (found == parameters.end()) return false;
+										term.borrowed = &found->second;
+									} else if (literal->isString()) {
+										term.scalar = PropertyValue(std::string{});
+										term.literal_text = literal->getStringValue();
+									} else if (literal->isBoolean()) term.scalar = PropertyValue(literal->getBooleanValue());
+									else if (literal->isInteger()) term.scalar = PropertyValue(literal->getIntegerValue());
+									else if (literal->isDouble()) term.scalar = PropertyValue(literal->getDoubleValue());
+									else if (literal->isPropertyValue()) term.borrowed = &literal->getPropertyValue();
+									directTerms.push_back(std::move(term));
+									return true;
 								};
 								directEligible = collect(collect, directFilter->getPredicate().get());
 							}
@@ -565,7 +596,7 @@
                                 const size_t textColumn = !directGroups.empty() ? directGroups.front() :
                                     !directTerms.empty() ? directTerms.front().column : rowCountBinding;
                                 for (const auto &term : directTerms)
-                                    batchCountEligible = batchCountEligible && term.column == textColumn && term.literal->isString() &&
+                                    batchCountEligible = batchCountEligible && term.column == textColumn && term.text().has_value() &&
                                         term.operation == detail::ColumnPredicateOp::CPO_EQUAL;
                                 if (batchCountEligible && directGroups.empty() && directTerms.empty()) {
                                     size_t accepted = 0U;
@@ -594,7 +625,7 @@
                                         prepared = columns.tryVisitShortTextColumn(textColumn, selection, ordinals,
                                             [&](size_t row, std::optional<std::string_view> text) {
                                                 for (const auto &term : directTerms) {
-                                                    if (!text || *text != term.literal->getStringValue()) { ++rejected; return; }
+                                                    if (!text || *text != *term.text()) { ++rejected; return; }
                                                 }
                                                 ++accepted;
                                                 // Global COUNT needs no dictionary or per-row group key.
@@ -656,15 +687,10 @@
 									for (const auto &term : directTerms) {
 										checkGuard(state); const auto cell = columns.cell(term.column, columns.rowId(ordinal));
 										if (cell.state != detail::ColumnCellState::CCS_VALUE) { passesFilter = false; break; }
-										const auto &literal = *term.literal; PropertyValue scalar;
-										std::optional<std::string_view> text; const PropertyValue *expected = &scalar;
-										if (literal.isString()) { scalar = PropertyValue(std::string{}); text = literal.getStringValue(); }
-										else if (literal.isBoolean()) scalar = PropertyValue(literal.getBooleanValue());
-										else if (literal.isInteger()) scalar = PropertyValue(literal.getIntegerValue());
-										else if (literal.isDouble()) scalar = PropertyValue(literal.getDoubleValue());
-										else if (literal.isPropertyValue()) expected = &literal.getPropertyValue();
-										const detail::ColumnPredicate predicate{term.column, term.operation, expected};
-										const bool match = std::visit([&](auto value) { return detail::columnPredicateMatchesBorrowed(value, predicate, text); }, cell.data);
+										const detail::ColumnPredicate predicate{term.column, term.operation, &term.expected()};
+										const bool match = std::visit([&](auto value) {
+											return detail::columnPredicateMatchesBorrowed(value, predicate, term.literal_text);
+										}, cell.data);
 										if (!match) { passesFilter = false; break; }
 									}
 									if (!passesFilter) { ++filterRejected; continue; }
@@ -785,16 +811,14 @@
                         bool streamingCountEligible = streamingCountEnabled() && countOnlyAggregate && directKeys.size() <= 1U &&
                             std::ranges::all_of(directArguments, [&](size_t column) { return column == rowCountBinding; }) &&
                             std::ranges::all_of(directTerms, [](const auto &term) {
-                                return term.literal->isInteger() || term.literal->isDouble() || term.literal->isBoolean();
+                                const auto type = term.expected().getType();
+                                return type == PropertyType::INTEGER || type == PropertyType::DOUBLE || type == PropertyType::BOOLEAN;
                             });
                         if (streamingCountEligible) {
                             try {
                                 countConstants.reserve(directTerms.size()); countPredicates.reserve(directTerms.size());
                                 for (const auto &term : directTerms) {
-                                    const auto &literal = *term.literal;
-                                    if (literal.isInteger()) countConstants.emplace_back(literal.getIntegerValue());
-                                    else if (literal.isDouble()) countConstants.emplace_back(literal.getDoubleValue());
-                                    else countConstants.emplace_back(literal.getBooleanValue());
+                                    countConstants.push_back(term.expected());
                                     countPredicates.push_back({0U, term.operation, &countConstants.back()});
                                 }
                             } catch (const MaterializedByteLimitExceeded &) {

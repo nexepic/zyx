@@ -469,6 +469,37 @@ TEST_F(RelocatableBTreeIndexTest, ContinuesAnOrderedCursorAcrossPoolRelocationTh
 			  (std::vector<BTreePageEntry>{{key("a"), 1U}, {key("c"), 3U}, {key("m"), 13U}, {key("z"), 26U}}));
 }
 
+TEST_F(RelocatableBTreeIndexTest, PrefixScanFollowsMatchingSeparatorsButDoesNotReadAnUnrelatedSuccessor) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100), 17, LogSequenceNumber(2), PageId(101), key("m2"), PageId(102));
+	root.insert({key("z"), 103});
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100)), root, PhysicalSlotId(40), PhysicalSlotId(40),
+							   LogSequenceNumber(2)).has_value());
+	BTreePage left = leaf(PageId(101), 17, LogSequenceNumber(3), {}, PageId(102));
+	left.insert({key("a"), 1});
+	left.insert({key("m1"), 2});
+	BTreePage middle = leaf(PageId(102), 17, LogSequenceNumber(4), PageId(101), PageId(103));
+	middle.insert({key("m2"), 3});
+	middle.insert({key("m3"), 4});
+	static_cast<void>(pages.append(appendRequest(PageId(101)), left, LogSequenceNumber(3)));
+	static_cast<void>(pages.append(appendRequest(PageId(102)), middle, LogSequenceNumber(4)));
+	const IndexRootLocation location{17, PageId(100), Generation(1)};
+	static_cast<void>(pages.publishRoots(std::span(&location, 1), {}, LogSequenceNumber(5)));
+	BTreeIndex index(17, pages, *metadata);
+	auto snapshot = metadata->openSnapshot();
+	// The unallocated page 103 forces a failure if the scan overruns its prefix.
+	EXPECT_EQ(index.scanPrefix(snapshot, key("m"), 8),
+			  (std::vector<BTreePageEntry>{{key("m1"), 2}, {key("m2"), 3}, {key("m3"), 4}}));
+	EXPECT_EQ(index.scanPrefix(snapshot, key("m"), 2),
+			  (std::vector<BTreePageEntry>{{key("m1"), 2}, {key("m2"), 3}}));
+	EXPECT_TRUE(index.scanPrefix(snapshot, key("m"), 0).empty());
+	EXPECT_TRUE(index.scanPrefix(snapshot, key("b"), 8).empty());
+	EXPECT_TRUE(index.scanPrefix(snapshot, key("n"), 8).empty());
+	expectFormatError([&] { static_cast<void>(index.scanPrefix(snapshot, key("z"), 8)); }, FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableBTreeIndexTest, RejectsMissingChildrenAndBrokenLeafLinks) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pool(io, *metadata);

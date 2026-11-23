@@ -184,6 +184,7 @@ namespace graph::storage {
         friend class NativeGraphWriteTransaction;
         friend class NativeStreamedGraphMembershipIndexPlanner;
 	public:
+        static constexpr size_t MAXIMUM_NATIVE_DERIVED_IMAGE_OPERATIONS = 8192U;
 		using NewTreePageFactory = std::function<std::vector<BTreePage>(const CatalogEntry &, std::span<const PageId>)>;
 		// Receives the complete logical Page-ID assignment, then produces one page
 		// at a time. This lets a large bottom-up builder link pages in different

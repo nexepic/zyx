@@ -377,6 +377,56 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE, "native graph staged scalar Index operation stream is empty");
 			}
             const auto memory = utils::OwnedAllocationScope::owner();
+            // Constraint supports can dirty many leaves even for monotonic user keys:
+            // their physical keys are digest-ordered. Keep logical COW local and let
+            // the fenced publisher find space for the changed images across pools.
+            if (memory && isSystemCatalogConstraintDefinitionId(staged.index_id) &&
+                staged.leaf_value_layout == BTreeLeafValueLayout::BLVL_U64 &&
+                staged.operations.size() <= BTreePageStore::MAXIMUM_NATIVE_DERIVED_IMAGE_OPERATIONS) {
+                SystemCatalog schema(*staged.index, *context_->metadata);
+                const auto definition = schema.findConstraintDefinitionById(snapshot_, staged.index_id);
+                if (definition && (definition->kind == ConstraintDefinitionKind::CDK_UNIQUE ||
+                                   definition->kind == ConstraintDefinitionKind::CDK_NODE_KEY)) {
+                    auto proof = std::shared_ptr<NativeGraphDeferredIndexImages>(
+                        new (memory) NativeGraphDeferredIndexImages(*context_->metadata, snapshot_.superblock().generation,
+                            staged.index_id, context_->metadata->findIndexRoot(snapshot_, staged.index_id), memory,
+                            context_->options.first_slot, context_->options.last_slot),
+                        std::default_delete<NativeGraphDeferredIndexImages>(), utils::OwnedPmrAllocator<std::byte>(memory));
+                    proof->incremental_ = true;
+                    proof->plan_ = staged.index->planNativeConstraintImages(snapshot_, *definition,
+                        staged.operations.size(), [&](const std::function<void(const BTreeScalarIndexOperation &)> &emit) {
+                            const auto operations = std::span(staged.operations);
+                            utils::OwnedStdVector<const BTreeScalarIndexOperation *> run;
+                            for (size_t first = 0; first != operations.size();) {
+                                if (operations[first].kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT) {
+                                    emit(operations[first++]);
+                                    continue;
+                                }
+                                size_t last = first;
+                                run.clear();
+                                do { run.push_back(&operations[last++]); }
+                                while (last != operations.size() &&
+                                    operations[last].kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT);
+                                std::ranges::sort(run, [](const auto *a, const auto *b) {
+                                    if (a->key == b->key) return a < b; // equal-key statement order
+                                    return std::ranges::lexicographical_compare(a->key, b->key);
+                                });
+                                for (const auto *operation : run) emit(*operation);
+                                first = last;
+                            }
+                        }, memory, [target = proof.get()](BTreePage page) { target->images_.push_back(std::move(page)); }, nullptr);
+                    if (!proof->plan_.final_tree_empty) {
+                        proof->assignments_credit_.set(16384U +
+                            (proof->plan_.pool_requests.size() + proof->plan_.additional_new_pool_mutations.size() +
+                             size_t(bool(proof->plan_.new_pool_mutation))) * 8192U);
+                        staged.plan.reset();
+                        staged.images = std::move(proof);
+                        debug::PerfTrace::addValue("native_graph.write.ordinary_constraint.incremental_plans", 1);
+                        continue;
+                    }
+                    // The regular path keeps an active constraint's empty durable root.
+                }
+            }
             if (memory && isSystemCatalogIndexDefinitionId(staged.index_id) && staged.operations.size() <
                 NativeGraphWritePlannerOptions::DEFAULT_GLOBAL_ADJACENCY_BULK_REBUILD_ENTRY_THRESHOLD) {
                 SystemCatalog schema(*staged.index, *context_->metadata);

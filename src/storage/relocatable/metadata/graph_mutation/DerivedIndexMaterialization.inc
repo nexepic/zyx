@@ -253,21 +253,31 @@
                 auto &proof = *owned;
                 if (proof.metadata_ != this || proof.source_generation_ != current.generation || proof.materialized_ ||
                     proof.private_segments_ || proof.reader_ || !proof.memory_ || !proof.incremental_ ||
-                    (proof.index_id_ != RSS_GLOBAL_ADJACENCY_INDEX_ID && !isSystemCatalogIndexDefinitionId(proof.index_id_)) ||
+                    (proof.index_id_ != RSS_GLOBAL_ADJACENCY_INDEX_ID && !isSystemCatalogIndexDefinitionId(proof.index_id_) &&
+                     !isSystemCatalogConstraintDefinitionId(proof.index_id_)) ||
                     locations_.findIndexRootOptional(current, proof.index_id_) != proof.source_root_ ||
                     std::ranges::any_of(effectiveIndexMutations, [&proof](const auto &other) {return other.index_id == proof.index_id_;}) ||
                     std::ranges::any_of(deferredPlans, [&proof](const auto &other) {return other.mutation.index_id == proof.index_id_;}))
                     throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary index images lost their exact owned source");
+                const bool constraint = isSystemCatalogConstraintDefinitionId(proof.index_id_);
                 if (proof.index_id_ != RSS_GLOBAL_ADJACENCY_INDEX_ID) {
                     BTreePageStore schemaPages(*deferredSchemaPool, *this); SystemCatalog schema(schemaPages, *this);
-                    const auto definition = schema.findIndexDefinitionById(*ordinaryIndexSource, proof.index_id_);
-                    if (!definition || definition->kind != IndexDefinitionKind::IDK_LABEL ||
-                        definition->entity_kind != IndexDefinitionEntityKind::IDEK_EDGE)
-                        throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary image receipt lost its EDGE membership schema");
+                    if (constraint) {
+                        const auto definition = schema.findConstraintDefinitionById(*ordinaryIndexSource, proof.index_id_);
+                        if (!definition || (definition->kind != ConstraintDefinitionKind::CDK_UNIQUE &&
+                                            definition->kind != ConstraintDefinitionKind::CDK_NODE_KEY))
+                            throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary index image receipt lost its constraint schema");
+                    } else {
+                        const auto definition = schema.findIndexDefinitionById(*ordinaryIndexSource, proof.index_id_);
+                        if (!definition || definition->kind != IndexDefinitionKind::IDK_LABEL ||
+                            definition->entity_kind != IndexDefinitionEntityKind::IDEK_EDGE)
+                            throw FormatException(FormatError::FERR_INVALID_STATE, "ordinary image receipt lost its EDGE membership schema");
+                    }
                 }
                 prepareStreamedAdjacencyImages(batch, writer, *ordinaryIndexSource, proof, ordinaryIndexPlacement);
-                debug::PerfTrace::addValue(proof.index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID ?
-                    "native_graph.write.ordinary_adjacency.prepared_images" : "native_graph.write.ordinary_membership.prepared_images", int64_t(proof.images_.size()));
+                debug::PerfTrace::addValue(constraint ? "native_graph.write.ordinary_constraint.prepared_images" :
+                    proof.index_id_ == RSS_GLOBAL_ADJACENCY_INDEX_ID ? "native_graph.write.ordinary_adjacency.prepared_images" :
+                    "native_graph.write.ordinary_membership.prepared_images", int64_t(proof.images_.size()));
             }
 		std::vector<CatalogEntry> newPoolEntries;
 		newPoolEntries.reserve(newPoolRequests.size() + freshReplacementPools.size());

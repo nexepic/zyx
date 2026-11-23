@@ -355,6 +355,30 @@ namespace graph::storage {
 		EXPECT_EQ(plans[1].upserted_canonical_key, std::optional{canonical("one@example.test")});
 	}
 
+	TEST(ConstraintMutationValidatorTest, ComparesCanonicalKeysForEveryMatchingDigestCandidate) {
+		FakeGraph graph;
+		graph.support_roots.insert(81U);
+		graph.nodes.emplace(1U, node(1U, {7U}, {{"email", PropertyValue("other")}}));
+		// Force a digest collision in the routing tree without relying on SHA-256
+		// to produce one: the candidate's authoritative stored property differs.
+		addSupportEntry(graph, 81U, "wanted", 1U);
+		const auto unique = nodeConstraint(81U, ConstraintDefinitionKind::CDK_NODE_KEY, "person_key", {"email"});
+		LogicalGraphMutationBatch batch;
+		batch.node_creates.push_back({{"Person"}, {{"email", PropertyValue("wanted")}}});
+		auto adapter = graph.adapter();
+		const auto scan = adapter.scan_support_tree;
+		adapter.scan_support_tree = [&](uint64_t id, std::span<const std::byte> prefix, size_t maximum) {
+			EXPECT_TRUE(std::ranges::equal(prefix, ConstraintSupportTree::digest(canonical("wanted"))));
+			EXPECT_EQ(maximum, 9U);
+			return scan(id, prefix, maximum);
+		};
+		ConstraintMutationValidator checking(std::move(adapter), {32U, 8U});
+		EXPECT_EQ(checking.validate(std::array{unique}, batch).size(), 1U);
+		graph.nodes.emplace(2U, node(2U, {7U}, {{"email", PropertyValue("wanted")}}));
+		addSupportEntry(graph, 81U, "wanted", 2U);
+		EXPECT_THROW(static_cast<void>(checking.validate(std::array{unique}, batch)), std::runtime_error);
+	}
+
 	TEST(ConstraintMutationValidatorTest, RejectsMalformedAndOverBudgetSupportTreeCandidates) {
 		FakeGraph graph;
 		graph.nodes.emplace(2U, node(2U, {7U}, {{"email", PropertyValue("taken@example.test")}}));

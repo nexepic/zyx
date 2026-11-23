@@ -89,6 +89,10 @@ namespace graph::storage {
 																	   BufferPoolReadHint initialLeafReadHint = BufferPoolReadHint::BPRH_SEQUENTIAL,
 																	   const CancellationCheckpoint *cancellation = nullptr,
 																					 bool excludeLowerBound = false) const;
+		// Scan only the contiguous run of keys starting with prefix, in tree order.
+		// An empty prefix matches every key; maximumEntries bounds emitted matches.
+		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> scanPrefix(
+				const MetadataSnapshotPin &snapshot, std::span<const std::byte> prefix, size_t maximumEntries) const;
 		// Opens a true continuation cursor. Unlike repeatedly calling scan() with
 		// the previous key, this descends from the root exactly once.
 		[[nodiscard]] RangeCursor openRangeCursor(
@@ -115,6 +119,10 @@ namespace graph::storage {
         template<class Key>
         [[nodiscard]] utils::OwnedStdVector<std::optional<uint64_t>> findSortedKeys(
             const MetadataSnapshotPin &snapshot, std::span<const Key> keys) const;
+		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> scanRange(
+				const MetadataSnapshotPin &snapshot, std::optional<std::span<const std::byte>> lowerBound,
+				size_t maximumEntries, BufferPoolReadHint initialLeafReadHint, const CancellationCheckpoint *cancellation,
+				bool excludeLowerBound, bool prefixOnly) const;
 		struct TraversalStep {
             using OwnedHeapElement = void;
 			PageId page_id{};
