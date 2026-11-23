@@ -24,6 +24,9 @@
 			std::function<bool(std::span<const std::string>, const detail::DirectPropertyColumns &,
 				const SelectionVector &, std::span<const size_t>)> consumeDirect{};
 			const logical::LogicalOperator *filterOwner = nullptr;
+            bool aggregateDemand = false;
+            std::string_view predicateKey{};
+            std::function<bool(storage::PropertyColumnBatchReadSinks &, SelectionVector &, bool &)> bindDemand{};
 #if ZYX_BUILD_STREAMING_COUNT_PATH
             std::function<bool(size_t)> consumeCount{};
             std::span<const detail::ColumnPredicate> countPredicates{};

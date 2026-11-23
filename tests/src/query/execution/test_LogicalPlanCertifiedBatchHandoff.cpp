@@ -14,6 +14,8 @@ struct BatchState {
     std::vector<uint64_t> ids;
     size_t source_calls = 0, batches = 0;
     bool enabled = true;
+    bool demand = false, fail_payload = false;
+    size_t predicates = 0, payloads = 0;
 };
 class BatchSnapshot final : public DirectEdgeSnapshot, public storage::LogicalGraphNodeScanProvider {
 public:
@@ -30,12 +32,26 @@ public:
             const size_t n = (std::min)({size_t{3}, batchRows, end - start});
             std::copy_n(state_.ids.begin() + start, n, reused.begin());
             NodeScanPropertySource source = [&](std::span<const uint64_t> requested,
-                const PropertyCellSink &sink, const storage::PropertyColumnBatchReadSinks &,
+                const PropertyCellSink &sink, const storage::PropertyColumnBatchReadSinks &runs,
                 const std::function<void(size_t)> &admission) {
                 ++state_.source_calls;
                 for (auto id : requested)
                     if (std::find(reused.begin(), reused.begin() + n, id) == reused.begin() + n)
                         throw std::runtime_error("source requested IDs outside current borrow");
+                if (state_.demand && runs.needs_payload) {
+                    if (keys.size() != 2U || keys[runs.predicate_column] != "rank")
+                        throw std::logic_error("unexpected demand projection");
+                    for (size_t i = 0; i < requested.size(); ++i) {
+                        const auto id = requested[i];
+                        ++state_.predicates;
+                        if (!runs.needs_payload(i, PropertyType::INTEGER, id, {})) continue;
+                        if (state_.fail_payload) throw std::runtime_error("injected payload failure");
+                        sink(i, runs.predicate_column, PropertyValue(static_cast<int64_t>(id)));
+                        sink(i, 1U - runs.predicate_column, PropertyValue(static_cast<int64_t>(id * 10U)));
+                        ++state_.payloads;
+                    }
+                    return;
+                }
                 readNodePropertyCellsSortedWithAdmission(requested, keys, sink, admission);
             };
             ++state_.batches;
@@ -60,6 +76,59 @@ private:
 };
 std::shared_ptr<expressions::Expression> rank() {
     return std::make_shared<expressions::VariableReferenceExpression>("n", "rank");
+}
+TEST(LogicalPlanCertifiedBatchHandoffTest, FilteredPayloadPreservesOrderAndNeverReplaysFailure) {
+    for (const auto minimum : {int64_t{1}, int64_t{3}}) {
+        for (bool fail : {false, true}) {
+            auto graph = directGraph();
+            graph.enable_direct_property_cells = true;
+            BatchState state{{3, 1, 2}};
+            state.demand = true;
+            state.fail_payload = fail;
+            BatchBackend backend(graph, state);
+            LogicalPlanReadRuntime runtime(backend);
+            auto condition = std::make_shared<expressions::BinaryOpExpression>(
+                std::make_unique<expressions::VariableReferenceExpression>("n", "rank"),
+                expressions::BinaryOperatorType::BOP_GREATER,
+                std::make_unique<expressions::LiteralExpression>(minimum));
+            auto filter = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalNodeScan>("n"), condition);
+            logical::LogicalProject project(std::move(filter), {
+                {std::make_shared<expressions::VariableReferenceExpression>("n", "payload"), "v"}});
+            if (fail && minimum == 1) {
+                EXPECT_THROW((void)runtime.executeToQueryResult(project, directBounds()), std::runtime_error);
+                EXPECT_EQ(state.predicates, 2U);
+            } else {
+                const auto result = runtime.executeToQueryResult(project, directBounds());
+                EXPECT_EQ(state.predicates, 3U);
+                ASSERT_EQ(result.rowCount(), minimum == 1 ? 2U : 0U);
+                EXPECT_EQ(state.payloads, result.rowCount());
+                if (minimum == 1) {
+                    EXPECT_EQ(result.getRows()[0].at("v").asPrimitive(), PropertyValue(30));
+                    EXPECT_EQ(result.getRows()[1].at("v").asPrimitive(), PropertyValue(20));
+                }
+            }
+            EXPECT_EQ(state.source_calls, 1U);
+        }
+    }
+}
+TEST(LogicalPlanCertifiedBatchHandoffTest, FilteredAggregatePayloadFailureIsNotReplayed) {
+    auto graph = directGraph();
+    graph.enable_direct_property_cells = true;
+    BatchState state{{3, 1, 2}};
+    state.demand = true;
+    state.fail_payload = true;
+    BatchBackend backend(graph, state);
+    LogicalPlanReadRuntime runtime(backend);
+    auto condition = std::make_shared<expressions::BinaryOpExpression>(
+        std::make_unique<expressions::VariableReferenceExpression>("n", "rank"),
+        expressions::BinaryOperatorType::BOP_GREATER, std::make_unique<expressions::LiteralExpression>(int64_t{1}));
+    auto filter = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalNodeScan>("n"), condition);
+    logical::LogicalAggregate aggregate(std::move(filter), {},
+        {{"sum", std::make_shared<expressions::VariableReferenceExpression>("n", "payload"), "sum"}});
+    EXPECT_THROW((void)runtime.executeToQueryResult(aggregate, directBounds()), std::runtime_error);
+    EXPECT_EQ(state.predicates, 2U);
+    EXPECT_EQ(state.payloads, 0U);
+    EXPECT_EQ(state.source_calls, 1U);
 }
 TEST(LogicalPlanCertifiedBatchHandoffTest, BorrowsReusedBatchesAndPreservesPhysicalFloatingOrder) {
     auto graph = directGraph(); graph.enable_direct_property_cells = true;

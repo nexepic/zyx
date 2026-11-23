@@ -143,6 +143,7 @@ namespace graph::query::execution {
 #include "read_runtime/PlanInspectionAndBatching.inc"
 #include "read_runtime/TraversalSupply.inc"
 #include "read_runtime/NodeSupplyAndSorting.inc"
+#include "read_runtime/BoundDirectFilter.inc"
 		[[nodiscard]] bool visitOperator(const logical::LogicalOperator &op, ExecutionState &state,
 										 const InternalVisitor &visitor, const ChargedRowVisitor *chargedReceiver,
 										 const NodeColumnReceiver *columnReceiver) {

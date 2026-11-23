@@ -1236,15 +1236,18 @@ namespace graph::storage {
         std::span<const std::byte> bytes, std::span<const uint32_t> tokens, size_t ownerOrdinal,
         const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> &sink,
         const PropertyScalarReadSink &scalars, const PropertyTextReadSink *texts,
-        const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation) const {
+        const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation,
+        const PropertyColumnBatchReadSinks *demand) const {
         if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) return false;
         if (location.key != key || location.page_id != pageId || ownerKind != PageOwnerKind::POK_PROPERTY)
             throwRootStoreError(FormatError::FERR_INVALID_STATE, "typed Property selection has a foreign owner page");
         const uint32_t ownerType = key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? Node::typeId : Edge::typeId;
-        const auto emit = [&](size_t column, std::optional<std::span<const std::byte>> encoded) {
+        using Primitive = CanonicalPropertyValueCodec::BorrowedPrimitive;
+        const auto emit = [&](size_t column, std::optional<std::span<const std::byte>> encoded,
+                              const std::optional<Primitive> *cached = nullptr) {
             if (cancellation) cancellation->check();
             if (!encoded) { sink(ownerOrdinal, column, std::nullopt); return; }
-            if (const auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(*encoded)) {
+            if (const auto primitive = cached ? *cached : CanonicalPropertyValueCodec::tryBorrowPrimitive(*encoded)) {
                 if (primitive->type != PropertyType::STRING && scalars) {
                     scalars(ownerOrdinal, column, primitive->type, primitive->bits);
                     debug::PerfTrace::addValue("native_graph.read.property_typed_scalar_cells", 1);
@@ -1268,8 +1271,44 @@ namespace graph::storage {
             debug::PerfTrace::addValue("native_graph.read.property_owning_fallback_cells", 1);
             debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", 1);
         };
-        EntityPropertyCollectionRootCodec::visitSelectedEncoded(bytes, key.entity_id, ownerType,
-            tokens, std::ref(emit), admission, cancellation);
+        constexpr size_t maxBorrowedColumns = 16;
+        if (demand && demand->needs_payload && tokens.size() <= maxBorrowedColumns &&
+            demand->predicate_column < tokens.size()) {
+            // Borrow offsets only while this authenticated slot remains pinned.
+            // The codec validates the directory and admits selected byte ranges once.
+            std::array<std::optional<std::span<const std::byte>>, maxBorrowedColumns> cells;
+            const auto collect = [&](size_t column, auto encoded) { cells[column] = encoded; };
+            EntityPropertyCollectionRootCodec::visitSelectedEncoded(bytes, key.entity_id, ownerType,
+                tokens, std::ref(collect), admission, cancellation);
+            const auto &predicate = cells[demand->predicate_column];
+            const auto primitive = predicate ? CanonicalPropertyValueCodec::tryBorrowPrimitive(*predicate) : std::nullopt;
+            bool keep = true;
+            debug::PerfTrace::addValue("native_graph.read.demand_predicate_cells", 1);
+            if (!predicate) keep = demand->needs_payload(ownerOrdinal, PropertyType::NULL_TYPE, 0, {});
+            else if (primitive)
+                keep = demand->needs_payload(ownerOrdinal, primitive->type, primitive->bits, primitive->text);
+            if (keep) {
+                debug::PerfTrace::addValue("native_graph.read.demand_payload_cells", tokens.size() - 1U);
+                for (size_t c = 0; c < tokens.size(); ++c)
+                    emit(c, cells[c], c == demand->predicate_column ? &primitive : nullptr);
+            } else {
+                // Authenticate skipped values without materializing them. Fixed-width
+                // payload bytes need only an exact length. Containers validate their
+                // nested structure and canonical map ordering on the same pinned slot.
+                for (size_t c = 0; c < tokens.size(); ++c) {
+                    if (c == demand->predicate_column || !cells[c]) continue;
+                    size_t offset = 0;
+                    (void)CanonicalPropertyValueCodec::inspectNext(*cells[c], offset,
+                        [&] { if (cancellation) cancellation->check(); });
+                    if (offset != cells[c]->size())
+                        throwRootStoreError(FormatError::FERR_INVALID_HEADER, "skipped Property has trailing bytes");
+                }
+                debug::PerfTrace::addValue("native_graph.read.demand_rows_rejected", 1);
+            }
+        } else {
+            EntityPropertyCollectionRootCodec::visitSelectedEncoded(bytes, key.entity_id, ownerType,
+                tokens, std::ref(emit), admission, cancellation);
+        }
         debug::PerfTrace::addValue("native_graph.read.property_selected_column_decode", 1);
         debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
         return true;

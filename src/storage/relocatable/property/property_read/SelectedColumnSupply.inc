@@ -144,7 +144,7 @@
 				const auto bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
                 if (sink && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
                         pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, ownerIndex,
-                        *sink, scalarOutput ? *scalarOutput : bufferedScalar, textOutput, admission, cancellation_)) {
+                        *sink, scalarOutput ? *scalarOutput : bufferedScalar, textOutput, admission, cancellation_, batches)) {
                     if (cancellation_) cancellation_->check();
                     debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
                     continue;
@@ -158,7 +158,7 @@
 				const auto bytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
                 if (sink && store_->emitSelectedEntityProperties(keys[ownerIndex], location,
                         copied->pageId(), copied->ownerKind(), bytes, keyTokens, ownerIndex,
-                        *sink, scalarOutput ? *scalarOutput : bufferedScalar, texts, admission, cancellation_)) {
+                        *sink, scalarOutput ? *scalarOutput : bufferedScalar, texts, admission, cancellation_, batches)) {
                     if (cancellation_) cancellation_->check();
                     debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
                     continue;

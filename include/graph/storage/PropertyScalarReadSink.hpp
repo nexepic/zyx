@@ -25,6 +25,11 @@ struct PropertyColumnBatchReadSinks {
     static constexpr size_t MAXIMUM_CELLS = 64U;
     std::function<void(std::span<const size_t>, size_t, PropertyType, std::span<const uint64_t>)> scalars;
     std::function<void(std::span<const size_t>, size_t, std::span<const std::string_view>)> texts;
+    // Optional synchronous decision on one primitive cell in an authenticated row.
+    // Returning false authorizes omission of other cells for that row. Unsupported
+    // producers may still emit the entire row without invoking this callback.
+    size_t predicate_column = 0;
+    std::function<bool(size_t, PropertyType, uint64_t, std::string_view)> needs_payload;
 };
 
 }

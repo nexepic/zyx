@@ -194,6 +194,7 @@
 							std::optional<detail::BatchEnvelope> directEnvelope;
 							detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
 							std::optional<SelectionVector> selected;
+							size_t aggregateRejected = 0;
 							bool guardFailed = false;
 							const auto directGuard = [&] {
 								try { checkGuardNow(state); } catch (...) { guardFailed = true; throw; }
@@ -218,12 +219,21 @@
 								};
                                 bool deliveredRuns = false;
                                 bool generalSourceFallback = false;
-                                if (certifiedSource || (state.shared.snapshot.hasImmutableReadIdentity() && nodeIds.size() > 1U && keyViews.size() == 1U)) {
+                                storage::PropertyColumnBatchReadSinks runs;
+                                bool demand = false;
+                                if ((certifiedSource || state.shared.snapshot.hasImmutableReadIdentity()) &&
+                                    columnReceiver->bindDemand && predicates.predicates().empty()) {
+                                    const auto key = std::ranges::find(keyViews, columnReceiver->predicateKey);
+                                    if (key != keyViews.end()) {
+                                        runs.predicate_column = key - keyViews.begin();
+                                        demand = columnReceiver->bindDemand(runs, *selected, guardFailed);
+                                    }
+                                }
+                                if (demand || certifiedSource || (state.shared.snapshot.hasImmutableReadIdentity() && nodeIds.size() > 1U && keyViews.size() == 1U)) {
                                     bool emitted = false;
                                     const auto owning = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
                                         emitted = true; emitValue(row, column, std::move(value));
                                     };
-                                    storage::PropertyColumnBatchReadSinks runs;
                                     runs.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
                                             std::span<const uint64_t> bits) {
                                         emitted = true; direct->appendScalarRun(rows, column, type, bits, directGuard);
@@ -263,6 +273,10 @@
                                     state.shared.snapshot.readNodePropertyCellsWithViewsSortedWithAdmission(nodeIds, keyViews,
                                         std::ref(emitValue), std::ref(emitScalar), std::ref(emitText), std::ref(admitSource));
 								direct->seal(); sourceScratch.reset();
+                                // Attribute early evaluation to the logical predicate owner.
+                                // Publish these counts only after private batch preparation.
+                                if (columnReceiver->aggregateDemand)
+                                    aggregateRejected = direct->size() - selected->selectedCount();
 								(void)predicates.filter(*direct, *selected, directGuard);
 								if (state.shared.bound_program) {
 									try {
@@ -294,8 +308,10 @@
 							}
 							debug::PerfTrace::addValue("logical_plan.direct_property.batches", 1);
 							debug::PerfTrace::addValue("logical_plan.direct_property.rows", static_cast<int64_t>(direct->size()));
-							debug::PerfTrace::addValue("logical_plan.direct_property.rejected", static_cast<int64_t>(direct->size() - selected->selectedCount()));
-							// Consumer exceptions are outside preparation fallback and never replay.
+							debug::PerfTrace::addValue("logical_plan.direct_property.rejected", static_cast<int64_t>(direct->size() - selected->selectedCount() - aggregateRejected));
+							if (aggregateRejected)
+                                debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(aggregateRejected));
+                            // Consumer exceptions are outside preparation fallback and never replay.
 							return columnReceiver->consumeDirect(propertyKeys, *direct, *selected, lookupOrdinals);
 						}
 						MaterializedByteReservation rowBytes(&state.shared.materialized_budget);

@@ -972,6 +972,14 @@ namespace graph::storage {
         PropertyColumnBatchReadSinks mappedBatches;
         if (batches) {
             if (!batches->scalars || !batches->texts) throw std::invalid_argument("Property runs require both sinks");
+            if (batches->needs_payload) {
+                const auto predicate = std::ranges::find(resolved, batches->predicate_column,
+                    &std::pair<uint32_t, size_t>::second);
+                if (predicate != resolved.end()) {
+                    mappedBatches.predicate_column = std::lower_bound(tokens.begin(), tokens.end(), predicate->first) - tokens.begin();
+                    mappedBatches.needs_payload = std::cref(batches->needs_payload);
+                }
+            }
             mappedBatches.scalars = [&](std::span<const size_t> rows, size_t column, PropertyType type,
                     std::span<const uint64_t> bits) {
                 const auto token = tokens.at(column);

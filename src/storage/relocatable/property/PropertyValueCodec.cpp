@@ -401,8 +401,14 @@ namespace graph::storage {
                         break;
                     case PropertyValueWireKind::PVW_INTEGER:
                     case PropertyValueWireKind::PVW_DOUBLE:
-                    case PropertyValueWireKind::PVW_DATETIME: static_cast<void>(payload.readU64()); break;
-                    case PropertyValueWireKind::PVW_DATE: static_cast<void>(payload.readU32()); break;
+                    case PropertyValueWireKind::PVW_DATETIME:
+                        if constexpr (std::is_same_v<Reader, ByteReader>) payload.skip(8U);
+                        else static_cast<void>(payload.readU64());
+                        break;
+                    case PropertyValueWireKind::PVW_DATE:
+                        if constexpr (std::is_same_v<Reader, ByteReader>) payload.skip(4U);
+                        else static_cast<void>(payload.readU32());
+                        break;
                     case PropertyValueWireKind::PVW_DURATION:
                         for (size_t i = 0U; i < 3U; ++i) static_cast<void>(payload.readU64());
                         break;

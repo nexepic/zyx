@@ -434,19 +434,6 @@
 					}
 					utils::AdmissionPmrVector<std::string_view> directKeys(&aggregateIndexMemory);
 					utils::AdmissionPmrVector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
-					struct DirectFilterTerm {
-						size_t column;
-						detail::ColumnPredicateOp operation;
-						PropertyValue scalar{};
-						const PropertyValue *borrowed = nullptr;
-						std::optional<std::string_view> literal_text{};
-						[[nodiscard]] const PropertyValue &expected() const { return borrowed ? *borrowed : scalar; }
-						[[nodiscard]] std::optional<std::string_view> text() const {
-							if (literal_text) return literal_text;
-							const auto *value = std::get_if<std::string>(&expected().getVariant());
-							return value ? std::optional<std::string_view>(*value) : std::nullopt;
-						}
-					};
 					utils::AdmissionPmrVector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
 #if ZYX_BUILD_STREAMING_COUNT_PATH
                     utils::AdmissionPmrVector<PropertyValue> countConstants(&aggregateIndexMemory);
@@ -455,6 +442,7 @@
 					const auto *directFilter = dynamic_cast<const logical::LogicalFilter *>(&aggregateChild);
 					const auto *directInput = directFilter ? &requireOnlyChild(*directFilter) : &aggregateChild;
 					bool directBound = false;
+                    bool sparseInput = true;
 					bool directEligible = state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans() &&
 						state.shared.snapshot.supportsNodePropertyCellBatches() && directInput->getType() == logical::LogicalOpType::LOP_NODE_SCAN;
 					const auto *directScan = directEligible ? &static_cast<const logical::LogicalNodeScan &>(*directInput) : nullptr;
@@ -500,47 +488,7 @@
 								return static_cast<size_t>(it - directKeys.begin());
 							};
 							if (directFilter) {
-								const auto collect = [&](const auto &self, const expressions::Expression *expression) -> bool {
-									checkGuard(state);
-									const auto *binary = dynamic_cast<const expressions::BinaryOpExpression *>(expression);
-									if (!binary || !binary->getLeft() || !binary->getRight()) return false;
-									using Op = expressions::BinaryOperatorType;
-									if (binary->getOperator() == Op::BOP_AND) return self(self, binary->getLeft()) && self(self, binary->getRight());
-									const auto *ref = directReference(binary->getLeft());
-									const auto *literal = dynamic_cast<const expressions::LiteralExpression *>(binary->getRight());
-									const auto *parameter = dynamic_cast<const expressions::ParameterExpression *>(binary->getRight());
-									if (!ref || !ref->hasProperty() || (!literal && !parameter)) return false;
-									detail::ColumnPredicateOp operation;
-									switch (binary->getOperator()) {
-										case Op::BOP_EQUAL: operation = detail::ColumnPredicateOp::CPO_EQUAL; break;
-										case Op::BOP_NOT_EQUAL: operation = detail::ColumnPredicateOp::CPO_NOT_EQUAL; break;
-										case Op::BOP_LESS: operation = detail::ColumnPredicateOp::CPO_LESS; break;
-										case Op::BOP_LESS_EQUAL: operation = detail::ColumnPredicateOp::CPO_LESS_EQUAL; break;
-										case Op::BOP_GREATER: operation = detail::ColumnPredicateOp::CPO_GREATER; break;
-										case Op::BOP_GREATER_EQUAL: operation = detail::ColumnPredicateOp::CPO_GREATER_EQUAL; break;
-										default: return false;
-									}
-									DirectFilterTerm term{bind(binary->getLeft()), operation};
-									if (parameter) {
-										// QueryContext owns immutable parameters for this execution. Borrow
-										// the actual value, not a literal or a cached plan's previous value.
-										if (!state.shared.context) return false;
-										const auto &parameters = state.shared.context->parameters;
-										const auto found = parameters.find(parameter->getParameterName());
-										// Let the row evaluator retain its missing-parameter error timing.
-										if (found == parameters.end()) return false;
-										term.borrowed = &found->second;
-									} else if (literal->isString()) {
-										term.scalar = PropertyValue(std::string{});
-										term.literal_text = literal->getStringValue();
-									} else if (literal->isBoolean()) term.scalar = PropertyValue(literal->getBooleanValue());
-									else if (literal->isInteger()) term.scalar = PropertyValue(literal->getIntegerValue());
-									else if (literal->isDouble()) term.scalar = PropertyValue(literal->getDoubleValue());
-									else if (literal->isPropertyValue()) term.borrowed = &literal->getPropertyValue();
-									directTerms.push_back(std::move(term));
-									return true;
-								};
-								directEligible = collect(collect, directFilter->getPredicate().get());
+								directEligible = collectDirectFilter(*directFilter, state, directReference, bind, directTerms);
 							}
 							for (const auto &expression : groupExpressions) directGroups.push_back(bind(expression.get()));
 							for (const auto &item : aggregations) directArguments.push_back(bind(item.argument.get()));
@@ -803,10 +751,21 @@
 									}
 									debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", 1);
 								}
-								debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(filterRejected));
+								sparseInput = (selection.selectedCount() - filterRejected) * 4 < ordinals.size();
+                                debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(filterRejected));
                                 return true;
 							}});
 						aggregateColumnReceiver->filterOwner = directFilter;
+                        if (directKeys.size() > 1 && !directTerms.empty() && std::ranges::all_of(directTerms,
+                                [&](const auto &term) { return term.column == directTerms.front().column; })) {
+                            aggregateColumnReceiver->aggregateDemand = true;
+                            aggregateColumnReceiver->predicateKey = directKeys.at(directTerms.front().column);
+                            aggregateColumnReceiver->bindDemand = [&](storage::PropertyColumnBatchReadSinks &runs, SelectionVector &selected, bool &guardFailed) {
+                                if (!sparseInput) return false;
+                                bindPayloadSelection(runs, selected, state, directTerms, guardFailed);
+                                return true;
+                            };
+                        }
 #if ZYX_BUILD_STREAMING_COUNT_PATH
                         bool streamingCountEligible = streamingCountEnabled() && countOnlyAggregate && directKeys.size() <= 1U &&
                             std::ranges::all_of(directArguments, [&](size_t column) { return column == rowCountBinding; }) &&

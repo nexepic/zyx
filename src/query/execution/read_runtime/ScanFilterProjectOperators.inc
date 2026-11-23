@@ -757,7 +757,89 @@
 							return finishDistinct(visitOperator(input, state, emitScalarPathRow));
 						}
 					}
-					std::vector<const expressions::Expression *> projectionCandidates;
+					// Consume the same authenticated field batch for a direct filtered projection.
+                    // A scan with bound index predicates keeps its ordinary access selection.
+                    const auto *filter = dynamic_cast<const logical::LogicalFilter *>(&projectChild);
+                    const auto *scan = filter ? dynamic_cast<const logical::LogicalNodeScan *>(&requireOnlyChild(*filter)) : nullptr;
+                    if (directPropertyMove && scan && scan->getPropertyPredicates().empty() && scan->getParameterPropertyPredicates().empty() &&
+                        scan->getRangePredicates().empty() && !scan->getCompositeEquality() &&
+                        state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans() &&
+                        state.shared.snapshot.supportsNodePropertyCellBatches()) {
+                        utils::AdmissionPmrVector<std::string_view> keys(&distinctMemory);
+                        utils::AdmissionPmrVector<size_t> outputs(&distinctMemory);
+                        utils::AdmissionPmrVector<DirectFilterTerm> terms(&distinctMemory);
+                        const auto ref = [&](const expressions::Expression *expr) {
+                            const auto *value = dynamic_cast<const expressions::VariableReferenceExpression *>(expr);
+                            return value && value->hasProperty() && value->getVariableName() == scan->getVariable() ? value : nullptr;
+                        };
+                        const auto bind = [&](const expressions::Expression *expr) {
+                            const auto name = std::string_view(ref(expr)->getPropertyName());
+                            const auto found = std::ranges::find(keys, name);
+                            if (found != keys.end()) return size_t(found - keys.begin());
+                            keys.push_back(name);
+                            return keys.size() - 1U;
+                        };
+                        bool eligible = false;
+                        try {
+                            eligible = std::ranges::all_of(items, [&](const auto &item) { return ref(item.expression.get()); }) &&
+                                collectDirectFilter(*filter, state, ref, bind, terms) && !terms.empty() &&
+                                std::ranges::all_of(terms, [&](const auto &t) { return t.column == terms.front().column; });
+                            if (eligible) for (const auto &item : items) outputs.push_back(bind(item.expression.get()));
+                        } catch (const MaterializedByteLimitExceeded &) { eligible = false; }
+                        if (eligible && keys.size() > 1U) {
+                            NodeColumnReceiver receiver{keys, {}};
+                            receiver.filterOwner = filter;
+                            receiver.predicateKey = keys[terms.front().column];
+                            bool sparse = true;
+                            receiver.bindDemand = [&](storage::PropertyColumnBatchReadSinks &runs, SelectionVector &selected, bool &guardFailed) {
+                                if (!sparse) return false;
+                                bindPayloadSelection(runs, selected, state, terms, guardFailed);
+                                return true;
+                            };
+                            receiver.consumeDirect = [&](std::span<const std::string> names, const detail::DirectPropertyColumns &cols,
+                                    const SelectionVector &selection, std::span<const size_t> ordinals) {
+                                if (!std::ranges::equal(keys, names)) throw std::logic_error("projection scan fields changed");
+                                size_t accepted = 0;
+                                for (auto ordinal : ordinals) {
+                                    checkGuard(state);
+                                    if (!selection.includes(ordinal)) continue;
+                                    const auto row = cols.rowId(ordinal);
+                                    const auto cell = cols.cell(terms.front().column, row);
+                                    if (cell.state != detail::ColumnCellState::CCS_VALUE ||
+                                        !std::ranges::all_of(terms, [&](const auto &term) {
+                                            return std::visit([&](auto value) { return detail::columnPredicateMatchesBorrowed(value,
+                                                {term.column, term.operation, &term.expected()}, term.literal_text); }, cell.data);
+                                        })) continue;
+                                    ++accepted;
+                                    LogicalPlanReadRow projected;
+                                    MaterializedByteReservation retained(&state.shared.materialized_budget), copy(&state.shared.materialized_budget);
+                                    retained.set(sizeof(LogicalPlanReadRow));
+                                    for (size_t i = 0; i < outputs.size(); ++i) {
+                                        auto value = cols.copyValue(outputs[i], row, [&](size_t bytes) { copy.set(bytes); },
+                                            [&] { checkGuardNow(state); });
+                                        retained.set(checkedSizeAdd(retained.bytes(), checkedSizeAdd(items[i].alias.size(),
+                                            sizeof(LogicalPlanReadValue), "projected alias bytes overflowed"), "projected row bytes overflowed"));
+                                        projected.values.emplace(items[i].alias, std::move(value));
+                                        retained.absorb(std::move(copy));
+                                        retained.set(logicalReadRowBytes(projected, state.shared.context));
+                                    }
+                                    if (chargedReceiver) {
+                                        if (!(*chargedReceiver)(std::move(projected), std::move(retained))) return false;
+                                    } else {
+                                        retained.reset();
+                                        if (!visitor(std::move(projected))) return false;
+                                    }
+                                }
+                                debug::PerfTrace::addValue("logical_plan.direct_property.rejected",
+                                    static_cast<int64_t>(selection.selectedCount() - accepted));
+                                sparse = accepted * 4U < ordinals.size();
+                                return true;
+                            };
+                            return visitOperator(projectChild, state, emitProjectedRow,
+                                chargedReceiver ? &chargedProject : nullptr, &receiver);
+                        }
+                    }
+                    std::vector<const expressions::Expression *> projectionCandidates;
 					projectionCandidates.reserve(items.size());
 					for (const logical::LogicalProjectItem &item: items) {
 						projectionCandidates.push_back(item.expression.get());

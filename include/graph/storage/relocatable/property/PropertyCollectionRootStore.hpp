@@ -246,7 +246,8 @@ namespace graph::storage {
             std::span<const std::byte> bytes, std::span<const uint32_t> tokens, size_t ownerOrdinal,
             const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> &sink,
             const PropertyScalarReadSink &scalars, const PropertyTextReadSink *texts,
-            const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation) const;
+            const SelectedPropertyReadAdmission *admission, const CancellationCheckpoint *cancellation,
+            const PropertyColumnBatchReadSinks *demand) const;
 		[[nodiscard]] std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
 		decodeSelectedEntityPropertiesAndCount(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
 				const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
