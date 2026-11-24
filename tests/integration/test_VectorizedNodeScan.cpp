@@ -163,7 +163,7 @@ TEST_F(VectorizedNodeScanIntegrationTest, FiltersThroughSnapshotCachedTokensAndS
 	const bool valuesWereEnabled = debug::PerfTrace::areValuesEnabled();
 	debug::PerfTrace::reset();
 	debug::PerfTrace::setValueCollectionEnabled(true);
-	EXPECT_EQ(runCount("MATCH (n:Person) WHERE n.age >= 30 RETURN count(n) AS count"), 2);
+	EXPECT_EQ(runCount("MATCH (n:Person) WHERE n.age <= 42 RETURN count(n) AS count"), 2);
 	const debug::PerfTrace::Snapshot trace = debug::PerfTrace::snapshotAndReset();
 	debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 

@@ -255,7 +255,11 @@ namespace graph::query::optimization {
 					range->maxInclusive = inclusive;
 				}
 			}
-			if (!range.has_value()) {
+			// Index builders omit values whose encoded key exceeds one leaf entry.
+			// With variant ordering even an open upper bound on an integer
+			// admits such strings. Without a type/coverage proof use the Filter.
+			if (!range || range->maxValue.getType() == PropertyType::NULL_TYPE ||
+				!(range->maxValue < PropertyValue(std::string{}))) {
 				return false;
 			}
 			scan->setRangePredicates({std::move(*range)});

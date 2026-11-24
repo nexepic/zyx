@@ -597,6 +597,7 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesExactLookupAndReta
 
 TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesRangeLookupAndRetainsRuntimePredicateValidation) {
 	LogicalGraphFixtureData data = graphData();
+	data.expected_range_lookup = {"age", PropertyValue(), PropertyValue(42), true, true};
 	data.enable_range_node_lookup = true;
 	auto rangeLookupCount = std::make_shared<size_t>(0U);
 	data.range_lookup_count = rangeLookupCount;
@@ -604,8 +605,8 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesRangeLookupAndReta
 	LogicalPlanReadRuntime runtime(backend);
 	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
 			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
-			expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
-			std::make_unique<expressions::LiteralExpression>(int64_t{30}));
+			expressions::BinaryOperatorType::BOP_LESS_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t{42}));
 	auto root = std::make_unique<logical::LogicalFilter>(
 			std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}), predicate);
 	const auto optimized = graph::query::optimization::LogicalPlanOptimizer{}.optimize(std::move(root));
@@ -625,6 +626,7 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesRangeLookupAndReta
 
 TEST(LogicalGraphReadExecutorTest, OptimizedFilterReusesVerifiedNativeRangeCandidateFields) {
 	LogicalGraphFixtureData data = graphData();
+	data.expected_range_lookup = {"age", PropertyValue(), PropertyValue(42), true, true};
 	data.enable_native_range_node_candidates = true;
 	data.native_snapshot_generation = 17U;
 	data.range_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true,
@@ -639,8 +641,8 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterReusesVerifiedNativeRangeCandi
 	LogicalPlanReadRuntime runtime(backend);
 	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
 			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
-			expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
-			std::make_unique<expressions::LiteralExpression>(int64_t{30}));
+			expressions::BinaryOperatorType::BOP_LESS_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t{42}));
 	auto root = std::make_unique<logical::LogicalFilter>(
 			std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}), predicate);
 	const auto optimized = graph::query::optimization::LogicalPlanOptimizer{}.optimize(std::move(root));
@@ -699,7 +701,7 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesCompositeRangeLook
 	LogicalGraphFixtureData data = graphData();
 	data.enable_composite_range_node_lookup = true;
 	data.expected_composite_range_lookup = {
-			{{"status", PropertyValue("online")}}, {"age", PropertyValue(30), PropertyValue(), true, true}};
+			{{"status", PropertyValue("online")}}, {"age", PropertyValue(), PropertyValue(42), true, true}};
 	auto lookupCount = std::make_shared<size_t>(0U);
 	data.composite_range_lookup_count = lookupCount;
 	TestLogicalGraphBackend backend(std::move(data));
@@ -710,8 +712,8 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesCompositeRangeLook
 			std::make_unique<expressions::LiteralExpression>(std::string{"online"}));
 	auto range = std::make_unique<expressions::BinaryOpExpression>(
 			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
-			expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
-			std::make_unique<expressions::LiteralExpression>(int64_t{30}));
+			expressions::BinaryOperatorType::BOP_LESS_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t{42}));
 	auto root = std::make_unique<logical::LogicalFilter>(
 			std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}),
 			std::make_shared<expressions::BinaryOpExpression>(

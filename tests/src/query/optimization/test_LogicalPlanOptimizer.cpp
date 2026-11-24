@@ -397,7 +397,7 @@ namespace graph::query::optimization {
 					std::make_unique<expressions::LiteralExpression>(std::string{"Shanghai"}));
 			auto residual = std::make_unique<expressions::BinaryOpExpression>(
 					std::make_unique<expressions::VariableReferenceExpression>("n", "score"),
-					expressions::BinaryOperatorType::BOP_GREATER,
+					expressions::BinaryOperatorType::BOP_LESS,
 					std::make_unique<expressions::LiteralExpression>(int64_t{10}));
 			auto predicate = std::make_shared<expressions::BinaryOpExpression>(
 					std::make_unique<expressions::BinaryOpExpression>(
@@ -420,8 +420,8 @@ namespace graph::query::optimization {
 																	  {"city", PropertyValue("Shanghai")}}));
 			ASSERT_EQ(scan->getRangePredicates().size(), 1U);
 			EXPECT_EQ(scan->getRangePredicates().front().key, "score");
-			EXPECT_EQ(scan->getRangePredicates().front().minValue, PropertyValue(int64_t{10}));
-			EXPECT_FALSE(scan->getRangePredicates().front().minInclusive);
+			EXPECT_EQ(scan->getRangePredicates().front().maxValue, PropertyValue(int64_t{10}));
+			EXPECT_FALSE(scan->getRangePredicates().front().maxInclusive);
 		}
 
 		TEST(LogicalPlanOptimizerTest, LeavesNonExactOrAlreadyRepresentedFilterPredicatesUntouched) {
@@ -469,10 +469,10 @@ namespace graph::query::optimization {
 			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(parameterConflict)).rewrite_count, 0U);
 		}
 
-		TEST(LogicalPlanOptimizerTest, PushesOneDirectLiteralRangeIntoNodeScanWithoutRemovingFilter) {
+		TEST(LogicalPlanOptimizerTest, PushesUpperBoundedLiteralRangeIntoNodeScanWithoutRemovingFilter) {
 			auto predicate = std::make_shared<expressions::BinaryOpExpression>(
 					std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
-					expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
+					expressions::BinaryOperatorType::BOP_LESS_EQUAL,
 					std::make_unique<expressions::LiteralExpression>(int64_t{42}));
 			auto root = std::make_unique<logical::LogicalFilter>(
 					std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}), predicate);
@@ -488,9 +488,9 @@ namespace graph::query::optimization {
 			EXPECT_EQ(scan->getPreferredScanHint(), logical::LogicalScanHint::LSH_RANGE);
 			ASSERT_EQ(scan->getRangePredicates().size(), 1U);
 			EXPECT_EQ(scan->getRangePredicates().front().key, "age");
-			EXPECT_EQ(scan->getRangePredicates().front().minValue, PropertyValue(int64_t{42}));
-			EXPECT_EQ(scan->getRangePredicates().front().maxValue, PropertyValue());
-			EXPECT_TRUE(scan->getRangePredicates().front().minInclusive);
+			EXPECT_EQ(scan->getRangePredicates().front().maxValue, PropertyValue(int64_t{42}));
+			EXPECT_EQ(scan->getRangePredicates().front().minValue, PropertyValue());
+			EXPECT_TRUE(scan->getRangePredicates().front().maxInclusive);
 
 			auto reverse = std::make_unique<logical::LogicalFilter>(
 					std::make_unique<logical::LogicalNodeScan>("n"),
