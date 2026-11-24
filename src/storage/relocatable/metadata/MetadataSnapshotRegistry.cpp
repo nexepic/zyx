@@ -152,6 +152,10 @@ namespace graph::storage {
 
 	MetadataSnapshotRegistry::~MetadataSnapshotRegistry() = default;
 
+    MetadataSnapshotCoordination &MetadataSnapshotRegistry::coordinationUnderWrite() const noexcept {
+        return *state_->coordination;
+    }
+
 	MetadataSnapshotPin MetadataSnapshotRegistry::openSnapshot() const {
 		std::shared_lock lock(state_->coordination->publication_mutex);
 		const Superblock snapshot = state_->bootstrap->recover();

@@ -135,7 +135,10 @@ namespace graph::storage {
 
         struct MetadataCoordinationRegistry {
             std::mutex mutex;
-            std::map<std::string, std::weak_ptr<MetadataSnapshotCoordination>> domains;
+            // Unresolved repairs retain their existing charged file domain even
+            // after the last handle closes. ProcessResourceDomains bounds these
+            // identities before admission. Successful repairs release this hold.
+            std::map<std::string, std::shared_ptr<MetadataSnapshotCoordination>> domains;
         };
         MetadataCoordinationRegistry &metadataCoordinationRegistry() {
             // Backends may be destroyed during static teardown after their first
@@ -148,19 +151,27 @@ namespace graph::storage {
                 auto &registry = metadataCoordinationRegistry();
                 std::lock_guard lock(registry.mutex);
                 for (auto it = registry.domains.begin(); it != registry.domains.end();)
-                    if (it->second.expired()) it = registry.domains.erase(it); else ++it;
+                    if (it->second.use_count() == 1 && !it->second->unresolved_pool_repair.load(std::memory_order_acquire))
+                        it = registry.domains.erase(it);
+                    else ++it;
             } catch (...) {
                 // Releasing a backend must remain noexcept.
             }
         }
         [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> metadataFileCoordination(
-            const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner) {
+            const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner,
+                const std::shared_ptr<void> &openedFile) {
             auto &registry = metadataCoordinationRegistry();
             std::lock_guard lock(registry.mutex);
             for (auto it = registry.domains.begin(); it != registry.domains.end();)
-                if (it->second.expired()) it = registry.domains.erase(it); else ++it;
-            if (auto existing = registry.domains[key].lock()) return existing;
-            auto created = makeMetadataSnapshotCoordination(owner); registry.domains[key] = created; return created;
+                if (it->second.use_count() == 1 && !it->second->unresolved_pool_repair.load(std::memory_order_acquire))
+                        it = registry.domains.erase(it);
+                    else ++it;
+            if (const auto it = registry.domains.find(key); it != registry.domains.end()) return it->second;
+            auto created = makeMetadataSnapshotCoordination(owner);
+            created->opened_file = openedFile;
+            registry.domains.emplace(key, created);
+            return created;
         }
 
 		[[nodiscard]] std::shared_ptr<std::mutex>
@@ -245,16 +256,16 @@ namespace graph::storage {
 	public:
 		[[nodiscard]] static std::unique_ptr<OwnedRelocatableBackendFile> create(const std::filesystem::path &path, uint64_t maximumFileBytes) {
 			auto result = std::unique_ptr<OwnedRelocatableBackendFile>(new OwnedRelocatableBackendFile());
-			result->write_fd_ = portable_create_rw_exclusive(path.string().c_str());
-			if (result->write_fd_ == INVALID_FILE_HANDLE) {
+			result->handles_->write = portable_create_rw_exclusive(path.string().c_str());
+			if (result->handles_->write == INVALID_FILE_HANDLE) {
 				throw std::runtime_error("relocatable backend cannot exclusively create the database file");
 			}
 			result->stream_ = std::make_shared<std::fstream>(path, std::ios::binary | std::ios::in | std::ios::out);
 			if (!result->stream_->is_open()) {
 				throw std::runtime_error("relocatable backend cannot open the newly created database file");
 			}
-			result->read_fd_ = portable_open(path.string().c_str(), O_RDONLY);
-			result->io_ = std::make_shared<StorageIO>(result->stream_, result->write_fd_, result->read_fd_,
+			result->handles_->read = portable_open(path.string().c_str(), O_RDONLY);
+			result->io_ = std::make_shared<StorageIO>(result->stream_, result->handles_->write, result->handles_->read,
 													  StorageIOAccessMode::SIOAM_READ_WRITE, maximumFileBytes);
 			// Cache admission follows opened-file and durable database identity binding.
 			return result;
@@ -270,12 +281,12 @@ namespace graph::storage {
 				throw std::runtime_error("relocatable backend cannot open the existing database file");
 			}
 			if (writable) {
-				result->write_fd_ = portable_open_rw(path.string().c_str());
+				result->handles_->write = portable_open_rw(path.string().c_str());
 			}
-			result->read_fd_ = portable_open(path.string().c_str(), O_RDONLY);
+			result->handles_->read = portable_open(path.string().c_str(), O_RDONLY);
 			// StorageIO falls back to its serialized fstream path if an optional
 			// native handle is unavailable on this platform or filesystem.
-			result->io_ = std::make_shared<StorageIO>(result->stream_, result->write_fd_, result->read_fd_,
+			result->io_ = std::make_shared<StorageIO>(result->stream_, result->handles_->write, result->handles_->read,
 													  writable ? StorageIOAccessMode::SIOAM_READ_WRITE
 															   : StorageIOAccessMode::SIOAM_READ_ONLY, maximumFileBytes);
             if (writable && result->io_->fileSize() > maximumFileBytes) {
@@ -288,12 +299,13 @@ namespace graph::storage {
 
 		~OwnedRelocatableBackendFile() {
 			io_.reset();
-			static_cast<void>(portable_close_rw(write_fd_));
-			static_cast<void>(portable_close(read_fd_));
 			stream_.reset();
 		}
 
 		[[nodiscard]] const std::shared_ptr<StorageIO> &io() const { return io_; }
+        // Outlive deferred buffer/stream flushes in this file's destructor.
+        std::shared_ptr<MetadataSnapshotCoordination> coordination;
+        [[nodiscard]] std::shared_ptr<void> openedFile() const { return handles_; }
         void installVerifiedScanRoot(VerifiedScanRoot root) { verified_scan_.emplace(std::move(root)); }
         [[nodiscard]] const VerifiedScanRoot *verifiedScanRoot() const {
             return verified_scan_ ? &*verified_scan_ : nullptr;
@@ -305,8 +317,15 @@ namespace graph::storage {
 
 		std::shared_ptr<std::fstream> stream_;
 		std::shared_ptr<StorageIO> io_;
-		file_handle_t write_fd_ = INVALID_FILE_HANDLE;
-		file_handle_t read_fd_ = INVALID_FILE_HANDLE;
+		struct Handles {
+            file_handle_t write = INVALID_FILE_HANDLE;
+            file_handle_t read = INVALID_FILE_HANDLE;
+            ~Handles() {
+                static_cast<void>(portable_close_rw(write));
+                static_cast<void>(portable_close(read));
+            }
+        };
+        std::shared_ptr<Handles> handles_ = std::make_shared<Handles>();
 	};
 
 	namespace {
@@ -1249,7 +1268,8 @@ namespace graph::storage {
         auto logicalIdMemory = writable ? query::execution::detail::ProcessResourceDomains::defaultOwner()->logicalIdGrant(resourceDomain) : nullptr;
         data->io()->enableBufferPool(options_.buffer_pool_bytes, cacheMemory);
         auto coordination = metadataFileCoordination(nativeOpenedFileIdentity(identityHandle) + ":" +
-            std::to_string(recovered.database_id.value()), controlMemory);
+            std::to_string(recovered.database_id.value()), controlMemory, data->openedFile());
+        data->coordination = coordination;
         if (writable && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) {
             // Authenticate complete semantics before writable recovery can
             // change any allocator control record. The writer is verified again

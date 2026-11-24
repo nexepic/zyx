@@ -179,7 +179,7 @@ namespace graph::storage {
 		}
 
 		void rewriteInactivePoolControlRecord(StorageIO &io, uint64_t pageOffset, Generation generation,
-											  const SharedPagePoolHeader &replacement, const char *truncatedMessage) {
+											  const SharedPagePoolHeader &replacement, const char *truncatedMessage, PoolRepairControlRecord *record = nullptr) {
 			std::array<std::byte, RSS_PAGE_SIZE> page = readTypedPage(io, pageOffset, generation, truncatedMessage);
 			const PoolControlHeaderSelection current = selectPoolControlHeader(page);
 			const uint8_t invalidIdentity =
@@ -201,7 +201,15 @@ namespace graph::storage {
 			// Each record is independently checksummed.  Writing only the inactive
 			// record makes a short write unable to overwrite the envelope or the
 			// currently selected control record.
-			io.writeControlRecord({pageOffset, generation.value()}, targetOffset, bytes);
+			if (record && io.hasPwriteSupport() && io.bufferPoolStats().dirty_bytes == 0U) {
+                // Capture before pwrite: a short write can still change disk.
+                std::copy_n(page.begin(), record->before.size(), record->before.begin());
+                record->replacement = bytes;
+                record->record_offset = targetOffset;
+                record->generation = generation;
+                record->page_offset = pageOffset;
+            }
+            io.writeControlRecord({pageOffset, generation.value()}, targetOffset, bytes);
 		}
 
 		[[nodiscard]] std::array<std::byte, RSS_PAGE_SIZE> makeOwnedPage(const PageOwnerHeader &owner,
@@ -1516,8 +1524,9 @@ namespace graph::storage {
 					const uint32_t framesBefore = debug::PerfTrace::areValuesEnabled()
 							? std::popcount(readPoolHeader(pool).allocated_frames)
 							: 0U;
-					const bool repaired = reconcilePoolFrames(pool, findPageLocation, findCatalog,
-							isFrameVisibleToActiveSnapshot);
+					const bool repaired = metadata_.persistPoolRepairUnderWrite([&](PoolRepairControlRecord &record) {
+						return reconcilePoolFramesWithRecord(pool, findPageLocation, findCatalog, isFrameVisibleToActiveSnapshot, false, {}, &record);
+					});
 					if (debug::PerfTrace::areValuesEnabled()) {
 						const uint32_t framesAfter = std::popcount(readPoolHeader(pool).allocated_frames);
 						debug::PerfTrace::addValue("native_graph.write.recovery.pool_reconcile_calls", 1);
@@ -1528,11 +1537,6 @@ namespace graph::storage {
 						if (repaired) {
 							debug::PerfTrace::addValue("native_graph.write.recovery.syncs", 1);
 						}
-					}
-					if (repaired) {
-						// The repaired frame map must reach stable storage before a future
-						// append can reuse a frame which was unreachable at recovery time.
-						io_->sync();
 					}
 				});
 	}
@@ -1564,7 +1568,9 @@ namespace graph::storage {
 			if (!isSharedPoolKind(pool.kind)) {
 				return;
 			}
-			const bool repaired = reconcilePoolFramesAtStartup(pool, pageLocations);
+			const bool repaired = metadata_.persistPoolRepairUnderWrite([&](PoolRepairControlRecord &record) {
+				return reconcilePoolFramesAtStartup(pool, pageLocations, &record);
+			});
 			if (debug::PerfTrace::areValuesEnabled()) {
 				debug::PerfTrace::addValue("native_graph.write.recovery.startup_pool_reconcile_calls", 1);
 				debug::PerfTrace::addValue("native_graph.write.recovery.startup_directory_pages",
@@ -1572,11 +1578,6 @@ namespace graph::storage {
 				if (repaired) {
 					debug::PerfTrace::addValue("native_graph.write.recovery.startup_syncs", 1);
 				}
-			}
-			if (repaired) {
-				// Persist each safe repair before a later corrupt pool can abort the
-				// scan; this prevents a recovered frame from becoming ambiguous again.
-				io_->sync();
 			}
 		});
 	}
@@ -1715,6 +1716,15 @@ namespace graph::storage {
 			const std::function<CatalogEntry(SegmentId)> &findCatalog,
 			const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot, bool nativeHybridFields,
             const std::function<std::optional<PageOwnerHeader>(const CatalogEntry &, uint8_t)> &validatedOwner) const {
+        return reconcilePoolFramesWithRecord(entry, findPageLocation, findCatalog, isFrameVisibleToActiveSnapshot,
+                                            nativeHybridFields, validatedOwner, nullptr);
+    }
+
+	bool SharedPagePoolAllocator::reconcilePoolFramesWithRecord(
+			const CatalogEntry &entry, const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
+			const std::function<CatalogEntry(SegmentId)> &findCatalog,
+			const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot, bool nativeHybridFields,
+            const std::function<std::optional<PageOwnerHeader>(const CatalogEntry &, uint8_t)> &validatedOwner, PoolRepairControlRecord *record) const {
 		// ZYX_COV_EXCL_START: both reconciliation entry points filter Catalog kinds before invoking this helper.
 		if (!isSharedPoolKind(entry.kind)) {
 			throwSharedPagePoolAllocatorError(
@@ -1840,12 +1850,13 @@ namespace graph::storage {
 			return !reactivateFrames.empty();
 		}
 		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, reconciled,
-										 "relocatable reconciled shared page-pool control page is truncated");
+										 "relocatable reconciled shared page-pool control page is truncated",
+                                         reactivateFrames.empty() ? record : nullptr);
 		return true;
 	}
 
 	bool SharedPagePoolAllocator::reconcilePoolFramesAtStartup(const CatalogEntry &entry,
-															   std::span<const PageLocation> pageLocations) const {
+															   std::span<const PageLocation> pageLocations, PoolRepairControlRecord *record) const {
 		// ZYX_COV_EXCL_START: reconcileCurrentPools filters non-shared Catalog entries before invoking this
 		// startup-only helper.
 		if (!isSharedPoolKind(entry.kind)) {
@@ -1919,7 +1930,8 @@ namespace graph::storage {
 			return !reactivateFrames.empty();
 		}
 		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, reconciled,
-										 "relocatable startup-reconciled shared page-pool control page is truncated");
+										 "relocatable startup-reconciled shared page-pool control page is truncated",
+                                         reactivateFrames.empty() ? record : nullptr);
 		return true;
 	}
 

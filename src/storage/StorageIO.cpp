@@ -629,7 +629,9 @@ namespace graph::storage {
 
 	void StorageIO::sync() { sync(StorageIOSyncKind::SIOSK_GENERAL); }
 
-	void StorageIO::sync(StorageIOSyncKind kind) {
+	void StorageIO::sync(StorageIOSyncKind kind) { sync(kind, true); }
+
+	void StorageIO::sync(StorageIOSyncKind kind, bool flushBufferPool) {
 		if (kind != StorageIOSyncKind::SIOSK_GENERAL && kind != StorageIOSyncKind::SIOSK_DATA_FENCE &&
 			kind != StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE) {
 			throw std::invalid_argument("StorageIO::sync requires a known sync kind");
@@ -638,8 +640,8 @@ namespace graph::storage {
 			kind == StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE ? "storage_io.sync.superblock_fence" : "storage_io.sync.general";
 		const bool timed = debug::PerfTrace::isEnabled();
 		const auto started = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
-			pool->flush();
+		if (flushBufferPool) {
+			if (const auto pool = bufferPool()) pool->flush();
 		}
 		syncUncached();
 		saturatingAdd(sync_calls_, 1U);

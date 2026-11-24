@@ -402,8 +402,16 @@ namespace graph::storage {
 							const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot,
                             bool nativeHybridFields = false,
                             const std::function<std::optional<PageOwnerHeader>(const CatalogEntry &, uint8_t)> &validatedOwner = {}) const;
+		[[nodiscard]] bool
+		reconcilePoolFramesWithRecord(const CatalogEntry &entry,
+							const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
+							const std::function<CatalogEntry(SegmentId)> &findCatalog,
+							const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot,
+                            bool nativeHybridFields,
+                            const std::function<std::optional<PageOwnerHeader>(const CatalogEntry &, uint8_t)> &validatedOwner,
+                            PoolRepairControlRecord *record) const;
 		[[nodiscard]] bool reconcilePoolFramesAtStartup(const CatalogEntry &entry,
-														std::span<const PageLocation> pageLocations) const;
+														std::span<const PageLocation> pageLocations, PoolRepairControlRecord *record = nullptr) const;
 		void writePreparedPage(const CatalogEntry &entry, const SharedPagePoolHeader &poolHeader,
 							   const PageOwnerHeader &owner, std::span<const std::byte> payload,
 							   uint8_t frameIndex) const;

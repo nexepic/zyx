@@ -22,7 +22,10 @@ namespace graph::storage {
         std::optional<utils::OwnedAllocationScope> scratch;
         if (controlOwner) scratch.emplace(controlOwner);
         auto writer = snapshots_.adoptWriteLock(std::move(openLock));
-        if (!readOnly) snapshots_.recoverAllocatorUnderWrite(writer, metadata_page_pool_, current);
+        if (!readOnly) {
+            requirePoolRepairFenceUnderWrite();
+            snapshots_.recoverAllocatorUnderWrite(writer, metadata_page_pool_, current);
+        }
 		pool_ownership_.restoreCatalogOwnership(current);
 		pool_ownership_.verifyAfterOpen(current);
         if (current.hybrid_property_descriptor_root.isValid())
@@ -34,6 +37,61 @@ namespace graph::storage {
 	}
 
 	RelocatableMetadataStore::~RelocatableMetadataStore() = default;
+
+    void RelocatableMetadataStore::requirePoolRepairFenceUnderWrite() {
+        auto &domain = snapshots_.coordinationUnderWrite();
+        if (domain.unresolved_pool_repair.load(std::memory_order_acquire)) {
+            const auto &record = domain.repair_record;
+            if (!record.page_offset || !io_->hasPwriteSupport() || !io_->hasPreadSupport() ||
+                bootstrap_.recover() != domain.repair_source || io_->bufferPoolStats().dirty_bytes) {
+                throw FormatException(FormatError::FERR_INVALID_STATE,
+                    "incomplete pool repair requires a clean native writer and authenticated recovery evidence");
+            }
+            // A failed writeback can mark a kernel page clean. A second sync
+            // alone is insufficient. Preserve the other valid record and only
+            // replay a known transition of this exact inactive slot.
+            decltype(record.before) observed{};
+            if (io_->readAtSequential(record.page_offset, observed.data(), observed.size()) != observed.size())
+                throw FormatException(FormatError::FERR_BUFFER_TOO_SMALL, "truncated control record during pool repair retry");
+            const auto begin = record.record_offset;
+            const auto end = begin + record.replacement.size();
+            const bool neighborsMatch =
+                std::equal(observed.begin(), observed.begin() + begin, record.before.begin()) &&
+                std::equal(observed.begin() + end, observed.end(), record.before.begin() + end);
+            // An interrupted exact-range pwrite may leave a prefix of the new
+            // bytes followed by a suffix of the old bytes (including either whole record).
+            const auto target = std::span(observed).subspan(begin, record.replacement.size());
+            const auto prefix = std::mismatch(target.begin(), target.end(), record.replacement.begin()).first;
+            if (!neighborsMatch || !std::equal(prefix, target.end(), record.before.begin() + begin + (prefix - target.begin())))
+                throw FormatException(FormatError::FERR_INVALID_STATE, "pool repair retry found unexpected control bytes");
+
+            io_->writeControlRecord({record.page_offset, record.generation.value()}, begin, record.replacement);
+            io_->sync(StorageIOSyncKind::SIOSK_GENERAL, false);
+            domain.unresolved_pool_repair.store(false, std::memory_order_release);
+        } else if (domain.first_writable_open) {
+            io_->sync(StorageIOSyncKind::SIOSK_GENERAL, false);
+        }
+        domain.first_writable_open = false;
+    }
+
+    bool RelocatableMetadataStore::persistPoolRepairUnderWrite(
+            const std::function<bool(PoolRepairControlRecord &)> &repair) {
+        auto &domain = snapshots_.coordinationUnderWrite();
+        auto &record = domain.repair_record;
+        record.page_offset = 0;
+        const auto before = io_->dataMutationEpoch();
+        try {
+            if (!repair(record)) return false;
+            io_->sync();
+        } catch (...) {
+            if (before == UINT64_MAX || before != io_->dataMutationEpoch()) {
+                domain.repair_source = synchronized_source_;
+                domain.unresolved_pool_repair.store(true, std::memory_order_release);
+            }
+            throw;
+        }
+        return true;
+    }
 
 	MetadataWriteGuard RelocatableMetadataStore::beginWrite(bool allowHybridMutation) {
 		if (read_only_) {
@@ -48,6 +106,7 @@ namespace graph::storage {
                 throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION,
                     "native hybrid candidate rejects unadapted writes and pool reconciliation");
         }, [this](MetadataWriteGuard &writer) {
+            requirePoolRepairFenceUnderWrite();
             const auto current = bootstrap_.recover();
             if (current != synchronized_source_) {
                 // Another handle published under the same file barrier. Rebuild

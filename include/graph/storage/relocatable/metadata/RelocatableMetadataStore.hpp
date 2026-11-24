@@ -2071,6 +2071,9 @@ namespace graph::storage {
             SlottedPagePool &sourcePages, BTreePageStore &sourceTrees, LargeValueStore &largeValues,
             const MetadataPublishOptions &options, HybridPropertyReadContext *preparationSource = nullptr);
 		[[nodiscard]] MetadataWriteGuard beginWrite(bool allowHybridMutation = false);
+        friend class SharedPagePoolAllocator;
+        void requirePoolRepairFenceUnderWrite();
+        bool persistPoolRepairUnderWrite(const std::function<bool(PoolRepairControlRecord &)> &repair);
 		RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current, bool readOnly,
                                  std::shared_ptr<std::pmr::memory_resource> memoryOwner,
                                  std::shared_ptr<std::pmr::memory_resource> controlOwner,

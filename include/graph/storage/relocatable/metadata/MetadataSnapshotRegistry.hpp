@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+
+#include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include <functional>
 #include <limits>
 #include <memory>
@@ -29,9 +32,27 @@ namespace graph::storage {
     // One process-local publication/pin domain per opened file identity. The
     // registry keeps its own bootstrap and ownership; only barriers and pins
     // are shared. Copies of a database file must use distinct domains.
+    struct PoolRepairControlRecord {
+        uint64_t page_offset = 0; // zero until the exact isolated write is known
+        Generation generation{};
+        size_t record_offset = 0;
+        std::array<std::byte, RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_CONTROL_RECORD_BYTES> before{};
+        std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> replacement{};
+    };
+
     struct MetadataSnapshotCoordination {
         explicit MetadataSnapshotCoordination(std::shared_ptr<std::pmr::memory_resource> owner = {});
         std::shared_ptr<std::pmr::memory_resource> memory_owner;
+        // Protected by publication_mutex. A new process/domain has no evidence
+        // that writes left in the kernel by an earlier opener reached a fence.
+        // Retain the exact opened native file identity while recovery evidence
+        // survives a close. An unlinked inode cannot be recycled underneath it.
+        std::shared_ptr<void> opened_file;
+        bool first_writable_open = true;
+        // Only the registry's prune operation reads this outside the writer lock.
+        std::atomic<bool> unresolved_pool_repair{false};
+        Superblock repair_source{};
+        PoolRepairControlRecord repair_record{};
         std::shared_mutex publication_mutex;
         std::mutex snapshots_mutex;
         std::pmr::map<uint64_t, std::pair<Superblock, uint64_t>> snapshots;
@@ -103,6 +124,7 @@ namespace graph::storage {
                                           std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
             std::shared_ptr<MetadataSnapshotCoordination> coordination = {});
 		~MetadataSnapshotRegistry();
+        [[nodiscard]] MetadataSnapshotCoordination &coordinationUnderWrite() const noexcept;
 		MetadataSnapshotRegistry(const MetadataSnapshotRegistry &) = delete;
 		MetadataSnapshotRegistry &operator=(const MetadataSnapshotRegistry &) = delete;
 

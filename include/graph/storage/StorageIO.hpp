@@ -354,6 +354,9 @@ namespace graph::storage {
 		[[nodiscard]] size_t readAtUncached(uint64_t offset, void *buf, size_t size) const;
 		[[nodiscard]] uint64_t fileSizeUncached() const;
 		void ensureFileSizeUncached(uint64_t minimumSize);
+		// Peers may fence already-submitted native repairs without flushing
+		// unrelated staged bytes from their own pool.
+		void sync(StorageIOSyncKind kind, bool flushBufferPool);
 		void syncUncached();
 		void flushStreamUncached();
 		[[nodiscard]] std::shared_ptr<std::fstream> getStream() const { return stream_; }

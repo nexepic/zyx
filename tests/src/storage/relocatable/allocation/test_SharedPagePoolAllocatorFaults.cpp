@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
@@ -117,7 +118,7 @@ protected:
 		std::filesystem::remove(path_, error);
 	}
 
-	void switchToNativeIo() {
+	void switchToNativeIo(std::shared_ptr<MetadataSnapshotCoordination> coordination = {}) {
 		allocator_.reset();
 		metadata_.reset();
 		io_.reset();
@@ -125,7 +126,7 @@ protected:
 		native_handle_ = portable_open_rw(path_.string().c_str());
 		ASSERT_NE(native_handle_, INVALID_FILE_HANDLE);
 		io_ = std::make_shared<StorageIO>(file_, native_handle_, native_handle_);
-		metadata_ = RelocatableMetadataStore::open(io_);
+		metadata_ = RelocatableMetadataStore::open(io_, {}, {}, {}, std::move(coordination));
 		allocator_ = std::make_unique<SharedPagePoolAllocator>(io_, *metadata_);
 	}
 
@@ -609,4 +610,130 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, RecoveryReadsHeadersWithoutS
     io_->resetStats(); allocator_->reconcilePool(SegmentId(31));
     RecordProperty("recovery_read_bytes", std::to_string(io_->stats().read_bytes));
     EXPECT_LT(io_->stats().read_bytes, uint64_t(RSS_PAGE_POOL_DATA_FRAME_COUNT) * RSS_PAGE_SIZE);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, FailedReclamationFencePrecedesFirstFrameOverwriteOnRetry) {
+	const std::array oldPayload{std::byte{0x31}};
+	const std::array newPayload{std::byte{0x32}};
+	const auto pool = createPool(31, 91, 40, oldPayload, 2);
+	auto domain = makeMetadataSnapshotCoordination();
+	switchToNativeIo(domain);
+	struct PeerFile {
+		file_handle_t handle;
+		~PeerFile() { if (handle != INVALID_FILE_HANDLE) static_cast<void>(portable_close_rw(handle)); }
+	} peerFile{portable_open_rw(path_.string().c_str())};
+	ASSERT_NE(peerFile.handle, INVALID_FILE_HANDLE);
+	auto peerIo = std::make_shared<StorageIO>(file_, peerFile.handle, peerFile.handle);
+	auto peerStore = RelocatableMetadataStore::open(peerIo, {}, {}, {}, domain);
+	SharedPagePoolAllocator peer(peerIo, *peerStore);
+	auto old = metadata_->openSnapshot();
+	const auto replacement = allocator_->replacePage(replacementRequest(newPayload), LogSequenceNumber(3));
+	ASSERT_EQ(replacement.location.page_index, 2U);
+	peer.reclaimRetiredFrames(SegmentId(31));
+	ASSERT_EQ(allocator_->read(old, PageId(91)).payload.front(), oldPayload.front());
+	old.release();
+
+	const uint64_t offset = poolOffset(pool.pool.physical_slot) + RSS_PAGE_SIZE;
+	SharedPagePoolAppendRequest append;
+	append.segment_id = SegmentId(31);
+	append.generation = Generation(1);
+	append.page_id = PageId(92);
+	append.page_owner_id = 77;
+	append.page_owner_kind = PageOwnerKind::POK_INDEX;
+	unsigned controlWrites = 0;
+	unsigned failedSyncs = 0;
+	unsigned ownerWrites = 0;
+	unsigned completedSyncs = 0;
+	std::optional<unsigned> firstWriteAfter;
+	StorageIO::ScopedNativeWriteHookForTesting observe([&](file_handle_t fd, const void *bytes, size_t size, pwrite_off_t at) {
+		if (static_cast<uint64_t>(at) == offset) {
+			if (!firstWriteAfter) firstWriteAfter = completedSyncs;
+			++ownerWrites;
+		}
+		const auto written = portable_pwrite(fd, bytes, size, at);
+		if (fd == peerFile.handle && size == RSS_SHARED_PAGE_POOL_HEADER_BYTES &&
+			static_cast<uint64_t>(at) >= offset - RSS_PAGE_SIZE && static_cast<uint64_t>(at) < offset &&
+			written == static_cast<pwrite_ssize_t>(size)) ++controlWrites;
+		return written;
+	});
+	{
+		StorageIO::ScopedNativeSyncHookForTesting fail([&](file_handle_t) {
+			++failedSyncs;
+			return static_cast<int>(failNativeWrite());
+		});
+		EXPECT_THROW(peer.reclaimRetiredFrames(SegmentId(31)), std::system_error);
+		ASSERT_EQ(controlWrites, 1U);
+		ASSERT_EQ(peer.availableFrameCount(pool.pool), RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U);
+		// A peer retry must not flush unrelated dirty frames from this
+		// handle while the shared repair fence is still failing.
+		io_->enableBufferPool(4U * 1024U * 1024U);
+		const std::array<std::byte, RSS_PAGE_SIZE> scratch{};
+		const BufferPoolPageKey unreferenced{poolOffset(PhysicalSlotId(49)), 1};
+		io_->writeAt(unreferenced, scratch.data(), scratch.size());
+		ASSERT_GE(io_->bufferPoolStats().dirty_bytes, RSS_PAGE_SIZE);
+		EXPECT_THROW(static_cast<void>(allocator_->appendPage(append, LogSequenceNumber(4))), FormatException);
+		EXPECT_THROW(peer.reclaimRetiredFrames(SegmentId(31)), std::system_error);
+		EXPECT_EQ(controlWrites, 2U);
+		EXPECT_EQ(ownerWrites, 0U);
+		EXPECT_GE(io_->bufferPoolStats().dirty_bytes, RSS_PAGE_SIZE);
+		EXPECT_GE(failedSyncs, 2U);
+	}
+	StorageIO::ScopedNativeSyncHookForTesting succeed([&](file_handle_t fd) {
+		const auto result = portable_fsync(fd);
+		if (result == 0) ++completedSyncs;
+		return result;
+	});
+	peer.reclaimRetiredFrames(SegmentId(31));
+	ASSERT_EQ(controlWrites, 3U);
+	ASSERT_EQ(allocator_->appendPage(append, LogSequenceNumber(4)).location.page_index, 1U);
+	ASSERT_TRUE(firstWriteAfter.has_value());
+	EXPECT_GT(*firstWriteAfter, 0U);
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(allocator_->read(current, PageId(91)).payload.front(), newPayload.front());
+	EXPECT_EQ(allocator_->read(current, PageId(92)).location.page_index, 1U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, TornControlRepairRequiresUnchangedNeighborsBeforeReplayingItsExactRecord) {
+	const std::array oldPayload{std::byte{1}};
+	const std::array newPayload{std::byte{2}};
+	const auto pool = createPool(31, 91, 40, oldPayload, 2);
+	switchToNativeIo();
+	auto old = metadata_->openSnapshot();
+	ASSERT_EQ(allocator_->replacePage(replacementRequest(newPayload), LogSequenceNumber(3)).location.page_index, 2U);
+	old.release();
+	const auto control = poolOffset(pool.pool.physical_slot);
+	bool torn = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting interrupt([&](file_handle_t fd, const void *bytes, size_t size, pwrite_off_t at) {
+			if (static_cast<uint64_t>(at) >= control && static_cast<uint64_t>(at) < control + RSS_PAGE_SIZE &&
+				size == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
+				torn = true;
+				return portable_pwrite(fd, bytes, 16U, at);
+			}
+			return portable_pwrite(fd, bytes, size, at);
+		});
+		EXPECT_THROW(allocator_->reclaimRetiredFrames(SegmentId(31)), std::system_error);
+	}
+	ASSERT_TRUE(torn);
+	std::byte saved{};
+	ASSERT_EQ(portable_pread(native_handle_, &saved, 1, control), 1);
+	auto corrupt = saved ^ std::byte{1};
+	ASSERT_EQ(portable_pwrite(native_handle_, &corrupt, 1, control), 1);
+	EXPECT_THROW(allocator_->reclaimRetiredFrames(SegmentId(31)), FormatException);
+	std::byte observed{};
+	ASSERT_EQ(portable_pread(native_handle_, &observed, 1, control), 1);
+	EXPECT_EQ(observed, corrupt);
+	ASSERT_EQ(portable_pwrite(native_handle_, &saved, 1, control), 1);
+	ASSERT_NO_THROW(allocator_->reclaimRetiredFrames(SegmentId(31)));
+	allocator_.reset();
+	metadata_.reset();
+	{
+		StorageIO::ScopedNativeSyncHookForTesting fail([](file_handle_t) { return static_cast<int>(failNativeWrite()); });
+		for (int attempt = 0; attempt < 2; ++attempt)
+			EXPECT_THROW(static_cast<void>(RelocatableMetadataStore::open(io_)), std::system_error);
+	}
+	reopen();
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(allocator_->read(current, PageId(91)).payload.front(), newPayload.front());
+	EXPECT_EQ(allocator_->availableFrameCount(pool.pool), RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U);
 }
