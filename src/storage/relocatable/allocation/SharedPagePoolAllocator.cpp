@@ -99,7 +99,10 @@ namespace graph::storage {
 		readTypedPage(const StorageIO &io, uint64_t offset, Generation generation, const char *message,
 					  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) {
 			std::array<std::byte, RSS_PAGE_SIZE> bytes{};
-			if (io.readAt({offset, generation.value()}, bytes.data(), bytes.size(), hint) != bytes.size()) {
+			const BufferPoolPageKey key{offset, generation.value()};
+            const auto size = io.hasSharedMutablePages() ? io.readMutablePage(key, bytes, hint) :
+                    io.readAt(key, bytes.data(), bytes.size(), hint);
+            if (size != bytes.size()) {
 				throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL, message);
 			}
 			return bytes;
@@ -1284,9 +1287,9 @@ namespace graph::storage {
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
 		const std::array<std::byte, RSS_PAGE_SIZE> poolPage =
 				// Pool control records can allocate more frames without changing the
-                // pool incarnation. Another handle cannot invalidate this IO's
-                // cache: bind the mutable image to the durable snapshot context.
-                // Decode below still authenticates the actual pool generation.
+                // pool incarnation. Bind the route to the snapshot and the
+                // mutable bytes to the opened file's physical write history.
+                // Decode below authenticates the actual pool generation.
                 readTypedPage(*io_, poolOffset, snapshot.superblock().generation,
                     "relocatable shared page-pool envelope is truncated");
 		std::array<std::byte, RSS_ENVELOPE_BYTES> envelopeBytes{};
@@ -1383,7 +1386,8 @@ namespace graph::storage {
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
 		// Unlike immutable data pages, pool allocation bits may advance within
-        // one pool generation. Keep cache images isolated by snapshot context.
+        // one pool generation. Qualify the route by snapshot and validate
+        // mutable control bytes against the file domain when handles overlap.
         const BufferPoolPageKey poolKey{poolOffset, snapshot.superblock().generation.value()};
         // The pool control header is mutable even while snapshot-visible data
         // pages are immutable. Copy its bounded image under the cache lock;
@@ -1395,7 +1399,8 @@ namespace graph::storage {
         if (capacity <= RSS_PAGE_SIZE)
             return std::nullopt;
         std::array<std::byte, RSS_PAGE_SIZE> poolImage{};
-        if (io_->readAt(poolKey, poolImage.data(), poolImage.size()) != RSS_PAGE_SIZE) {
+        if ((io_->hasSharedMutablePages() ? io_->readMutablePage(poolKey, poolImage) :
+                io_->readAt(poolKey, poolImage.data(), poolImage.size())) != RSS_PAGE_SIZE) {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
 														 "relocatable shared pinned page-pool envelope is truncated");
 		}
@@ -1425,9 +1430,11 @@ namespace graph::storage {
 		}
 
 		const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+        bool currentMutableImage = false;
         std::optional<BufferPool::Pin> pagePin;
         try {
-            pagePin = io_->pinTypedPage({pageOffset, location.generation.value()}, hint);
+            pagePin = io_->pinTypedPage({pageOffset, location.generation.value()}, hint,
+                    io_->hasSharedMutablePages() ? &currentMutableImage : nullptr);
         } catch (const query::execution::detail::ResourceAdmissionDenied &) {
             // The validated pool/location can still be read through an owned
             // copy; optional pin admission is not a logical read failure.
@@ -1441,6 +1448,13 @@ namespace graph::storage {
 														 "relocatable shared pinned page owner header is truncated");
 		}
 		const std::span<const std::byte, RSS_PAGE_SIZE> pageBytes = pagePin->bytes();
+        // A retained image may predate an owner-only repair. An incompatible
+        // view falls back to an owned, independently authenticated full image.
+        if (!currentMutableImage && io_->hasSharedMutablePages()) {
+            const auto current = readTypedPage(*io_, pageOffset, location.generation,
+                    "relocatable shared pinned page owner header is truncated", hint);
+            if (!std::ranges::equal(current, pageBytes)) return std::nullopt;
+        }
 		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(pageBytes.first(RSS_PAGE_OWNER_HEADER_BYTES));
 		if (owner.page_id != location.page_id || owner.generation != location.generation ||
 			(hybridFieldOnly

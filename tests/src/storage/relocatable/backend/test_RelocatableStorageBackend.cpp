@@ -7,6 +7,9 @@
  **/
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
+#include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+
 #include <atomic>
 #include <cerrno>
 #include <iterator>
@@ -22,6 +25,114 @@
 #endif
 
 using namespace relocatable_storage_backend_test;
+
+namespace graph::storage {
+class MutablePageVisibilityTestAccess {
+public:
+    static auto io(RelocatableStorageBackend &backend) { return backend.scanSourceIO(); }
+    static auto &metadata(RelocatableStorageBackend &backend) { return *backend.metadata_; }
+    static auto &pages(RelocatableStorageBackend &backend) { return *backend.slotted_pages_; }
+};
+}
+
+TEST_F(RelocatableStorageBackendTest, PeerReconciliationRefreshesBestFitAndOwnerWithoutDisturbingPinnedReaders) {
+    materializeNativeDatabase();
+    auto options = backendOptions();
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend reader(options), writer(options);
+    reader.open();
+    writer.open();
+    using Access = graph::storage::MutablePageVisibilityTestAccess;
+    auto &metadata = Access::metadata(reader);
+    auto &pages = Access::pages(reader);
+    auto io = Access::io(reader);
+    auto lsn = metadata.openSnapshot().superblock().checkpoint_lsn.value() + 1U;
+    const std::array pools{SegmentId(601), SegmentId(600)};
+    for (unsigned index = 0; index != 2; ++index) {
+        SlottedPagePoolAllocationRequest request{SegmentId(600 + index), SegmentKind::SGK_PROPERTY_PAGE_POOL,
+            41, Generation(1), PageId(1600 + index), 99, PageOwnerKind::POK_PROPERTY};
+        ASSERT_TRUE(pages.allocateEmptyPage(request, PhysicalSlotId(400 + index), PhysicalSlotId(400 + index),
+                                           LogSequenceNumber(lsn++)));
+    }
+    for (unsigned index = 0; index != RSS_PAGE_POOL_DATA_FRAME_COUNT - 2; ++index) {
+        SlottedPagePoolAppendRequest request;
+        request.segment_id = pools.front();
+        request.generation = Generation(1);
+        request.page_id = PageId(2000 + index);
+        request.page_owner_id = 99;
+        request.page_owner_kind = PageOwnerKind::POK_PROPERTY;
+        (void)pages.appendEmptyPage(request, LogSequenceNumber(lsn++));
+    }
+    auto old = metadata.openSnapshot();
+    auto tighter = pages.read(old, PageId(1601));
+    (void)tighter.insert(std::vector<std::byte>(3000U, std::byte{5}));
+    (void)pages.replacePage(tighter, LogSequenceNumber(lsn++));
+    auto snapshot = metadata.openSnapshot();
+    const auto root = snapshot.superblock();
+    auto choose = [&] {
+        return pages.findBestFitPageForRecord(snapshot, pools, PageOwnerKind::POK_PROPERTY, 98U).value().page_id;
+    };
+    auto independentCapacity = [&] {
+        auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+        auto raw = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+        auto authority = RelocatableMetadataStore::openReadOnly(raw);
+        SlottedPagePool uncached(raw, *authority, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+        return uncached.availableFrameCount(authority->openSnapshot(), pools.front());
+    };
+    ASSERT_EQ(choose(), PageId(1600));
+    Access::pages(writer).reclaimRetiredFrames(pools.front());
+    EXPECT_EQ(independentCapacity(), 0U);
+    old.release();
+    const auto epoch = metadata.dataMutationEpoch();
+    Access::pages(writer).reclaimRetiredFrames(pools.front());
+    EXPECT_EQ(metadata.openSnapshot().superblock(), root);
+    EXPECT_EQ(metadata.dataMutationEpoch(), epoch);
+    ASSERT_EQ(independentCapacity(), 1U);
+    ASSERT_EQ(choose(), PageId(1601));
+    io->resetBufferPoolStats();
+    for (unsigned i = 0; i != 100; ++i) EXPECT_EQ(choose(), PageId(1601));
+    EXPECT_EQ(io->bufferPoolStats().disk_read_bytes, 0U);
+
+    const auto location = metadata.findPageLocation(snapshot, PageId(1601));
+    const auto catalog = metadata.findCatalog(snapshot, pools.front());
+    const auto base = PhysicalSegmentAllocator::checkedSlotOffset(root.data_region_offset, catalog.physical_slot);
+    const auto offset = base + location.page_index * RSS_PAGE_SIZE;
+    auto controlImage = [&] {
+        std::array<std::byte, RSS_PAGE_SIZE> image{};
+        EXPECT_EQ(io->readAtSequential(base, image.data(), image.size()), image.size());
+        return image;
+    };
+    const auto control = controlImage();
+    SharedPagePoolAllocator shared(io, metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+    auto owner = shared.read(snapshot, location.page_id).owner;
+    owner.flags = RSS_PAGE_OWNER_FLAG_RETIRED;
+    const auto retired = PageOwnerHeaderCodec::encode(owner);
+    auto peer = Access::io(writer);
+    peer->writeAt(offset, retired.data(), retired.size());
+    peer->sync();
+    // Establish a borrowed retired image before the repair.
+    io->disableBufferPool();
+    io->enableBufferPool(64U * RSS_PAGE_SIZE);
+    auto held = io->pinTypedPage({offset, location.generation.value()});
+    ASSERT_TRUE(held);
+    ASSERT_EQ(shared.read(snapshot, location.page_id).owner.flags, RSS_PAGE_OWNER_FLAG_RETIRED);
+    auto borrowed = shared.readPinned(snapshot, location.page_id);
+    ASSERT_TRUE(borrowed);
+    EXPECT_EQ(borrowed->owner.flags, RSS_PAGE_OWNER_FLAG_RETIRED);
+    Access::pages(writer).reclaimRetiredFrames(pools.front());
+    auto refreshed = shared.readPinned(snapshot, location.page_id);
+    EXPECT_EQ(refreshed ? refreshed->owner.flags : shared.read(snapshot, location.page_id).owner.flags, 0U);
+    EXPECT_EQ(borrowed->owner.flags, RSS_PAGE_OWNER_FLAG_RETIRED);
+    EXPECT_EQ(PageOwnerHeaderCodec::decode(held->bytes().first(RSS_PAGE_OWNER_HEADER_BYTES)).flags,
+              RSS_PAGE_OWNER_FLAG_RETIRED);
+    EXPECT_EQ(controlImage(), control);
+    EXPECT_EQ(metadata.openSnapshot().superblock(), root);
+    borrowed.reset();
+    held.reset();
+    auto current = shared.readPinned(snapshot, location.page_id);
+    ASSERT_TRUE(current);
+    EXPECT_EQ(current->owner.flags, 0U);
+}
 
 TEST_F(RelocatableStorageBackendTest, WritableOpenReclaimsInterruptedSingleFileBulkScratchBeforeReadersExist) {
 	materializeNativeDatabase();

@@ -562,6 +562,7 @@ namespace graph::storage {
 		void resetRuntimeStatistics() override;
 
 	private:
+        friend class MutablePageVisibilityTestAccess;
 		friend class RelocatableLogicalGraphReadSnapshot;
 		[[nodiscard]] LogicalGraphMutationFence resolvedLogicalGraphMutationFence(const Superblock &superblock) const;
 		[[nodiscard]] LogicalGraphMutationBatchResult executeNativeMutationBatch(

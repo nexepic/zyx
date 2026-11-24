@@ -6,6 +6,8 @@
  * @license Apache-2.0
  **/
 
+#include "storage/MutableFileAuthority.hpp"
+#include <future>
 #include <algorithm>
 #include "graph/debug/PerfTrace.hpp"
 #include <array>
@@ -1001,6 +1003,92 @@ TEST_F(BufferPoolTest, TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvict
     EXPECT_EQ(pool_->stats().pinned_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
     EXPECT_EQ(pool_->stats().evictions, 0U);
 }
+
+TEST_F(BufferPoolTest, FreshMutableCopyCoexistsWithAnOlderPinnedImage) {
+    open(2U);
+    pool_ = createPool(2U);
+    const BufferPoolPageKey key{0U, 11U};
+    auto held = pool_->pin(key);
+    ASSERT_EQ(held.bytes().front(), std::byte{1});
+    auto peer = std::make_shared<std::fstream>(path_, std::ios::binary | std::ios::in | std::ios::out);
+    StorageIO other(peer, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+    const std::byte replacement{9};
+    other.writeAt(0U, &replacement, 1U);
+    other.flushStream();
+    ASSERT_EQ(diskByte(0U), replacement);
+    BufferPool::PageBytes fresh{};
+    EXPECT_EQ(pool_->readMutablePage(key, fresh), fresh.size());
+    EXPECT_EQ(fresh.front(), replacement);
+    EXPECT_EQ(held.bytes().front(), std::byte{1});
+}
+
+TEST_F(BufferPoolTest, FlushingOneGenerationRefreshesAnOverlappingCleanMutableCopy) {
+    open(2U);
+    pool_ = createPool(3U);
+    const auto file = std::make_shared<graph::storage::detail::MutableFileAuthority>();
+    graph::storage::detail::bindMutableFile(*io_, file);
+    io_->markSharedMutablePages();
+    BufferPool::PageBytes changed{}, observed{};
+    changed.fill(std::byte{7});
+    pool_->writePage({0U, 11U}, changed);
+    ASSERT_EQ(pool_->readMutablePage({0U, 12U}, observed), observed.size());
+    ASSERT_EQ(observed.front(), std::byte{1});
+    pool_->flush();
+    ASSERT_EQ(diskByte(0U), std::byte{7});
+    ASSERT_EQ(pool_->readMutablePage({0U, 12U}, observed), observed.size());
+    EXPECT_EQ(observed, changed);
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(BufferPoolTest, PeerPartialWriteInvalidatesCurrentCopyWhileOldPinSurvivesRepeatedChanges) {
+    open(2U);
+    pool_ = createPool(2U);
+    const BufferPoolPageKey key{0U, 11U};
+    auto held = pool_->pin(key);
+    const auto file = std::make_shared<graph::storage::detail::MutableFileAuthority>();
+    StorageIO writer(stream_, write_fd_, read_fd_);
+    graph::storage::detail::bindMutableFile(*io_, file);
+    graph::storage::detail::bindMutableFile(writer, file);
+    BufferPool::PageBytes current{};
+    ASSERT_EQ(pool_->readMutablePage(key, current), current.size());
+    for (unsigned step = 2; step <= 4; ++step) {
+        const auto value = static_cast<std::byte>(step);
+        std::promise<void> partial, release, readerStarted;
+        auto resume = release.get_future();
+        auto writing = std::async(std::launch::async, [&] {
+            StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t fd, const void *bytes, size_t, pwrite_off_t offset) {
+                const auto result = portable_pwrite(fd, bytes, 1U, offset);
+                partial.set_value();
+                resume.wait();
+                return result;
+            });
+            const std::array payload{value, value};
+            EXPECT_THROW(writer.writeAt(0U, payload.data(), payload.size()), std::system_error);
+        });
+        partial.get_future().wait();
+        std::unique_lock observer(file->mutex, std::try_to_lock);
+        EXPECT_FALSE(observer.owns_lock());
+        if (observer.owns_lock()) observer.unlock();
+        auto reading = std::async(std::launch::async, [&] {
+            readerStarted.set_value();
+            return pool_->readMutablePage(key, current);
+        });
+        readerStarted.get_future().wait();
+        release.set_value();
+        writing.get();
+        ASSERT_EQ(reading.get(), current.size());
+        EXPECT_EQ(current[0], value);
+        EXPECT_EQ(current[1], std::byte{1});
+        EXPECT_EQ(held.bytes()[0], std::byte{1});
+        pool_->resetStats();
+        for (unsigned i = 0; i < 100; ++i) {
+            ASSERT_EQ(pool_->readMutablePage(key, current), current.size());
+            EXPECT_EQ(current[0], value);
+        }
+        EXPECT_EQ(pool_->stats().disk_read_bytes, 0U);
+    }
+}
+#endif
 
 TEST_F(BufferPoolTest, TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages) {
     open(2U); pool_ = createPool(2U);

@@ -315,13 +315,21 @@ namespace graph::storage {
 		// bytes and must contain at least one 4 KiB format page.
 		void enableBufferPool(size_t capacityBytes,
                               std::shared_ptr<std::pmr::memory_resource> memoryOwner = {});
+        void markSharedMutablePages() noexcept { shares_mutable_file_.store(true, std::memory_order_release); }
+        void markMutableFileBound() noexcept { mutable_file_bound_.store(true, std::memory_order_release); }
+        [[nodiscard]] bool hasMutableFileBinding() const noexcept { return mutable_file_bound_.load(std::memory_order_acquire); }
+        [[nodiscard]] bool hasSharedMutablePages() const noexcept { return shares_mutable_file_.load(std::memory_order_acquire); }
+        [[nodiscard]] size_t readMutablePage(BufferPoolPageKey key, std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> output,
+                                             BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		void disableBufferPool();
 		// Holds a generation-qualified cached native page without copying its
 		// bytes. Typed storage readers use this only while their decoded view is
 		// alive; callers without an enabled pool keep the established copy path.
 		[[nodiscard]] std::optional<BufferPool::Pin>
 		pinTypedPage(BufferPoolPageKey key, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
-		// Discard clean, unpinned cached pages after another handle has published a
+		[[nodiscard]] std::optional<BufferPool::Pin>
+        pinTypedPage(BufferPoolPageKey key, BufferPoolReadHint hint, bool *currentMutableImage) const;
+        // Discard clean, unpinned cached pages after another handle has published a
 		// newer durable root. This deliberately never flushes local cache images.
 		void discardBufferPoolForExternalRebase();
 		// Best-effort cache warming for already validated native page routes. With
@@ -351,6 +359,7 @@ namespace graph::storage {
 		void recordRead(size_t bytes) const noexcept;
 		void recordWrite(size_t bytes) noexcept;
 		void writeAtUncached(uint64_t offset, const void *buf, size_t size);
+        void writeAtUncached(uint64_t offset, const void *buf, size_t size, const BufferPool *coherentCache);
 		[[nodiscard]] size_t readAtUncached(uint64_t offset, void *buf, size_t size) const;
 		[[nodiscard]] uint64_t fileSizeUncached() const;
 		void ensureFileSizeUncached(uint64_t minimumSize);
@@ -373,9 +382,11 @@ namespace graph::storage {
 		file_handle_t writeFd_;
 		file_handle_t readFd_;
 		StorageIOAccessMode access_mode_;
+        std::atomic<bool> mutable_file_bound_{false};
+        std::atomic<bool> shares_mutable_file_{false};
         const uint64_t maximum_file_bytes_;
 		// The fallback stream has one shared seek position. Native positioned I/O
-		// remains lock-free; fallback operations serialize only that stream state.
+		// has an independent file-visibility lock where handles share mutable pages.
 		mutable std::mutex stream_mutex_;
 		mutable std::mutex buffer_pool_mutex_;
 		std::shared_ptr<BufferPool> buffer_pool_;

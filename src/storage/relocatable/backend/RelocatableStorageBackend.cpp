@@ -1,3 +1,4 @@
+#include "storage/MutableFileAuthority.hpp"
 #include "graph/debug/RssActivity.hpp"
 /**
  * @file RelocatableStorageBackend.cpp
@@ -135,10 +136,21 @@ namespace graph::storage {
 
         struct MetadataCoordinationRegistry {
             std::mutex mutex;
-            // Unresolved repairs retain their existing charged file domain even
-            // after the last handle closes. ProcessResourceDomains bounds these
-            // identities before admission. Successful repairs release this hold.
-            std::map<std::string, std::shared_ptr<MetadataSnapshotCoordination>> domains;
+            struct FileDomain {
+                std::shared_ptr<MetadataSnapshotCoordination> coordination;
+                std::weak_ptr<StorageIO> first;
+                std::shared_ptr<detail::MutableFileAuthority> file;
+            };
+            std::map<std::string, FileDomain> domains;
+            void prune() {
+                // Keep charged repair evidence pinned to this opened inode even
+                // when every backend has closed after an unsuccessful fence.
+                std::erase_if(domains, [](const auto &item) {
+                    const auto &coordination = item.second.coordination;
+                    return coordination.use_count() == 1 &&
+                        !coordination->unresolved_pool_repair.load(std::memory_order_acquire);
+                });
+            }
         };
         MetadataCoordinationRegistry &metadataCoordinationRegistry() {
             // Backends may be destroyed during static teardown after their first
@@ -150,28 +162,30 @@ namespace graph::storage {
             try {
                 auto &registry = metadataCoordinationRegistry();
                 std::lock_guard lock(registry.mutex);
-                for (auto it = registry.domains.begin(); it != registry.domains.end();)
-                    if (it->second.use_count() == 1 && !it->second->unresolved_pool_repair.load(std::memory_order_acquire))
-                        it = registry.domains.erase(it);
-                    else ++it;
+                registry.prune();
             } catch (...) {
                 // Releasing a backend must remain noexcept.
             }
         }
         [[nodiscard]] std::shared_ptr<MetadataSnapshotCoordination> metadataFileCoordination(
             const std::string &key, const std::shared_ptr<std::pmr::memory_resource> &owner,
-                const std::shared_ptr<void> &openedFile) {
+            const std::shared_ptr<void> &openedFile, const std::shared_ptr<StorageIO> &io) {
             auto &registry = metadataCoordinationRegistry();
             std::lock_guard lock(registry.mutex);
-            for (auto it = registry.domains.begin(); it != registry.domains.end();)
-                if (it->second.use_count() == 1 && !it->second->unresolved_pool_repair.load(std::memory_order_acquire))
-                        it = registry.domains.erase(it);
-                    else ++it;
-            if (const auto it = registry.domains.find(key); it != registry.domains.end()) return it->second;
-            auto created = makeMetadataSnapshotCoordination(owner);
-            created->opened_file = openedFile;
-            registry.domains.emplace(key, created);
-            return created;
+            registry.prune();
+            if (const auto it = registry.domains.find(key); it != registry.domains.end()) {
+                const auto &domain = it->second;
+                detail::bindMutableFile(*io, domain.file, domain.coordination);
+                if (auto first = domain.first.lock()) first->markSharedMutablePages();
+                io->markSharedMutablePages();
+                return domain.coordination;
+            }
+            auto coordination = makeMetadataSnapshotCoordination(owner);
+            coordination->opened_file = openedFile;
+            auto file = std::make_shared<detail::MutableFileAuthority>();
+            registry.domains.emplace(key, MetadataCoordinationRegistry::FileDomain{coordination, io, file});
+            detail::bindMutableFile(*io, file, coordination);
+            return coordination;
         }
 
 		[[nodiscard]] std::shared_ptr<std::mutex>
@@ -1268,7 +1282,7 @@ namespace graph::storage {
         auto logicalIdMemory = writable ? query::execution::detail::ProcessResourceDomains::defaultOwner()->logicalIdGrant(resourceDomain) : nullptr;
         data->io()->enableBufferPool(options_.buffer_pool_bytes, cacheMemory);
         auto coordination = metadataFileCoordination(nativeOpenedFileIdentity(identityHandle) + ":" +
-            std::to_string(recovered.database_id.value()), controlMemory, data->openedFile());
+            std::to_string(recovered.database_id.value()), controlMemory, data->openedFile(), data->io());
         data->coordination = coordination;
         if (writable && (recovered.flags & RSS_SUPERBLOCK_FLAG_SCAN_COMPLETE)) {
             // Authenticate complete semantics before writable recovery can

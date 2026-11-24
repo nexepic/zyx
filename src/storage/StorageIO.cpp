@@ -8,6 +8,8 @@
 
 #include "graph/storage/StorageIO.hpp"
 
+#include "storage/MutableFileAuthority.hpp"
+#include <map>
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -28,6 +30,64 @@
 #endif
 
 namespace graph::storage {
+
+    namespace detail {
+        struct FileBindings {
+            std::mutex mutex;
+            struct Binding {
+                std::shared_ptr<MutableFileAuthority> file;
+                // Keep the identity registry entry alive until the last
+                // buffered write on this I/O has returned, including teardown.
+                std::shared_ptr<void> coordination;
+            };
+            std::map<const StorageIO *, Binding> files;
+        };
+        static FileBindings &bindings() {
+            static auto *table = new FileBindings;
+            return *table;
+        }
+        void bindMutableFile(StorageIO &io, std::shared_ptr<MutableFileAuthority> file, std::shared_ptr<void> coordination) {
+            auto &table = bindings();
+            std::lock_guard lock(table.mutex);
+            if (file) {
+                table.files.emplace(&io, FileBindings::Binding{std::move(file), std::move(coordination)});
+                io.markMutableFileBound();
+            }
+            else table.files.erase(&io);
+        }
+        std::shared_ptr<MutableFileAuthority> mutableFile(const StorageIO &io) {
+            if (!io.hasMutableFileBinding()) return nullptr;
+            auto &table = bindings();
+            std::lock_guard lock(table.mutex);
+            auto it = table.files.find(&io);
+            return it == table.files.end() ? nullptr : it->second.file;
+        }
+        class PhysicalChange {
+        public:
+            explicit PhysicalChange(const StorageIO &io, const BufferPool *cache = nullptr)
+                : file_(mutableFile(io)), exceptions_(std::uncaught_exceptions()) {
+                if (file_) {
+                    lock_ = std::unique_lock(file_->mutex);
+                    // Advance before any bytes might change; readers cannot
+                    // see the version until the I/O returns or throws.
+                    const auto identity = reinterpret_cast<uintptr_t>(cache);
+                    if (file_->coherent_cache != identity) {
+                        file_->before_coherent_writes = file_->version;
+                        file_->coherent_cache = identity;
+                    }
+                    if (!io.hasPwriteSupport()) file_->version = UINT64_MAX;
+                    else if (file_->version != UINT64_MAX) ++file_->version;
+                }
+            }
+            ~PhysicalChange() {
+                if (file_ && std::uncaught_exceptions() > exceptions_) file_->coherent_cache = 0;
+            }
+        private:
+            std::shared_ptr<MutableFileAuthority> file_;
+            int exceptions_;
+            std::unique_lock<std::mutex> lock_;
+        };
+    }
 
 	namespace {
 
@@ -110,6 +170,7 @@ namespace graph::storage {
 	StorageIO::~StorageIO() noexcept {
 		try {
 			disableBufferPool();
+            if (hasMutableFileBinding()) detail::bindMutableFile(*this, nullptr);
 		} catch (...) {
 			// Dropping a dirty COW page on destruction would silently violate the
 			// storage contract. Noexcept teardown therefore fails closed instead.
@@ -363,7 +424,11 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writeAtUncached(uint64_t offset, const void *buf, size_t size) {
-		// Also invalidate on a failed partial native write.
+		writeAtUncached(offset, buf, size, nullptr);
+    }
+
+    void StorageIO::writeAtUncached(uint64_t offset, const void *buf, size_t size, const BufferPool *coherentCache) {
+        // Also invalidate on a failed partial native write.
 		saturatingAdd(data_mutation_epoch_, 1U);
 		if (!buf || size == 0U) {
 			return;
@@ -371,7 +436,8 @@ namespace graph::storage {
 		requireWritable("writeAt");
 		requireWritableRange(offset, size, "writeAt");
 
-		if (writeFd_ != INVALID_FILE_HANDLE) {
+		detail::PhysicalChange change(*this, coherentCache);
+        if (writeFd_ != INVALID_FILE_HANDLE) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 			NativeWriteHookForTesting allThreadHook;
 			if (!nativeWriteHookForTesting) {
@@ -450,6 +516,23 @@ namespace graph::storage {
 		recordRead(result);
 		return result;
 	}
+
+    size_t StorageIO::readMutablePage(BufferPoolPageKey key, std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> output, BufferPoolReadHint hint) const {
+        requireTypedPageKey(key, output.size(), "readMutablePage");
+        const auto pool = bufferPool();
+        size_t bytes;
+        if (pool) {
+            if (SequentialReadScope::activeFor(*this)) hint = BufferPoolReadHint::BPRH_SEQUENTIAL;
+            bytes = pool->readMutablePage(key, output, hint);
+        } else {
+            auto file = detail::mutableFile(*this);
+            std::unique_lock<std::mutex> fileLock;
+            if (file) fileLock = std::unique_lock(file->mutex);
+            bytes = readAtUncached(key.page_offset, output.data(), output.size());
+        }
+        recordRead(bytes);
+        return bytes;
+    }
 
 	size_t StorageIO::readPages(BufferPoolPageKey firstKey, void *buf, size_t size, BufferPoolReadHint hint) const {
 		if (buf == nullptr) {
@@ -590,7 +673,8 @@ namespace graph::storage {
 			}
 		}
 		flushStreamUncached();
-		const int truncateResult =
+		detail::PhysicalChange change(*this);
+        const int truncateResult =
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 				nativeTruncateHookForTesting ? nativeTruncateHookForTesting(writeFd_, size)
 											 : portable_ftruncate(writeFd_, size);
@@ -743,7 +827,12 @@ namespace graph::storage {
 
 	std::optional<BufferPool::Pin> StorageIO::pinTypedPage(const BufferPoolPageKey key,
 														  const BufferPoolReadHint hint) const {
-		if (key.generation == 0U || key.page_offset % RSS_BUFFER_POOL_PAGE_BYTES != 0U) {
+		return pinTypedPage(key, hint, nullptr);
+    }
+
+    std::optional<BufferPool::Pin> StorageIO::pinTypedPage(BufferPoolPageKey key, BufferPoolReadHint hint,
+                                                          bool *currentMutableImage) const {
+        if (key.generation == 0U || key.page_offset % RSS_BUFFER_POOL_PAGE_BYTES != 0U) {
 			throw std::invalid_argument("StorageIO::pinTypedPage requires an aligned durable page key");
 		}
         // The sequential scope also covers borrowed reads. Retaining a raw
@@ -753,7 +842,7 @@ namespace graph::storage {
 		if (pool == nullptr) {
 			return std::nullopt;
 		}
-		BufferPool::Pin pin = pool->pin(key, hint);
+		BufferPool::Pin pin = pool->pin(key, hint, currentMutableImage);
         pin.pool_owner_ = pool;
 		recordRead(pin.validBytes());
 		return pin;

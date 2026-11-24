@@ -67,7 +67,8 @@ namespace graph::storage {
 		BufferPool &operator=(const BufferPool &) = delete;
 
 		[[nodiscard]] Pin pin(BufferPoolPageKey key, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
-		// COW writers create a fresh generation-specific physical page. The caller
+		[[nodiscard]] Pin pin(BufferPoolPageKey key, BufferPoolReadHint hint, bool *currentMutableImage);
+        // COW writers create a fresh generation-specific physical page. The caller
 		// owns the only mutable pin until it publishes the page through a new root.
 		[[nodiscard]] Pin allocatePrivate(BufferPoolPageKey key);
 		// Typed storage paths identify a complete physical page by both its address
@@ -75,6 +76,9 @@ namespace graph::storage {
 		// cache entries, so a recycled frame cannot serve stale snapshot bytes.
 		[[nodiscard]] size_t readPage(BufferPoolPageKey key, std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> output,
 									  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
+        // Observe completed same-file maintenance without disturbing an older pin.
+        [[nodiscard]] size_t readMutablePage(BufferPoolPageKey key, std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> output,
+                                             BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
 		void writePage(BufferPoolPageKey key, std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES> input);
 		// Bounded typed scans such as private scratch candidates use one lock and
 		// one uncached read per missing contiguous run, while retaining the normal
@@ -125,6 +129,8 @@ namespace graph::storage {
 		using PageQueue = utils::AdmissionPmrList<BufferPoolPageKey>;
 		struct Entry {
 			BufferPoolPageKey key{};
+			uint64_t authority_version = 0;
+            std::shared_ptr<PageBytes> current_pinned_image;
 			Entry *dirty_previous = nullptr;
 			Entry *dirty_next = nullptr;
 			PageBytes bytes{};

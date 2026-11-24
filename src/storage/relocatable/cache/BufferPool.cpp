@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "storage/MutableFileAuthority.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/debug/StaticPerfTimer.hpp"
@@ -115,6 +116,10 @@ namespace graph::storage {
 	}
 
 	BufferPool::Pin BufferPool::pin(BufferPoolPageKey key, BufferPoolReadHint hint) {
+        return pin(key, hint, nullptr);
+    }
+
+    BufferPool::Pin BufferPool::pin(BufferPoolPageKey key, BufferPoolReadHint hint, bool *currentMutableImage) {
 		if (!isAligned(key)) {
 			throw std::invalid_argument("buffer pool page key is not 4 KiB aligned");
 		}
@@ -127,7 +132,17 @@ namespace graph::storage {
 		if (entry.private_cow) {
 			throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
 		}
-		if (entry.pin_count == 0U) {
+		if (currentMutableImage) {
+            *currentMutableImage = entry.dirty;
+            if (!entry.dirty && !entry.current_pinned_image && entry.authority_version) {
+                if (auto file = detail::mutableFile(io_)) {
+                    std::lock_guard guard(file->mutex);
+                    *currentMutableImage = file->version != UINT64_MAX &&
+                            entry.authority_version == file->observedBy(this);
+                }
+            }
+        }
+        if (entry.pin_count == 0U) {
 			++pinned_pages_;
 		}
 		++entry.pin_count;
@@ -193,6 +208,85 @@ namespace graph::storage {
         }
 	}
 
+    size_t BufferPool::readMutablePage(BufferPoolPageKey key, std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> output, BufferPoolReadHint hint) {
+        if (!isAligned(key) || key.generation == 0U)
+            throw std::invalid_argument("mutable buffer-pool read requires an aligned nonzero generation");
+        std::lock_guard lock(mutex_);
+        const auto found = entries_.find(key);
+        Entry *entry = found == entries_.end() ? nullptr : found->second.get();
+        if (entry && entry->private_cow)
+            throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
+        if (entry && entry->dirty) {
+            ++hits_;
+            std::copy_n(entry->bytes.begin(), entry->valid_bytes, output.begin());
+            return entry->valid_bytes;
+        }
+        auto file = detail::mutableFile(io_);
+        uint64_t version = 0;
+        uint64_t sampledPhysicalVersion = 0;
+        size_t bytes;
+        {
+            std::unique_lock<std::mutex> fileLock;
+            if (file) fileLock = std::unique_lock(file->mutex);
+            if (file && io_.hasPreadSupport()) {
+                sampledPhysicalVersion = file->version;
+                version = file->observedBy(this);
+                if (version != UINT64_MAX && entry && entry->authority_version == version) {
+                    ++hits_;
+                    const auto &image = entry->current_pinned_image ? *entry->current_pinned_image : entry->bytes;
+                    std::copy(image.begin(), image.end(), output.begin());
+                    return output.size();
+                }
+            }
+            bytes = io_.readAtUncached(key.page_offset, output.data(), output.size());
+        }
+        ++misses_;
+        disk_read_bytes_ += bytes;
+        debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(bytes));
+        if (!version || version == UINT64_MAX || bytes != output.size() ||
+            hint == BufferPoolReadHint::BPRH_SEQUENTIAL) return bytes;
+        // Admission can evict a dirty page. The observed token stays bound
+        // to the bytes sampled above, including when eviction advances it.
+        try {
+            const bool inserted = !entry;
+            if (inserted) {
+                if (resident_bytes_ >= capacity_bytes_ && !evictOneLocked(true)) return bytes;
+                entry = &storeEntryLocked(key, allocateEntryLocked());
+            }
+            const bool differentPinned = entry->pin_count && (entry->current_pinned_image ||
+                    entry->valid_bytes != bytes || !std::ranges::equal(entry->bytes, output));
+            std::shared_ptr<PageBytes> newImage;
+            if (differentPinned && !entry->current_pinned_image) {
+                if (resident_bytes_ >= capacity_bytes_ && !evictOneLocked(true)) return bytes;
+                newImage = std::allocate_shared<PageBytes>(std::pmr::polymorphic_allocator<PageBytes>(memory_));
+            }
+            // Admission may itself have flushed an overlapping dirty image
+            // before the new entry existed. Never install that earlier sample.
+            std::lock_guard check(file->mutex);
+            if (file->version != sampledPhysicalVersion) {
+                if (inserted) {
+                    eraseLocked(key, *entry);
+                    entries_.erase(key);
+                }
+                return bytes;
+            }
+            if (differentPinned) {
+                if (newImage) {
+                    entry->current_pinned_image = std::move(newImage);
+                    resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+                }
+                std::copy(output.begin(), output.end(), entry->current_pinned_image->begin());
+            } else if (!entry->pin_count) {
+                std::copy(output.begin(), output.end(), entry->bytes.begin());
+                entry->valid_bytes = bytes;
+            }
+            entry->authority_version = version;
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // The authenticated caller already owns the complete read image.
+        }
+        return bytes;
+    }
+
 	void BufferPool::writePage(BufferPoolPageKey key, std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES> input) {
 		if (!isAligned(key) || key.generation == 0U) {
 			throw std::invalid_argument("typed buffer-pool write needs an aligned nonzero generation key");
@@ -221,7 +315,7 @@ namespace graph::storage {
                 // No resident entry exists for this key; stale generations have
                 // already been checked and invalidated under the cache lock.
                 try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
-                io_.writeAtUncached(key.page_offset, input.data(), input.size());
+                io_.writeAtUncached(key.page_offset, input.data(), input.size(), this);
                 disk_write_bytes_ += input.size();
                 return;
             }
@@ -355,7 +449,7 @@ namespace graph::storage {
                     // have completed before writing any page in this batch.
                     try { debug::PerfTrace::addValue("storage.buffer_pool.write_admission_fallback", 1); } catch (...) {}
                     io_.writeAtUncached(key.page_offset,
-                        input.data() + page * RSS_BUFFER_POOL_PAGE_BYTES, RSS_BUFFER_POOL_PAGE_BYTES);
+                        input.data() + page * RSS_BUFFER_POOL_PAGE_BYTES, RSS_BUFFER_POOL_PAGE_BYTES, this);
                     disk_write_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
                     continue;
                 }
@@ -378,7 +472,7 @@ namespace graph::storage {
         eraseRangeLocked(firstKey.page_offset, end);
         // Invalidate before I/O so a short write cannot be overwritten by a
         // surviving dirty image. Unrelated offsets are never visited.
-        io_.writeAtUncached(firstKey.page_offset, input.data(), input.size());
+        io_.writeAtUncached(firstKey.page_offset, input.data(), input.size(), this);
         disk_write_bytes_ += input.size();
     }
 
@@ -391,7 +485,7 @@ namespace graph::storage {
         std::lock_guard lock(mutex_);
         requireUnpinnedRangeLocked(key.page_offset, key.page_offset + RSS_BUFFER_POOL_PAGE_BYTES, false);
         eraseRangeLocked(key.page_offset, key.page_offset + RSS_BUFFER_POOL_PAGE_BYTES);
-        io_.writeAtUncached(offset, input.data(), input.size());
+        io_.writeAtUncached(offset, input.data(), input.size(), this);
         disk_write_bytes_ += input.size();
     }
 
@@ -737,7 +831,18 @@ namespace graph::storage {
 		// A page becomes dirty only after a non-empty write, or as a full private
 		// COW page. Both paths establish the exact durable byte range first.
 		const size_t bytes = entry.valid_bytes;
-		io_.writeAtUncached(pageOffset, entry.bytes.data(), bytes);
+		// A later read may have cached the same address under another
+        // generation while this image was dirty. Such a flush must invalidate
+        // this cache too. Direct range writes above already removed all aliases.
+        const BufferPool *coherent = nullptr;
+        if (io_.hasSharedMutablePages()) {
+            auto first = offsets_.lower_bound({pageOffset, 0});
+            if (first != offsets_.end() && first->second == &entry) {
+                ++first;
+                if (first == offsets_.end() || first->first.page_offset != pageOffset) coherent = this;
+            }
+        }
+        io_.writeAtUncached(pageOffset, entry.bytes.data(), bytes, coherent);
 		disk_write_bytes_ += bytes;
         if (entry.dirty_previous) entry.dirty_previous->dirty_next = entry.dirty_next;
         else dirty_head_ = entry.dirty_next;
@@ -814,6 +919,12 @@ namespace graph::storage {
 				return;
 			}
 			--pinned_pages_;
+            if (entry.current_pinned_image) {
+                entry.bytes = *entry.current_pinned_image;
+                entry.valid_bytes = entry.bytes.size();
+                entry.current_pinned_image.reset();
+                resident_bytes_ -= RSS_BUFFER_POOL_PAGE_BYTES;
+            }
 			if (entry.transient) {
 				// Transient pages are only created by read-only sequential pins. A
 				// mutable write cannot overlap such a pin, so they are always clean.
