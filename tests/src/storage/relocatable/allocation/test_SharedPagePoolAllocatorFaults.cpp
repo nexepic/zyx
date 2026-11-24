@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cerrno>
@@ -13,8 +14,10 @@
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <source_location>
 #include <span>
+#include <stdexcept>
 #include <system_error>
 #include <vector>
 
@@ -736,4 +739,72 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, TornControlRepairRequiresUnc
 	auto current = metadata_->openSnapshot();
 	EXPECT_EQ(allocator_->read(current, PageId(91)).payload.front(), newPayload.front());
 	EXPECT_EQ(allocator_->availableFrameCount(pool.pool), RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, AcknowledgedWritebackErrorRequiresFreshDurableControlBeforeFrameReuse) {
+	const std::array beforePayload{std::byte{1}};
+	const std::array afterPayload{std::byte{2}};
+	const auto pool = createPool(31, 91, 40, beforePayload, 2);
+	switchToNativeIo();
+	auto held = metadata_->openSnapshot();
+	ASSERT_EQ(allocator_->replacePage(replacementRequest(afterPayload), LogSequenceNumber(3)).location.page_index, 2U);
+	held.release();
+	io_->sync();
+
+	const auto control = poolOffset(pool.pool.physical_slot);
+	const auto reclaimed = control + RSS_PAGE_SIZE;
+	std::array<std::byte, RSS_PAGE_SIZE> original{};
+	ASSERT_EQ(portable_pread(native_handle_, original.data(), original.size(), control),
+			  static_cast<pwrite_ssize_t>(original.size()));
+	auto readable = original;
+	auto durable = original;
+	auto released = original;
+	bool dirty = false;
+	bool failWriteback = true;
+	std::optional<bool> durableAtFirstReuse;
+	unsigned controlWrites = 0;
+	StorageIO::ScopedNativeWriteHookForTesting physicalWrite([&](file_handle_t fd, const void *bytes, size_t size, pwrite_off_t offset) {
+		const auto at = static_cast<uint64_t>(offset);
+		if (!durableAtFirstReuse.has_value() && at <= reclaimed && reclaimed - at < size)
+			durableAtFirstReuse = (durable == released && durable != original);
+		const auto written = portable_pwrite(fd, bytes, size, offset);
+		if (written > 0 && at >= control && at - control < RSS_PAGE_SIZE) {
+			const auto count = static_cast<size_t>(written);
+			if (count > RSS_PAGE_SIZE - (at - control)) throw std::logic_error("unexpected cross-page control write");
+			std::copy_n(static_cast<const std::byte *>(bytes), count, readable.data() + (at - control));
+			dirty = true;
+			++controlWrites;
+		}
+		return written;
+	});
+	StorageIO::ScopedNativeSyncHookForTesting sync([&](file_handle_t fd) {
+		if (failWriteback) {
+			failWriteback = false;
+			dirty = false; // Completed writeback with EIO, leaving the readable image clean.
+			return static_cast<int>(failNativeWrite());
+		}
+		const int result = portable_fsync(fd);
+		if (result == 0 && dirty) {
+			durable = readable;
+			dirty = false;
+		}
+		return result;
+	});
+	EXPECT_THROW(allocator_->reclaimRetiredFrames(SegmentId(31)), std::system_error);
+	ASSERT_EQ(controlWrites, 1U);
+	released = readable;
+	ASSERT_NE(released, original);
+	io_->sync(); // An already-reported error need not be reported a second time.
+	ASSERT_EQ(controlWrites, 1U);
+	ASSERT_EQ(durable, original);
+
+	SharedPagePoolAppendRequest append;
+	append.segment_id = SegmentId(31);
+	append.generation = Generation(1);
+	append.page_id = PageId(92);
+	append.page_owner_id = 77;
+	append.page_owner_kind = PageOwnerKind::POK_INDEX;
+	ASSERT_EQ(allocator_->appendPage(append, LogSequenceNumber(4)).location.page_index, 1U);
+	ASSERT_TRUE(durableAtFirstReuse.has_value());
+	EXPECT_TRUE(*durableAtFirstReuse);
 }
