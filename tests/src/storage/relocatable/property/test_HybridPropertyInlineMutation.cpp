@@ -253,12 +253,27 @@ TEST_F(HybridPropertyInlineMutationTest, PackedShortTextColumnsUseTypedSinksAndR
   graph::utils::OwnedAllocationScope transient(tight);
   EXPECT_TRUE(HybridPropertyValueReader::readSelected(*warmContext,columnPin,owners,tokens,{}, {},nullptr,&narrow,&owning,&scalars,&texts,&batches));
  });
- EXPECT_EQ(tight->used(),0U);warmContext.reset();EXPECT_EQ(cacheMemory->used(),0U);
+ EXPECT_EQ(tight->used(),0U);
  const auto declined=graph::debug::PerfTrace::snapshotAndReset();
  ASSERT_TRUE(declined.contains("native_graph.hybrid.grouped_column_declined_admission"));
  EXPECT_EQ(declined.at("native_graph.hybrid.grouped_column_declined_admission").totalValue,1);
  EXPECT_FALSE(declined.contains("native_graph.hybrid.grouped_column_batches"));
  EXPECT_EQ(owningCalls,0U);EXPECT_EQ(textCalls,63U);EXPECT_EQ(nullCalls,1U);
+ // A declined multi-column preflight must still emit every requested cell.
+ // Token 1 is present on every owner (including one NULL), token 2 is missing.
+ const std::array<uint32_t,2> multiTokens{1,2};
+ owningCalls=textCalls=nullCalls=runCalls=0;
+ const std::function<void(size_t,size_t,std::optional<PropertyCollectionRootEntry>)> missing=
+     [&](size_t row,size_t column,auto value){
+      EXPECT_EQ(row,owningCalls++);EXPECT_EQ(column,1U);EXPECT_FALSE(value.has_value());
+     };
+ {
+  graph::utils::OwnedAllocationScope transient(tight);
+  ASSERT_TRUE(HybridPropertyValueReader::readSelected(*warmContext,columnPin,owners,multiTokens,{}, {},nullptr,
+      &narrow,&missing,&scalars,&texts,&batches));
+ }
+ EXPECT_EQ(owningCalls,64U);EXPECT_EQ(textCalls,63U);EXPECT_EQ(nullCalls,1U);
+ EXPECT_EQ(tight->used(),0U);warmContext.reset();EXPECT_EQ(cacheMemory->used(),0U);
  struct GroupCancelled final:std::runtime_error {GroupCancelled():std::runtime_error("group supply cancelled") {}};
  struct CancelAfterAuthentication final:CancellationCheckpoint {
   bool requested=false;void check()const override {if(requested)throw GroupCancelled();}

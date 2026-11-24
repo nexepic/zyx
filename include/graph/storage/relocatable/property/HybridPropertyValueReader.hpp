@@ -291,16 +291,17 @@ public:
                         std::pmr::vector<HybridPropertyColumnRecord> columns(size_t{0U},
                             memory ? memory.get() : std::pmr::get_default_resource());
                         columns.reserve(tokens.size());
-                        consumed = true;
+                        bool allColumnsAvailable = true;
                         for (const auto token : tokens) {
                             if (!context.visitColumnOwnersSorted(owners.subspan(i,end-i),token,
                                 [&](const auto &,const auto &column,const auto &,const auto &){columns.push_back(column);},
-                                std::ref(boundary))) { consumed=false; break; }
+                                std::ref(boundary))) { allColumnsAvailable=false; break; }
                         }
-                        if (consumed) {
+                        if (allColumnsAvailable) {
                             hybrid_property_detail::require(columns.size()==tokens.size(),
                                 "grouped field preflight changed its bounded column count");
                             for (size_t column=0;column<columns.size();++column) emitColumn(columns[column],column);
+                            consumed = true;
                             debug::PerfTrace::addValue("native_graph.hybrid.grouped_multi_column_batches",1);
                         }
                     }
