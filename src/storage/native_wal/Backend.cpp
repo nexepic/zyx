@@ -1,6 +1,7 @@
 #include "Backend.hpp"
 #include "Journal.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/LogicalGraphSchema.hpp"
 #include "graph/storage/NativeWalDatabase.hpp"
 #include "graph/storage/SnapshotNodeIndex.hpp"
 #include "query/execution/ProcessResourceDomains.hpp"
@@ -13,7 +14,7 @@ namespace graph::storage::nativewal {
 		std::optional<LogicalGraphMutationFence> mutationFence() const override {
 			LogicalGraphMutationFence f;
 			f.backend_token = 0x6e673031;
-			f.format_token = data->declaration ? 4 : 3;
+			f.format_token = data->unique ? 5 : data->declaration ? 4 : 3;
 			std::memcpy(f.graph_state_tokens.data(), data->identity.data(), 16);
 			f.graph_state_tokens[2] = data->sequence;
 			return f;
@@ -364,6 +365,10 @@ namespace graph::storage::nativewal {
 			try {
 				if (working)
 					owner->commit(pinned.data, working, changes);
+			} catch (const UniqueViolation &) {
+				status = Status::LGTTS_ROLLED_BACK;
+				release();
+				throw;
 			} catch (const LogicalGraphMutationConflict &) {
 				status = Status::LGTTS_CONFLICTED;
 				release();
@@ -384,14 +389,18 @@ namespace graph::storage::nativewal {
 			release();
 		}
 	};
-	class Backend final : public StorageBackend,
-						  public LogicalGraphReadBackend,
-						  public LogicalGraphTransactionalBackend {
+	class Backend : public StorageBackend, public LogicalGraphReadBackend, public LogicalGraphTransactionalBackend {
 		std::string path;
 		size_t memory;
 		bool ro;
 		std::shared_ptr<Journal> journal;
 		std::shared_ptr<resource::DatabaseResourceBudget> resources;
+
+	protected:
+		Journal &schemaJournal() const {
+			require(bool(journal), "Native graph is closed");
+			return *journal;
+		}
 
 	public:
 		Backend(std::string p, bool readOnly, size_t bytes) : path(std::move(p)), memory(bytes), ro(readOnly) {}
@@ -435,10 +444,68 @@ namespace graph::storage::nativewal {
 			return std::make_unique<Tx>(journal, readOnly);
 		}
 	};
+	// Schema DDL is a separate auto-commit operation. Read-only opens use Backend.
+	class UniqueBackend final : public Backend, public LogicalGraphSchemaBackend {
+		static LogicalGraphConstraintDefinition definition(const State &s) {
+			LogicalGraphConstraintDefinition d;
+			d.constraint_id = s.unique->revision;
+			d.name = s.unique->name;
+			d.label = s.declaration->label;
+			d.property_keys = std::vector<std::string>{s.declaration->key};
+			return d;
+		}
+		[[noreturn]] static void unsupported() { throw std::runtime_error("Native schema operation is unsupported"); }
+
+	public:
+		using Backend::Backend;
+		LogicalGraphConstraintDefinition
+		createLogicalConstraint(const LogicalGraphConstraintCreateRequest &r) override {
+			return createLogicalConstraintWithCheckpoint(r, {}, {});
+		}
+		LogicalGraphConstraintDefinition
+		createLogicalConstraintWithCheckpoint(const LogicalGraphConstraintCreateRequest &r,
+											  const std::function<void()> &check,
+											  const std::function<void(size_t)> &admit) override {
+			require(r.entity_kind == LogicalGraphConstraintEntityKind::LGCEK_NODE &&
+							r.kind == LogicalGraphConstraintKind::LGCK_UNIQUE && r.property_keys.size() == 1 &&
+							r.property_type == LogicalGraphConstraintPropertyType::LGCPT_NONE,
+					"Native UNIQUE supports one declared node property");
+			LogicalGraphConstraintDefinition result;
+			result.name = r.name;
+			result.label = r.label;
+			result.property_keys = r.property_keys;
+			result.constraint_id = schemaJournal().createUnique(r.name, r.label, r.property_keys[0], check, admit);
+			return result;
+		}
+		std::vector<LogicalGraphConstraintDefinition> listLogicalConstraints(size_t maximum) const override {
+			auto s = schemaJournal().snapshot();
+			if (!s->unique)
+				return {};
+			require(maximum > 0, "Native constraint list exceeds budget");
+			return {definition(*s)};
+		}
+		bool dropLogicalConstraintByName(std::string_view) override { unsupported(); }
+		LogicalGraphIndexDefinition createLogicalNodeIndex(const LogicalGraphNodeIndexCreateRequest &) override {
+			unsupported();
+		}
+		std::vector<LogicalGraphIndexDefinition>
+		createLogicalNodeIndexes(std::span<const LogicalGraphNodeIndexCreateRequest>) override {
+			unsupported();
+		}
+		LogicalGraphIndexDefinition
+		createLogicalNodeVectorIndex(const LogicalGraphNodeVectorIndexCreateRequest &) override {
+			unsupported();
+		}
+		bool dropLogicalIndexByName(std::string_view) override { unsupported(); }
+		bool dropLogicalNodeIndexBySchema(std::string_view, std::string_view) override { unsupported(); }
+		std::vector<LogicalGraphIndexDefinition> listLogicalIndexes(size_t) const override { unsupported(); }
+	};
 } // namespace graph::storage::nativewal
 namespace graph::storage {
 	std::shared_ptr<StorageBackend> openNativeWalBackend(const std::string &path, bool readOnly, size_t memory) {
-		return std::make_shared<nativewal::Backend>(path, readOnly, memory);
+		if (!readOnly)
+			return std::make_shared<nativewal::UniqueBackend>(path, false, memory);
+		return std::make_shared<nativewal::Backend>(path, true, memory);
 	}
 	std::string createNativeWalDatabase(const std::string &directory) { return nativewal::Journal::create(directory); }
 	std::string createIndexedNativeWalDatabase(const std::string &directory, const std::string &label,

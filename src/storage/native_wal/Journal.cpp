@@ -217,7 +217,7 @@ namespace graph::storage::nativewal {
 		Digest digest(Span b) { return utils::Sha256::digest(b); }
 		Bytes manifest(const State &s, uint64_t baseSequence, Span base, size_t length, const Digest &hash) {
 			Encoder w(maxState + 256);
-			w.magic(s.declaration ? "ZYXng004" : "ZYXng003");
+			w.magic(s.unique ? "ZYXng005" : s.declaration ? "ZYXng004" : "ZYXng003");
 			w.raw(s.identity);
 			w.num(baseSequence);
 			w.num(s.sequence);
@@ -372,7 +372,7 @@ namespace graph::storage::nativewal {
 			syncFile(activeLog->fd);
 		}
 		template<class Emit>
-		void installStream(const std::string &name, Emit emit) {
+		void installStream(const std::string &name, Emit emit, const std::function<void()> &beforePublish = {}) {
 			// Under the exclusive main lock, exactly one stage name is
 			// reserved for this entry (including independent copies). A killed writer
 			// can leave this inode behind, but repeated retries cannot accumulate stages.
@@ -397,6 +397,8 @@ namespace graph::storage::nativewal {
 				}
 				if (::close(std::exchange(f.fd, -1)) < 0)
 					fail("close native graph stage");
+				if (beforePublish)
+					beforePublish();
 				if (renameat(directory.fd, tmp.c_str(), directory.fd, name.c_str()) < 0)
 					fail("install native graph stage");
 				renamed = true;
@@ -415,124 +417,131 @@ namespace graph::storage::nativewal {
 		void install(const std::string &name, Span b) {
 			installStream(name, [&](int fd) { writeComplete(fd, b); });
 		}
-		Digest installBase(State &s) {
+		Digest installBase(State &s, const std::function<void()> &beforePublish = {}) {
 			utils::Sha256 hash;
 			struct stat written{};
 			CheckpointLocations nodes, edges;
 			size_t nodeStart = 0, edgeStart = 0;
-			installStream(main, [&](int fd) {
-				// Coalesce small rows while hashing the exact independent main image.
-				auto window = std::min(size_t(16384), s.budget->capacity() / 16);
-				VersionCharge buffering(s.budget, window);
-				Encoder buffer(window);
-				buffer.bytes.reserve(window);
-				auto flush = [&] {
-					if (!buffer.bytes.empty())
-						writeComplete(fd, buffer.bytes);
-					buffer.bytes.clear();
-				};
-				auto put = [&](Span b) {
-					hash.update(b);
-					if (b.size() > buffer.limit - buffer.bytes.size())
-						flush();
-					if (b.size() > buffer.limit)
-						writeComplete(fd, b);
-					else
-						buffer.raw(b);
-				};
-				Encoder head(112);
-				head.magic(s.declaration ? "ZYXng004" : "ZYXng003");
-				head.raw(s.identity);
-				head.num(s.sequence);
-				head.num(s.sequence);
-				head.num(0);
-				head.raw(digest({}));
-				head.num(s.nodeHigh);
-				head.num(s.edgeHigh);
-				head.num(s.nodes.size());
-				head.num(s.edges.size());
-				put(head.bytes);
-				Encoder encoded(maxState);
-				VersionCharge rowBuffer(s.budget, 0);
-				nodeStart = head.bytes.size();
-				std::shared_ptr<IndexedColumn> projection;
-				if (s.declaration) {
-					Encoder names(528);
-					names.text(s.declaration->label);
-					names.text(s.declaration->key);
-					put(names.bytes);
-					nodeStart += names.bytes.size();
-					projection = std::make_shared<IndexedColumn>(s.budget);
-				}
-				size_t offset = nodeStart;
-				auto rows = [&](const auto &table, CheckpointLocations &layout) {
-					table.visitAfter(0, [&](auto it) {
-						auto id = it.id();
-						auto size = it.encodedBytes() - 16;
-						require(size <= maxState, "Native checkpoint row exceeds encoding limit");
-						// A large-file API can outgrow the in-memory offset type
-						// on a 32-bit host. Include this header and the final digest.
-						if constexpr (sizeof(off_t) > sizeof(size_t))
-							require(offset <= SIZE_MAX - size - 16 - Digest{}.size(),
-									"Native checkpoint exceeds addressable extent");
-						if (size > encoded.bytes.capacity()) {
-							// The previous buffer is empty and can be freed before growing.
-							Bytes{}.swap(encoded.bytes);
-							rowBuffer.growTo(size);
-							encoded.bytes.reserve(size);
-						}
-						if (it.onDisk()) {
-							encoded.bytes.resize(size);
-							it.readImage(encoded.bytes);
-							layout.observe(id, it.offset(), offset + 16);
-						} else {
-							encodeBaseRow(encoded, it->second);
-						}
-						if constexpr (std::is_same_v<typename std::decay_t<decltype(table)>::mapped_type,
-													 LogicalGraphNode>) {
-							if (projection) {
-								VersionCharge decode(s.budget, 3 * size + 4096);
-								projection->observe(*s.declaration, baseNode(id, encoded.bytes));
+			installStream(
+					main,
+					[&](int fd) {
+						// Coalesce small rows while hashing the exact independent main image.
+						auto window = std::min(size_t(16384), s.budget->capacity() / 16);
+						VersionCharge buffering(s.budget, window);
+						Encoder buffer(window);
+						buffer.bytes.reserve(window);
+						auto flush = [&] {
+							if (!buffer.bytes.empty())
+								writeComplete(fd, buffer.bytes);
+							buffer.bytes.clear();
+						};
+						auto put = [&](Span b) {
+							hash.update(b);
+							if (b.size() > buffer.limit - buffer.bytes.size())
+								flush();
+							if (b.size() > buffer.limit)
+								writeComplete(fd, b);
+							else
+								buffer.raw(b);
+						};
+						Encoder head(112);
+						head.magic(s.unique ? "ZYXng005" : s.declaration ? "ZYXng004" : "ZYXng003");
+						head.raw(s.identity);
+						head.num(s.sequence);
+						head.num(s.sequence);
+						head.num(0);
+						head.raw(digest({}));
+						head.num(s.nodeHigh);
+						head.num(s.edgeHigh);
+						head.num(s.nodes.size());
+						head.num(s.edges.size());
+						put(head.bytes);
+						Encoder encoded(maxState);
+						VersionCharge rowBuffer(s.budget, 0);
+						nodeStart = head.bytes.size();
+						std::shared_ptr<IndexedColumn> projection;
+						if (s.declaration) {
+							Encoder names(3 * (256 + 8) + 8);
+							names.text(s.declaration->label);
+							names.text(s.declaration->key);
+							if (s.unique) {
+								names.text(s.unique->name);
+								names.num(s.unique->revision);
 							}
+							put(names.bytes);
+							nodeStart += names.bytes.size();
+							projection = std::make_shared<IndexedColumn>(s.budget);
 						}
-						offset += size + 16;
-						require(encoded.bytes.size() == size, "Native checkpoint size accounting mismatch");
-						std::array<std::byte, 16> h{};
-						for (unsigned i = 0; i < 8; ++i) {
-							h[i] = std::byte(id >> (8 * i));
-							h[8 + i] = std::byte(uint64_t(size) >> (8 * i));
+						size_t offset = nodeStart;
+						auto rows = [&](const auto &table, CheckpointLocations &layout) {
+							table.visitAfter(0, [&](auto it) {
+								auto id = it.id();
+								auto size = it.encodedBytes() - 16;
+								require(size <= maxState, "Native checkpoint row exceeds encoding limit");
+								// A large-file API can outgrow the in-memory offset type
+								// on a 32-bit host. Include this header and the final digest.
+								if constexpr (sizeof(off_t) > sizeof(size_t))
+									require(offset <= SIZE_MAX - size - 16 - Digest{}.size(),
+											"Native checkpoint exceeds addressable extent");
+								if (size > encoded.bytes.capacity()) {
+									// The previous buffer is empty and can be freed before growing.
+									Bytes{}.swap(encoded.bytes);
+									rowBuffer.growTo(size);
+									encoded.bytes.reserve(size);
+								}
+								if (it.onDisk()) {
+									encoded.bytes.resize(size);
+									it.readImage(encoded.bytes);
+									layout.observe(id, it.offset(), offset + 16);
+								} else {
+									encodeBaseRow(encoded, it->second);
+								}
+								if constexpr (std::is_same_v<typename std::decay_t<decltype(table)>::mapped_type,
+															 LogicalGraphNode>) {
+									if (projection) {
+										VersionCharge decode(s.budget, 3 * size + 4096);
+										projection->observe(*s.declaration, baseNode(id, encoded.bytes));
+									}
+								}
+								offset += size + 16;
+								require(encoded.bytes.size() == size, "Native checkpoint size accounting mismatch");
+								std::array<std::byte, 16> h{};
+								for (unsigned i = 0; i < 8; ++i) {
+									h[i] = std::byte(id >> (8 * i));
+									h[8 + i] = std::byte(uint64_t(size) >> (8 * i));
+								}
+								put(h);
+								put(encoded.bytes);
+								encoded.bytes.clear();
+								return true;
+							});
+						};
+						rows(s.nodes, nodes);
+						edgeStart = offset;
+						rows(s.edges, edges);
+						if (projection) {
+							std::ranges::sort(projection->postings);
+							Encoder field(16);
+							auto pair = [&](uint64_t a, uint64_t b) {
+								field.bytes.clear();
+								field.num(a);
+								field.num(b);
+								put(field.bytes);
+							};
+							pair(projection->column.size(), projection->complete);
+							for (auto [id, v]: projection->column)
+								pair(id, std::bit_cast<uint64_t>(v));
+							for (auto [v, id]: projection->postings)
+								pair(std::bit_cast<uint64_t>(v), id);
+							s.column = std::move(projection);
+							s.changedColumn.reset();
+							s.columnOverflow = false;
 						}
-						put(h);
-						put(encoded.bytes);
-						encoded.bytes.clear();
-						return true;
-					});
-				};
-				rows(s.nodes, nodes);
-				edgeStart = offset;
-				rows(s.edges, edges);
-				if (projection) {
-					std::ranges::sort(projection->postings);
-					Encoder field(16);
-					auto pair = [&](uint64_t a, uint64_t b) {
-						field.bytes.clear();
-						field.num(a);
-						field.num(b);
-						put(field.bytes);
-					};
-					pair(projection->column.size(), projection->complete);
-					for (auto [id, v]: projection->column)
-						pair(id, std::bit_cast<uint64_t>(v));
-					for (auto [v, id]: projection->postings)
-						pair(std::bit_cast<uint64_t>(v), id);
-					s.column = std::move(projection);
-					s.changedColumn.reset();
-					s.columnOverflow = false;
-				}
-				flush();
-				writeComplete(fd, hash.finalize());
-				written = metadata(fd);
-			});
+						flush();
+						writeComplete(fd, hash.finalize());
+						written = metadata(fd);
+					},
+					beforePublish);
 			auto [published, extent] = openInput(main);
 			auto st = metadata(published->fd);
 			require(sameContentStamp(written, st), "Published native base identity changed");
@@ -590,8 +599,9 @@ namespace graph::storage::nativewal {
 		Cursor m(main->fd, extent, s->budget, memory);
 		auto head = m.fixed<80>();
 		Decoder r{head};
-		bool indexed = std::memcmp(head.data(), "ZYXng004", 8) == 0;
-		r.magic(indexed ? "ZYXng004" : "ZYXng003");
+		bool unique = std::memcmp(head.data(), "ZYXng005", 8) == 0;
+		bool indexed = unique || std::memcmp(head.data(), "ZYXng004", 8) == 0;
+		r.magic(unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
 		std::ranges::copy(r.take(16), s->identity.begin());
 		baseSequence = r.num();
 		auto sequence = r.num();
@@ -621,6 +631,12 @@ namespace graph::storage::nativewal {
 					return value;
 				};
 				s->declaration = std::make_shared<ColumnDeclaration>(ColumnDeclaration{name(), name()});
+				if (unique) {
+					auto constraint = name();
+					auto revision = c.num();
+					require(revision && revision <= baseSequence, "Invalid unique declaration revision");
+					s->unique = std::make_shared<UniqueDeclaration>(UniqueDeclaration{std::move(constraint), revision});
+				}
 				projection = std::make_shared<IndexedColumn>(s->budget);
 			}
 			const bool lazy = c.remaining() > std::min(size_t(256 * 1024), memory / 2);
@@ -661,6 +677,7 @@ namespace graph::storage::nativewal {
 				s->column = std::move(projection);
 			}
 			baseDigest = finish(c);
+			validateUnique(*s);
 		};
 		if (!needed) {
 			require(std::ranges::equal(digest({}), expected), "Invalid standalone digest");
@@ -687,7 +704,7 @@ namespace graph::storage::nativewal {
 			Cursor a(anchor.first->fd, anchor.second, s->budget, memory);
 			auto ah = a.fixed<80>();
 			Decoder ar{ah};
-			ar.magic(indexed ? "ZYXng004" : "ZYXng003");
+			ar.magic(unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
 			require(std::ranges::equal(ar.take(16), s->identity) && ar.num() == baseSequence &&
 							ar.num() == baseSequence && ar.num() == 0 && std::ranges::equal(ar.take(32), digest({})),
 					"Native graph base generation mismatch");
@@ -704,6 +721,7 @@ namespace graph::storage::nativewal {
 				Bytes delta(size);
 				log.consume(delta);
 				applyDelta(*s, delta);
+				validateUnique(*s);
 				s->sequence = seq;
 				size_t padding = (alignment - log.position % alignment) % alignment;
 				std::array<std::byte, 512> zeros;
@@ -731,9 +749,8 @@ namespace graph::storage::nativewal {
 		require(!poisoned, "Native graph requires recovery");
 		return current;
 	}
-	void Journal::checkpointLocked() {
-		auto rebased = std::make_shared<State>(*current);
-		auto fresh = files->installBase(*rebased);
+	void Journal::publishBase(std::shared_ptr<State> rebased, const std::function<void()> &beforePublish) {
+		auto fresh = files->installBase(*rebased, beforePublish);
 		files->removeWal();
 		current = std::move(rebased);
 		baseDigest = fresh;
@@ -741,6 +758,41 @@ namespace graph::storage::nativewal {
 		walLength = 0;
 		walHash = utils::Sha256{};
 		needsStabilization = false;
+	}
+	void Journal::checkpointLocked() { publishBase(std::make_shared<State>(*current)); }
+	uint64_t Journal::createUnique(const std::string &name, const std::string &label, const std::string &key,
+								   const std::function<void()> &check, const std::function<void(size_t)> &admit) {
+		std::lock_guard lock(gate);
+		require(!readOnly && !poisoned, "Native schema writer unavailable");
+		require(!name.empty() && name.size() <= 256 && !current->unique && current->declaration &&
+						current->declaration->key == key && current->declaration->label == label,
+				"Native UNIQUE requires its declared node property index");
+		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
+		auto next = std::make_shared<State>(*current);
+		++next->sequence;
+		next->unique = std::make_shared<UniqueDeclaration>(UniqueDeclaration{name, next->sequence});
+		validateUnique(*next, check, admit);
+		if (check)
+			check();
+		bool cancelledBeforeRename = false;
+		auto beforePublish = [&] {
+			try {
+				if (check)
+					check();
+			} catch (...) {
+				cancelledBeforeRename = true;
+				throw;
+			}
+		};
+		try {
+			files->checkAuthority();
+			publishBase(std::move(next), beforePublish);
+			return current->sequence;
+		} catch (...) {
+			if (!cancelledBeforeRename)
+				poisoned = true;
+			throw;
+		}
 	}
 	void Journal::checkpoint() {
 		std::lock_guard lock(gate);
@@ -767,6 +819,7 @@ namespace graph::storage::nativewal {
 			throw LogicalGraphMutationConflict("Stale native graph write snapshot");
 		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
 		next->sequence = current->sequence + 1;
+		validateUnique(*next);
 		auto delta = encodeDelta(*next, changed);
 		try {
 			files->checkAuthority();
@@ -838,5 +891,9 @@ namespace graph::storage::nativewal {
 		unavailable();
 	}
 	void Journal::checkpoint() { unavailable(); }
+	uint64_t Journal::createUnique(const std::string &, const std::string &, const std::string &,
+								   const std::function<void()> &, const std::function<void(size_t)> &) {
+		unavailable();
+	}
 } // namespace graph::storage::nativewal
 #endif

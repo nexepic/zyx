@@ -54,8 +54,8 @@ ssize_t write(int fd, const void *data, size_t len) {
 		errno = EIO;
 		return -1;
 	}
-	if (len >= 8 && (!memcmp(data, "ZYXng003", 8) || !memcmp(data, "ZYXng004", 8) || !memcmp(data, "ZYXnw003", 8) ||
-					 !memcmp(data, "ZYXtx002", 8))) {
+	if (len >= 8 && (!memcmp(data, "ZYXng003", 8) || !memcmp(data, "ZYXng004", 8) || !memcmp(data, "ZYXng005", 8) ||
+					 !memcmp(data, "ZYXnw003", 8) || !memcmp(data, "ZYXtx002", 8))) {
 		kind = ((const char *) data)[4] == 'g' ? 'm' : (((const char *) data)[3] == 't' ? 'a' : 'w');
 
 		// The small indexed fixture fits in one coalesced checkpoint write.

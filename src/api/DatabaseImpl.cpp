@@ -1621,7 +1621,10 @@ namespace zyx {
 				graph::debug::ScopedPerfTimer timer("api.build_plan");
 				return queryEngine->buildPlan(cypher);
 			}();
-			if ((plan.mutatesData || plan.mutatesSchema) && !impl_->db_.getLogicalGraphWriteBackend()) {
+			if ((plan.mutatesData || plan.mutatesSchema) && !impl_->db_.getLogicalGraphWriteBackend() &&
+				!(plan.mutatesSchema && !plan.mutatesData &&
+				  std::dynamic_pointer_cast<graph::storage::LogicalGraphSchemaBackend>(
+						  impl_->db_.getLogicalGraphTransactionalBackend()))) {
 				throw std::runtime_error("relocatable backend was opened read-only and cannot execute Cypher mutations");
 			}
 
@@ -1674,7 +1677,10 @@ namespace zyx {
 			}
 			auto queryEngine = impl_->db_.getQueryEngine();
 			auto plan = detail::clonePreparedQueryPlan(*query.impl_);
-			if ((plan.mutatesData || plan.mutatesSchema) && !impl_->db_.getLogicalGraphWriteBackend()) {
+			if ((plan.mutatesData || plan.mutatesSchema) && !impl_->db_.getLogicalGraphWriteBackend() &&
+				!(plan.mutatesSchema && !plan.mutatesData &&
+				  std::dynamic_pointer_cast<graph::storage::LogicalGraphSchemaBackend>(
+						  impl_->db_.getLogicalGraphTransactionalBackend()))) {
 				throw std::runtime_error("relocatable backend was opened read-only and cannot execute query mutations");
 			}
 			auto start = std::chrono::high_resolution_clock::now();

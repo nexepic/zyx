@@ -14,6 +14,7 @@ namespace graph::storage::nativewal {
 		bool readOnly, poisoned = false, needsStabilization = true;
 		std::mutex gate;
 		std::shared_ptr<const State> current;
+		void publishBase(std::shared_ptr<State> next, const std::function<void()> &beforePublish = {});
 		void checkpointLocked();
 
 	public:
@@ -23,5 +24,7 @@ namespace graph::storage::nativewal {
 		std::shared_ptr<const State> snapshot();
 		void commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next, const Changes &);
 		void checkpoint();
+		uint64_t createUnique(const std::string &name, const std::string &label, const std::string &key,
+							  const std::function<void()> &check, const std::function<void(size_t)> &admit);
 	};
 } // namespace graph::storage::nativewal

@@ -74,7 +74,8 @@ namespace graph::storage {
 			return {openCheckpointBackend(database_path, cache_size), nullptr};
 		}
 		if (std::string_view(signature.data(), signature.size()) == "ZYXng003" ||
-			std::string_view(signature.data(), signature.size()) == "ZYXng004")
+			std::string_view(signature.data(), signature.size()) == "ZYXng004" ||
+			std::string_view(signature.data(), signature.size()) == "ZYXng005")
 			return {openNativeWalBackend(database_path, open_mode == OpenMode::OPEN_READ_ONLY_EXISTING_FILE,
 										 cache_size),
 					nullptr};

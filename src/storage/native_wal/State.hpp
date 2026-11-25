@@ -15,7 +15,15 @@ namespace graph::storage::nativewal {
 		if (!condition)
 			throw std::runtime_error(message);
 	}
+	struct UniqueViolation : std::runtime_error {
+		using std::runtime_error::runtime_error;
+	};
+	struct UniqueDeclaration {
+		std::string name;
+		uint64_t revision;
+	};
 	struct State {
+		std::shared_ptr<const UniqueDeclaration> unique;
 		Identity identity{};
 		std::shared_ptr<const ColumnDeclaration> declaration;
 		std::shared_ptr<const IndexedColumn> column;
@@ -55,6 +63,8 @@ namespace graph::storage::nativewal {
 			budget(std::make_shared<VersionBudget>(memory)), nodes(budget), edges(budget) {}
 		size_t encodedSize() const { return 32 + nodes.encodedBytes() + edges.encodedBytes(); }
 	};
+	void validateUnique(const State &, const std::function<void()> &check = {},
+						const std::function<void(size_t)> &admit = {});
 	struct Changes {
 		std::set<uint64_t> nodes, edges;
 	};

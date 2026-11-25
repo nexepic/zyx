@@ -1,4 +1,5 @@
 #include "State.hpp"
+#include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
 namespace graph::storage::nativewal {
 	void Encoder::value(const PropertyValue &v) {
 		auto type = v.getType();
@@ -227,6 +228,35 @@ namespace graph::storage::nativewal {
 			encodeProperties(w, e.properties);
 		}
 	} // namespace
+	// The first writable constraint slice uses the same canonical tuple codec as
+	// the product validator. Admission includes the ordered set and decoded row.
+	void validateUnique(const State &s, const std::function<void()> &check, const std::function<void(size_t)> &admit) {
+		if (!s.unique)
+			return;
+		require(bool(s.declaration), "Missing native UNIQUE scope");
+		VersionCharge retained(s.budget, 0);
+		std::set<Bytes> keys;
+		size_t charged = 0;
+		s.nodes.visitAfter(0, [&](auto row) {
+			if (check)
+				check();
+			if (admit)
+				admit(row.encodedBytes());
+			const auto &n = row->second;
+			if (std::ranges::find(n.labels, s.declaration->label) == n.labels.end())
+				return true;
+			const auto field = std::ranges::find(n.properties, s.declaration->key, &LogicalGraphPropertyEntry::key);
+			if (field == n.properties.end() || field->value.getType() == PropertyType::NULL_TYPE)
+				return true;
+			VersionCharge scratch(s.budget, 4 * row.encodedBytes() + 4096);
+			auto key = ConstraintSupportTree::canonicalKey(std::span(&field->value, 1));
+			charged += key.capacity() + sizeof(Bytes) + 64;
+			retained.growTo(charged);
+			if (!keys.insert(std::move(key)).second)
+				throw UniqueViolation("Constraint violation: '" + s.unique->name + "' has a duplicate key");
+			return true;
+		});
+	}
 	Bytes encodeDelta(const State &s, const Changes &changed) {
 		Encoder w(maxState);
 		w.num(s.nodeHigh);
