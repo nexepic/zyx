@@ -365,8 +365,19 @@ namespace graph::storage::nativewal {
 				bytes = bytes.subspan(n);
 			}
 		}
+		// Padding has no transaction-specific content. Tiny budgets can emit
+		// these same authenticated bytes without retaining an aligned heap page.
+		static constexpr std::array<std::byte, 4096> zeroPage{};
+		template<class Emit>
+		static void emitPadding(size_t size, Emit emit) {
+			while (size) {
+				auto chunk = Span(zeroPage).first(std::min(size, zeroPage.size()));
+				emit(chunk);
+				size -= chunk.size();
+			}
+		}
 		std::unique_ptr<File> activeLog;
-		void append(Span bytes, size_t offset) {
+		void append(Span bytes, size_t offset, size_t padding) {
 			require(bool(activeLog), "Missing native append authority");
 			checkBaseName(false);
 			struct stat st{}, named{};
@@ -376,6 +387,7 @@ namespace graph::storage::nativewal {
 							static_cast<uint64_t>(st.st_size) == offset,
 					"Native WAL append extent or identity changed");
 			writeComplete(activeLog->fd, bytes);
+			emitPadding(padding, [&](Span chunk) { writeComplete(activeLog->fd, chunk); });
 			syncFile(activeLog->fd);
 		}
 		template<class Emit>
@@ -421,8 +433,11 @@ namespace graph::storage::nativewal {
 				throw;
 			}
 		}
-		void install(const std::string &name, Span b) {
-			installStream(name, [&](int fd) { writeComplete(fd, b); });
+		void install(const std::string &name, Span b, size_t padding = 0) {
+			installStream(name, [&](int fd) {
+				writeComplete(fd, b);
+				emitPadding(padding, [&](Span chunk) { writeComplete(fd, chunk); });
+			});
 		}
 		Digest installBase(State &s, const std::function<void()> &beforePublish = {}) {
 			utils::Sha256 hash;
@@ -983,13 +998,22 @@ namespace graph::storage::nativewal {
 		// Admit the final extent before allocating or modifying the namespace.
 		// Encode into its final position; no second transaction-sized copy is
 		// required for either the generation header or aligned append.
-		VersionCharge frameCharge(next->budget, frameSize);
-		Encoder frame(frameSize, next->budget);
-		frame.bytes.reserve(frameSize);
+		VersionCharge frameCharge(next->budget, unpadded);
+		size_t resident = unpadded;
+		try {
+			frameCharge.growTo(frameSize);
+			resident = frameSize;
+		} catch (const std::length_error &) {
+			// Only optional coalescing failed admission. Content still has
+			// its full reservation; padding is hashed and written separately.
+		}
+		const size_t padding = frameSize - resident;
+		Encoder frame(resident, next->budget);
+		frame.bytes.reserve(resident);
 		frame.bytes.resize(header);
 		encodeDelta(frame, *next, changed);
 		require(frame.bytes.size() == unpadded, "Native WAL measured delta size mismatch");
-		frame.bytes.resize(frameSize);
+		frame.bytes.resize(resident);
 		try {
 			files->checkAuthority();
 			if (rotate)
@@ -1021,13 +1045,14 @@ namespace graph::storage::nativewal {
 			std::copy(bytes.bytes.begin(), bytes.bytes.end(), frame.bytes.begin());
 			auto hash = walHash;
 			hash.update(frame.bytes);
+			Files::emitPadding(padding, [&](Span chunk) { hash.update(chunk); });
 			auto length = walLength + frameSize;
 			auto receipt = manifest(*next, baseSequence, {}, length, hash.finalize());
 			if (walLength == 0) {
 				files->retainBase();
-				files->install(files->log, frame.bytes);
+				files->install(files->log, frame.bytes, padding);
 			} else
-				files->append(frame.bytes, walLength);
+				files->append(frame.bytes, walLength, padding);
 			files->install(files->main, receipt);
 			if (!walLength)
 				files->checkBaseName(true);

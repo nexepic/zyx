@@ -191,6 +191,24 @@ int main(int argc, char **argv) try {
 		selection.backend->close();
 		return 0;
 	}
+	if (op == "tiny-wal-writes") {
+		using namespace graph::storage;
+		auto selection = StorageBackendFactory::create(path, 4096, OpenMode::OPEN_EXISTING_FILE);
+		selection.backend->open();
+		auto &writer = dynamic_cast<LogicalGraphTransactionalBackend &>(*selection.backend);
+		for (int i = 0; i < 2; ++i) {
+			auto tx = writer.beginLogicalGraphTransaction(false);
+			LogicalGraphMutationBatch batch;
+			LogicalGraphNodeCreateRequest node;
+			node.labels = {"Tiny"};
+			node.properties.push_back({"p", graph::PropertyValue(std::string(16, 'a' + i))});
+			batch.node_creates.push_back(std::move(node));
+			(void) tx->stageMutationBatch(std::move(batch));
+			(void) tx->commit();
+		}
+		// Leave the two aligned frames for a fresh recovery process.
+		raise(SIGKILL);
+	}
 	if (op == "nested-budget-write" || op == "nested-budget-open") {
 		using namespace graph::storage;
 		expect(argc == 4, "Expected version budget");

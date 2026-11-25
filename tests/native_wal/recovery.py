@@ -28,6 +28,9 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    tiny = new("tiny-wal")
+    run("tiny-wal-writes", tiny, code=-signal.SIGKILL)
+    recovered(tiny, 2)
     run("long-limits", new("long-limits"))
     long_seed = new("long-seed")
     run("long-seed", long_seed)
