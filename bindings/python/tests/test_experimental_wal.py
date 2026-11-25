@@ -133,3 +133,10 @@ def test_public_graph_ids_survive_reopen(tmp_path,backend):
     replacement=db.create_node('Item',{'id':88})
     assert replacement!=b and read(db,q)==[]
     db.close()
+
+@pytest.mark.parametrize('backend',['native','experimental-wal'])
+def test_nested_equality_keeps_types_and_null(tmp_path,backend):
+    db=zyxdb.Database(str(tmp_path/'db'),backend=backend)
+    values=read(db,'RETURN (1=1)=1 AS mixed,(1=1)=(2=2) AS both,NULL=NULL AS missing')
+    assert values==[[False,True,None]]
+    db.close()
