@@ -1,7 +1,9 @@
 #include "graph/storage/SegmentedSnapshot.hpp"
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <mutex>
+#include <set>
 #include "CheckpointReadBackend.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
@@ -53,6 +55,39 @@ namespace graph::storage {
 			put(b, s.size());
 			append(b, std::as_bytes(std::span(s)));
 		}
+		enum class NameSpace : size_t { NS_PROPERTY, NS_LABEL, NS_TYPE };
+		void token(Bytes &out, uint32_t value) {
+			for (unsigned i = 0; i < 4; ++i)
+				out.push_back(std::byte(value >> (8 * i)));
+		}
+		uint32_t token(Cursor &c) {
+			auto bytes = c.take(4);
+			uint32_t result = 0;
+			for (unsigned i = 0; i < 4; ++i)
+				result |= uint32_t(std::to_integer<unsigned>(bytes[i])) << (8 * i);
+			return result;
+		}
+		struct Dictionary {
+			// Separate snapshot-local domains mirror the catalog's property names,
+			// label schema tokens and relationship type tokens.
+			std::array<std::vector<std::string>, 3> names;
+			std::vector<uint8_t> lanes;
+			bool separate(uint32_t key, bool edges) const { return lanes.at(key) & (1U << unsigned(edges)); }
+			std::string_view lookup(NameSpace ns, uint32_t key) const {
+				const auto &table = names[size_t(ns)];
+				check(key < table.size(), "Invalid snapshot name token");
+				return table[key];
+			}
+			uint32_t find(NameSpace ns, std::string_view name) const {
+				const auto &table = names[size_t(ns)];
+				auto it = std::lower_bound(table.begin(), table.end(), name);
+				check(it != table.end() && *it == name, "Snapshot name changed during export");
+				return static_cast<uint32_t>(it - table.begin());
+			}
+		};
+		std::string_view name(Cursor &c, const Dictionary *dict, NameSpace ns) {
+			return dict ? dict->lookup(ns, token(c)) : c.skipText();
+		}
 		void write(std::ostream &out, Span s) {
 			out.write(reinterpret_cast<const char *>(s.data()), s.size());
 			check(bool(out), "cp003 export write failed");
@@ -66,12 +101,12 @@ namespace graph::storage {
 				CanonicalPropertyValueCodec::append(b, e.value);
 			}
 		}
-		auto properties(Cursor &c) {
+		auto properties(Cursor &c, const Dictionary *dict) {
 			std::vector<LogicalGraphPropertyEntry> p;
 			auto count = c.num();
-			check(count <= c.b.size() / 14, "Invalid cp003 property count");
+			check(count <= c.b.size() / (dict ? 9 : 14), "Invalid cp003 property count");
 			for (size_t i = 0; i < count; i++) {
-				auto key = c.text();
+				auto key = std::string(name(c, dict, NameSpace::NS_PROPERTY));
 				size_t off = 0;
 				auto value = CanonicalPropertyValueCodec::decodeNext(c.b, off);
 				c.take(off);
@@ -79,19 +114,19 @@ namespace graph::storage {
 			}
 			return p;
 		}
-		LogicalGraphNode nodeIdentity(uint64_t id, Cursor c) {
+		LogicalGraphNode nodeIdentity(uint64_t id, Cursor c, const Dictionary *dict) {
 			LogicalGraphNode n{id, {}};
 			auto count = c.num();
-			check(count <= c.b.size() / 8, "Invalid cp003 labels");
+			check(count <= c.b.size() / (dict ? 4 : 8), "Invalid cp003 labels");
 			while (count--)
-				n.labels.push_back(c.text());
+				n.labels.emplace_back(name(c, dict, NameSpace::NS_LABEL));
 
 			check(c.b.empty(), "Trailing cp003 node bytes");
 			return n;
 		}
-		LogicalGraphEdge edgeIdentity(uint64_t id, Cursor c) {
+		LogicalGraphEdge edgeIdentity(uint64_t id, Cursor c, const Dictionary *dict) {
 			auto a = c.num(), b = c.num();
-			auto type = c.text();
+			auto type = std::string(name(c, dict, NameSpace::NS_TYPE));
 			check(a && b, "Invalid cp003 endpoints");
 			LogicalGraphEdge e{id, a, b, std::move(type), {}};
 			check(c.b.empty(), "Trailing cp003 edge bytes");
@@ -124,6 +159,24 @@ namespace graph::storage {
 				append(payload, b);
 			}
 		};
+		void finishSnapshot(std::ostream &out, Builder &w, const Bytes &directory) {
+			Bytes footer;
+			put(footer, w.offset);
+			put(footer, directory.size());
+			Hash hash;
+			hash.update(footer);
+			hash.update(directory);
+			append(footer, hash.finalize());
+			write(out, directory);
+			write(out, footer);
+			auto end = out.tellp();
+			out.seekp(8);
+			write(out, Span(footer).last(32));
+			out.seekp(end);
+			out.flush();
+			check(bool(out), "cp003 export flush failed");
+		}
+
 	} // namespace
 	void exportSegmentedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out) {
 		check(out.tellp() == 0, "cp003 export needs a new empty stream");
@@ -171,22 +224,169 @@ namespace graph::storage {
 			return true;
 		});
 		w.flush();
-		Bytes footer;
-		put(footer, w.offset);
-		put(footer, w.dir.size());
-		Hash hash;
-		hash.update(footer);
-		hash.update(w.dir);
-		append(footer, hash.finalize());
-		write(out, w.dir);
-		write(out, footer);
-		auto end = out.tellp();
-		out.seekp(8);
-		write(out, Span(footer).last(32));
-		out.seekp(end);
-		out.flush();
-		check(bool(out), "cp003 export flush failed");
+		finishSnapshot(out, w, w.dir);
 	}
+	void exportTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns) {
+		check(out.tellp() == 0, "Snapshot export requires a new empty stream");
+		Dictionary dict;
+		{
+			struct Stats {
+				std::array<uint64_t, 2> bytes{}, count{};
+			};
+			std::array<std::map<std::string, Stats, std::less<>>, 3> distinct;
+			size_t used = 0;
+			auto collect = [&](NameSpace ns, const std::string &key) -> Stats & {
+				auto &set = distinct[size_t(ns)];
+				if (auto it = set.find(key); it != set.end())
+					return it->second;
+				check(!key.empty() && key.size() <= maxBlock && used + key.size() + 192 <= maxDirectory,
+					  "Snapshot vocabulary capacity exceeded");
+				used += key.size() + 192;
+				return set.try_emplace(key).first->second;
+			};
+			source.visitNodes(SIZE_MAX, [&](const LogicalGraphNode &n) {
+				for (const auto &label: n.labels)
+					collect(NameSpace::NS_LABEL, label);
+				for (const auto &p: n.properties) {
+					auto &stats = collect(NameSpace::NS_PROPERTY, p.key);
+					stats.bytes[0] += CanonicalPropertyValueCodec::encodedSize(p.value);
+					++stats.count[0];
+				}
+				return true;
+			});
+			source.visitEdges(SIZE_MAX, [&](const LogicalGraphEdge &e) {
+				collect(NameSpace::NS_TYPE, e.type);
+				for (const auto &p: e.properties) {
+					auto &stats = collect(NameSpace::NS_PROPERTY, p.key);
+					stats.bytes[1] += CanonicalPropertyValueCodec::encodedSize(p.value);
+					++stats.count[1];
+				}
+				return true;
+			});
+			for (size_t i = 0; i < distinct.size(); ++i)
+				for (const auto &[word, stats]: distinct[i]) {
+					dict.names[i].push_back(word);
+					if (i != size_t(NameSpace::NS_PROPERTY))
+						continue;
+					uint8_t mask = 0;
+					// Each separate lane adds an owner ID per value and at least
+					// one directory entry. Keep small or rare values with the owner.
+					for (size_t e = 0; e < 2; ++e)
+						if (columns && stats.bytes[e] / 4 > stats.count[e] * sizeof(uint64_t) + entrySize)
+							mask |= 1U << e;
+					dict.lanes.push_back(mask);
+				}
+		}
+		out.write("ZYXcp004", 8);
+		write(out, std::array<std::byte, 32>{});
+		Builder w{out, {}, {}};
+		struct Lane {
+			Bytes data;
+			uint64_t first = 0, last = 0, touched = 0;
+		};
+		// Projected reads may pin an owner window and a field window together.
+		// Share the regular window target between them on split layouts.
+		const bool hasFields = std::ranges::any_of(dict.lanes, [](auto mask) { return mask != 0; });
+
+		uint64_t clock = 0;
+		std::map<uint64_t, Lane> lanes;
+		auto flush = [&](auto it) {
+			w.kind = it->first;
+			w.first = it->second.first;
+			w.last = it->second.last;
+			w.payload = std::move(it->second.data);
+			w.flush();
+			lanes.erase(it);
+		};
+		auto emit = [&](uint64_t kind, uint64_t id, Span data) {
+			size_t extra = kind < 4 ? 16 : 8;
+			const size_t laneTarget = hasFields && kind >= 2 ? targetBytes / 2 : targetBytes;
+			check(id && data.size() <= maxBlock - extra, "Snapshot row exceeds segment limit");
+			auto it = lanes.find(kind);
+			if (it != lanes.end() && it->second.data.size() + data.size() + extra > laneTarget) {
+				flush(it);
+				it = lanes.end();
+			}
+			if (it == lanes.end()) {
+				if (lanes.size() == 16)
+					flush(std::min_element(lanes.begin(), lanes.end(),
+										   [](auto &a, auto &b) { return a.second.touched < b.second.touched; }));
+				it = lanes.try_emplace(kind).first;
+				it->second.first = id;
+			}
+			auto &lane = it->second;
+			check(id > lane.last, "Unordered snapshot owner");
+			lane.last = id;
+			lane.touched = ++clock;
+			put(lane.data, id);
+			if (kind < 4)
+				put(lane.data, data.size());
+			append(lane.data, data);
+		};
+		auto attributes = [&](bool edges, uint64_t id, const auto &properties) {
+			Bytes owner;
+			check(properties.size() <= (maxBlock - 24) / 4, "Snapshot has too many keys");
+			put(owner, properties.size());
+			for (const auto &p: properties) {
+				auto key = dict.find(NameSpace::NS_PROPERTY, p.key);
+				token(owner, key);
+				auto size = CanonicalPropertyValueCodec::encodedSize(p.value);
+				check(size <= maxBlock - 16 && owner.size() <= maxBlock - 16, "Snapshot property exceeds limit");
+				if (dict.separate(key, edges)) {
+					Bytes value;
+					CanonicalPropertyValueCodec::append(value, p.value);
+					emit(4 + 2 * uint64_t(key) + unsigned(edges), id, value);
+				} else {
+					check(size <= maxBlock - 16 - owner.size(), "Snapshot property row exceeds limit");
+					CanonicalPropertyValueCodec::append(owner, p.value);
+				}
+			}
+			emit(2 + unsigned(edges), id, owner);
+		};
+		uint64_t last = 0;
+		source.visitNodes(SIZE_MAX, [&](const LogicalGraphNode &n) {
+			check(n.node_id > last && n.labels.size() <= (maxBlock - 24) / 4, "Invalid snapshot node");
+			last = n.node_id;
+			Bytes b;
+			put(b, n.labels.size());
+			for (const auto &l: n.labels)
+				token(b, dict.find(NameSpace::NS_LABEL, l));
+			emit(0, last, b);
+			attributes(false, last, n.properties);
+			return true;
+		});
+		last = 0;
+		source.visitEdges(SIZE_MAX, [&](const LogicalGraphEdge &e) {
+			check(e.edge_id > last && e.source_node_id && e.target_node_id, "Invalid snapshot edge");
+			last = e.edge_id;
+			Bytes b;
+			put(b, e.source_node_id);
+			put(b, e.target_node_id);
+			token(b, dict.find(NameSpace::NS_TYPE, e.type));
+			emit(1, last, b);
+			attributes(true, last, e.properties);
+			return true;
+		});
+		while (!lanes.empty())
+			flush(lanes.begin());
+		Bytes directory;
+		put(directory, unsigned(columns));
+		for (const auto &table: dict.names) {
+			put(directory, table.size());
+			for (const auto &word: table) {
+				put(directory, word.size());
+				append(directory, std::as_bytes(std::span(word)));
+			}
+		}
+		if (columns)
+			append(directory, std::as_bytes(std::span(dict.lanes)));
+		check(directory.size() <= maxDirectory && w.dir.size() <= maxDirectory - directory.size(),
+			  "Snapshot directory too large");
+		append(directory, w.dir);
+		finishSnapshot(out, w, directory);
+	}
+
+
 	namespace {
 		struct Block {
 			uint64_t kind, first, last, off, size;
@@ -205,6 +405,10 @@ namespace graph::storage {
 			};
 			mutable std::mutex cacheMutex;
 			mutable std::array<std::shared_ptr<const Window>, 4> windows;
+			mutable std::array<std::shared_ptr<const Window>, 8> fields;
+			std::optional<Dictionary> dictionary;
+			bool columns = false;
+			const Dictionary *dict() const { return dictionary ? &*dictionary : nullptr; }
 			mutable std::mutex mutex;
 			mutable std::ifstream in;
 			std::vector<Block> blocks;
@@ -226,21 +430,24 @@ namespace graph::storage {
 				auto end = in.tellg();
 				check(end >= std::streamoff(headerSize + footerSize), "Truncated cp003 file");
 				auto h = read(0, headerSize);
-				check(!std::memcmp(h.data(), "ZYXcp003", 8), "Invalid cp003 signature");
+				bool v4 = !std::memcmp(h.data(), "ZYXcp004", 8);
+				check(v4 || !std::memcmp(h.data(), "ZYXcp003", 8), "Invalid cp003 signature");
 				auto f = read(uint64_t(end) - footerSize, footerSize);
 				Cursor c{f};
 				auto off = c.num(), size = c.num();
 				check(off >= headerSize && off <= uint64_t(end) - footerSize &&
-							  size == uint64_t(end) - footerSize - off && size <= maxDirectory && size % entrySize == 0,
+							  size == uint64_t(end) - footerSize - off && size <= maxDirectory &&
+							  (v4 || size % entrySize == 0),
 					  "Invalid cp003 directory extent");
 				check(std::ranges::equal(Span(h).subspan(8), c.b), "Mismatched cp003 directory identity");
 				domain = resource::ProcessResourceDomains::defaultOwner()->domain(
-						"cp003:" + std::string(reinterpret_cast<const char *>(c.b.data()), 32));
+						std::string(v4 ? "cp004:" : "cp003:") +
+						std::string(reinterpret_cast<const char *>(c.b.data()), 32));
 				account =
 						std::make_shared<resource::ResourceAccount>(domain, resource::ResourceClass::RCK_CACHE, budget);
 				lease.emplace(account);
-				const size_t entries = size / entrySize;
-				lease->set(size + entries * sizeof(Block));
+				size_t entries = size / entrySize;
+				lease->set(size + (v4 ? 0 : entries * sizeof(Block)));
 				auto d = read(off, size);
 				Hash hash;
 				hash.update(Span(f).first(16));
@@ -248,20 +455,60 @@ namespace graph::storage {
 				auto digest = hash.finalize();
 				check(std::ranges::equal(digest, c.b), "Invalid cp003 directory digest");
 				fence.backend_token = 0x6370303033ULL;
-				fence.format_token = 3;
+				fence.format_token = v4 ? 4 : 3;
 				Cursor dc{digest};
 				for (size_t i = 0; i < 4; ++i)
 					fence.graph_state_tokens[i] = dc.num();
 				Cursor r{d};
+				size_t dictionaryBytes = 0;
+				if (v4) {
+					auto mode = r.num();
+					check(mode <= 1, "Invalid snapshot layout");
+					columns = mode == 1;
+					dictionary.emplace();
+					for (auto &table: dictionary->names) {
+						auto count = r.num();
+						check(count <= r.b.size() / 8, "Invalid snapshot vocabulary");
+						dictionaryBytes += count * sizeof(std::string);
+						lease->set(size + dictionaryBytes);
+						table.reserve(count);
+						for (size_t i = 0; i < count; ++i) {
+							auto word = r.skipText();
+							check(!word.empty() && (table.empty() || table.back() < word),
+								  "Unordered snapshot vocabulary");
+							dictionaryBytes += word.size() + 1;
+							lease->set(size + dictionaryBytes);
+							table.emplace_back(word);
+						}
+					}
+					if (columns) {
+						const auto count = dictionary->names[0].size();
+						dictionaryBytes += count;
+						lease->set(size + dictionaryBytes);
+						auto flags = r.take(count);
+						dictionary->lanes.reserve(count);
+						for (auto raw: flags) {
+							auto mask = std::to_integer<uint8_t>(raw);
+							check(mask <= 3, "Invalid snapshot field layout");
+							dictionary->lanes.push_back(mask);
+						}
+					}
+					check(r.b.size() % entrySize == 0, "Invalid snapshot directory length");
+					entries = r.b.size() / entrySize;
+					lease->set(size + entries * sizeof(Block) + dictionaryBytes);
+				}
 				blocks.reserve(entries);
 				uint64_t next = headerSize;
 				while (!r.b.empty()) {
 					Block b{r.num(), r.num(), r.num(), r.num(), r.num(), {}};
 					std::ranges::copy(r.take(32), b.digest.begin());
-					check(b.kind <= 3 && b.first && b.last >= b.first && b.size >= 16 && b.size <= maxBlock &&
-								  b.off == next && b.size <= off - next,
+					check((b.kind <= 3 ||
+						   (columns && (b.kind - 4) / 2 < dictionary->names[0].size() &&
+							dictionary->separate(static_cast<uint32_t>((b.kind - 4) / 2), b.kind % 2))) &&
+								  b.first && b.last >= b.first && b.size >= (b.kind < 4 ? 16U : 9U) &&
+								  b.size <= maxBlock && b.off == next && b.size <= off - next,
 						  "Invalid cp003 segment");
-					if (!blocks.empty()) {
+					if (!v4 && !blocks.empty()) {
 						auto &prev = blocks.back();
 						check(b.kind > prev.kind || (b.kind == prev.kind && b.first > prev.last),
 							  "Unordered cp003 directory");
@@ -270,15 +517,51 @@ namespace graph::storage {
 					next += b.size;
 				}
 				check(next == off, "Unaccounted cp003 payload");
+				if (v4) {
+					std::ranges::sort(blocks, {}, [](const Block &b) { return std::pair{b.kind, b.first}; });
+					for (size_t i = 1; i < blocks.size(); ++i)
+						check(blocks[i - 1].kind != blocks[i].kind || blocks[i - 1].last < blocks[i].first,
+							  "Overlapping snapshot segments");
+				}
 				Bytes().swap(d);
-				lease->set(entries * sizeof(Block));
+				lease->set(entries * sizeof(Block) + dictionaryBytes);
+			}
+			static Span record(Cursor &c, uint64_t kind) {
+				if (kind < 4) {
+					auto n = c.num();
+					check(n <= c.b.size(), "Invalid snapshot row length");
+					return c.take(n);
+				}
+				size_t n = 0;
+				(void) CanonicalPropertyValueCodec::inspectNext(c.b, n);
+				return c.take(n);
 			}
 			std::shared_ptr<const Window> window(const Block &b) const {
 				std::lock_guard lock(cacheMutex);
-				auto &current = windows[b.kind];
+				auto *slot = &windows[b.kind < 4 ? b.kind : 0];
+				if (b.kind >= 4) {
+					auto hit = std::find_if(fields.begin(), fields.end(),
+											[&](const auto &w) { return w && w->offset == b.off; });
+					if (hit != fields.end()) {
+						auto keep = *hit;
+						std::rotate(fields.begin(), hit, hit + 1);
+						return keep;
+					}
+					std::rotate(fields.rbegin(), fields.rbegin() + 1, fields.rend());
+					slot = &fields.front();
+				}
+				auto &current = *slot;
 				if (current && current->offset == b.off)
 					return current;
 				current.reset();
+				if (dictionary && account->available() < b.size + (b.size / 8) * sizeof(uint32_t)) {
+					for (auto &saved: fields)
+						if (saved.use_count() == 1)
+							saved.reset();
+					for (auto &saved: windows)
+						if (saved.use_count() == 1)
+							saved.reset();
+				}
 				auto w = std::make_shared<Window>(account, b);
 				w->bytes = read(b.off, b.size);
 				check(Hash::digest(w->bytes) == b.digest, "Invalid cp003 segment digest");
@@ -288,10 +571,9 @@ namespace graph::storage {
 				size_t count = 0;
 				uint64_t last = 0;
 				while (!framing.b.empty()) {
-					auto id = framing.num(), length = framing.num();
-					check((count || id == b.first) && id > last && id <= b.last && length <= framing.b.size(),
-						  "Invalid cp003 row framing");
-					framing.take(length);
+					auto id = framing.num();
+					check((count || id == b.first) && id > last && id <= b.last, "Invalid cp003 row framing");
+					record(framing, b.kind);
 					last = id;
 					++count;
 				}
@@ -302,8 +584,7 @@ namespace graph::storage {
 				while (!framing.b.empty()) {
 					w->offsets.push_back(static_cast<uint32_t>(w->bytes.size() - framing.b.size()));
 					framing.num();
-					auto length = framing.num();
-					framing.take(length);
+					record(framing, b.kind);
 				}
 
 				current = w;
@@ -323,8 +604,8 @@ namespace graph::storage {
 											   [&](uint32_t off, uint64_t key) { return cursor(off).num() < key; });
 					for (; row != hold->offsets.end(); ++row) {
 						auto c = cursor(*row);
-						auto id = c.num(), length = c.num();
-						if (!visitor(id, Cursor{c.take(length)}))
+						auto id = c.num();
+						if (!visitor(id, Cursor{record(c, b.kind)}))
 							return false;
 					}
 				}
@@ -334,6 +615,21 @@ namespace graph::storage {
 		class Snapshot final : public LogicalGraphReadSnapshot {
 			std::shared_ptr<const Image> img;
 			using Admission = std::function<void(size_t)>;
+			PropertyValue field(bool edges, uint64_t id, uint32_t key, std::string_view spelling,
+								const Admission &admit) const {
+				std::optional<PropertyValue> value;
+				img->visit(4 + uint64_t(key) * 2 + unsigned(edges), id, [&](auto owner, Cursor c) {
+					check(owner == id, "Missing snapshot property cell");
+					if (admit)
+						admit(c.b.size() + spelling.size() + 8);
+					size_t end = 0;
+					value = CanonicalPropertyValueCodec::decodeNext(c.b, end);
+					check(end == c.b.size(), "Invalid snapshot property cell");
+					return false;
+				});
+				check(value.has_value(), "Missing snapshot property cell");
+				return std::move(*value);
+			}
 			std::vector<LogicalGraphPropertyEntry> readProperties(bool edges, uint64_t id,
 																  const Admission &admit = {}) const {
 				std::vector<LogicalGraphPropertyEntry> result;
@@ -342,7 +638,37 @@ namespace graph::storage {
 					if (key == id) {
 						if (admit)
 							admit(c.b.size());
-						result = properties(c);
+						if (!img->columns) {
+							if (img->dict() && admit) {
+								auto t = c;
+								auto n = t.num();
+								while (n--) {
+									admit(name(t, img->dict(), NameSpace::NS_PROPERTY).size() + 8);
+									size_t end = 0;
+									(void) CanonicalPropertyValueCodec::inspectNext(t.b, end);
+									t.take(end);
+								}
+							}
+							result = properties(c, img->dict());
+						} else {
+							auto count = c.num();
+							check(count <= c.b.size() / 4, "Invalid snapshot owner keys");
+							for (size_t i = 0; i < count; ++i) {
+								auto key = token(c);
+								auto spelling = img->dict()->lookup(NameSpace::NS_PROPERTY, key);
+								PropertyValue value;
+								if (img->dict()->separate(key, edges))
+									value = field(edges, id, key, spelling, admit);
+								else {
+									if (admit)
+										admit(spelling.size() + 8);
+									size_t end = 0;
+									value = CanonicalPropertyValueCodec::decodeNext(c.b, end);
+									c.take(end);
+								}
+								result.push_back({std::string(spelling), std::move(value)});
+							}
+						}
 						check(c.b.empty(), "Trailing cp003 property bytes");
 						found = true;
 					}
@@ -352,12 +678,12 @@ namespace graph::storage {
 				return result;
 			}
 			LogicalGraphNode node(uint64_t id, Cursor c) const {
-				auto n = nodeIdentity(id, c);
+				auto n = nodeIdentity(id, c, img->dict());
 				n.properties = readProperties(false, id);
 				return n;
 			}
 			LogicalGraphEdge edge(uint64_t id, Cursor c) const {
-				auto e = edgeIdentity(id, c);
+				auto e = edgeIdentity(id, c, img->dict());
 				e.properties = readProperties(true, id);
 				return e;
 			}
@@ -391,7 +717,7 @@ namespace graph::storage {
 				LogicalGraphNode n;
 				img->visit(0, id, [&](auto k, Cursor c) {
 					if (k == id)
-						n = nodeIdentity(k, c);
+						n = nodeIdentity(k, c, img->dict());
 					return false;
 				});
 				check(n.node_id, "Unknown cp003 node");
@@ -415,7 +741,7 @@ namespace graph::storage {
 				LogicalGraphEdge e;
 				img->visit(1, id, [&](auto k, Cursor c) {
 					if (k == id)
-						e = edgeIdentity(k, c);
+						e = edgeIdentity(k, c, img->dict());
 					return false;
 				});
 				check(e.edge_id, "Unknown cp003 edge");
@@ -430,7 +756,7 @@ namespace graph::storage {
 				check(maximum && f, "Invalid cp003 topology visit");
 				img->visit(1, 0, [&](auto k, Cursor c) {
 					check(maximum--, "cp003 edge bound exceeded");
-					auto e = edgeIdentity(k, c);
+					auto e = edgeIdentity(k, c, img->dict());
 					return f({k, e.source_node_id, e.target_node_id, e.type});
 				});
 			}
@@ -481,7 +807,7 @@ namespace graph::storage {
 					auto count = c.num();
 					std::vector<std::string> names;
 					while (count--)
-						names.push_back(c.text());
+						names.emplace_back(name(c, img->dict(), NameSpace::NS_LABEL));
 					return f({k, false, 0, 0, 0}, std::ranges::all_of(labels, [&](auto &l) {
 								 return std::ranges::find(names, l) != names.end();
 							 }));
@@ -514,8 +840,51 @@ namespace graph::storage {
 					++next;
 				}
 			}
-			Columns columns(bool edges, std::span<const uint64_t> ids, std::span<const std::string_view> keys,
-							const Admission &admit) const {
+			template<class Emit>
+			void selected(bool edges, std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+						  const Admission &admit, Emit &&emit) const {
+				check(bool(admit), "Missing property admission");
+				owners(2 + unsigned(edges), ids, [&](size_t row, Cursor c) {
+					auto n = c.num();
+					while (n--) {
+						uint32_t key = 0;
+						std::string_view spelling;
+						if (img->dict()) {
+							key = token(c);
+							spelling = img->dict()->lookup(NameSpace::NS_PROPERTY, key);
+						} else {
+							spelling = c.skipText();
+						}
+						const auto deliver = [&](Span encoded) {
+							for (size_t col = 0; col < keys.size(); ++col)
+								if (keys[col] == spelling) {
+									admit(encoded.size() + spelling.size() + 8);
+									emit(row, col, encoded);
+								}
+						};
+						if (img->columns && img->dict()->separate(key, edges)) {
+							if (std::ranges::find(keys, spelling) == keys.end())
+								continue;
+							bool found = false;
+							img->visit(4 + uint64_t(key) * 2 + unsigned(edges), ids[row],
+									   [&](auto owner, Cursor value) {
+										   check(owner == ids[row], "Missing snapshot property cell");
+										   deliver(value.b);
+										   found = true;
+										   return false;
+									   });
+							check(found, "Missing snapshot property cell");
+						} else {
+							size_t end = 0;
+							(void) CanonicalPropertyValueCodec::inspectNext(c.b, end);
+							deliver(c.take(end));
+						}
+					}
+					check(c.b.empty(), "Trailing snapshot property bytes");
+				});
+			}
+			Columns legacyColumns(bool edges, std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+								  const Admission &admit) const {
 				check(bool(admit), "Missing cp003 admission");
 				Columns result(keys.size());
 				for (auto &col: result)
@@ -541,6 +910,70 @@ namespace graph::storage {
 				});
 				return result;
 			}
+			Columns columns(bool edges, std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+							const Admission &admit) const {
+				if (!img->dict())
+					return legacyColumns(edges, ids, keys, admit);
+				Columns result(keys.size());
+				for (auto &col: result)
+					col.resize(ids.size());
+				selected(edges, ids, keys, admit, [&](size_t row, size_t col, Span value) {
+					size_t offset = 0;
+					result[col][row] = CanonicalPropertyValueCodec::decodeNext(value, offset);
+				});
+				return result;
+			}
+			bool supportsNodePropertyCellBatches() const override { return img->columns; }
+			bool hasImmutableReadIdentity() const noexcept override { return img->columns; }
+			void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+														  std::span<const std::string_view> keys,
+														  const PropertyCellSink &sink,
+														  const Admission &admit) const override {
+				check(bool(sink), "Missing snapshot property sink");
+				selected(false, ids, keys, admit, [&](size_t row, size_t col, Span value) {
+					size_t offset = 0;
+					sink(row, col, CanonicalPropertyValueCodec::decodeNext(value, offset));
+				});
+			}
+			void readNodePropertyCellsWithViewsSortedWithAdmission(std::span<const uint64_t> ids,
+																   std::span<const std::string_view> keys,
+																   const PropertyCellSink &values,
+																   const PropertyScalarReadSink &scalars,
+																   const PropertyTextReadSink &texts,
+																   const Admission &admit) const override {
+				check(values && scalars && texts, "Missing snapshot property sinks");
+				selected(false, ids, keys, admit, [&](size_t row, size_t col, Span value) {
+					if (auto p = CanonicalPropertyValueCodec::tryBorrowPrimitive(value)) {
+						if (p->type == PropertyType::STRING)
+							texts(row, col, p->text);
+						else
+							scalars(row, col, p->type, p->bits);
+					} else {
+						size_t offset = 0;
+						values(row, col, CanonicalPropertyValueCodec::decodeNext(value, offset));
+					}
+				});
+			}
+			bool tryReadNodePropertyColumnBatchesSortedWithAdmission(std::span<const uint64_t> ids,
+																	 std::span<const std::string_view> keys,
+																	 const PropertyCellSink &values,
+																	 const PropertyColumnBatchReadSinks &batches,
+																	 const Admission &admit) const override {
+				if (!img->columns)
+					return false;
+				check(batches.scalars && batches.texts, "Missing snapshot property runs");
+				// Borrowed text is consumed before the owning window is released.
+				readNodePropertyCellsWithViewsSortedWithAdmission(
+						ids, keys, values,
+						[&](size_t row, size_t col, PropertyType type, uint64_t bits) {
+							batches.scalars({&row, 1}, col, type, {&bits, 1});
+						},
+						[&](size_t row, size_t col, std::string_view text) {
+							batches.texts({&row, 1}, col, {&text, 1});
+						},
+						admit);
+				return true;
+			}
 			bool supportsPropertyReadAdmission() const override { return true; }
 			Columns readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> ids,
 															   std::span<const std::string_view> keys,
@@ -561,7 +994,13 @@ namespace graph::storage {
 				out.reserve(ids.size());
 				owners(false, ids, [&](size_t i, Cursor c) {
 					a(c.b.size());
-					auto n = nodeIdentity(ids[i], c);
+					if (img->dict()) {
+						auto t = c;
+						auto count = t.num();
+						while (count--)
+							a(name(t, img->dict(), NameSpace::NS_LABEL).size() + 8);
+					}
+					auto n = nodeIdentity(ids[i], c, img->dict());
 					if (!shape.include_labels)
 						n.labels.clear();
 					if (shape.all_properties || !shape.property_tokens.empty())
@@ -578,7 +1017,13 @@ namespace graph::storage {
 				out.reserve(ids.size());
 				owners(true, ids, [&](size_t i, Cursor c) {
 					a(c.b.size());
-					auto e = edgeIdentity(ids[i], c);
+					if (img->dict()) {
+						auto t = c;
+						t.num();
+						t.num();
+						a(name(t, img->dict(), NameSpace::NS_TYPE).size() + 8);
+					}
+					auto e = edgeIdentity(ids[i], c, img->dict());
 					if (!shape.include_type)
 						e.type.clear();
 					if (shape.all_properties || !shape.property_tokens.empty())

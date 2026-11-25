@@ -433,3 +433,86 @@ TEST_F(CheckpointReadTest, ExportsNativeVariablePropertiesAndReadsLabelsWithoutT
 	ASSERT_TRUE(changed);
 	checkSnapshot(true);
 }
+
+TEST_F(CheckpointReadTest, BothTokenizedLayoutsPreserveSparseStableIdentities) {
+	using namespace graph::storage;
+	graph::Database source(path.string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+	source.open();
+	auto pinned = std::dynamic_pointer_cast<LogicalGraphReadBackend>(source.getStorageBackend())
+						  ->openLogicalGraphReadSnapshot();
+	for (bool columns : {false, true}) {
+		auto dest = path;
+		dest += ".tokens";
+		struct Cleanup {
+			std::filesystem::path p;
+			~Cleanup() { std::error_code ec; std::filesystem::remove(p, ec); }
+		} cleanup{dest};
+		std::ofstream out(dest, std::ios::binary);
+		exportTokenizedSnapshot(*pinned, out, columns);
+		out.close();
+		ASSERT_TRUE(out);
+		graph::Database copy(dest.string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+		copy.open();
+		auto reader = std::dynamic_pointer_cast<LogicalGraphReadBackend>(copy.getStorageBackend())
+							  ->openLogicalGraphReadSnapshot();
+		for (uint64_t id : {5, 1})
+			EXPECT_EQ(reader->readNode(id), pinned->readNode(id));
+		for (uint64_t id : {8, 3, 9})
+			EXPECT_EQ(reader->readEdge(id), pinned->readEdge(id));
+		EXPECT_THROW(reader->readNode(3), std::runtime_error);
+	}
+}
+
+TEST_F(CheckpointReadTest, AuthenticatedColumnRunsPreserveBorrowedTextAndPresence) {
+	using namespace graph::storage;
+	auto dir = std::filesystem::path(path.string() + ".fields");
+	std::filesystem::create_directory(dir);
+	struct Cleanup {
+		std::filesystem::path p;
+		~Cleanup() { std::error_code ec; std::filesystem::remove_all(p, ec); }
+	} cleanup{dir};
+	std::string longText(4096, 'x');
+	longText[1] = '\0';
+	longText += "关系";
+	zyx::Database writer((dir / "source").string());
+	writer.open();
+	auto result = writer.execute("CREATE (:Shared {Shared:$text, small:42}), (:Shared {small:7})",
+								 {{"text", zyx::Value(longText)}});
+	ASSERT_TRUE(result.isSuccess()) << result.getError();
+	std::ofstream file(dir / "copy", std::ios::binary);
+	writer.exportSegmentedSnapshot(file, zyx::Database::SnapshotLayout::SL_TOKEN_COLUMN);
+	file.close();
+	ASSERT_TRUE(file);
+	graph::Database copy((dir / "copy").string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+	copy.open();
+	auto reader = std::dynamic_pointer_cast<LogicalGraphReadBackend>(copy.getStorageBackend())
+						  ->openLogicalGraphReadSnapshot();
+	std::array<uint64_t, 2> ids{1, 2};
+	std::array<std::string_view, 3> keys{"Shared", "small", "missing"};
+	std::vector<std::string> texts;
+	std::vector<uint64_t> numbers;
+	PropertyColumnBatchReadSinks runs;
+	runs.texts = [&](std::span<const size_t> rows, size_t key, std::span<const std::string_view> cells) {
+		EXPECT_EQ(key, 0U);
+		ASSERT_EQ(rows.size(), cells.size());
+		for (size_t i = 0; i < rows.size(); ++i) {
+			EXPECT_EQ(rows[i], 0U);
+			texts.emplace_back(cells[i]);
+		}
+	};
+	runs.scalars = [&](std::span<const size_t> rows, size_t key, graph::PropertyType type, std::span<const uint64_t> bits) {
+		EXPECT_EQ(key, 1U);
+		EXPECT_EQ(type, graph::PropertyType::INTEGER);
+		ASSERT_EQ(rows.size(), bits.size());
+		numbers.insert(numbers.end(), bits.begin(), bits.end());
+	};
+	auto noComplex = [](size_t, size_t, std::optional<graph::PropertyValue>) { ADD_FAILURE(); };
+	ASSERT_TRUE(reader->tryReadNodePropertyColumnBatchesSortedWithAdmission(ids, keys, noComplex, runs, [](size_t) {}));
+	EXPECT_EQ(texts, (std::vector<std::string>{longText}));
+	EXPECT_EQ(numbers, (std::vector<uint64_t>{42, 7}));
+	size_t attempts = 0;
+	EXPECT_THROW(reader->tryReadNodePropertyColumnBatchesSortedWithAdmission(ids, keys, noComplex, runs, [&](size_t) {
+		if (++attempts == 2) throw std::runtime_error("fixture budget");
+	}), std::runtime_error);
+	EXPECT_EQ(attempts, 2U);
+}

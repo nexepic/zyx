@@ -3,5 +3,6 @@
 #include <iosfwd>
 #include "graph/storage/LogicalGraphRead.hpp"
 namespace graph::storage {
+	void exportTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns);
 	void exportSegmentedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out);
 }

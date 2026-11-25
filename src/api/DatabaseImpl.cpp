@@ -1465,6 +1465,9 @@ namespace zyx {
 	bool Database::openIfExists() const { return impl_->db_.openIfExists(); }
 	void Database::close() const { impl_->db_.close(); }
 	void Database::exportSegmentedSnapshot(std::ostream &destination) const {
+		exportSegmentedSnapshot(destination, SnapshotLayout::SL_SEGMENTED_ROW);
+	}
+	void Database::exportSegmentedSnapshot(std::ostream &destination, SnapshotLayout layout) const {
 		if (!impl_->db_.isOpen())
 			throw std::logic_error("Snapshot export requires an open database");
 		auto backend =
@@ -1472,7 +1475,12 @@ namespace zyx {
 		if (!backend)
 			throw std::logic_error("Snapshot export requires a logical read backend");
 		auto snapshot = backend->openLogicalGraphReadSnapshot();
-		graph::storage::exportSegmentedSnapshot(*snapshot, destination);
+		switch (layout) {
+			case SnapshotLayout::SL_SEGMENTED_ROW: return graph::storage::exportSegmentedSnapshot(*snapshot, destination);
+			case SnapshotLayout::SL_TOKEN_ROW: return graph::storage::exportTokenizedSnapshot(*snapshot, destination, false);
+			case SnapshotLayout::SL_TOKEN_COLUMN: return graph::storage::exportTokenizedSnapshot(*snapshot, destination, true);
+		}
+		throw std::invalid_argument("Unknown snapshot property layout");
 	}
 	void Database::save() const { impl_->db_.flush(); }
 

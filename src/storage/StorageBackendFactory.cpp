@@ -77,7 +77,8 @@ namespace graph::storage {
 			return {openNativeWalBackend(database_path, open_mode == OpenMode::OPEN_READ_ONLY_EXISTING_FILE,
 										 cache_size),
 					nullptr};
-		if (std::string_view(signature.data(), signature.size()) == "ZYXcp003")
+		if (std::string_view(signature.data(), signature.size()) == "ZYXcp003" ||
+			std::string_view(signature.data(), signature.size()) == "ZYXcp004")
 			return {openSegmentedBackend(database_path, cache_size), nullptr};
 		throw std::runtime_error("Database refuses a " + std::string(StorageFormatProbe::describe(format.kind)) +
 								 " file because it is not a complete native relocatable database");
