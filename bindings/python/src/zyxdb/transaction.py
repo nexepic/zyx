@@ -28,6 +28,14 @@ class Transaction:
             raise RuntimeError("Cannot execute: transaction is not active")
         return Result(self._tx.execute(cypher, **params))
 
+    @property
+    def experimental_commit_token(self) -> str:
+        """Token an experimental WAL writer can retain before attempting commit."""
+        token = getattr(self._tx, "experimental_commit_token", None)
+        if token is None:
+            raise NotImplementedError("This backend does not supply commit tokens")
+        return token
+
     def commit(self) -> None:
         """Commit the transaction."""
         if not self._tx.is_active:

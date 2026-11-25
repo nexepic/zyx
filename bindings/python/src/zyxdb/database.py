@@ -29,8 +29,15 @@ class Database:
             db.execute("CREATE (n:Test {x: 1})")
     """
 
-    def __init__(self, path: str, *, open: bool = True) -> None:
-        self._db = _CoreDatabase(path)
+    def __init__(self, path: str, *, open: bool = True, backend: str = "native") -> None:
+        if backend == "native":
+            self._db = _CoreDatabase(path)
+        elif backend == "experimental-wal":
+            from zyxdb import _wal_plan
+            from zyx_development_wal.adapter import DatabaseAdapter
+            self._db = DatabaseAdapter(path, _wal_plan.compile)
+        else:
+            raise ValueError(f"Unknown database backend: {backend!r}")
         if open:
             self._db.open()
 
@@ -69,6 +76,13 @@ class Database:
     def has_active_transaction(self) -> bool:
         """Whether there is an active transaction."""
         return self._db.has_active_transaction
+
+    def experimental_transaction_outcome(self, token: str) -> int | None:
+        """Look up a finished experimental WAL transaction after an uncertain reply."""
+        lookup = getattr(self._db, "experimental_transaction_outcome", None)
+        if lookup is None:
+            raise NotImplementedError("This backend has no commit-token lookup")
+        return lookup(token)
 
     def set_thread_pool_size(self, size: int) -> None:
         """Resize the thread pool (0=auto, 1=single-thread, >1=N threads)."""

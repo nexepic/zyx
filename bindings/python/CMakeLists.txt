@@ -21,3 +21,11 @@ else()
 endif()
 
 install(TARGETS zyxdb_core LIBRARY DESTINATION zyxdb)
+
+option(ZYX_BUILD_EXPERIMENTAL_WAL_PLAN "Build the development WAL logical-plan adapter" OFF)
+if(ZYX_BUILD_EXPERIMENTAL_WAL_PLAN)
+    pybind11_add_module(_wal_plan MODULE src/zyxdb/_wal_plan.cpp)
+    target_include_directories(_wal_plan PRIVATE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(_wal_plan PRIVATE zyx::core)
+    install(TARGETS _wal_plan LIBRARY DESTINATION zyxdb)
+endif()
