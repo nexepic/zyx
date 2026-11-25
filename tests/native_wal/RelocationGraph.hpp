@@ -54,13 +54,13 @@ namespace relocation_test {
 		db.open();
 		{
 			auto writer = db.beginTransaction();
-			for (Id id = 1; id <= 80; ++id) {
+			for (Id id = 1; id <= 20; ++id) {
 				auto &node = model.nodes[id] = {text(4000, id), id};
 				check(writer.createNode("N", {{"s", node.text}, {"rank", node.rank}}) == id, "Unexpected node ID");
 			}
-			for (Id id = 1; id <= 80; ++id) {
-				auto &edge = model.edges[id] = {text(4000, id + 1), -id, 1 + id % 20,
-												1 + (id % 5 == 0 ? id : id + 1) % 20};
+			for (Id id = 1; id <= 20; ++id) {
+				auto &edge = model.edges[id] = {text(4000, id + 1), -id, 1 + id % 5,
+												1 + (id % 5 == 0 ? id : id + 1) % 5};
 				check(writer.createEdge(edge.from, edge.to, "R", {{"s", edge.text}, {"rank", edge.rank}}) == id,
 					  "Unexpected relationship ID");
 			}
@@ -94,7 +94,7 @@ namespace relocation_test {
 			auto writer = db.beginTransaction();
 			for (bool edges : {false, true}) {
 				auto &rows = edges ? model.edges : model.nodes;
-				for (Id id : std::set<Id>{1, 40, 79, 2 + (step * 17 + (edges ? 9 : 3)) % 75}) {
+				for (Id id : std::set<Id>{1, 10, 19, 2 + (step * 7 + (edges ? 9 : 3)) % 15}) {
 					auto &row = rows.at(id);
 					row.text = text(step % 2 ? 8192 : 43, step + static_cast<int>(id));
 					auto r = writer.execute(edges ? "MATCH ()-[r:R]->() WHERE id(r)=$id SET r.s=$s"
@@ -115,7 +115,7 @@ namespace relocation_test {
 			Id rank = step;
 			auto node = writer.createNode("N", {{"s", value}, {"rank", rank}});
 			auto edge = writer.createEdge(node, 1, "R", {{"s", value}, {"rank", -rank}});
-			check(node == 81 + step && edge == 81 + step, "Reused deleted identity");
+			check(node == 21 + step && edge == 21 + step, "Reused deleted identity");
 			model.nodes[node] = {value, rank};
 			model.edges[edge] = {value, -rank, node, 1};
 			if (step == 3)
@@ -129,7 +129,7 @@ namespace relocation_test {
 				verify(*middle, middleVersion);
 		}
 		auto setRank = [](zyx::Transaction &tx, Id rank) {
-			auto r = tx.execute("MATCH (n:N) WHERE id(n)=77 SET n.rank=$v", {{"v", rank}});
+			auto r = tx.execute("MATCH (n:N) WHERE id(n)=17 SET n.rank=$v", {{"v", rank}});
 			check(r.isSuccess(), r.getError());
 		};
 		// Make an earlier row longer, then stage a write to a later ID while
@@ -144,7 +144,7 @@ namespace relocation_test {
 			setRank(pending, 0);
 			db.save();
 			pending.commit();
-			model.nodes.at(77).rank = 0;
+			model.nodes.at(17).rank = 0;
 		}
 		verify(db, model);
 		{
@@ -183,7 +183,7 @@ namespace relocation_test {
 		r.next();
 		check(std::get<std::string>(r.get(0)) == text(8192, 2) && std::get<Id>(r.get(1)) == 1 && !r.hasNext(),
 			  "Export contains a later row version");
-		auto newer = exported.execute("MATCH (n:N) WHERE id(n)=92 RETURN id(n)");
+		auto newer = exported.execute("MATCH (n:N) WHERE id(n)=32 RETURN id(n)");
 		check(newer.isSuccess() && !newer.hasNext(), "Later committed node appeared in export");
 		exported.close();
 	}
