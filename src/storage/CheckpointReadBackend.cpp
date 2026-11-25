@@ -181,7 +181,7 @@ namespace graph::storage {
 					require(in.get() == 0, "Invalid cp002 padding");
 				require(in.peek() == std::char_traits<char>::eof() && !in.bad(), "cp002 extent changed");
 				bool nodeOrder = true, outOrder = true, inOrder = true;
-				dense = true;
+				uint64_t minId = UINT64_MAX, maxId = 0;
 				Record last{};
 				for (uint32_t i = 0; i < count; ++i) {
 					const Record r = record(i);
@@ -189,15 +189,14 @@ namespace graph::storage {
 					if (r[0] == 1) {
 						const auto id = word(r.data() + 12);
 						require(id && id <= INT64_MAX && id <= word(h.data() + 32), "Invalid cp002 node ID");
-						if (!nodes.count)
-							firstId = id;
-						else {
+						if (nodes.count) {
 							require(std::bit_cast<int64_t>(word(last.data() + 4)) <
 											std::bit_cast<int64_t>(word(r.data() + 4)),
 									"Invalid cp002 key order");
 							nodeOrder &= word(last.data() + 12) < id;
 						}
-						dense &= id == firstId + nodes.count;
+						minId = std::min(minId, id);
+						maxId = std::max(maxId, id);
 						if (r[1])
 							(void) cell(r[1], word(r.data() + 20));
 						if (r[2])
@@ -224,26 +223,35 @@ namespace graph::storage {
 					require(admitted <= budget, "cp002 snapshot exceeds storage cache budget");
 					reservation->set(admitted);
 				};
+				firstId = nodes.count ? minId : 0;
+				dense = nodes.count && maxId - minId == nodes.count - 1U;
 				if (!nodeOrder) {
 					admitOrder(nodes);
-					nodes.sortBy([&](auto i) { return nid(i); });
-					for (uint32_t i = 1; i < nodes.count; ++i)
-						require(nid(nodes.permutation[i - 1]) != nid(nodes.permutation[i]), "Duplicate cp002 node ID");
+					if (dense) {
+						// The candidate interval is exact only after uniqueness is established.
+						nodes.permutation.resize(nodes.count, UINT32_MAX);
+						for (uint32_t i = 0; i < nodes.count; ++i) {
+							auto &slot = nodes.permutation[nid(i) - firstId];
+							require(slot == UINT32_MAX, "Duplicate cp002 node ID");
+							slot = i;
+						}
+					} else {
+						nodes.sortBy([&](auto i) { return nid(i); });
+						for (uint32_t i = 1; i < nodes.count; ++i)
+							require(nid(nodes.permutation[i - 1]) != nid(nodes.permutation[i]),
+									"Duplicate cp002 node ID");
+					}
 				}
-				for (auto i: edges) {
-					auto r = record(i);
-					require(hasNode(word(r.data() + 12)) && hasNode(word(r.data() + 20)),
-							"Invalid cp002 edge endpoint");
-				}
+				for (auto i: edges)
+					require(hasNode(field(i, 12)) && hasNode(field(i, 20)), "Invalid cp002 edge endpoint");
 				auto direction = [&](Order &order, bool sorted, size_t off) {
 					order.first = edges.first;
 					order.count = edges.count;
 					if (!sorted) {
 						admitOrder(order);
-						order.sortBy([&](auto i) {
-							auto r = record(i);
-							return std::pair(word(r.data() + off), word(r.data() + 4));
-						});
+						// Edge IDs are strictly increasing in physical order. The ordinal
+						// therefore breaks endpoint ties without reading another lane.
+						order.sortBy([&](auto i) { return std::pair(field(i, off), i); });
 					}
 				};
 				direction(outgoing, outOrder, 12);

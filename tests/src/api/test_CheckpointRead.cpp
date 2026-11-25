@@ -267,6 +267,19 @@ namespace {
 		EXPECT_NO_THROW(snap->visitAdjacentEdges(5, LogicalGraphReadDirection::LGRD_OUTGOING, 1,
 												 [](const auto &) { return false; }));
 	}
+	TEST_F(CheckpointReadTest, DenseExtentWithAnInteriorDuplicateIsNotADirectory) {
+		put(bytes, 48, 4 * 40);
+		// Four rows spanning [2,5], but duplicated 3 leaves a hole at 4.
+		record(bytes, 0, 1, 0, -2, 5, 0);
+		record(bytes, 1, 1, 0, -1, 3, 0);
+		record(bytes, 2, 1, 0, 0, 2, 0);
+		record(bytes, 3, 1, 0, 1, 3, 0);
+		std::fill(bytes.begin() + 88 + 160, bytes.end(), 0);
+		seal(bytes, 4);
+		save();
+		EXPECT_EQ(zyx_driver_db_open(path.string().c_str(), &db, &err), ZYX_DRIVER_OPEN_FAILED);
+		EXPECT_NE(std::string(message()).find("Duplicate"), std::string::npos);
+	}
 	TEST_F(CheckpointReadTest, DeniesWriteTransaction) {
 		ASSERT_EQ(zyx_driver_db_open(path.string().c_str(), &db, &err), ZYX_DRIVER_OK);
 		EXPECT_NE(zyx_driver_txn_begin(db, &tx, &err), ZYX_DRIVER_OK);
