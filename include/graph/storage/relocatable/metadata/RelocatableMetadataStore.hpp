@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp"
+#include "graph/storage/relocatable/entity/ScanNodeChange.hpp"
+
 #include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
 #include <array>
 #include <atomic>
@@ -46,7 +49,6 @@
 #include "graph/storage/relocatable/vector/VectorManifestPage.hpp"
 
 namespace graph::storage {
-    namespace scan_candidate_detail { struct ScanNodeChange; }
     class PreparedScanMembershipMutation;
 
     class NativeGraphDeferredIndexImages;
@@ -1126,7 +1128,6 @@ namespace graph::storage {
         std::span<const EntityPropertyKey> owner_deletions;
         std::span<const EntityPropertyKey> pending_owner_additions;
     };
-    struct NativeVectorMutation;
     // Only the native transaction can bind its sealed semantic plan to this
     // exact compound publication. No caller-supplied callback grants authority.
     class NativeHybridVectorPublication final {

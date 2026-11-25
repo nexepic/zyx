@@ -3,14 +3,9 @@
 #include "graph/storage/relocatable/entity/ScanMembershipSource.hpp"
 #include "graph/storage/relocatable/entity/ScanMembershipDirectory.hpp"
 #include <bit>
+#include "graph/storage/relocatable/entity/ScanNodeChange.hpp"
 
 namespace graph::storage::scan_candidate_detail {
-    enum class ScanNodeChangeKind : uint8_t { SNCK_CREATE = 1, SNCK_DELETE, SNCK_RELABEL };
-    struct ScanNodeChange {
-        uint64_t id = 0;
-        ScanNodeChangeKind kind = ScanNodeChangeKind::SNCK_CREATE;
-        std::span<const uint64_t> labels;
-    };
     // Raw bounded preparation, not a publication capability. The sealed graph
     // coordinator must bind these changes to its actual Entity/LabelSet images
     // and publish the resulting membership in that same metadata batch.

@@ -103,7 +103,7 @@ public:
     OwnedFunction() noexcept = default;
     OwnedFunction(std::nullptr_t) noexcept {}
     template<class F> requires (!std::is_same_v<std::remove_cvref_t<F>, OwnedFunction> &&
-        std::is_copy_constructible_v<std::decay_t<F>> && std::is_invocable_r_v<R, std::decay_t<F> &, A...>)
+        std::is_invocable_r_v<R, std::decay_t<F> &, A...> && std::is_copy_constructible_v<std::decay_t<F>>)
     OwnedFunction(F &&function) {
         using Target = std::decay_t<F>;
         if constexpr (std::is_pointer_v<Target> || std::is_member_pointer_v<Target> || detail::IsStandardFunction<Target>::value)
@@ -134,7 +134,7 @@ public:
     }
     OwnedFunction &operator=(std::nullptr_t) noexcept { clear(); return *this; }
     template<class F> requires (!std::is_same_v<std::remove_cvref_t<F>, OwnedFunction> &&
-        std::is_copy_constructible_v<std::decay_t<F>> && std::is_invocable_r_v<R, std::decay_t<F> &, A...>)
+        std::is_invocable_r_v<R, std::decay_t<F> &, A...> && std::is_copy_constructible_v<std::decay_t<F>>)
     OwnedFunction &operator=(F &&function) {
         OwnedFunction next(std::forward<F>(function)); swap(next); return *this;
     }
