@@ -1,7 +1,7 @@
 #pragma once
 #include <cstring>
 #include <set>
-#include "VersionedRows.hpp"
+#include "IndexedColumn.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/utils/Sha256.hpp"
@@ -17,6 +17,36 @@ namespace graph::storage::nativewal {
 	}
 	struct State {
 		Identity identity{};
+		std::shared_ptr<const ColumnDeclaration> declaration;
+		std::shared_ptr<const IndexedColumn> column;
+		std::shared_ptr<const ColumnChanges> changedColumn;
+		bool columnOverflow = false;
+		template<class Range>
+		void recordColumnChanges(const Range &ids) {
+			if (!declaration || ids.empty() || columnOverflow)
+				return;
+			if (ids.size() <= ColumnChanges::limit) {
+				auto next = std::make_shared<ColumnChanges>(budget);
+				if (changedColumn)
+					next->ids = changedColumn->ids;
+				for (auto id: ids) {
+					auto p = std::ranges::lower_bound(next->ids, id);
+					if (p != next->ids.end() && *p == id)
+						continue;
+					if (next->ids.size() == ColumnChanges::limit) {
+						columnOverflow = true;
+						break;
+					}
+					next->ids.insert(p, id);
+				}
+				if (!columnOverflow) {
+					changedColumn = std::move(next);
+					return;
+				}
+			}
+			columnOverflow = true;
+			changedColumn.reset();
+		}
 		uint64_t sequence = 0, nodeHigh = 0, edgeHigh = 0;
 		std::shared_ptr<VersionBudget> budget;
 		VersionedRows<LogicalGraphNode> nodes;

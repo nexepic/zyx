@@ -19,7 +19,7 @@ namespace graph::storage::nativewal {
 	public:
 		Journal(const std::string &, bool, size_t memory);
 		~Journal();
-		static std::string create(const std::string &);
+		static std::string create(const std::string &, std::shared_ptr<const ColumnDeclaration> = {});
 		std::shared_ptr<const State> snapshot();
 		void commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next, const Changes &);
 		void checkpoint();

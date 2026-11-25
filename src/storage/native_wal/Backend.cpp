@@ -1,21 +1,105 @@
 #include "Backend.hpp"
 #include "Journal.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/NativeWalDatabase.hpp"
+#include "graph/storage/SnapshotNodeIndex.hpp"
 #include "query/execution/ProcessResourceDomains.hpp"
 namespace graph::storage::nativewal {
 	namespace resource = query::execution::detail;
-	class Snapshot final : public LogicalGraphReadSnapshot {
+	class Snapshot final : public LogicalGraphReadSnapshot, public SnapshotNodeIndexSource {
 	public:
 		std::shared_ptr<const State> data;
 		explicit Snapshot(std::shared_ptr<const State> value) : data(std::move(value)) {}
 		std::optional<LogicalGraphMutationFence> mutationFence() const override {
 			LogicalGraphMutationFence f;
 			f.backend_token = 0x6e673031;
-			f.format_token = 3;
+			f.format_token = data->declaration ? 4 : 3;
 			std::memcpy(f.graph_state_tokens.data(), data->identity.data(), 16);
 			f.graph_state_tokens[2] = data->sequence;
 			return f;
 		}
+		std::optional<SnapshotNodeIndex> singleNodePropertyIndex() const override {
+			if (!data->declaration)
+				return std::nullopt;
+			return SnapshotNodeIndex{1, 1, data->declaration->label, data->declaration->key};
+		}
+		std::optional<uint64_t> nativeSnapshotGeneration() const override {
+			if (!data->declaration || data->sequence == UINT64_MAX)
+				return std::nullopt;
+			return data->sequence + 1;
+		}
+		bool supportsNativeExactNodeCandidates() const override {
+			return nativeSnapshotGeneration().has_value() && data->column && data->column->complete &&
+				   !data->columnOverflow;
+		}
+		bool supportsNativeRangeNodeCandidates() const override { return supportsNativeExactNodeCandidates(); }
+		std::optional<bool>
+		visitNodeCandidatesByPropertyRange(const std::vector<std::string> &labels, const LogicalGraphPropertyRange &r,
+										   size_t nodes, size_t fields, size_t bytes,
+										   const IndexCandidateBatchVisitor &visitor) const override {
+			if (!supportsNativeExactNodeCandidates() || !fields || labels.size() != 1 ||
+				labels.front() != data->declaration->label || r.key != data->declaration->key)
+				return std::nullopt;
+			const auto *lo = std::get_if<int64_t>(&r.min_value.getVariant());
+			const auto *hi = std::get_if<int64_t>(&r.max_value.getVariant());
+			if ((!lo && !hi) || (lo ? !exactColumnInteger(*lo) : r.min_value.getType() != PropertyType::NULL_TYPE) ||
+				(hi ? !exactColumnInteger(*hi) : r.max_value.getType() != PropertyType::NULL_TYPE))
+				return std::nullopt;
+			const auto &base = data->column->postings;
+			auto bound = [&](int64_t v, bool after) {
+				return after ? std::ranges::upper_bound(base, Posting{v, UINT64_MAX})
+							 : std::ranges::lower_bound(base, Posting{v, 0});
+			};
+			auto first = lo ? bound(*lo, !r.min_inclusive) : base.begin();
+			auto last = hi ? bound(*hi, r.max_inclusive) : base.end();
+			auto cap = std::min({size_t(64), nodes, bytes / sizeof(EntityRef)});
+			if (last - first > static_cast<ptrdiff_t>(cap))
+				return std::nullopt;
+			IndexCandidateBatch batch;
+			batch.snapshot_generation = *nativeSnapshotGeneration();
+			const auto &changes = data->changedColumn;
+			for (auto it = first; it < last; ++it)
+				if (!changes || !std::ranges::binary_search(changes->ids, it->second))
+					batch.candidates.push_back(EntityRef{it->second});
+			if (changes)
+				for (auto id: changes->ids) {
+					auto it = data->nodes.find(id);
+					if (it == data->nodes.end())
+						continue;
+					const auto &row = it->second;
+					if (std::ranges::find(row.labels, labels.front()) == row.labels.end())
+						continue;
+					for (const auto &p: row.properties) {
+						if (p.key != r.key || p.value.getType() == PropertyType::NULL_TYPE)
+							continue;
+						auto v = std::get_if<int64_t>(&p.value.getVariant());
+						if (!v || !exactColumnInteger(*v))
+							return std::nullopt;
+						if ((!lo || *v > *lo || (*v == *lo && r.min_inclusive)) &&
+							(!hi || *v < *hi || (*v == *hi && r.max_inclusive))) {
+							if (batch.candidates.size() >= cap)
+								return std::nullopt;
+							batch.candidates.push_back(EntityRef{id});
+						}
+					}
+				}
+			std::ranges::sort(batch.candidates, {}, &EntityRef::entity_id);
+			debug::PerfTrace::addValue("native_wal.index.probes", 1);
+			debug::PerfTrace::addValue("native_wal.index.candidates", batch.candidates.size());
+			return visitor(batch);
+		}
+		std::optional<bool>
+		visitNodeCandidatesByExactProperties(const std::vector<std::string> &labels,
+											 const std::vector<std::pair<std::string, PropertyValue>> &properties,
+											 size_t nodes, size_t fields, size_t bytes,
+											 const IndexCandidateBatchVisitor &visitor) const override {
+			if (properties.size() != 1 || properties[0].second.getType() != PropertyType::INTEGER)
+				return std::nullopt;
+			return visitNodeCandidatesByPropertyRange(
+					labels, {properties[0].first, properties[0].second, properties[0].second, true, true}, nodes,
+					fields, bytes, visitor);
+		}
+
 		bool supportsNodeExistenceProbes() const override { return true; }
 		bool containsNode(uint64_t id) const override { return data->nodes.contains(id); }
 		LogicalGraphNode readNode(uint64_t id) const override { return data->nodes.at(id); }
@@ -169,6 +253,28 @@ namespace graph::storage::nativewal {
 		Columns readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> ids,
 														   std::span<const std::string_view> keys,
 														   const Admission &a) const override {
+			if (keys.size() == 1 && data->column && !data->columnOverflow && keys.front() == data->declaration->key) {
+				Columns result(1);
+				auto &out = result.front();
+				out.reserve(ids.size());
+				uint64_t previous = 0;
+				for (auto id: ids) {
+					require(id > previous, "Invalid native graph owner order");
+					previous = id;
+					const auto &lane = data->column->column;
+					auto it = std::ranges::lower_bound(lane, id, {}, &std::pair<uint64_t, int64_t>::first);
+					if (it != lane.end() && it->first == id &&
+						(!data->changedColumn || !std::ranges::binary_search(data->changedColumn->ids, id))) {
+						PropertyValue v(it->second);
+						a(CanonicalPropertyValueCodec::encodedSize(v) + keys.front().size() + 8);
+						out.push_back(std::move(v));
+					} else {
+						auto one = columns(data->nodes, std::span(&id, 1), keys, a);
+						out.push_back(std::move(one.front().front()));
+					}
+				}
+				return result;
+			}
 			return columns(data->nodes, ids, keys, a);
 		}
 		Columns readEdgePropertyColumnsSortedWithAdmission(std::span<const uint64_t> ids,
@@ -312,4 +418,11 @@ namespace graph::storage {
 		return std::make_shared<nativewal::Backend>(path, readOnly, memory);
 	}
 	std::string createNativeWalDatabase(const std::string &directory) { return nativewal::Journal::create(directory); }
+	std::string createIndexedNativeWalDatabase(const std::string &directory, const std::string &label,
+											   const std::string &key) {
+		nativewal::require(!label.empty() && label.size() <= 256 && !key.empty() && key.size() <= 256,
+						   "Invalid native index declaration");
+		return nativewal::Journal::create(
+				directory, std::make_shared<nativewal::ColumnDeclaration>(nativewal::ColumnDeclaration{label, key}));
+	}
 } // namespace graph::storage

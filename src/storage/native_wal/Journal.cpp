@@ -13,7 +13,9 @@ namespace graph::storage::nativewal {
 		[[noreturn]] void fail(const char *action) { throw std::system_error(errno, std::generic_category(), action); }
 		void readExact(int fd, uint64_t offset, std::span<std::byte> target);
 		struct File : BaseInput {
-			void read(uint64_t, size_t offset, std::span<std::byte> bytes) const override { readExact(fd, offset, bytes); }
+			void read(uint64_t, size_t offset, std::span<std::byte> bytes) const override {
+				readExact(fd, offset, bytes);
+			}
 			int fd;
 			explicit File(int f) : fd(f) {
 				if (fd < 0)
@@ -32,9 +34,7 @@ namespace graph::storage::nativewal {
 		struct LocatorRun {
 			uint64_t firstId = 0;
 			size_t original = 0, published = 0;
-			bool startsRun(size_t from, size_t to) const {
-				return from - original != to - published;
-			}
+			bool startsRun(size_t from, size_t to) const { return from - original != to - published; }
 		};
 		class LocatedInput final : public BaseInput {
 			VersionCharge charge;
@@ -217,7 +217,7 @@ namespace graph::storage::nativewal {
 		Digest digest(Span b) { return utils::Sha256::digest(b); }
 		Bytes manifest(const State &s, uint64_t baseSequence, Span base, size_t length, const Digest &hash) {
 			Encoder w(maxState + 256);
-			w.magic("ZYXng003");
+			w.magic(s.declaration ? "ZYXng004" : "ZYXng003");
 			w.raw(s.identity);
 			w.num(baseSequence);
 			w.num(s.sequence);
@@ -291,8 +291,7 @@ namespace graph::storage::nativewal {
 			if (fstatat(directory.fd, main.c_str(), &named, AT_SYMLINK_NOFOLLOW) < 0)
 				fail("stat native graph main authority");
 			auto held = metadata(authority->fd);
-			require(held.st_dev == named.st_dev && held.st_ino == named.st_ino,
-					"Native graph base authority changed");
+			require(held.st_dev == named.st_dev && held.st_ino == named.st_ino, "Native graph base authority changed");
 		}
 		std::pair<std::shared_ptr<File>, size_t> lockMain(bool ro) {
 			auto opened = openInput(main);
@@ -442,7 +441,7 @@ namespace graph::storage::nativewal {
 						buffer.raw(b);
 				};
 				Encoder head(112);
-				head.magic("ZYXng003");
+				head.magic(s.declaration ? "ZYXng004" : "ZYXng003");
 				head.raw(s.identity);
 				head.num(s.sequence);
 				head.num(s.sequence);
@@ -456,6 +455,15 @@ namespace graph::storage::nativewal {
 				Encoder encoded(maxState);
 				VersionCharge rowBuffer(s.budget, 0);
 				nodeStart = head.bytes.size();
+				std::shared_ptr<IndexedColumn> projection;
+				if (s.declaration) {
+					Encoder names(528);
+					names.text(s.declaration->label);
+					names.text(s.declaration->key);
+					put(names.bytes);
+					nodeStart += names.bytes.size();
+					projection = std::make_shared<IndexedColumn>(s.budget);
+				}
 				size_t offset = nodeStart;
 				auto rows = [&](const auto &table, CheckpointLocations &layout) {
 					table.visitAfter(0, [&](auto it) {
@@ -480,6 +488,13 @@ namespace graph::storage::nativewal {
 						} else {
 							encodeBaseRow(encoded, it->second);
 						}
+						if constexpr (std::is_same_v<typename std::decay_t<decltype(table)>::mapped_type,
+													 LogicalGraphNode>) {
+							if (projection) {
+								VersionCharge decode(s.budget, 3 * size + 4096);
+								projection->observe(*s.declaration, baseNode(id, encoded.bytes));
+							}
+						}
 						offset += size + 16;
 						require(encoded.bytes.size() == size, "Native checkpoint size accounting mismatch");
 						std::array<std::byte, 16> h{};
@@ -496,6 +511,24 @@ namespace graph::storage::nativewal {
 				rows(s.nodes, nodes);
 				edgeStart = offset;
 				rows(s.edges, edges);
+				if (projection) {
+					std::ranges::sort(projection->postings);
+					Encoder field(16);
+					auto pair = [&](uint64_t a, uint64_t b) {
+						field.bytes.clear();
+						field.num(a);
+						field.num(b);
+						put(field.bytes);
+					};
+					pair(projection->column.size(), projection->complete);
+					for (auto [id, v]: projection->column)
+						pair(id, std::bit_cast<uint64_t>(v));
+					for (auto [v, id]: projection->postings)
+						pair(std::bit_cast<uint64_t>(v), id);
+					s.column = std::move(projection);
+					s.changedColumn.reset();
+					s.columnOverflow = false;
+				}
 				flush();
 				writeComplete(fd, hash.finalize());
 				written = metadata(fd);
@@ -531,7 +564,7 @@ namespace graph::storage::nativewal {
 			}
 		}
 	};
-	std::string Journal::create(const std::string &name) {
+	std::string Journal::create(const std::string &name, std::shared_ptr<const ColumnDeclaration> declaration) {
 		std::filesystem::path target(name);
 		require(!target.filename().empty() && target.filename() != "." && target.filename() != "..",
 				"Invalid native graph directory");
@@ -544,6 +577,7 @@ namespace graph::storage::nativewal {
 		Files files(path);
 		State s;
 		s.identity = identity();
+		s.declaration = std::move(declaration);
 		files.installBase(s);
 		return path.string();
 	}
@@ -556,7 +590,8 @@ namespace graph::storage::nativewal {
 		Cursor m(main->fd, extent, s->budget, memory);
 		auto head = m.fixed<80>();
 		Decoder r{head};
-		r.magic("ZYXng003");
+		bool indexed = std::memcmp(head.data(), "ZYXng004", 8) == 0;
+		r.magic(indexed ? "ZYXng004" : "ZYXng003");
 		std::ranges::copy(r.take(16), s->identity.begin());
 		baseSequence = r.num();
 		auto sequence = r.num();
@@ -576,6 +611,18 @@ namespace graph::storage::nativewal {
 			s->edgeHigh = c.num();
 			require(s->nodeHigh <= INT64_MAX && s->edgeHigh <= INT64_MAX, "Invalid native base ID high-water mark");
 			auto nodes = c.count(c.remaining() / 16), edges = c.count(c.remaining() / 16);
+			std::shared_ptr<IndexedColumn> projection;
+			if (indexed) {
+				auto name = [&] {
+					auto n = c.count(256);
+					require(n > 0, "Empty native index name");
+					std::string value(n, char{});
+					c.consume(std::as_writable_bytes(std::span(value)));
+					return value;
+				};
+				s->declaration = std::make_shared<ColumnDeclaration>(ColumnDeclaration{name(), name()});
+				projection = std::make_shared<IndexedColumn>(s->budget);
+			}
 			const bool lazy = c.remaining() > std::min(size_t(256 * 1024), memory / 2);
 			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode) {
 				uint64_t prior = 0;
@@ -589,6 +636,9 @@ namespace graph::storage::nativewal {
 					Bytes b(size);
 					c.consume(b);
 					auto row = decode(id, b);
+					if constexpr (std::is_same_v<decltype(row), LogicalGraphNode>)
+						if (projection)
+							projection->observe(*s->declaration, row);
 					if constexpr (std::is_same_v<decltype(row), LogicalGraphEdge>)
 						require(s->nodes.contains(row.source_node_id) && s->nodes.contains(row.target_node_id),
 								"Native WAL dangling relationship");
@@ -600,6 +650,16 @@ namespace graph::storage::nativewal {
 			};
 			rows(nodes, s->nodeHigh, s->nodes, baseNode);
 			rows(edges, s->edgeHigh, s->edges, baseEdge);
+			if (projection) {
+				std::ranges::sort(projection->postings);
+				require(c.num() == projection->column.size() && c.num() == projection->complete,
+						"Invalid native projection coverage");
+				for (auto [id, v]: projection->column)
+					require(c.num() == id && c.num() == std::bit_cast<uint64_t>(v), "Native projection mismatch");
+				for (auto [v, id]: projection->postings)
+					require(c.num() == std::bit_cast<uint64_t>(v) && c.num() == id, "Native posting mismatch");
+				s->column = std::move(projection);
+			}
 			baseDigest = finish(c);
 		};
 		if (!needed) {
@@ -627,7 +687,7 @@ namespace graph::storage::nativewal {
 			Cursor a(anchor.first->fd, anchor.second, s->budget, memory);
 			auto ah = a.fixed<80>();
 			Decoder ar{ah};
-			ar.magic("ZYXng003");
+			ar.magic(indexed ? "ZYXng004" : "ZYXng003");
 			require(std::ranges::equal(ar.take(16), s->identity) && ar.num() == baseSequence &&
 							ar.num() == baseSequence && ar.num() == 0 && std::ranges::equal(ar.take(32), digest({})),
 					"Native graph base generation mismatch");
@@ -702,8 +762,8 @@ namespace graph::storage::nativewal {
 		// A checkpoint may replace the physical root at the same revision.
 		// The budget is owned by exactly one open journal and shared by every
 		// derived root; matching a copied file's identity alone is insufficient.
-		if (current != expected && (!expected || current->budget != expected->budget ||
-									current->sequence != expected->sequence))
+		if (current != expected &&
+			(!expected || current->budget != expected->budget || current->sequence != expected->sequence))
 			throw LogicalGraphMutationConflict("Stale native graph write snapshot");
 		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
 		next->sequence = current->sequence + 1;
@@ -719,6 +779,11 @@ namespace graph::storage::nativewal {
 				next->nodes.inheritInput(current->nodes);
 				next->edges.inheritInput(current->edges);
 			}
+			// The checkpoint may have replaced the base underlying the writer.
+			next->column = current->column;
+			next->changedColumn = current->changedColumn;
+			next->columnOverflow = current->columnOverflow;
+			next->recordColumnChanges(changed.nodes);
 			Encoder bytes(maxWal);
 			if (walLength == 0) {
 				bytes.magic("ZYXnw003");
@@ -765,7 +830,7 @@ namespace graph::storage::nativewal {
 			throw std::runtime_error("Experimental native WAL requires Linux local file operations");
 		}
 	} // namespace
-	std::string Journal::create(const std::string &) { unavailable(); }
+	std::string Journal::create(const std::string &, std::shared_ptr<const ColumnDeclaration>) { unavailable(); }
 	Journal::Journal(const std::string &, bool, size_t) { unavailable(); }
 	Journal::~Journal() = default;
 	std::shared_ptr<const State> Journal::snapshot() { unavailable(); }

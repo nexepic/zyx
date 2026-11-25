@@ -281,6 +281,7 @@ namespace graph::storage::nativewal {
 		require(nh >= s.nodeHigh && eh >= s.edgeHigh && nh <= INT64_MAX && eh <= INT64_MAX,
 				"Invalid native WAL identity high-water mark");
 		bool removedNode = false;
+		std::vector<uint64_t> changedColumnIds;
 		auto rows = [&](auto &map, uint64_t old, uint64_t high, auto decode) {
 			auto count = r.count(2 * maxRows);
 			uint64_t previous = 0;
@@ -289,6 +290,9 @@ namespace graph::storage::nativewal {
 				require(id > previous && id <= high && (id > old || map.contains(id)),
 						"Invalid or resurrected native WAL id");
 				previous = id;
+				if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
+					if (s.declaration && !s.columnOverflow && changedColumnIds.size() <= ColumnChanges::limit)
+						changedColumnIds.push_back(id);
 				if (r.count(1))
 					map.insert_or_assign(id, decode(id));
 				else {
@@ -306,6 +310,7 @@ namespace graph::storage::nativewal {
 			return edge;
 		});
 		require(r.bytes.empty(), "Trailing native WAL delta");
+		s.recordColumnChanges(changedColumnIds);
 		s.nodeHigh = nh;
 		s.edgeHigh = eh;
 		if (removedNode)
