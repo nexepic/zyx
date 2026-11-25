@@ -1,7 +1,25 @@
+// A graph key must stay distinct even when it is outside JavaScript's safe integer range.
+// d3 accepts numeric and string keys. Small identities retain their original numeric type.
+export type GraphId = number | string;
+
+export function graphId(value: number | bigint): GraphId {
+  return typeof value === 'bigint' ? value.toString() : value;
+}
+
+export function displayJson(value: unknown): string {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return '[' + value.map(displayJson).join(',') + ']';
+  if (value !== null && typeof value === 'object') {
+    return '{' + Object.entries(value).map(([key, item]) => JSON.stringify(key) + ':' + displayJson(item)).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
 export type DriverValue =
   | null
   | boolean
   | number
+  | bigint
   | string
   | DriverValue[]
   | { [key: string]: DriverValue }
@@ -10,16 +28,16 @@ export type DriverValue =
 
 export interface DriverNode {
   kind: 'node';
-  id: number;
+  id: GraphId;
   labels: string[];
   properties: Record<string, DriverValue>;
 }
 
 export interface DriverEdge {
   kind: 'edge';
-  id: number;
-  sourceId: number;
-  targetId: number;
+  id: GraphId;
+  sourceId: GraphId;
+  targetId: GraphId;
   type: string;
   properties: Record<string, DriverValue>;
 }
@@ -344,7 +362,13 @@ export class WasmDriverAbi {
 
   private parseEntityProperties(json: string): Record<string, DriverValue> {
     if (!json) return {};
-    const parsed = JSON.parse(json) as unknown;
+    const parsed = JSON.parse(json, (_key, value, context?: { source?: string }) => {
+      if (typeof value === 'number' && Number.isInteger(value) && !Number.isSafeInteger(value)) {
+        if (!context?.source) throw new RangeError('This browser cannot decode large JSON integers exactly');
+        if (/^-?\d+$/.test(context.source)) return BigInt(context.source);
+      }
+      return value;
+    }) as unknown;
     const normalized = this.normalizeJsonValue(parsed);
     return normalized !== null && typeof normalized === 'object' && !Array.isArray(normalized) && !('kind' in normalized)
       ? normalized
@@ -352,7 +376,7 @@ export class WasmDriverAbi {
   }
 
   private normalizeJsonValue(value: unknown): DriverValue {
-    if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
+    if (value === null || typeof value === 'boolean' || typeof value === 'string' || typeof value === 'bigint') return value;
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     if (Array.isArray(value)) return value.map((item) => this.normalizeJsonValue(item));
     if (typeof value === 'object') {
@@ -369,7 +393,7 @@ export class WasmDriverAbi {
     return Boolean(this.readScalarOut('zyx_driver_result_get_bool', ['number', 'number', 'number', 'number'], [result, column], U32_BYTES, 'i8'));
   }
 
-  private readResultInt64(result: number, column: number): number {
+  private readResultInt64(result: number, column: number): number | bigint {
     return this.readScalarOut('zyx_driver_result_get_int64', ['number', 'number', 'number', 'number'], [result, column], I64_BYTES, 'i64');
   }
 
@@ -385,7 +409,7 @@ export class WasmDriverAbi {
     return Boolean(this.readScalarOut('zyx_driver_value_ref_get_bool', ['number', 'number', 'number'], [ref], U32_BYTES, 'i8'));
   }
 
-  private readValueRefInt64(ref: number): number {
+  private readValueRefInt64(ref: number): number | bigint {
     return this.readScalarOut('zyx_driver_value_ref_get_int64', ['number', 'number', 'number'], [ref], I64_BYTES, 'i64');
   }
 
@@ -446,25 +470,31 @@ export class WasmDriverAbi {
     return this.readStringOut('zyx_driver_value_ref_map_key', ['number', 'number', 'number', 'number', 'number'], [result, ref, index]);
   }
 
-  private readEntityInt64(name: string, result: number, column: number): number {
-    return this.readScalarOut(name, ['number', 'number', 'number', 'number'], [result, column], I64_BYTES, 'i64');
+  private readEntityInt64(name: string, result: number, column: number): GraphId {
+    return graphId(this.readScalarOut(name, ['number', 'number', 'number', 'number'], [result, column], I64_BYTES, 'i64'));
   }
 
-  private readValueRefEntityInt64(name: string, ref: number): number {
-    return this.readScalarOut(name, ['number', 'number', 'number'], [ref], I64_BYTES, 'i64');
+  private readValueRefEntityInt64(name: string, ref: number): GraphId {
+    return graphId(this.readScalarOut(name, ['number', 'number', 'number'], [ref], I64_BYTES, 'i64'));
   }
 
   private readCount(name: string, argTypes: string[], argsBeforeOut: unknown[]): number {
     return this.readScalarOut(name, argTypes, argsBeforeOut, U32_BYTES, 'i32');
   }
 
-  private readScalarOut(name: string, argTypes: string[], argsBeforeOut: unknown[], bytes: number, valueType: string): number {
+  private readScalarOut(name: string, argTypes: string[], argsBeforeOut: unknown[], bytes: number, valueType: 'i64'): number | bigint;
+  private readScalarOut(name: string, argTypes: string[], argsBeforeOut: unknown[], bytes: number, valueType: 'i32' | 'i8' | 'double'): number;
+  private readScalarOut(name: string, argTypes: string[], argsBeforeOut: unknown[], bytes: number, valueType: string): number | bigint {
     const out = this.allocBytes(bytes);
     const outError = this.allocPtrSlot();
     try {
       const status = this.ccallNumber(name, argTypes, [...argsBeforeOut, out, outError]);
       this.throwIfNotOk(status, outError);
-      return Number(this.mod.getValue(out, valueType));
+      if (valueType !== 'i64') return Number(this.mod.getValue(out, valueType));
+      const low = this.mod.getValue(out, 'i32') >>> 0;
+      const high = this.mod.getValue(out + 4, 'i32') | 0;
+      const value = high * 0x100000000 + low;
+      return Number.isSafeInteger(value) ? value : BigInt(high) * BigInt(0x100000000) + BigInt(low);
     } finally {
       this.mod._free(out);
       this.freeErrorFromSlot(outError);

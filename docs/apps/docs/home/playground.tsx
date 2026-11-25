@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { displayJson, graphId, type GraphId } from "./wasmDriverAbi";
 import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 import { GdsPanel, type GdsRunPlan } from "./gds-panel";
@@ -92,12 +93,12 @@ const isDriverEdge = (value: DriverValue): value is DriverEdge =>
 const formatDriverValue = (value: DriverValue): string => {
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return "[list]";
-  if (isDriverNode(value)) return JSON.stringify(value.properties) || "(node)";
-  if (isDriverEdge(value)) return JSON.stringify(value.properties) || "(edge)";
-  return JSON.stringify(value) || "{}";
+  if (isDriverNode(value)) return displayJson(value.properties) || "(node)";
+  if (isDriverEdge(value)) return displayJson(value.properties) || "(edge)";
+  return displayJson(value) || "{}";
 };
 
 const displayLabelForNode = (node: DriverNode): string => {
@@ -318,9 +319,9 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
   const materializeQueryResult = useCallback((driverResult: DriverResult) => {
     const values: string[][] = [];
-    const nodeMap = new Map<number, GraphNode>();
+    const nodeMap = new Map<GraphId, GraphNode>();
     const edgeList: GraphEdge[] = [];
-    const edgeSeen = new Set<number>();
+    const edgeSeen = new Set<GraphId>();
     const schemaLabelProps = new Map<string, Set<string>>();
     const schemaEdgeTypes = new Set<string>();
 
@@ -444,12 +445,12 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
       const costCol = algoResult.columns.indexOf("cost");
       const valueCol = scoreCol >= 0 ? scoreCol : costCol;
 
-      const scoreMap = new Map<number, number>();
-      for (const row of algoValues) {
+      const scoreMap = new Map<GraphId, number>();
+      for (const row of algoResult.rows) {
         if (nodeIdCol >= 0 && valueCol >= 0) {
-          const nid = Number(row[nodeIdCol]);
+          const nid = row[nodeIdCol];
           const val = Number(row[valueCol]);
-          if (!isNaN(nid) && !isNaN(val)) scoreMap.set(nid, val);
+          if ((typeof nid === "bigint" || typeof nid === "number") && !isNaN(val)) scoreMap.set(graphId(nid), val);
         }
       }
 
@@ -469,16 +470,16 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       const matchResult = driver.executeReadOnly(txn, buildScopedGraphMatchQuery(scope.nodeLabel, scope.edgeType));
       const graphEdges: GraphEdge[] = [];
-      const nodeMap = new Map<number, GraphNode>();
-      const edgeSeen = new Set<number>();
-      const pathNodeIds = new Set<number>();
+      const nodeMap = new Map<GraphId, GraphNode>();
+      const edgeSeen = new Set<GraphId>();
+      const pathNodeIds = new Set<GraphId>();
       if (isDijkstra) for (const [nid] of scoreMap) pathNodeIds.add(nid);
 
       const pathEdgePairs = new Set<string>();
       if (isDijkstra && algoValues.length > 1 && nodeIdCol >= 0) {
         for (let i = 0; i < algoValues.length - 1; i++) {
-          const a = Number(algoValues[i][nodeIdCol]);
-          const b = Number(algoValues[i + 1][nodeIdCol]);
+          const a = algoValues[i][nodeIdCol];
+          const b = algoValues[i + 1][nodeIdCol];
           pathEdgePairs.add(`${a}-${b}`);
           pathEdgePairs.add(`${b}-${a}`);
         }

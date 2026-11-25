@@ -1,5 +1,6 @@
 "use client";
 
+import { displayJson, type GraphId } from "./wasmDriverAbi";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   forceSimulation,
@@ -12,7 +13,7 @@ import {
 } from "d3-force";
 
 export interface GraphNode {
-  id: number;
+  id: GraphId;
   label: string;
   score?: number;
   highlighted?: boolean;
@@ -21,15 +22,15 @@ export interface GraphNode {
 }
 
 export interface GraphEdge {
-  id: number;
-  sourceId: number;
-  targetId: number;
+  id: GraphId;
+  sourceId: GraphId;
+  targetId: GraphId;
   type: string;
   highlighted?: boolean;
 }
 
 interface SimNode extends SimulationNodeDatum {
-  id: number;
+  id: GraphId;
   label: string;
   degree: number;
   score: number;
@@ -41,14 +42,14 @@ interface SimNode extends SimulationNodeDatum {
 }
 
 interface SelectedNodeInfo {
-  id: number;
+  id: GraphId;
   label: string;
   nodeLabel?: string;
   degree: number;
   score: number;
   highlighted: boolean;
   props?: Record<string, unknown>;
-  connections: { id: number; label: string; type: string; direction: "out" | "in" }[];
+  connections: { id: GraphId; label: string; type: string; direction: "out" | "in" }[];
 }
 
 interface SimLink extends SimulationLinkDatum<SimNode> {
@@ -85,7 +86,7 @@ function clamp(v: number, lo: number, hi: number) {
 
 // Simple community detection via greedy graph coloring
 function assignColors(nodes: SimNode[], links: SimLink[]): void {
-  const adj = new Map<number, Set<number>>();
+  const adj = new Map<GraphId, Set<GraphId>>();
   for (const n of nodes) adj.set(n.id, new Set());
   for (const l of links) {
     const src = l.source as SimNode;
@@ -96,7 +97,7 @@ function assignColors(nodes: SimNode[], links: SimLink[]): void {
 
   // Sort by degree descending for better coloring
   const sorted = [...nodes].sort((a, b) => b.degree - a.degree);
-  const colorMap = new Map<number, number>();
+  const colorMap = new Map<GraphId, number>();
   const paletteSize = NODE_PALETTE.length;
 
   for (const node of sorted) {
@@ -142,7 +143,7 @@ export function GraphView({ nodes, edges }: Props) {
     const s = stateRef.current;
     s.sim?.stop();
 
-    const degreeMap = new Map<number, number>();
+    const degreeMap = new Map<GraphId, number>();
     for (const e of edges) {
       degreeMap.set(e.sourceId, (degreeMap.get(e.sourceId) || 0) + 1);
       degreeMap.set(e.targetId, (degreeMap.get(e.targetId) || 0) + 1);
@@ -254,7 +255,7 @@ export function GraphView({ nodes, edges }: Props) {
     const hoverNode = s.hover;
     const isHoveringAny = hoverNode !== null;
     const hEdges = new Set<SimLink>();
-    const hNodes = new Set<number>();
+    const hNodes = new Set<GraphId>();
     if (hoverNode) {
       hNodes.add(hoverNode.id);
       for (const link of s.simLinks) {
@@ -638,7 +639,7 @@ export function GraphView({ nodes, edges }: Props) {
                     <div key={key} className="flex items-start justify-between gap-3">
                       <span className="shrink-0 text-[0.65rem] text-[#6b7f94]">{key}</span>
                       <span className="break-all text-right font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.65rem] text-[#aec0d2]">
-                        {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                        {typeof val === "object" ? displayJson(val) : String(val)}
                       </span>
                     </div>
                   ))}

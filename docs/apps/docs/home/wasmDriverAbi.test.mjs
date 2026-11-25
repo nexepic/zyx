@@ -1,49 +1,18 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { stripTypeScriptTypes } from 'node:module';
 
 const source = readFileSync(new URL('./wasmDriverAbi.ts', import.meta.url), 'utf8');
 const buildScript = readFileSync(new URL('../../../../scripts/build_wasm.sh', import.meta.url), 'utf8');
 const publicWasmLoader = readFileSync(new URL('../public/wasm/zyx.js', import.meta.url), 'utf8');
 
-function loadWasmDriverAbi() {
-  const js = source
-    .replace(/export type DriverValue =[\s\S]*?;\n\n/, '')
-    .replace(/export interface DriverNode \{[\s\S]*?\}\n\n/, '')
-    .replace(/export interface DriverEdge \{[\s\S]*?\}\n\n/, '')
-    .replace(/export interface DriverResult \{[\s\S]*?\}\n\n/, '')
-    .replace(/export interface EmscriptenZyxModule \{[\s\S]*?\}\n\n/, '')
-    .replace(/export class WasmDriverAbi/, 'class WasmDriverAbi')
-    .replace(/constructor\(private readonly mod: EmscriptenZyxModule\) \{/, 'constructor(mod) { this.mod = mod;')
-    .replace(/: void/g, '')
-    .replace(/: number/g, '')
-    .replace(/: string\[\]/g, '')
-    .replace(/: unknown\[\]/g, '')
-    .replace(/: string\[\]/g, '')
-    .replace(/: DriverResult/g, '')
-    .replace(/: DriverValue\[\]\[\]/g, '')
-    .replace(/: DriverValue\[\]/g, '')
-    .replace(/: DriverValue/g, '')
-    .replace(/: Record<string, DriverValue>/g, '')
-    .replace(/: DriverNode/g, '')
-    .replace(/: DriverEdge/g, '')
-    .replace(/: string/g, '')
-    .replace(/: boolean/g, '')
-    .replace(/: unknown/g, '')
-    .replace(/ as unknown/g, '')
-    .replace(/ as Record<string, unknown>/g, '')
-    .replace(/private readonly mod/g, 'mod')
-    .replace(/private /g, '')
-    .replace(/readonly /g, '')
-    .replace(/\n}\s*$/, '\n}\nthis.WasmDriverAbi = WasmDriverAbi;');
-  const context = {};
-  vm.runInNewContext(js, context, { filename: 'wasmDriverAbi.ts' });
-  return context.WasmDriverAbi;
-}
+const js = stripTypeScriptTypes(source, { mode: 'transform' });
+const { WasmDriverAbi, displayJson, graphId } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+assert.equal(graphId(9007199254740993n), '9007199254740993');
+assert.equal(displayJson({ id: 9223372036854775807n }), '{"id":9223372036854775807}');
 
-const WasmDriverAbi = loadWasmDriverAbi();
-
-function createFakeModule({ executeStatus = 0, errorMessage = 'boom', pointerSize = 4 } = {}) {
+function createFakeModule({ executeStatus = 0, errorMessage = 'boom', pointerSize = 4, integer = 7, nodeId = 42 } = {}) {
   const STATUS_OK = 0;
   const STATUS_ROW = 1;
   const STATUS_DONE = 2;
@@ -66,7 +35,7 @@ function createFakeModule({ executeStatus = 0, errorMessage = 'boom', pointerSiz
   const nestedRoot = {
     type: VALUE_LIST,
     values: [
-      { type: VALUE_INT64, value: 7 },
+      { type: VALUE_INT64, value: integer },
       {
         type: VALUE_MAP,
         entries: {
@@ -74,7 +43,7 @@ function createFakeModule({ executeStatus = 0, errorMessage = 'boom', pointerSiz
           beta: { type: VALUE_LIST, values: [{ type: VALUE_INT64, value: 9 }] },
           node: {
             type: VALUE_NODE,
-            id: 42,
+            id: nodeId,
             labels: ['Person', 'Engineer'],
             properties: { name: 'Ada', score: 98 },
           },
@@ -99,7 +68,10 @@ function createFakeModule({ executeStatus = 0, errorMessage = 'boom', pointerSiz
   }
 
   function write(ptr, value) {
-    memory.set(ptr, value);
+    if (typeof value === 'bigint') {
+      memory.set(ptr, Number(BigInt.asIntN(32, value)));
+      memory.set(ptr + 4, Number(BigInt.asIntN(32, value >> 32n)));
+    } else memory.set(ptr, value);
   }
 
   function readValueRef(ref) {
@@ -392,6 +364,14 @@ if (/createZyxModule\.isStub\s*=\s*true/.test(publicWasmLoader)) {
 {
   const fake = createFakeModule({ pointerSize: 8 });
   assert.throws(() => new WasmDriverAbi(fake.module), /requires wasm32 pointer slots/);
+}
+
+{
+  const fake = createFakeModule({ integer: -9223372036854775808n, nodeId: 9007199254740993n });
+  const driver = new WasmDriverAbi(fake.module);
+  const [value, map] = driver.executeReadOnly(123, 'RETURN nested').rows[0][0];
+  assert.equal(value, -9223372036854775808n);
+  assert.equal(map.node.id, '9007199254740993');
 }
 
 console.log('wasmDriverAbi tests passed');
