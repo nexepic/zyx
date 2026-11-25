@@ -80,9 +80,11 @@ namespace graph::storage::nativewal {
 			Item item;
 			Link left, right;
 			int height;
+			bool hasResident;
 			Node(const std::shared_ptr<VersionBudget> &b, Item e, Link l, Link r) :
 				charge(b, sizeof(Node) + 64), item(std::move(e)), left(std::move(l)), right(std::move(r)),
-				height(1 + std::max(depth(left), depth(right))) {}
+				height(1 + std::max(depth(left), depth(right))),
+				hasResident(!item->record || (left && left->hasResident) || (right && right->hasResident)) {}
 		};
 		std::shared_ptr<VersionBudget> budget;
 		Link root;
@@ -197,6 +199,19 @@ namespace graph::storage::nativewal {
 				return true;
 			};
 			walk(walk, root.get());
+		}
+		size_t residentCount() const { return count - diskRows; }
+		// A disk record can only be introduced by loading an authenticated base.
+		// Replacements and insertions are resident; deletions leave no live entry.
+		template<class Visitor>
+		bool visitResident(const Visitor &visit) const {
+			auto walk = [&](auto &&self, const Node *n) -> bool {
+				if (!n || !n->hasResident)
+					return true;
+				return self(self, n->left.get()) && (n->item->record || visit(n->item->value)) &&
+					   self(self, n->right.get());
+			};
+			return walk(walk, root.get());
 		}
 		Iterator begin() const { return {this, bound(0)}; }
 		Iterator end() const { return {this, nullptr}; }

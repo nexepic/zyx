@@ -23,6 +23,15 @@ with tempfile.TemporaryDirectory() as name:
     run("seed",seed/"main")
     def fresh(name):
         return shutil.copytree(seed,root/name)/"main"
+    resident=root/"resident"
+    run("create",resident)
+    run("resident-seed",resident/"main")
+    shutil.copytree(resident,root/"deletions")
+    run("resident-deletions",root/"deletions"/"main")
+    assert run("resident-kill",resident/"main",expected=-signal.SIGKILL).stdout.strip()=="ack"
+    shutil.copytree(resident,root/"budget")
+    run("resident-budget",root/"budget"/"main")
+    run("resident-replay",resident/"main")
     p=fresh("functional")
     run("change",p)
     run("verify",p)

@@ -30,7 +30,7 @@ namespace graph::storage::nativewal {
 		}
 		bool supportsNativeExactNodeCandidates() const override {
 			return nativeSnapshotGeneration().has_value() && data->column && data->column->complete &&
-				   !data->columnOverflow;
+				   (!data->columnOverflow || data->nodes.residentCount() <= data->nodes.size() / 2);
 		}
 		bool supportsNativeRangeNodeCandidates() const override { return supportsNativeExactNodeCandidates(); }
 		std::optional<bool>
@@ -53,36 +53,59 @@ namespace graph::storage::nativewal {
 			auto first = lo ? bound(*lo, !r.min_inclusive) : base.begin();
 			auto last = hi ? bound(*hi, r.max_inclusive) : base.end();
 			auto cap = std::min({size_t(64), nodes, bytes / sizeof(EntityRef)});
-			if (last - first > static_cast<ptrdiff_t>(cap))
+			if (last < first || last - first > static_cast<ptrdiff_t>(cap))
 				return std::nullopt;
 			IndexCandidateBatch batch;
 			batch.snapshot_generation = *nativeSnapshotGeneration();
 			const auto &changes = data->changedColumn;
-			for (auto it = first; it < last; ++it)
-				if (!changes || !std::ranges::binary_search(changes->ids, it->second))
-					batch.candidates.push_back(EntityRef{it->second});
-			if (changes)
-				for (auto id: changes->ids) {
-					auto it = data->nodes.find(id);
-					if (it == data->nodes.end())
+			const bool useResident = data->columnOverflow;
+			if (useResident && data->nodes.residentCount() > nodes)
+				return std::nullopt;
+			for (auto it = first; it < last; ++it) {
+				if (useResident) {
+					// A base posting may now refer to a deleted or replaced row.
+					auto current = data->nodes.find(it->second);
+					if (current == data->nodes.end() || !current.onDisk())
 						continue;
-					const auto &row = it->second;
-					if (std::ranges::find(row.labels, labels.front()) == row.labels.end())
+				} else if (changes && std::ranges::binary_search(changes->ids, it->second)) {
+					continue;
+				}
+				batch.candidates.push_back(EntityRef{it->second});
+			}
+			auto inspect = [&](const LogicalGraphNode &row) {
+				if (std::ranges::find(row.labels, labels.front()) == row.labels.end())
+					return true;
+				if (useResident) {
+					if (row.properties.size() > fields)
+						return false;
+					fields -= row.properties.size();
+				}
+				for (const auto &p: row.properties) {
+					if (p.key != r.key || p.value.getType() == PropertyType::NULL_TYPE)
 						continue;
-					for (const auto &p: row.properties) {
-						if (p.key != r.key || p.value.getType() == PropertyType::NULL_TYPE)
-							continue;
-						auto v = std::get_if<int64_t>(&p.value.getVariant());
-						if (!v || !exactColumnInteger(*v))
-							return std::nullopt;
-						if ((!lo || *v > *lo || (*v == *lo && r.min_inclusive)) &&
-							(!hi || *v < *hi || (*v == *hi && r.max_inclusive))) {
-							if (batch.candidates.size() >= cap)
-								return std::nullopt;
-							batch.candidates.push_back(EntityRef{id});
-						}
+					auto value = std::get_if<int64_t>(&p.value.getVariant());
+					if (!value || !exactColumnInteger(*value))
+						return false;
+					if ((!lo || *value > *lo || (*value == *lo && r.min_inclusive)) &&
+						(!hi || *value < *hi || (*value == *hi && r.max_inclusive))) {
+						if (batch.candidates.size() >= cap)
+							return false;
+						batch.candidates.push_back(EntityRef{row.node_id});
 					}
 				}
+				return true;
+			};
+			if (useResident) {
+				if (!data->nodes.visitResident([&](const auto &entry) { return inspect(entry.second); }))
+					return std::nullopt;
+				debug::PerfTrace::addValue("native_wal.index.resident_rows", data->nodes.residentCount());
+			} else if (changes) {
+				for (auto id: changes->ids) {
+					auto it = data->nodes.find(id);
+					if (it != data->nodes.end() && !inspect(it->second))
+						return std::nullopt;
+				}
+			}
 			std::ranges::sort(batch.candidates, {}, &EntityRef::entity_id);
 			debug::PerfTrace::addValue("native_wal.index.probes", 1);
 			debug::PerfTrace::addValue("native_wal.index.candidates", batch.candidates.size());

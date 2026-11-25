@@ -2,7 +2,10 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/NativeWalDatabase.hpp"
+#include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/storage/StorageBackendFactory.hpp"
 #include "zyx/zyx.hpp"
 
 namespace {
@@ -45,12 +48,111 @@ int main(int argc, char **argv) try {
 		std::cout << graph::storage::createIndexedNativeWalDatabase(path, "K", "k") << "\n";
 		return 0;
 	}
+	if (op == "resident-budget") {
+		using namespace graph::storage;
+		auto backend = StorageBackendFactory::create(path, 8 << 20, OpenMode::OPEN_EXISTING_FILE).backend;
+		backend->open();
+		auto snapshot = std::dynamic_pointer_cast<LogicalGraphReadBackend>(backend)->openLogicalGraphReadSnapshot();
+		size_t calls = 0;
+		auto probe = [&](int64_t key, size_t nodes, size_t fields, size_t bytes, size_t expected, bool consume) {
+			calls = 0;
+			return snapshot->visitNodeCandidatesByExactProperties(
+				{"K"}, {{"k", graph::PropertyValue(key)}}, nodes, fields, bytes,
+				[&](const IndexCandidateBatch &batch) {
+					++calls;
+					expect(batch.candidates.size() == expected, "resident candidate count");
+					return consume;
+				});
+		};
+		expect(!probe(-17, 700, 2048, 4096, 0, true).has_value() && !calls, "node budget");
+		expect(!probe(-17, 701, 701, 4096, 0, true).has_value() && !calls, "field budget");
+		expect(!probe(-17, 701, 702, 0, 0, true).has_value() && !calls, "byte budget");
+		expect(probe(-17, 701, 702, 4096, 2, false) == false && calls == 1, "consumer stop");
+		expect(probe(-701, 701, 702, 4096, 0, true) == true && calls == 1, "complete empty");
+		return 0;
+	}
 	zyx::Database db(path);
 	db.open();
 	if (op == "seed") {
 		write(db, "CREATE (:K {k:17})-[:T {p:5}]->(:K {k:19})");
 		write(db, "CREATE (:K), (:K {k:null})");
 		db.save();
+	} else if (op == "resident-seed") {
+		for (int64_t first = 0; first < 2048; first += 128) {
+			auto tx = db.beginTransaction();
+			for (auto i = first; i < first + 128; ++i)
+				(void) tx.createNode("K", {{"k", i}, {"padding", std::string(240, 'p')}});
+			tx.commit();
+		}
+		db.save();
+	} else if (op == "resident-deletions") {
+		auto old = db.beginReadOnlyTransaction();
+		write(db, "MATCH(n:K) WHERE n.k>=0 AND n.k<75 DETACH DELETE n");
+		graph::debug::PerfTrace::setEnabled(true);
+		graph::debug::PerfTrace::reset();
+		scalar(db, "MATCH(n:K) WHERE n.k=17 RETURN count(n)", 0);
+		auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		expect(trace["native_wal.index.probes"].totalValue == 1, "deletion-only index route");
+		expect(trace["native_wal.index.resident_rows"].totalValue == 0, "deletions became resident");
+		scalar(old, "MATCH(n:K) WHERE n.k=17 RETURN count(n)", 1);
+		old.commit();
+		db.save();
+		db.close();
+		db.open();
+		scalar(db, "MATCH(n:K) WHERE n.k=17 RETURN count(n)", 0);
+	} else if (op == "resident-kill" || op == "resident-replay") {
+		const std::string key = "MATCH(n:K) WHERE n.k=-17 RETURN count(n)";
+		const std::string gone = "MATCH(n:K) WHERE n.k=42 RETURN count(n)";
+		auto verify = [&] {
+			graph::debug::PerfTrace::setEnabled(true);
+			graph::debug::PerfTrace::reset();
+			scalar(db, key, 2);
+			auto trace = graph::debug::PerfTrace::snapshotAndReset();
+			expect(trace["native_wal.index.resident_rows"].totalValue == 701, "delta route lost or repeated a row");
+			scalar(db, gone, 0);
+			scalar(db, "MATCH(n:K) WHERE n.k>=-19 AND n.k<=-17 RETURN count(n)", 4);
+			scalar(db, "MATCH(n:K) WHERE n.k=43 RETURN count(n)", 0);
+			scalar(db, "MATCH(n:K) WHERE n.k=1001 RETURN id(n)", 1002);
+		};
+		if (op == "resident-kill") {
+			auto old = db.beginReadOnlyTransaction();
+			auto change = [&](auto &tx) {
+				query(tx, "MATCH(n:K) WHERE n.k=42 SET n.k=-17");
+				query(tx, "MATCH(n:K) WHERE n.k=43 DETACH DELETE n");
+				std::vector<std::unordered_map<std::string, zyx::Value>> rows;
+				for (int64_t k = -700; k < 0; ++k)
+					rows.push_back({{"k", k}});
+				(void) tx.createNodes("K", rows);
+				scalar(tx, key, 2);
+				scalar(tx, gone, 0);
+			};
+			auto discarded = db.beginTransaction();
+			change(discarded);
+			discarded.rollback();
+			scalar(db, key, 0);
+			auto tx = db.beginTransaction();
+			change(tx);
+			tx.commit();
+			verify();
+			scalar(old, key, 0);
+			scalar(old, gone, 1);
+			std::cout << "ack" << std::endl;
+			std::raise(SIGKILL);
+		}
+		verify();
+		auto before = db.beginReadOnlyTransaction();
+		write(db, "CREATE (:K {k:'unindexed'})");
+		graph::debug::PerfTrace::reset();
+		scalar(db, key, 2);
+		expect(graph::debug::PerfTrace::snapshotAndReset()["native_wal.index.probes"].totalValue == 0,
+			   "incompatible resident value did not fall back");
+		scalar(before, key, 2);
+		db.save();
+		scalar(before, key, 2);
+		before.commit();
+		db.close();
+		db.open();
+		scalar(db, key, 2);
 	} else if (op == "fault-commit" || op == "fault-checkpoint") {
 		expect(argc == 4, "fault event required");
 		auto tx = db.beginTransaction();
