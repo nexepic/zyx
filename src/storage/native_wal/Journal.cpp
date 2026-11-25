@@ -13,7 +13,7 @@ namespace graph::storage::nativewal {
 		[[noreturn]] void fail(const char *action) { throw std::system_error(errno, std::generic_category(), action); }
 		void readExact(int fd, uint64_t offset, std::span<std::byte> target);
 		struct File : BaseInput {
-			void read(size_t offset, std::span<std::byte> bytes) const override { readExact(fd, offset, bytes); }
+			void read(uint64_t, size_t offset, std::span<std::byte> bytes) const override { readExact(fd, offset, bytes); }
 			int fd;
 			explicit File(int f) : fd(f) {
 				if (fd < 0)
@@ -25,6 +25,86 @@ namespace graph::storage::nativewal {
 			}
 			File(File &&other) noexcept : fd(std::exchange(other.fd, -1)) {}
 			File(const File &) = delete;
+		};
+		// Immutable entries keep their original authenticated offsets. Between
+		// two length changes the same translation applies to every surviving ID.
+		// Each published view maps directly to its own file, never to a prior map.
+		struct LocatorRun {
+			uint64_t firstId = 0;
+			size_t original = 0, published = 0;
+			bool startsRun(size_t from, size_t to) const {
+				return from - original != to - published;
+			}
+		};
+		class LocatedInput final : public BaseInput {
+			VersionCharge charge;
+			std::shared_ptr<const File> file;
+			std::vector<LocatorRun> runs;
+
+		public:
+			LocatedInput(const std::shared_ptr<VersionBudget> &budget, std::shared_ptr<const File> f, size_t n) :
+				charge(budget, sizeof(LocatedInput) + 64 + n * sizeof(LocatorRun)), file(std::move(f)) {
+				runs.reserve(n);
+			}
+			void add(LocatorRun run) { runs.push_back(run); }
+			void read(uint64_t id, size_t offset, std::span<std::byte> data) const override {
+				auto next = std::upper_bound(runs.begin(), runs.end(), id,
+											 [](uint64_t key, const LocatorRun &run) { return key < run.firstId; });
+				if (next != runs.begin()) {
+					const auto &run = *std::prev(next);
+					require(offset >= run.original && offset - run.original <= SIZE_MAX - run.published,
+							"Invalid native checkpoint locator");
+					offset = run.published + (offset - run.original);
+				}
+				file->read(id, offset, data);
+			}
+		};
+		struct CheckpointLocations {
+			size_t count = 0;
+			LocatorRun last;
+			void observe(uint64_t id, size_t from, size_t to) {
+				if (last.startsRun(from, to)) {
+					last = {id, from, to};
+					++count;
+				}
+			}
+			template<class Table>
+			void bind(Table &table, const std::shared_ptr<File> &file, size_t start,
+					  const std::shared_ptr<VersionBudget> &budget) const {
+				if (!count) {
+					table.bindInput(file);
+					return;
+				}
+				std::shared_ptr<LocatedInput> mapped;
+				try {
+					// Retention is optional. The independent image is already
+					// durable and the old view remains authenticated and usable.
+					mapped = std::make_shared<LocatedInput>(budget, file, count);
+				} catch (const std::length_error &) {
+					return;
+				} catch (const std::bad_alloc &) {
+					return;
+				}
+				if (count == 1) {
+					mapped->add(last);
+				} else {
+					// Visit immutable metadata only, using the exact sizes verified
+					// by the encoder. This pass neither reads nor constructs a row.
+					CheckpointLocations layout;
+					table.visitAfter(0, [&](auto it) {
+						if (it.onDisk()) {
+							auto previous = layout.count;
+							layout.observe(it.id(), it.offset(), start + 16);
+							if (layout.count != previous)
+								mapped->add(layout.last);
+						}
+						start += it.encodedBytes();
+						return true;
+					});
+					require(layout.count == count, "Native checkpoint locator count changed");
+				}
+				table.bindInput(std::move(mapped));
+			}
 		};
 		void syncFile(int fd) {
 			while (::fsync(fd) < 0) {
@@ -306,7 +386,8 @@ namespace graph::storage::nativewal {
 		Digest installBase(State &s) {
 			utils::Sha256 hash;
 			struct stat written{};
-			bool nodeOffsetsMatch = true, edgeOffsetsMatch = true;
+			CheckpointLocations nodes, edges;
+			size_t nodeStart = 0, edgeStart = 0;
 			installStream(main, [&](int fd) {
 				// Coalesce small rows while hashing the exact independent main image.
 				auto window = std::min(size_t(16384), s.budget->capacity() / 16);
@@ -341,12 +422,18 @@ namespace graph::storage::nativewal {
 				put(head.bytes);
 				Encoder encoded(maxState);
 				VersionCharge rowBuffer(s.budget, 0);
-				size_t offset = head.bytes.size();
-				auto rows = [&](const auto &table, bool &offsetsMatch) {
+				nodeStart = head.bytes.size();
+				size_t offset = nodeStart;
+				auto rows = [&](const auto &table, CheckpointLocations &layout) {
 					table.visitAfter(0, [&](auto it) {
 						auto id = it.id();
 						auto size = it.encodedBytes() - 16;
 						require(size <= maxState, "Native checkpoint row exceeds encoding limit");
+						// A large-file API can outgrow the in-memory offset type
+						// on a 32-bit host. Include this header and the final digest.
+						if constexpr (sizeof(off_t) > sizeof(size_t))
+							require(offset <= SIZE_MAX - size - 16 - Digest{}.size(),
+									"Native checkpoint exceeds addressable extent");
 						if (size > encoded.bytes.capacity()) {
 							// The previous buffer is empty and can be freed before growing.
 							Bytes{}.swap(encoded.bytes);
@@ -356,7 +443,7 @@ namespace graph::storage::nativewal {
 						if (it.onDisk()) {
 							encoded.bytes.resize(size);
 							it.readImage(encoded.bytes);
-							offsetsMatch = offsetsMatch && it.offset() == offset + 16;
+							layout.observe(id, it.offset(), offset + 16);
 						} else {
 							encodeBaseRow(encoded, it->second);
 						}
@@ -373,8 +460,9 @@ namespace graph::storage::nativewal {
 						return true;
 					});
 				};
-				rows(s.nodes, nodeOffsetsMatch);
-				rows(s.edges, edgeOffsetsMatch);
+				rows(s.nodes, nodes);
+				edgeStart = offset;
+				rows(s.edges, edges);
 				flush();
 				writeComplete(fd, hash.finalize());
 				written = metadata(fd);
@@ -383,12 +471,8 @@ namespace graph::storage::nativewal {
 			auto st = metadata(published->fd);
 			require(sameContentStamp(written, st), "Published native base identity changed");
 			remember(published, st);
-			// Entries are immutable; the new snapshot may redirect exact byte
-			// locations only after the independent image and name are durable.
-			if (nodeOffsetsMatch)
-				s.nodes.bindInput(published);
-			if (edgeOffsetsMatch)
-				s.edges.bindInput(published);
+			nodes.bind(s.nodes, published, nodeStart, s.budget);
+			edges.bind(s.edges, published, edgeStart, s.budget);
 			return hash.finalize();
 		}
 		void removeWal() {
@@ -584,8 +668,8 @@ namespace graph::storage::nativewal {
 			if (needsStabilization || delta.size() + 24 + files->alignment - 1 > maxWal - walLength)
 				checkpointLocked();
 			// Unchanged entries in this private transaction still carry the
-			// original offsets. A checkpoint of that same logical version may
-			// have redirected their table to byte-identical locations.
+			// original offsets. Inherit the locator map published for that
+			// logical version, even if those bytes moved within the new file.
 			if (current != expected) {
 				next->nodes.inheritInput(current->nodes);
 				next->edges.inheritInput(current->edges);

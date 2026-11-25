@@ -51,7 +51,7 @@ namespace graph::storage::nativewal {
 	class BaseInput {
 	public:
 		virtual ~BaseInput() = default;
-		virtual void read(size_t offset, std::span<std::byte> bytes) const = 0;
+		virtual void read(uint64_t id, size_t offset, std::span<std::byte> bytes) const = 0;
 	};
 
 	// A persistent AVL tree. Path copies share immutable entries (including
@@ -157,7 +157,7 @@ namespace graph::storage::nativewal {
 			bool onDisk() const { return bool(entry->record); }
 			size_t offset() const { return entry->record->offset; }
 			void readImage(std::span<std::byte> data) const {
-				rows->input->read(offset(), data);
+				rows->input->read(id(), offset(), data);
 				if (utils::Sha256::digest(data) != entry->record->digest)
 					throw std::runtime_error("Immutable native base row changed");
 			}
