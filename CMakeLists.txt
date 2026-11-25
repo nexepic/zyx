@@ -226,6 +226,16 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             PROPERTIES COMPILE_OPTIONS "-fno-profile-instr-generate;-fno-coverage-mapping"
         )
     endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_executable(zyx_native_wal_worker EXCLUDE_FROM_ALL tests/native_wal/driver.cpp)
+        target_link_libraries(zyx_native_wal_worker PRIVATE zyx::core)
+        add_library(zyx_native_wal_fault MODULE EXCLUDE_FROM_ALL tests/native_wal/fault.cpp)
+        target_link_libraries(zyx_native_wal_fault PRIVATE ${CMAKE_DL_LIBS})
+        add_custom_target(zyx_native_wal_recovery
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/native_wal/recovery.py"
+                    $<TARGET_FILE:zyx_native_wal_worker> $<TARGET_FILE:zyx_native_wal_fault>
+            DEPENDS zyx_native_wal_worker zyx_native_wal_fault)
+    endif()
     # Explicitly selected process-crash probe; neither the default build nor
     # CTest launches it. Its Python runner owns only fresh temporary databases.
     add_executable(zyx_query_scratch_crash_worker EXCLUDE_FROM_ALL

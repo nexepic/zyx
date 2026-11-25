@@ -1,0 +1,303 @@
+#include "Backend.hpp"
+#include "Journal.hpp"
+#include "graph/storage/NativeWalDatabase.hpp"
+#include "query/execution/ProcessResourceDomains.hpp"
+namespace graph::storage::nativewal {
+	namespace resource = query::execution::detail;
+	class Snapshot final : public LogicalGraphReadSnapshot {
+	public:
+		std::shared_ptr<const State> data;
+		explicit Snapshot(std::shared_ptr<const State> value) : data(std::move(value)) {}
+		std::optional<LogicalGraphMutationFence> mutationFence() const override {
+			LogicalGraphMutationFence f;
+			f.backend_token = 0x6e673031;
+			f.format_token = 1;
+			std::memcpy(f.graph_state_tokens.data(), data->identity.data(), 16);
+			f.graph_state_tokens[2] = data->sequence;
+			return f;
+		}
+		bool supportsNodeExistenceProbes() const override { return true; }
+		bool containsNode(uint64_t id) const override { return data->nodes.contains(id); }
+		LogicalGraphNode readNode(uint64_t id) const override { return data->nodes.at(id); }
+		LogicalGraphEdge readEdge(uint64_t id) const override { return data->edges.at(id); }
+		template<class Map, class Visitor>
+		static void visit(const Map &rows, size_t limit, const Visitor &fn) {
+			for (auto &[id, row]: rows) {
+				require(limit-- > 0, "Native graph visit limit exceeded");
+				if (!fn(row))
+					break;
+			}
+		}
+		void visitNodes(size_t max, const std::function<bool(const LogicalGraphNode &)> &f) const override {
+			visit(data->nodes, max, f);
+		}
+		void visitEdges(size_t max, const std::function<bool(const LogicalGraphEdge &)> &f) const override {
+			visit(data->edges, max, f);
+		}
+		LogicalGraphNodePage scanNodesAfter(uint64_t after, size_t max, size_t pages) const override {
+			require(max && pages, "Invalid native graph scan size");
+			LogicalGraphNodePage page;
+			auto it = data->nodes.upper_bound(after);
+			for (; it != data->nodes.end() && page.nodes.size() < std::min(max, size_t(64)); ++it)
+				page.nodes.push_back(it->second);
+			page.may_have_more = it != data->nodes.end();
+			page.metadata_pages_visited = 1;
+			return page;
+		}
+		static bool matches(const LogicalGraphEdge &e, uint64_t id, LogicalGraphReadDirection dir) {
+			return (dir == LogicalGraphReadDirection::LGRD_OUTGOING ? e.source_node_id : e.target_node_id) == id;
+		}
+		LogicalGraphAdjacencyPage scanAdjacentEdges(uint64_t id, LogicalGraphReadDirection dir,
+													std::optional<LogicalGraphAdjacencyContinuation> cursor,
+													size_t max) const override {
+			require(max && data->nodes.contains(id), "Invalid native adjacency scan");
+			auto it = data->edges.begin();
+			if (cursor) {
+				it = data->edges.find(cursor->previous_edge_id);
+				require(it != data->edges.end() && matches(it->second, id, dir), "Invalid native adjacency cursor");
+				++it;
+			}
+			LogicalGraphAdjacencyPage page;
+			for (; it != data->edges.end(); ++it) {
+				if (!matches(it->second, id, dir))
+					continue;
+				if (cursor) {
+					require(cursor->next_edge_id == it->first, "Invalid native adjacency continuation");
+					cursor.reset();
+				}
+				if (page.edges.size() == std::min(max, size_t(64))) {
+					page.continuation = {{page.edges.back().edge_id, it->first}};
+					break;
+				}
+				page.edges.push_back(it->second);
+			}
+			require(!cursor, "Missing native adjacency continuation");
+			return page;
+		}
+		void visitAdjacentEdges(uint64_t id, LogicalGraphReadDirection dir, size_t max,
+								const std::function<bool(const LogicalGraphEdge &)> &f) const override {
+			require(data->nodes.contains(id), "Missing native adjacency owner");
+			for (auto &[eid, e]: data->edges) {
+				if (!matches(e, id, dir))
+					continue;
+				require(max-- > 0, "Native adjacency limit exceeded");
+				if (!f(e))
+					break;
+			}
+		}
+		using Columns = std::vector<std::vector<PropertyValue>>;
+		using Admission = std::function<void(size_t)>;
+		template<class Map>
+		static Columns columns(const Map &rows, std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+							   const Admission &admit) {
+			Columns out(keys.size());
+			for (auto &col: out)
+				col.resize(ids.size());
+			uint64_t prev = 0;
+			for (size_t i = 0; i < ids.size(); ++i) {
+				require(prev < ids[i], "Invalid native graph owner order");
+				prev = ids[i];
+				for (auto &p: rows.at(prev).properties)
+					for (size_t k = 0; k < keys.size(); ++k)
+						if (keys[k] == p.key) {
+							admit(CanonicalPropertyValueCodec::encodedSize(p.value) + p.key.size() + 8);
+							out[k][i] = p.value;
+						}
+			}
+			return out;
+		}
+		bool supportsNativeEdgeRefScans() const override { return true; }
+		void visitEdgeRefs(size_t max, const std::function<bool(const EntityRef &)> &visitor) const override {
+			visit(data->edges, max,
+				  [&](const auto &e) { return visitor({e.edge_id, true, e.source_node_id, e.target_node_id, 0}); });
+		}
+		bool supportsShapedPropertyReadAdmission() const override { return true; }
+		template<class Map>
+		static auto shaped(const Map &rows, std::span<const uint64_t> ids, const EntityReadShape &shape,
+						   const Admission &admit) {
+			validateEntityReadShape(shape);
+			using Row = typename Map::mapped_type;
+			std::vector<Row> result;
+			result.reserve(ids.size());
+			uint64_t previous = 0;
+			for (auto id: ids) {
+				require(id > previous, "Invalid native entity order");
+				previous = id;
+				const auto &source = rows.at(id);
+				Row row{};
+				if constexpr (std::is_same_v<Row, LogicalGraphNode>) {
+					row.node_id = id;
+					if (shape.include_labels) {
+						for (auto &l: source.labels)
+							admit(l.size() + 8);
+						row.labels = source.labels;
+					}
+				} else {
+					row.edge_id = id;
+					row.source_node_id = source.source_node_id;
+					row.target_node_id = source.target_node_id;
+					if (shape.include_type) {
+						admit(source.type.size() + 8);
+						row.type = source.type;
+					}
+				}
+				if (shape.all_properties || !shape.property_tokens.empty()) {
+					for (auto &p: source.properties)
+						admit(p.key.size() + 8 + CanonicalPropertyValueCodec::encodedSize(p.value));
+					row.properties = source.properties;
+				}
+				result.emplace_back(std::move(row));
+			}
+			return result;
+		}
+		std::vector<LogicalGraphNode> readNodesShapedSortedWithAdmission(std::span<const uint64_t> ids,
+																		 const EntityReadShape &shape,
+																		 const Admission &a) const override {
+			return shaped(data->nodes, ids, shape, a);
+		}
+		std::vector<LogicalGraphEdge> readEdgesShapedSortedWithAdmission(std::span<const uint64_t> ids,
+																		 const EntityReadShape &shape,
+																		 const Admission &a) const override {
+			return shaped(data->edges, ids, shape, a);
+		}
+		bool supportsPropertyReadAdmission() const override { return true; }
+		Columns readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> ids,
+														   std::span<const std::string_view> keys,
+														   const Admission &a) const override {
+			return columns(data->nodes, ids, keys, a);
+		}
+		Columns readEdgePropertyColumnsSortedWithAdmission(std::span<const uint64_t> ids,
+														   std::span<const std::string_view> keys,
+														   const Admission &a) const override {
+			return columns(data->edges, ids, keys, a);
+		}
+	};
+	using Status = LogicalGraphTransactionState;
+	class Tx final : public LogicalGraphTransaction {
+		std::shared_ptr<Journal> owner;
+		Snapshot pinned;
+		std::shared_ptr<State> working;
+		Changes changes;
+		bool ro;
+		Status status = Status::LGTTS_ACTIVE;
+		LogicalGraphMutationBatchResult created;
+		void release() {
+			owner.reset();
+			working.reset();
+			pinned.data.reset();
+			changes = {};
+		}
+		void active() const { require(status == Status::LGTTS_ACTIVE, "Native transaction ended"); }
+
+	public:
+		Tx(std::shared_ptr<Journal> j, bool readOnly) : owner(std::move(j)), pinned(owner->snapshot()), ro(readOnly) {}
+		Status state() const override { return status; }
+		bool isReadOnly() const override { return ro; }
+		LogicalGraphReadSnapshot &readSnapshot() override {
+			active();
+			return pinned;
+		}
+		LogicalGraphMutationBatchResult previewMutationBatch(const LogicalGraphMutationBatch &b) const override {
+			active();
+			require(!ro, "Read-only native transaction");
+			return preview(working ? *working : *pinned.data, b);
+		}
+		LogicalGraphMutationBatchResult stageMutationBatch(LogicalGraphMutationBatch b) override {
+			active();
+			require(!ro, "Read-only native transaction");
+			auto next = std::make_shared<State>(working ? *working : *pinned.data);
+			auto changed = changes;
+			auto ids = apply(*next, changed, b);
+			require(changed.nodes.size() + changed.edges.size() <= maxRows * 2,
+					"Native transaction change limit exceeded");
+			(void) encodeBase(*next);
+			auto result = created;
+			require(result.created_node_ids.size() + result.created_edge_ids.size() + ids.created_node_ids.size() +
+									ids.created_edge_ids.size() <=
+							maxRows * 2,
+					"Native transaction creation limit exceeded");
+			result.created_node_ids.insert(result.created_node_ids.end(), ids.created_node_ids.begin(),
+										   ids.created_node_ids.end());
+			result.created_edge_ids.insert(result.created_edge_ids.end(), ids.created_edge_ids.begin(),
+										   ids.created_edge_ids.end());
+			working = std::move(next);
+			changes = std::move(changed);
+			created = std::move(result);
+			return ids;
+		}
+		LogicalGraphMutationBatchResult commit() override {
+			active();
+			try {
+				if (working)
+					owner->commit(pinned.data, working, changes);
+			} catch (const LogicalGraphMutationConflict &) {
+				status = Status::LGTTS_CONFLICTED;
+				release();
+				throw;
+			} catch (...) {
+				status = Status::LGTTS_INDETERMINATE;
+				release();
+				throw;
+			}
+			status = Status::LGTTS_COMMITTED;
+			release();
+			return std::move(created);
+		}
+		void rollback() override {
+			active();
+			status = Status::LGTTS_ROLLED_BACK;
+			working.reset();
+			release();
+		}
+	};
+	class Backend final : public StorageBackend,
+						  public LogicalGraphReadBackend,
+						  public LogicalGraphTransactionalBackend {
+		std::string path;
+		bool ro;
+		std::shared_ptr<Journal> journal;
+
+	public:
+		Backend(std::string p, bool readOnly) : path(std::move(p)), ro(readOnly) {}
+		void open() override {
+			if (!journal)
+				journal = std::make_shared<Journal>(path, ro);
+		}
+		void flush() override {
+			if (journal)
+				journal->checkpoint();
+		}
+		void close() override {
+			if (!journal)
+				return;
+			require(journal.use_count() == 1, "Native graph has active transactions");
+			auto closing = std::move(journal);
+			closing->checkpoint();
+		}
+		bool isOpen() const override { return bool(journal); }
+		bool isReadOnly() const override { return ro; }
+		StorageFormatKind formatKind() const override { return StorageFormatKind::SFM_NATIVE_WAL; }
+		std::shared_ptr<resource::DatabaseResourceBudget> queryResourceDomain() const override {
+			require(bool(journal), "Native graph is closed");
+			auto s = journal->snapshot();
+			return resource::ProcessResourceDomains::defaultOwner()->domain(
+					"native-wal:" +
+					std::string(reinterpret_cast<const char *>(s->identity.data()), s->identity.size()));
+		}
+		StorageBackendCapabilities capabilities() const override { return {true, true, false, true, !ro}; }
+		std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
+			require(bool(journal), "Native graph is closed");
+			return std::make_unique<Snapshot>(journal->snapshot());
+		}
+		std::unique_ptr<LogicalGraphTransaction> beginLogicalGraphTransaction(bool readOnly) override {
+			require(journal && (!ro || readOnly), "Native graph write transaction unavailable");
+			return std::make_unique<Tx>(journal, readOnly);
+		}
+	};
+} // namespace graph::storage::nativewal
+namespace graph::storage {
+	std::shared_ptr<StorageBackend> openNativeWalBackend(const std::string &path, bool readOnly) {
+		return std::make_shared<nativewal::Backend>(path, readOnly);
+	}
+	std::string createNativeWalDatabase(const std::string &directory) { return nativewal::Journal::create(directory); }
+} // namespace graph::storage

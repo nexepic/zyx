@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "CheckpointReadBackend.hpp"
+#include "native_wal/Backend.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/StorageFormat.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -72,6 +73,8 @@ namespace graph::storage {
 			std::string_view(signature.data(), signature.size()) == "ZYXcp002") {
 			return {openCheckpointBackend(database_path, cache_size), nullptr};
 		}
+		if (std::string_view(signature.data(), signature.size()) == "ZYXng001")
+			return {openNativeWalBackend(database_path, open_mode == OpenMode::OPEN_READ_ONLY_EXISTING_FILE), nullptr};
 		if (std::string_view(signature.data(), signature.size()) == "ZYXcp003")
 			return {openSegmentedBackend(database_path, cache_size), nullptr};
 		throw std::runtime_error("Database refuses a " + std::string(StorageFormatProbe::describe(format.kind)) +

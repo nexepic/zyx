@@ -19,6 +19,7 @@
  **/
 
 #pragma once
+#include <iosfwd>
 
 #include <cstddef>
 #include <cstdint>
@@ -293,6 +294,10 @@ namespace zyx {
 		void open() const;
 		[[nodiscard]] bool openIfExists() const;
 		void close() const;
+		// Export committed graph entities from one pinned snapshot to an empty,
+        // seekable binary stream. The caller owns final close and publication.
+        // The segmented interchange format carries no index or constraint definitions.
+        void exportSegmentedSnapshot(std::ostream &destination) const;
 		void save() const; // Flushes data to disk
 
 		// Transaction support

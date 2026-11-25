@@ -22,6 +22,7 @@ namespace graph::storage {
 		SFM_TRUNCATED = 3,
 		SFM_UNRECOGNIZED = 4,
         SFM_CHECKPOINT = 5,
+        SFM_NATIVE_WAL = 6,
 	};
 
 	struct StorageFormatInfo {

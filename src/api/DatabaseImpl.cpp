@@ -18,6 +18,7 @@
  * limitations under the License.
  **/
 
+#include "graph/storage/SegmentedSnapshot.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -1463,6 +1464,16 @@ namespace zyx {
 	void Database::open() const { impl_->db_.open(); }
 	bool Database::openIfExists() const { return impl_->db_.openIfExists(); }
 	void Database::close() const { impl_->db_.close(); }
+	void Database::exportSegmentedSnapshot(std::ostream &destination) const {
+		if (!impl_->db_.isOpen())
+			throw std::logic_error("Snapshot export requires an open database");
+		auto backend =
+				std::dynamic_pointer_cast<graph::storage::LogicalGraphReadBackend>(impl_->db_.getStorageBackend());
+		if (!backend)
+			throw std::logic_error("Snapshot export requires a logical read backend");
+		auto snapshot = backend->openLogicalGraphReadSnapshot();
+		graph::storage::exportSegmentedSnapshot(*snapshot, destination);
+	}
 	void Database::save() const { impl_->db_.flush(); }
 
 	Transaction Database::beginTransaction() {

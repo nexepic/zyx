@@ -81,6 +81,7 @@ namespace graph::storage {
 
 	const char *StorageFormatProbe::describe(StorageFormatKind kind) {
 		switch (kind) {
+			case StorageFormatKind::SFM_NATIVE_WAL: return "experimental native WAL";
 			case StorageFormatKind::SFM_CHECKPOINT:
                 return "experimental checkpoint";
 			case StorageFormatKind::SFM_EMPTY:
