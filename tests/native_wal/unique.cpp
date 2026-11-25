@@ -1,3 +1,5 @@
+#include "confirmation_budget.hpp"
+#include "projection_budget.hpp"
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
@@ -91,9 +93,67 @@ namespace {
 		rejectLabelAddition(db, "A");
 		check(labelledMembers(db, "Item") == after, "second rejection changed graph");
 	}
+	// One checkpoint fits the old geometric reservations. The second must
+	// still fit after retaining the original indexed snapshot and its posting list.
+	void checkpointWithPinnedProjection(const std::string &path) {
+		using namespace graph::storage;
+		{
+			zyx::Database seed(path);
+			seed.open();
+			for (int64_t first = 0; first < 10000; first += 250) {
+				std::vector<std::unordered_map<std::string, zyx::Value>> rows;
+				for (int64_t id = first; id < first + 250; ++id)
+					rows.push_back({{"k", id}, {"v", int64_t(0)}});
+				auto tx = seed.beginTransaction();
+				(void) tx.createNodes("Item", rows);
+				tx.commit();
+			}
+			execute(seed, ddl);
+			seed.close();
+		}
+		auto backend = StorageBackendFactory::create(path, 6U << 20, OpenMode::OPEN_EXISTING_FILE).backend;
+		backend->open();
+		auto &reader = dynamic_cast<LogicalGraphReadBackend &>(*backend);
+		auto &writer = dynamic_cast<LogicalGraphTransactionalBackend &>(*backend);
+		auto old = reader.openLogicalGraphReadSnapshot();
+		auto readKey = [](const auto &view) {
+			auto row = view.readNode(1);
+			auto key = std::ranges::find(row.properties, "k", &LogicalGraphPropertyEntry::key);
+			if (key == row.properties.end())
+				throw std::runtime_error("Checkpoint lost the indexed key");
+			return std::get<int64_t>(key->value.getVariant());
+		};
+		for (int64_t key: {-1, -2}) {
+			LogicalGraphMutationEntityReference first;
+			first.value = 1;
+			LogicalGraphMutationBatch changes;
+			changes.property_replacements.push_back({first, {{"k", graph::PropertyValue(key)}}});
+			auto tx = writer.beginLogicalGraphTransaction(false);
+			(void) tx->stageMutationBatch(std::move(changes));
+			(void) tx->commit();
+			tx.reset();
+			backend->flush();
+			check(readKey(*old) == 0 && readKey(*reader.openLogicalGraphReadSnapshot()) == key,
+				  "Checkpoint changed a pinned or current indexed row");
+		}
+		old.reset();
+		backend->close();
+	}
 } // namespace
 int main(int argc, char **argv) try {
 	std::string op = argv[1], p = argv[2];
+	if (op == "pinned-projection") {
+		checkpointWithPinnedProjection(p);
+		return 0;
+	}
+	if (op == "projection-budget") {
+		projection_test::exactBudget();
+		return 0;
+	}
+	if (op == "deny-create" || op == "deny-drop") {
+		confirmation_test::deny(p, op == "deny-create" ? ddl : "DROP CONSTRAINT unique_k", op == "deny-drop");
+		return 0;
+	}
 	if (op == "unindexed") {
 		std::cout << graph::storage::createNativeWalDatabase(p) << "\n";
 		return 0;

@@ -494,7 +494,7 @@ namespace graph::storage::nativewal {
 							}
 							put(names.bytes);
 							nodeStart += names.bytes.size();
-							projection = std::make_shared<IndexedColumn>(s.budget);
+							projection = std::make_shared<IndexedColumn>(s.budget, s.nodes.size());
 						}
 						size_t offset = nodeStart;
 						auto rows = [&](const auto &table, CheckpointLocations &layout) {
@@ -544,7 +544,7 @@ namespace graph::storage::nativewal {
 						edgeStart = offset;
 						rows(s.edges, edges);
 						if (projection) {
-							std::ranges::sort(projection->postings);
+							projection->buildPostings();
 							Encoder field(16);
 							auto pair = [&](uint64_t a, uint64_t b) {
 								field.bytes.clear();
@@ -557,6 +557,7 @@ namespace graph::storage::nativewal {
 								pair(id, std::bit_cast<uint64_t>(v));
 							for (auto [v, id]: projection->postings)
 								pair(std::bit_cast<uint64_t>(v), id);
+							projection->releaseUnusablePostings();
 							s.column = std::move(projection);
 							s.changedColumn.reset();
 							s.columnOverflow = false;
@@ -683,7 +684,7 @@ namespace graph::storage::nativewal {
 					s->unique = std::make_shared<UniqueDeclaration>(
 							UniqueDeclaration{std::move(constraint), revision, ownsProjection});
 				}
-				projection = std::make_shared<IndexedColumn>(s->budget);
+				projection = std::make_shared<IndexedColumn>(s->budget, nodes);
 			}
 			// A subsequent receipt must select the same format as its sealed
 			// anchor, including when the catalog has just one long durable name.
@@ -717,13 +718,14 @@ namespace graph::storage::nativewal {
 			rows(nodes, s->nodeHigh, s->nodes, baseNode);
 			rows(edges, s->edgeHigh, s->edges, baseEdge);
 			if (projection) {
-				std::ranges::sort(projection->postings);
+				projection->buildPostings();
 				require(c.num() == projection->column.size() && c.num() == projection->complete,
 						"Invalid native projection coverage");
 				for (auto [id, v]: projection->column)
 					require(c.num() == id && c.num() == std::bit_cast<uint64_t>(v), "Native projection mismatch");
 				for (auto [v, id]: projection->postings)
 					require(c.num() == std::bit_cast<uint64_t>(v) && c.num() == id, "Native posting mismatch");
+				projection->releaseUnusablePostings();
 				s->column = std::move(projection);
 			}
 			baseDigest = finish(c);

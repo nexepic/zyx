@@ -19,6 +19,9 @@ def run(*args,code=0,error=None):
 
 with tempfile.TemporaryDirectory() as d:
     root=Path(d)
+    run("projection-budget", root)
+    indexed = Path(run("init", root / "pinned-projection"))
+    run("pinned-projection", indexed)
     labels=Path(run("init",root/"labels"))
     run("labels",labels)
     seed=Path(run("init",root/"seed"));run("seed",seed)
@@ -46,6 +49,15 @@ with tempfile.TemporaryDirectory() as d:
         several = Path(run(init, root / ("several-" + init)))
         run("several", several)
         run("finish-several", several)
+    denied = Path(run("unindexed", root / "denied-create"))
+    run("seed", denied)
+    run("deny-create", denied)
+    run("old", denied)  # Fresh process sees no constraint and commits a duplicate.
+    denied = Path(run("unindexed", root / "denied-drop"))
+    run("seed", denied)
+    run("ddl", denied)
+    run("deny-drop", denied)
+    run("defined", denied)  # Fresh process must still reject a duplicate.
     derived = Path(run("unindexed", root / "derived"))
     run("seed", derived)
     for event, code in events:
