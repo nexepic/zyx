@@ -352,12 +352,35 @@ int main(int argc, char **argv) try {
 		expect(!std::filesystem::exists(path + ".wal"), "Uncertain base published a WAL");
 		return 0;
 	}
-	if (op == "locked-checkpoint") {
+	if (op == "hold-failed-fence") {
+		auto tx = db.beginTransaction();
+		query(tx, "CREATE (:Confirmed)");
+		tx.commit();
+		setenv("ZYX_TEST_NATIVE_IO", "m.dirsync=eio", 1);
+		bool rejected = false;
+		try {
+			db.save();
+		} catch (const std::exception &error) {
+			rejected = std::string(error.what()).find("sync native graph") != std::string::npos;
+		}
+		unsetenv("ZYX_TEST_NATIVE_IO");
+		expect(rejected, "Injected publication fence unexpectedly succeeded");
+		std::cout << "failed fence" << std::endl;
+		std::cin.get();
+		return 0;
+	}
+	if (op == "locked-checkpoint" || op == "locked-close") {
 		auto old = db.beginReadOnlyTransaction();
 		auto w = db.beginTransaction();
 		query(w, "CREATE (:A)");
 		w.commit();
-		setenv("ZYX_TEST_NATIVE_IO", "m.renamed=stop", 1);
+		if (op == "locked-close") {
+			old.commit();
+			setenv("ZYX_TEST_NATIVE_IO", "w.unlinked=stop", 1);
+			db.close();
+			return 0;
+		}
+		setenv("ZYX_TEST_NATIVE_IO", argc > 3 ? argv[3] : "m.renamed=stop", 1);
 		db.save();
 		unsetenv("ZYX_TEST_NATIVE_IO");
 		expect(scalar(old, count) == 0 && scalar(db, count) == 1, "Checkpoint changed transaction snapshot");

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -32,6 +33,17 @@ static int fault(char k, const char *name) {
 		return -1;
 	}
 	return 0;
+}
+int flock(int fd, int operation) {
+	static auto real = reinterpret_cast<decltype(&flock)>(dlsym(RTLD_NEXT, "flock"));
+	if (!strcmp(action('f', "admit"), "stop")) {
+		struct stat st{};
+		if (!fstat(fd, &st) && S_ISREG(st.st_mode)) {
+			raise(SIGSTOP);
+			unsetenv("ZYX_TEST_NATIVE_IO");
+		}
+	}
+	return real(fd, operation);
 }
 ssize_t write(int fd, const void *data, size_t len) {
 	static ssize_t (*real)(int, const void *, size_t);

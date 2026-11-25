@@ -84,41 +84,8 @@ with tempfile.TemporaryDirectory() as name:
         path = new(kind+"-short")
         run("append",path,kind+".write=short")
         recovered(path,1)
-    # Directory lock survives replacement of the main inode. The stopped
-    # writer has a genuine older in-process snapshot and an acknowledged B.
-    handoff = new("handoff")
-    other = handoff.parent/"second"
-    shutil.copyfile(new("independent-identity"), other)
-    with subprocess.Popen([driver,"locked-checkpoint",str(handoff)],env=env) as writer:
-        try:
-            deadline=time.monotonic()+20
-            while True:
-                pid, status = os.waitpid(writer.pid,os.WUNTRACED|os.WNOHANG)
-                if pid:
-                    break
-                if time.monotonic()>=deadline:
-                    writer.kill()
-                    raise AssertionError("writer did not stop at publication")
-                time.sleep(0.01)
-            assert os.WIFSTOPPED(status) and os.WSTOPSIG(status)==signal.SIGSTOP,status
-            run("append", other, code=2, error="lock native graph directory")
-            alias_dir = root/"external-alias"
-            alias_dir.mkdir()
-            alias = alias_dir/"main"
-            os.link(handoff, alias)
-            try:
-                run("append", alias, code=2, error="private, unaliased files")
-            finally:
-                alias.unlink()
-            run("append",handoff,code=2,error="lock native graph directory")
-            run("read-only",handoff,code=2,error="lock native graph directory")
-        finally:
-            if writer.poll() is None: os.kill(writer.pid,signal.SIGCONT)
-        assert writer.wait(timeout=20)==0
-    recovered(handoff,1)
-    run("append", other)
-    recovered(other, 1)
-    print("Directory lock: independent main refused during handoff, writable after release; external hard link refused")
+    from lock_isolation import exercise_isolation
+    exercise_isolation(root, new, run, recovered, driver, env)
     for event in ("b.link","b.linked","b.dirsync","b.dirsynced"):
         path=new("anchor-"+event)
         run("append",path,event+"=kill",killed)
@@ -140,8 +107,8 @@ with tempfile.TemporaryDirectory() as name:
     old_log = log.read_bytes()
     anchor_path=original.with_suffix(".base")
     anchor_bytes=anchor_path.read_bytes()
-    run("append",anchor_path,code=2,error="Managed native base")
-    run("read-only",anchor_path,code=2,error="Managed native base")
+    run("append",anchor_path,code=2,error="Managed native dependency")
+    run("read-only",anchor_path,code=2,error="Managed native dependency")
     assert anchor_path.read_bytes()==anchor_bytes and log.read_bytes()==old_log
     for event in ("m.write","m.synced","m.renamed","m.dirsynced","w.unlink","w.unlinked","u.dirsynced"):
         dest = root / ("checkpoint-"+event)

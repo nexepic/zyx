@@ -125,10 +125,10 @@ namespace graph::storage::nativewal {
 			}
 			return id;
 		}
-		std::string stageName(const Identity &id) {
+		std::string stageName(Span key) {
 			const char *digits = "0123456789abcdef";
 			std::string s = ".zyx-native-";
-			for (auto b: id) {
+			for (auto b: key) {
 				unsigned v = std::to_integer<unsigned>(b);
 				s += digits[v >> 4];
 				s += digits[v & 15];
@@ -230,23 +230,22 @@ namespace graph::storage::nativewal {
 	} // namespace
 	struct Journal::Files {
 		File directory;
+		std::shared_ptr<File> authority;
 		std::string main, log, stage;
 		size_t alignment = 0;
-		Files(const std::filesystem::path &path, bool ro) :
+		explicit Files(const std::filesystem::path &path) :
 			directory(::open((path.has_parent_path() ? path.parent_path() : ".").c_str(),
 							 O_DIRECTORY | O_RDONLY | O_CLOEXEC)),
-			main(path.filename().string()), log(main + ".wal") {
-			if (flock(directory.fd, (ro ? LOCK_SH : LOCK_EX) | LOCK_NB) < 0)
+			main(path.filename().string()), log(main + ".wal"),
+			stage(stageName(utils::Sha256::digest(std::as_bytes(std::span(main))))) {
+			// Keep legacy directory-exclusive writers out while allowing
+			// independently locked databases to share this directory.
+			if (flock(directory.fd, LOCK_SH | LOCK_NB) < 0)
 				fail("lock native graph directory");
-			// Only the official main entry can publish. An anchored checkpoint is
-			// itself a valid standalone image; opening its *managed name* for an
-			// independent transaction would otherwise overwrite the reachable base.
-			require(!main.starts_with(".zyx-native-"), "Managed native stage is not a database entry point");
-			if (main.ends_with(".base")) {
-				auto parent = main.substr(0, main.size() - 5);
-				require(parent.empty() || (!exists(parent) && !exists(parent + ".wal")),
-						"Managed native base is not a database entry point");
-			}
+			// WAL, anchor and scratch names belong to their database throughout
+			// its lifetime, including intervals when they do not exist on disk.
+			require(!main.starts_with(".zyx-native-") && !main.ends_with(".base") && !main.ends_with(".wal"),
+					"Managed native dependency is not a database entry point");
 			struct stat info{};
 			if (fstat(directory.fd, &info) < 0)
 				fail("stat native graph directory");
@@ -283,6 +282,27 @@ namespace graph::storage::nativewal {
 					"Invalid native graph file extent");
 			return {f, static_cast<size_t>(st.st_size)};
 		}
+		static void lockFile(int fd, bool ro) {
+			if (flock(fd, (ro ? LOCK_SH : LOCK_EX) | LOCK_NB) < 0)
+				fail("lock native graph main");
+		}
+		void checkAuthority() const {
+			struct stat named{};
+			if (fstatat(directory.fd, main.c_str(), &named, AT_SYMLINK_NOFOLLOW) < 0)
+				fail("stat native graph main authority");
+			auto held = metadata(authority->fd);
+			require(held.st_dev == named.st_dev && held.st_ino == named.st_ino,
+					"Native graph base authority changed");
+		}
+		std::pair<std::shared_ptr<File>, size_t> lockMain(bool ro) {
+			auto opened = openInput(main);
+			lockFile(opened.first->fd, ro);
+			authority = opened.first;
+			// An opener may have paused after openat across a rename and unlock.
+			// Never admit that superseded inode, even if its flock succeeds.
+			checkAuthority();
+			return opened;
+		}
 		std::shared_ptr<File> stable;
 		struct stat authenticated{};
 		static struct stat metadata(int fd) {
@@ -317,7 +337,7 @@ namespace graph::storage::nativewal {
 		}
 		// Main replacement removes the second link to this inode. Record that
 		// exact transition before the first ACK; later appends must still reach
-		// the same sealed base through the directory locked by this writer.
+		// the same sealed base through the official database directory.
 		void checkBaseName(bool first) {
 			struct stat named{};
 			if (fstatat(directory.fd, anchor().c_str(), &named, AT_SYMLINK_NOFOLLOW) < 0)
@@ -354,9 +374,11 @@ namespace graph::storage::nativewal {
 		}
 		template<class Emit>
 		void installStream(const std::string &name, Emit emit) {
-			// Under the exclusive directory lock, exactly one stage name is
-			// reserved for this authenticated database identity. A killed writer
+			// Under the exclusive main lock, exactly one stage name is
+			// reserved for this entry (including independent copies). A killed writer
 			// can leave this inode behind, but repeated retries cannot accumulate stages.
+			if (authority)
+				checkAuthority();
 			const auto &tmp = stage;
 			if (unlinkat(directory.fd, tmp.c_str(), 0) < 0 && errno != ENOENT)
 				fail("discard previous native graph stage");
@@ -365,11 +387,22 @@ namespace graph::storage::nativewal {
 			try {
 				emit(f.fd);
 				syncFile(f.fd);
+				// Lock the replacement before it can be opened through the official
+				// name. A duplicate keeps the same open file description locked
+				// across the checked close, rename and directory fence.
+				std::shared_ptr<File> successor;
+				if (name == main) {
+					File duplicate(fcntl(f.fd, F_DUPFD_CLOEXEC, 0));
+					lockFile(duplicate.fd, false);
+					successor = std::make_shared<File>(std::move(duplicate));
+				}
 				if (::close(std::exchange(f.fd, -1)) < 0)
 					fail("close native graph stage");
 				if (renameat(directory.fd, tmp.c_str(), directory.fd, name.c_str()) < 0)
 					fail("install native graph stage");
 				renamed = true;
+				if (successor)
+					authority = std::move(successor);
 				syncFile(directory.fd);
 				if (name == log)
 					activeLog = std::make_unique<File>(
@@ -475,6 +508,17 @@ namespace graph::storage::nativewal {
 			edges.bind(s.edges, published, edgeStart, s.budget);
 			return hash.finalize();
 		}
+		void discardLegacyStage(const Identity &id) {
+			// Old experimental builds used the 16-byte graph ID alone. Only
+			// check after authenticating it. The shared directory flock excludes
+			// legacy writers, and current stage names use disjoint 32-byte keys.
+			auto old = stageName(id);
+			if (exists(old)) {
+				if (unlinkat(directory.fd, old.c_str(), 0) < 0 && errno != ENOENT)
+					fail("remove abandoned legacy native stage");
+				syncFile(directory.fd);
+			}
+		}
 		void removeWal() {
 			activeLog.reset();
 			for (const auto &name: {log, anchor()}) {
@@ -497,17 +541,16 @@ namespace graph::storage::nativewal {
 			fail("exclusively create native graph directory");
 		syncFile(parent.fd);
 		auto path = target / "main";
-		Files files(path, false);
+		Files files(path);
 		State s;
 		s.identity = identity();
-		files.stage = stageName(s.identity);
 		files.installBase(s);
 		return path.string();
 	}
 	Journal::Journal(const std::string &path, bool ro, size_t memory) :
-		files(std::make_unique<Files>(path, ro)), readOnly(ro) {
+		files(std::make_unique<Files>(path)), readOnly(ro) {
 		auto s = std::make_shared<State>(memory);
-		auto [main, extent] = files->openInput(files->main);
+		auto [main, extent] = files->lockMain(ro);
 		require(extent >= 112, "Incomplete native graph main");
 		auto initial = Files::metadata(main->fd);
 		Cursor m(main->fd, extent, s->budget, memory);
@@ -515,7 +558,6 @@ namespace graph::storage::nativewal {
 		Decoder r{head};
 		r.magic("ZYXng003");
 		std::ranges::copy(r.take(16), s->identity.begin());
-		files->stage = stageName(s->identity);
 		baseSequence = r.num();
 		auto sequence = r.num();
 		auto needed = r.count(maxWal);
@@ -619,6 +661,8 @@ namespace graph::storage::nativewal {
 			require(std::ranges::equal(walHash.finalize(), expected) && s->sequence == sequence,
 					"Incomplete native graph transaction");
 		}
+		if (!ro)
+			files->discardLegacyStage(s->identity);
 		current = std::move(s);
 	}
 	Journal::~Journal() = default;
@@ -665,6 +709,7 @@ namespace graph::storage::nativewal {
 		next->sequence = current->sequence + 1;
 		auto delta = encodeDelta(*next, changed);
 		try {
+			files->checkAuthority();
 			if (needsStabilization || delta.size() + 24 + files->alignment - 1 > maxWal - walLength)
 				checkpointLocked();
 			// Unchanged entries in this private transaction still carry the
