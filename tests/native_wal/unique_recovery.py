@@ -1,5 +1,7 @@
 """Public Cypher semantics, schema publication and WAL receipt failures."""
+import hashlib
 import os
+import struct
 from pathlib import Path
 import shutil
 import signal
@@ -8,9 +10,11 @@ import sys
 import tempfile
 
 driver, shim=map(os.path.abspath,sys.argv[1:3])
-def run(*args,code=0):
+def run(*args,code=0,error=None):
     p=subprocess.run([driver,*map(str,args)],env={**os.environ,"LD_PRELOAD":shim},text=True,capture_output=True,timeout=30)
     assert p.returncode==code,(args,p.returncode,p.stdout,p.stderr)
+    if error is not None:
+        assert error in p.stderr, (args, p.stderr)
     return p.stdout.strip()
 
 with tempfile.TemporaryDirectory() as d:
@@ -30,6 +34,59 @@ with tempfile.TemporaryDirectory() as d:
             run("defined" if visible else "old",p)
     cancel=clone(seed,"cancelled");run("cancel",cancel);run("defined",cancel)
     active=clone(seed,"unique");run("ddl",active)
+    run("overlay", clone(active, "overlay"))
+    run("large-delta", clone(active, "large-delta"))
+    run("owner-limit", clone(active, "owner-limit"))
+    unindexed = Path(run("unindexed", root / "unindexed"))
+    run("undeclared", unindexed)
+    # Produce matching integer columns and postings with a duplicate using a
+    # real unconstrained writer. Re-seal the same base with a declaration:
+    # successful byte authentication must still fail its semantic audit.
+    fabricated = Path(run("init", root / "duplicate-base"))
+    run("duplicate-in-base", fabricated)
+    image = bytearray(fabricated.read_bytes()[:-32])
+    assert image[:8] == b"ZYXng004"
+    pos = 112
+    for expected in (b"Item", b"k"):
+        size = struct.unpack_from("<Q", image, pos)[0]
+        assert image[pos + 8:pos + 8 + size] == expected
+        pos += 8 + size
+    image[:8] = b"ZYXng005"
+    image[pos:pos] = struct.pack("<Q", 1) + b"u" + image[24:32]
+    fabricated.write_bytes(image + hashlib.sha256(image).digest())
+    run("defined", fabricated, code=1, error="duplicate key")
+    prefix = clone(active, "prefix")
+    run("prefix", prefix)
+    run("accept-prefix", clone(prefix, "legal-prefix"))
+    truncated = clone(prefix, "truncated-prefix")
+    with truncated.with_suffix(".wal").open("r+b") as f:
+        f.truncate(os.fstat(f.fileno()).st_size - 1)
+    run("accept-prefix", truncated, code=1, error="Missing native graph WAL prefix")
+    # Keep both WAL transactions, use a duplicate in the first and leave the
+    # later repair intact. The receipt authenticates these exact modified bytes.
+    log = prefix.with_suffix(".wal")
+    contents = log.read_bytes()
+    marker = struct.pack("<Q", 4328719365)
+    assert contents.count(marker) == 1
+    invalid = contents.replace(marker, struct.pack("<Q", 1))
+    log.write_bytes(invalid)
+    receipt = bytearray(prefix.read_bytes())
+    assert len(receipt) == 112 and receipt[48:80] == hashlib.sha256(contents).digest()
+    receipt[48:80] = hashlib.sha256(invalid).digest()
+    receipt[80:] = hashlib.sha256(receipt[:80]).digest()
+    prefix.write_bytes(receipt)
+    run("accept-prefix", prefix, code=1, error="duplicate key")
+    # Copy only a closed, independently durable root. The writable copy can
+    # advance and enforce its declaration without changing the source.
+    run("defined", active)  # Close the writable source cleanly before copying.
+    backup_dir = root / "writable-copy"
+    backup_dir.mkdir()
+    backup = backup_dir / "main"
+    shutil.copyfile(active, backup)
+    run("defined", backup)
+    run("change", backup)
+    run("changed", backup)
+    run("defined", active)
     for obj in ("w","m"):
         for event,code in events:
             p=clone(active,obj+event);run("change",p,obj+"."+event,code=code)

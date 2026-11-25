@@ -677,7 +677,16 @@ namespace graph::storage::nativewal {
 				s->column = std::move(projection);
 			}
 			baseDigest = finish(c);
-			validateUnique(*s);
+			// Every posting was reconstructed from its row and matched to the
+			// sealed base. With complete integer coverage, adjacent keys are
+			// an exhaustive uniqueness audit, including an empty declaration.
+			if (s->unique && s->column && s->column->complete) {
+				const auto &posts = s->column->postings;
+				if (std::ranges::adjacent_find(posts, {}, &Posting::first) != posts.end())
+					throw UniqueViolation("Constraint violation: '" + s->unique->name + "' has a duplicate key");
+			} else
+				validateUnique(*s);
+			uniqueOwners.bind(*s);
 		};
 		if (!needed) {
 			require(std::ranges::equal(digest({}), expected), "Invalid standalone digest");
@@ -720,9 +729,11 @@ namespace graph::storage::nativewal {
 				VersionCharge charge(s->budget, 3 * size + std::min(size_t(16384), 8 * size));
 				Bytes delta(size);
 				log.consume(delta);
-				applyDelta(*s, delta);
-				validateUnique(*s);
+				UniqueDelta check(*s, uniqueOwners);
+				applyDelta(*s, delta, check);
+				check.validate(*s);
 				s->sequence = seq;
+				check.advance(*s);
 				size_t padding = (alignment - log.position % alignment) % alignment;
 				std::array<std::byte, 512> zeros;
 				while (padding) {
@@ -753,6 +764,7 @@ namespace graph::storage::nativewal {
 		auto fresh = files->installBase(*rebased, beforePublish);
 		files->removeWal();
 		current = std::move(rebased);
+		uniqueOwners.bind(*current);
 		baseDigest = fresh;
 		baseSequence = current->sequence;
 		walLength = 0;
@@ -819,7 +831,13 @@ namespace graph::storage::nativewal {
 			throw LogicalGraphMutationConflict("Stale native graph write snapshot");
 		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
 		next->sequence = current->sequence + 1;
-		validateUnique(*next);
+		UniqueDelta check(*current, uniqueOwners);
+		if (next->unique) {
+			check.reserve(changed.nodes.size());
+			for (auto id: changed.nodes)
+				check.observe(id, check.key(*current, id), check.key(*next, id));
+			check.validate(*next);
+		}
 		auto delta = encodeDelta(*next, changed);
 		try {
 			files->checkAuthority();
@@ -866,6 +884,7 @@ namespace graph::storage::nativewal {
 			files->install(files->main, receipt);
 			if (!walLength)
 				files->checkBaseName(true);
+			check.advance(*next);
 			walLength = length;
 			walHash = hash;
 			current = std::move(next);

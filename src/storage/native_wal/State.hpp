@@ -125,5 +125,6 @@ namespace graph::storage::nativewal {
 	void encodeBaseRow(Encoder &, const LogicalGraphEdge &);
 	LogicalGraphNode baseNode(uint64_t, Span);
 	LogicalGraphEdge baseEdge(uint64_t, Span);
-	void applyDelta(State &, Span);
+	class UniqueDelta;
+	void applyDelta(State &, Span, UniqueDelta &);
 } // namespace graph::storage::nativewal

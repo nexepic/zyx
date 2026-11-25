@@ -1,4 +1,4 @@
-#include "State.hpp"
+#include "UniqueDelta.hpp"
 #include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
 namespace graph::storage::nativewal {
 	void Encoder::value(const PropertyValue &v) {
@@ -305,7 +305,7 @@ namespace graph::storage::nativewal {
 		require(r.bytes.empty(), "Trailing native edge");
 		return row;
 	}
-	void applyDelta(State &s, Span bytes) {
+	void applyDelta(State &s, Span bytes, UniqueDelta &unique) {
 		Decoder r{bytes};
 		auto nh = r.num(), eh = r.num();
 		require(nh >= s.nodeHigh && eh >= s.edgeHigh && nh <= INT64_MAX && eh <= INT64_MAX,
@@ -314,12 +314,18 @@ namespace graph::storage::nativewal {
 		std::vector<uint64_t> changedColumnIds;
 		auto rows = [&](auto &map, uint64_t old, uint64_t high, auto decode) {
 			auto count = r.count(2 * maxRows);
+			constexpr bool nodes = std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>;
+			if constexpr (nodes)
+				unique.reserve(count);
 			uint64_t previous = 0;
 			while (count--) {
 				auto id = r.num();
 				require(id > previous && id <= high && (id > old || map.contains(id)),
 						"Invalid or resurrected native WAL id");
 				previous = id;
+				UniqueDelta::Key before;
+				if constexpr (nodes)
+					before = unique.key(s, id);
 				if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
 					if (s.declaration && !s.columnOverflow && changedColumnIds.size() <= ColumnChanges::limit)
 						changedColumnIds.push_back(id);
@@ -330,6 +336,8 @@ namespace graph::storage::nativewal {
 					if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
 						removedNode |= existed;
 				}
+				if constexpr (nodes)
+					unique.observe(id, before, unique.key(s, id));
 			}
 		};
 		rows(s.nodes, s.nodeHigh, nh, [&](uint64_t id) { return readNode(r, id); });

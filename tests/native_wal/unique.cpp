@@ -94,6 +94,10 @@ namespace {
 } // namespace
 int main(int argc, char **argv) try {
 	std::string op = argv[1], p = argv[2];
+	if (op == "unindexed") {
+		std::cout << graph::storage::createNativeWalDatabase(p) << "\n";
+		return 0;
+	}
 	if (op == "init") {
 		std::cout << graph::storage::createIndexedNativeWalDatabase(p, "Item", "k") << "\n";
 		return 0;
@@ -130,6 +134,104 @@ int main(int argc, char **argv) try {
 	db.open();
 	if (op == "labels") {
 		checkLabelTransfer(db);
+		return 0;
+	}
+	if (op == "undeclared") {
+		auto r = db.execute(ddl);
+		check(!r.isSuccess() && r.getError().find("requires its declared") != std::string::npos,
+			  "installed constraint without the declared index");
+		auto tx = db.beginTransaction();
+		execute(tx, "CREATE (:Item {k:1}),(:Item {k:1})");
+		tx.commit();
+		db.close();
+		return 0;
+	}
+	if (op == "duplicate-in-base") {
+		auto w = db.beginTransaction();
+		execute(w, "CREATE (:Item {k:1}),(:Item {k:1})");
+		w.commit();
+		db.close();
+		return 0;
+	}
+	if (op == "large-delta") {
+		// Exceed sparse admission, with a duplicate among late incoming keys.
+		auto tx = db.beginTransaction();
+		std::vector<std::unordered_map<std::string, zyx::Value>> rows;
+		for (int64_t i = 0; i < 4097; ++i)
+			rows.push_back({{"k", i == 4096 ? int64_t{100} : 100 + i}});
+		(void) tx.createNodes("Item", rows);
+		bool rejected = false;
+		try {
+			tx.commit();
+		} catch (const std::exception &e) {
+			rejected = std::string(e.what()).find("duplicate key") != std::string::npos;
+		}
+		check(rejected, "large duplicate batch escaped the full validator");
+		count(db, "n.k=100", 0);
+		check(duplicate(db), "failed batch changed uniqueness");
+		db.close();
+		return 0;
+	}
+	if (op == "prefix") {
+		for (auto key: {"4328719365", "4"}) {
+			auto w = db.beginTransaction();
+			execute(w, std::string("MATCH(n:Item) WHERE id(n)=2 SET n.k=") + key);
+			w.commit();
+		}
+		std::_Exit(0);
+	}
+	if (op == "accept-prefix") {
+		count(db, "n.k=4", 1);
+		check(duplicate(db), "restored constraint absent");
+		db.close();
+		return 0;
+	}
+	if (op == "owner-limit") {
+		for (int64_t base: {100, 2200}) {
+			auto tx = db.beginTransaction();
+			std::vector<std::unordered_map<std::string, zyx::Value>> rows;
+			for (int64_t i = base; i < base + 2100; ++i)
+				rows.push_back({{"k", i}});
+			(void) tx.createNodes("Item", rows);
+			tx.commit();
+		}
+		auto conflict = db.beginTransaction();
+		execute(conflict, "CREATE (:Item {k:4299})");
+		bool duplicateKey = false;
+		try {
+			conflict.commit();
+		} catch (const std::exception &e) {
+			duplicateKey = std::string(e.what()).find("duplicate key") != std::string::npos;
+		}
+		check(duplicateKey, "owner admission limit hid a committed claim");
+		db.save();
+		count(db, "n.k=4299", 1);
+		return 0;
+	}
+	if (op == "overlay") {
+		auto tx = db.beginTransaction();
+		execute(tx, "MATCH(n:Item) WHERE n.k=1 SET n.k=91");
+		tx.commit();
+		auto bad = db.beginTransaction();
+		execute(bad, "CREATE (:Item {k:91})");
+		bool rejected = false;
+		try {
+			bad.commit();
+		} catch (const std::exception &e) {
+			rejected = std::string(e.what()).find("duplicate key") != std::string::npos;
+		}
+		check(rejected, "empty base hid confirmed owner");
+		auto swap = db.beginTransaction();
+		execute(swap, "MATCH(n:Item) WHERE id(n)=2 SET n.k=91");
+		db.save();
+		execute(swap, "MATCH(n:Item) WHERE id(n)=1 SET n.k=2");
+		swap.commit();
+		auto del = db.beginTransaction();
+		execute(del, "MATCH(n:Item) WHERE n.k=91 DETACH DELETE n");
+		execute(del, "CREATE (:Item {k:91})");
+		del.commit();
+		count(db, "n.k=91", 1);
+		db.close();
 		return 0;
 	}
 	if (op == "seed" || op == "dirty-seed") {
