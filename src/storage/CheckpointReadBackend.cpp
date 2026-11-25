@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <boost/iterator/iterator_facade.hpp>
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <numeric>
 #include <tuple>
+#include "CheckpointSegments.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/utils/Sha256.hpp"
@@ -49,16 +52,60 @@ namespace graph::storage {
 		// File offsets never escape this object. Read and authenticate the exact private
 		// bytes used by every subsequent cursor, including on mutable native filesystems.
 		namespace resource = query::execution::detail;
+		// On-disk order is sufficient unless authenticated keys prove otherwise.
+		struct Order {
+			uint32_t first = 0, count = 0;
+			std::vector<uint32_t> permutation;
+			struct Cursor : boost::iterator_facade<Cursor, uint32_t, boost::random_access_traversal_tag, uint32_t,
+												   std::ptrdiff_t> {
+				using iterator_concept = std::random_access_iterator_tag;
+				using iterator_category = std::random_access_iterator_tag;
+				uint32_t operator[](std::ptrdiff_t n) const { return *(*this + n); }
+				const Order *order = nullptr;
+				uint32_t pos = 0;
+				Cursor() = default;
+				Cursor(const Order *o, uint32_t p) : order(o), pos(p) {}
+				uint32_t dereference() const {
+					return order->permutation.empty() ? order->first + pos : order->permutation[pos];
+				}
+				bool equal(const Cursor &rhs) const { return order == rhs.order && pos == rhs.pos; }
+				void increment() { ++pos; }
+				void decrement() { --pos; }
+				void advance(std::ptrdiff_t d) { pos = static_cast<uint32_t>(pos + d); }
+				std::ptrdiff_t distance_to(const Cursor &rhs) const { return std::ptrdiff_t(rhs.pos) - pos; }
+			};
+			auto iter(uint32_t i) const { return Cursor(this, i); }
+			auto begin() const { return iter(0); }
+			auto end() const { return iter(count); }
+			template<class Key>
+			void sortBy(Key key) {
+				permutation.resize(count);
+				std::iota(permutation.begin(), permutation.end(), first);
+				std::sort(permutation.begin(), permutation.end(), [&](auto a, auto b) { return key(a) < key(b); });
+			}
+		};
+		static_assert(std::random_access_iterator<Order::Cursor>);
 		struct Image {
 			std::shared_ptr<resource::DatabaseResourceBudget> domain;
 			std::optional<resource::ResourceLease> reservation;
 			LogicalGraphMutationFence fence;
-			std::vector<Record> records;
-			std::vector<uint32_t> nodes, edges, outgoing, incoming;
-			uint64_t field(uint32_t i, size_t off) const { return word(records[i].data() + off); }
+			checkpoint::Windows privateFile;
+			checkpoint::Segments segments;
+			bool packed = false;
+			Record record(uint32_t i) const { return packed ? segments[i] : privateFile[i]; }
+			bool dense = false;
+			uint64_t firstId = 0;
+			Order nodes, edges, outgoing, incoming;
+			uint64_t field(uint32_t i, size_t off) const {
+				return packed ? segments.value(i, (off - 4) / 8) : word(privateFile[i].data() + off);
+			}
 			uint64_t nid(uint32_t i) const { return field(i, 12); }
 			uint64_t eid(uint32_t i) const { return field(i, 4); }
 			auto nodeAt(uint64_t id) const {
+				if (dense) {
+					auto offset = id <= firstId ? 0 : std::min<uint64_t>(id - firstId, nodes.count);
+					return nodes.iter(static_cast<uint32_t>(offset));
+				}
 				return std::lower_bound(nodes.begin(), nodes.end(), id,
 										[&](auto i, auto target) { return nid(i) < target; });
 			}
@@ -67,12 +114,12 @@ namespace graph::storage {
 				return it != nodes.end() && nid(*it) == id;
 			}
 			LogicalGraphNode node(uint32_t i) const {
+				const auto tags = packed ? segments.value(i, 4) : word(privateFile[i].data());
 				LogicalGraphNode n{nid(i), {"Item"}, {{"id", std::bit_cast<int64_t>(field(i, 4))}}};
-				const auto &r = records[i];
-				if (r[1])
-					n.properties.push_back({"val", cell(r[1], field(i, 20))});
-				if (r[2])
-					n.properties.push_back({"grp", cell(r[2], field(i, 28))});
+				if (auto t = (tags >> 8) & 255)
+					n.properties.push_back({"val", cell(t, field(i, 20))});
+				if (auto t = (tags >> 16) & 255)
+					n.properties.push_back({"grp", cell(t, field(i, 28))});
 				return n;
 			}
 			LogicalGraphEdge edge(uint32_t i) const {
@@ -93,22 +140,36 @@ namespace graph::storage {
 				require(size >= extent, "Incomplete cp002 checkpoint padding");
 				require(size == extent, "cp002 main requires its WAL or native recovery");
 				const size_t count = length / 40;
-				// At most three index entries per record (one edge index plus both directions).
-				require(count * (sizeof(Record) + 3 * sizeof(uint32_t)) <= budget,
-						"cp002 snapshot exceeds storage cache budget");
+				const size_t working = checkpoint::Segments::workingBytes(count);
+				const size_t directory = checkpoint::Segments::directoryBytes(count);
+				// With a small input the fixed window is already the cheapest private form.
+				// Admit the worst case up front on native, so a tight cap can use disk instead.
+				packed = count > 256 && working + directory + count * sizeof(Record) <= budget;
+#ifdef __EMSCRIPTEN__
+				// A temporary file here would consume unaccounted MEMFS memory.
+				packed = count > 256;
+#endif
+				size_t admitted = packed ? working + directory : checkpoint::Windows::bytes(count);
+				require(admitted <= budget, "cp002 snapshot exceeds storage cache budget");
 				std::string identity("cp002:");
 				identity.append(reinterpret_cast<const char *>(h.data() + 8), 16);
 				domain = resource::ProcessResourceDomains::defaultOwner()->domain(std::move(identity));
 				auto account =
 						std::make_shared<resource::ResourceAccount>(domain, resource::ResourceClass::RCK_CACHE, budget);
 				reservation.emplace(std::move(account));
-				reservation->set(count * (sizeof(Record) + 3 * sizeof(uint32_t)));
-				records.resize(count);
-				if (length)
-					require(bool(in.read(reinterpret_cast<char *>(records.data()), length)), "Short cp002 checkpoint");
+				reservation->set(admitted);
 				utils::Sha256 hash;
 				hash.update(std::as_bytes(std::span(h).first(56)));
-				hash.update(std::as_bytes(std::span(records)));
+				if (packed) {
+					segments.load(in, count, hash, [&](size_t bytes) {
+						require(bytes <= budget - admitted, "cp002 snapshot exceeds storage cache budget");
+						admitted += bytes;
+						reservation->set(admitted);
+					});
+					admitted -= working;
+					reservation->set(admitted);
+				} else
+					privateFile.load(in, count, hash);
 				require(std::memcmp(hash.finalize().data(), h.data() + 56, 32) == 0,
 						"cp002 checkpoint checksum mismatch");
 				// Only a read-only view of these exact authenticated bytes can expose this fence.
@@ -119,50 +180,74 @@ namespace graph::storage {
 				for (uint64_t pos = 88 + length; pos < size; ++pos)
 					require(in.get() == 0, "Invalid cp002 padding");
 				require(in.peek() == std::char_traits<char>::eof() && !in.bad(), "cp002 extent changed");
-				const auto nodeCount =
-						std::count_if(records.begin(), records.end(), [](const auto &r) { return r[0] == 1; });
-				const auto edgeCount =
-						std::count_if(records.begin(), records.end(), [](const auto &r) { return r[0] == 2; });
-				nodes.reserve(nodeCount);
-				edges.reserve(edgeCount);
+				bool nodeOrder = true, outOrder = true, inOrder = true;
+				dense = true;
+				Record last{};
 				for (uint32_t i = 0; i < count; ++i) {
-					const auto &r = records[i];
-					require(i == 0 || records[i - 1][0] <= r[0], "Invalid cp002 record order");
+					const Record r = record(i);
+					require(last[0] <= r[0], "Invalid cp002 record order");
 					if (r[0] == 1) {
-						require(nid(i) > 0 && nid(i) <= word(h.data() + 32) && nid(i) <= INT64_MAX,
-								"Invalid cp002 node ID");
-						if (!nodes.empty())
-							require(std::bit_cast<int64_t>(eid(nodes.back())) < std::bit_cast<int64_t>(eid(i)),
+						const auto id = word(r.data() + 12);
+						require(id && id <= INT64_MAX && id <= word(h.data() + 32), "Invalid cp002 node ID");
+						if (!nodes.count)
+							firstId = id;
+						else {
+							require(std::bit_cast<int64_t>(word(last.data() + 4)) <
+											std::bit_cast<int64_t>(word(r.data() + 4)),
 									"Invalid cp002 key order");
+							nodeOrder &= word(last.data() + 12) < id;
+						}
+						dense &= id == firstId + nodes.count;
 						if (r[1])
-							(void) cell(r[1], field(i, 20));
+							(void) cell(r[1], word(r.data() + 20));
 						if (r[2])
-							(void) cell(r[2], field(i, 28));
-						nodes.push_back(i);
+							(void) cell(r[2], word(r.data() + 28));
+						++nodes.count;
 					} else if (r[0] == 2) {
-						require(eid(i) > 0 && eid(i) <= word(h.data() + 40) && eid(i) <= INT64_MAX &&
-										(edges.empty() || eid(edges.back()) < eid(i)),
-								"Invalid cp002 edge ID");
-						edges.push_back(i);
+						const auto id = word(r.data() + 4);
+						require(id && id <= INT64_MAX && id <= word(h.data() + 40), "Invalid cp002 edge ID");
+						if (edges.count) {
+							require(word(last.data() + 4) < id, "Invalid cp002 edge ID");
+							outOrder &= word(last.data() + 12) <= word(r.data() + 12);
+							inOrder &= word(last.data() + 20) <= word(r.data() + 20);
+						} else
+							edges.first = i;
+						++edges.count;
 					} else {
-						require(r[0] == 3 && (i == 0 || records[i - 1][0] != 3 ||
-											  std::memcmp(records[i - 1].data() + 4, r.data() + 4, 16) < 0),
+						require(r[0] == 3 && (last[0] != 3 || std::memcmp(last.data() + 4, r.data() + 4, 16) < 0),
 								"Invalid cp002 receipt order");
 					}
+					last = r;
 				}
-				std::sort(nodes.begin(), nodes.end(), [&](auto a, auto b) { return nid(a) < nid(b); });
-				for (size_t i = 1; i < nodes.size(); ++i)
-					require(nid(nodes[i - 1]) != nid(nodes[i]), "Duplicate cp002 node ID");
-				for (auto i: edges)
-					require(hasNode(field(i, 12)) && hasNode(field(i, 20)), "Invalid cp002 edge endpoint");
-				auto buildDirection = [&](auto &index, size_t off) {
-					index = edges;
-					std::sort(index.begin(), index.end(), [&](auto a, auto b) {
-						return std::pair(field(a, off), eid(a)) < std::pair(field(b, off), eid(b));
-					});
+				auto admitOrder = [&](const Order &order) {
+					admitted += order.count * sizeof(uint32_t);
+					require(admitted <= budget, "cp002 snapshot exceeds storage cache budget");
+					reservation->set(admitted);
 				};
-				buildDirection(outgoing, 12);
-				buildDirection(incoming, 20);
+				if (!nodeOrder) {
+					admitOrder(nodes);
+					nodes.sortBy([&](auto i) { return nid(i); });
+					for (uint32_t i = 1; i < nodes.count; ++i)
+						require(nid(nodes.permutation[i - 1]) != nid(nodes.permutation[i]), "Duplicate cp002 node ID");
+				}
+				for (auto i: edges) {
+					auto r = record(i);
+					require(hasNode(word(r.data() + 12)) && hasNode(word(r.data() + 20)),
+							"Invalid cp002 edge endpoint");
+				}
+				auto direction = [&](Order &order, bool sorted, size_t off) {
+					order.first = edges.first;
+					order.count = edges.count;
+					if (!sorted) {
+						admitOrder(order);
+						order.sortBy([&](auto i) {
+							auto r = record(i);
+							return std::pair(word(r.data() + off), word(r.data() + 4));
+						});
+					}
+				};
+				direction(outgoing, outOrder, 12);
+				direction(incoming, inOrder, 20);
 			}
 		};
 		class Snapshot final : public LogicalGraphReadSnapshot {
@@ -201,6 +286,29 @@ namespace graph::storage {
 				require(it != img->edges.end() && img->eid(*it) == id, "Unknown cp002 edge");
 				return img->edge(*it);
 			}
+			bool supportsNativeNodeRefScans() const override { return true; }
+			void visitNodeRefs(size_t max, const std::function<bool(const EntityRef &)> &visitor) const override {
+				require(max && bool(visitor), "Invalid Node reference visit bound");
+				visitComplete(img->nodes, max, [&](auto i) { return visitor({img->nid(i), false, 0, 0, 0}); });
+			}
+			void
+			visitNodeRefsWithLabelMatches(size_t max, const std::vector<std::string> &labels,
+										  const std::function<bool(const EntityRef &, bool)> &visitor) const override {
+				require(bool(visitor), "Invalid Node label visitor");
+				// cp002 has exactly one label for every authenticated Node record.
+				const bool matches = std::ranges::all_of(labels, [](const auto &s) { return s == "Item"; });
+				visitNodeRefs(max, [&](const EntityRef &ref) { return visitor(ref, matches); });
+			}
+			LogicalGraphNode readNodeShaped(uint64_t id, const EntityReadShape &shape) const override {
+				validateEntityReadShape(shape);
+				if (shape.all_properties || !shape.property_tokens.empty())
+					return LogicalGraphReadSnapshot::readNodeShaped(id, shape);
+				require(img->hasNode(id), "Unknown cp002 node");
+				LogicalGraphNode n{id, {}, {}};
+				if (shape.include_labels)
+					n.labels.emplace_back("Item");
+				return n;
+			}
 			bool supportsPropertyReadAdmission() const override { return true; }
 			using Columns = std::vector<std::vector<PropertyValue>>;
 			Columns columns(bool edge, std::span<const uint64_t> ids, std::span<const std::string_view> keys,
@@ -214,12 +322,12 @@ namespace graph::storage {
 					require(id > previous, "Unsorted cp002 property owners");
 					previous = id;
 					const auto &owners = edge ? img->edges : img->nodes;
-					const auto it = std::ranges::lower_bound(
-							owners, id, {}, [&](uint32_t i) { return edge ? img->eid(i) : img->nid(i); });
+					const auto it = edge ? std::ranges::lower_bound(owners, id, {}, [&](auto i) { return img->eid(i); })
+										 : img->nodeAt(id);
 					require(it != owners.end() && (edge ? img->eid(*it) : img->nid(*it)) == id,
 							"Unknown cp002 property owner");
 					admit(sizeof(Record));
-					const auto &r = img->records[*it];
+					const auto tags = img->packed ? img->segments.value(*it, 4) : word(img->privateFile[*it].data());
 					for (size_t col = 0; col < keys.size(); ++col) {
 						auto key = keys[col];
 						PropertyValue value;
@@ -227,10 +335,10 @@ namespace graph::storage {
 							value = std::bit_cast<int64_t>(img->field(*it, 28));
 						if (!edge && key == "id")
 							value = std::bit_cast<int64_t>(img->field(*it, 4));
-						if (!edge && key == "val" && r[1])
-							value = cell(r[1], img->field(*it, 20));
-						if (!edge && key == "grp" && r[2])
-							value = cell(r[2], img->field(*it, 28));
+						if (!edge && key == "val" && (tags & 0xff00))
+							value = cell((tags >> 8) & 255, img->field(*it, 20));
+						if (!edge && key == "grp" && (tags & 0xff0000))
+							value = cell((tags >> 16) & 255, img->field(*it, 28));
 						result[col].push_back(std::move(value));
 					}
 				}
@@ -271,7 +379,9 @@ namespace graph::storage {
 			}
 			LogicalGraphNodePage scanNodesAfter(uint64_t after, size_t max, size_t pages) const override {
 				require(max && pages, "Invalid node scan bound");
-				auto it = std::ranges::upper_bound(img->nodes, after, {}, [&](auto i) { return img->nid(i); });
+				auto it = img->nodeAt(after);
+				if (it != img->nodes.end() && img->nid(*it) == after)
+					++it;
 				LogicalGraphNodePage page;
 				// One charged directory window is at most 4 KiB of uint32 offsets.
 				const size_t slotsLeft = 1024U - static_cast<size_t>(it - img->nodes.begin()) % 1024U;

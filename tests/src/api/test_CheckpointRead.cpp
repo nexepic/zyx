@@ -184,6 +184,60 @@ namespace {
 		graph::Database graph(path.string(), graph::storage::OpenMode::OPEN_READ_ONLY_EXISTING_FILE, 64);
 		EXPECT_THROW(graph.open(), std::runtime_error);
 	}
+	TEST_F(CheckpointReadTest, IrregularMultiWindowRowsSurviveSourceOverwriteAndPreserveOrder) {
+		// The high budget exercises compact lanes. The low budget uses the private backing file.
+		constexpr size_t count = 1025;
+		for (size_t budget: {131072U, 32768U}) {
+			bytes.assign((88 + count * 40 + 4095) / 4096 * 4096, 0);
+			std::memcpy(bytes.data(), "ZYXcp002", 8);
+			put(bytes, 32, count * 2);
+			put(bytes, 48, count * 40);
+			for (size_t i = 0; i < count; ++i) {
+				const int64_t key = static_cast<int64_t>(i) - 500;
+				// Sorting key is distinct from graph identity. Payloads cross zero
+				// and routinely exercise the full uint64 representation.
+				record(bytes, i, 1, 2, key, 2 * (count - i), uint64_t(i) * 0x9e3779b97f4a7c15ULL);
+			}
+			seal(bytes, count);
+			save();
+			graph::Database graph(path.string(), graph::storage::OpenMode::OPEN_READ_ONLY_EXISTING_FILE, budget);
+			graph.open();
+			auto backend =
+					std::dynamic_pointer_cast<graph::storage::LogicalGraphReadBackend>(graph.getStorageBackend());
+			auto snapshot = backend->openLogicalGraphReadSnapshot();
+			bytes.assign(88, 0);
+			save();
+			size_t visited = 0;
+			uint64_t after = 0;
+			do {
+				auto page = snapshot->scanNodesAfter(after, 63, 1);
+				ASSERT_FALSE(page.nodes.empty());
+				for (auto &n: page.nodes) {
+					++visited;
+					EXPECT_EQ(n.node_id, 2 * visited);
+					auto idx = count - visited;
+					ASSERT_EQ(n.properties.size(), 2U);
+					EXPECT_EQ(n.properties[0].value, graph::PropertyValue(static_cast<int64_t>(idx) - 500));
+					EXPECT_EQ(n.properties[1].value,
+							  graph::PropertyValue(std::bit_cast<int64_t>(idx * 0x9e3779b97f4a7c15ULL)));
+					after = n.node_id;
+				}
+				if (!page.may_have_more)
+					break;
+			} while (visited <= count);
+			EXPECT_EQ(visited, count);
+			for (auto labels: {std::vector<std::string>{"Item"}, std::vector<std::string>{"Other"}}) {
+				size_t calls = 0;
+				snapshot->visitNodeRefsWithLabelMatches(10, labels, [&](const auto &ref, bool match) {
+					++calls;
+					EXPECT_EQ(ref.entity_id, calls * 2);
+					EXPECT_EQ(match, labels.front() == "Item");
+					return calls < 3;
+				});
+				EXPECT_EQ(calls, 3U);
+			}
+		}
+	}
 	TEST_F(CheckpointReadTest, CompleteVisitorsRejectTruncationButPreserveExactAndEarlyStops) {
 		using namespace graph::storage;
 		graph::Database graph(path.string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE, 4096);
