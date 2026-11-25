@@ -61,10 +61,14 @@ namespace graph::storage::nativewal {
 
 	public:
 		VersionCharge(std::shared_ptr<VersionBudget> b, size_t n) : budget(std::move(b)), bytes(n) {
-			budget->acquire(n);
+			if (n) budget->acquire(n);
 		}
-		~VersionCharge() { budget->release(bytes); }
+		~VersionCharge() { if (bytes) budget->release(bytes); }
 		VersionCharge(const VersionCharge &) = delete;
+		void add(size_t n) {
+			if (n > SIZE_MAX - bytes) throw std::length_error("Native row memory overflow");
+			growTo(bytes + n);
+		}
 		void growTo(size_t n) {
 			if (n > bytes) {
 				budget->acquire(n - bytes);
@@ -87,7 +91,7 @@ namespace graph::storage::nativewal {
 		struct Record {
 			size_t offset;
 			std::array<std::byte, 32> digest;
-			Row (*decode)(uint64_t, std::span<const std::byte>);
+			Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &);
 		};
 		struct Entry {
 			VersionCharge charge;
@@ -196,7 +200,7 @@ namespace graph::storage::nativewal {
 					VersionCharge scratch(rows->budget, 3 * size + 4096);
 					std::vector<std::byte> data(size);
 					readImage(data);
-					auto row = entry->record->decode(id(), data);
+					auto row = entry->record->decode(id(), data, scratch);
 					auto [wire, heap] = rowCost(row);
 					loaded = std::make_shared<Entry>(rows->budget, entry->value.first, std::move(row), wire, heap);
 				}
@@ -277,7 +281,7 @@ namespace graph::storage::nativewal {
 			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap);
 		}
 		Item baseRecord(uint64_t id, size_t wire, size_t offset, const std::array<std::byte, 32> &digest,
-						Row (*decode)(uint64_t, std::span<const std::byte>)) const {
+						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &)) const {
 			auto item = std::make_shared<Entry>(budget, id, Row{}, wire, 192);
 			item->record = std::make_unique<Record>(Record{offset, digest, decode});
 			return item;

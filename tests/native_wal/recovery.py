@@ -28,6 +28,43 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    budget = new("nested-budget")
+    for op in ("nested-budget-write", "nested-budget-open"):
+        before = hashlib.sha256(budget.read_bytes()).digest()
+        run(op, budget, "32768", code=2, error="budget exceeded")
+        assert before == hashlib.sha256(budget.read_bytes()).digest()
+        run(op, budget, "2097152")
+    recovered(budget, 1)
+    run("nested-unique", new("nested-unique"))
+    nested = new("nested")
+    run("nested-write", nested, code=-signal.SIGKILL)
+    # Preserve a valid digest/receipt while damaging the list count.
+    # Structural rejection must happen before the decoder trusts that count.
+    damaged = root / "damaged-nested" / "main"
+    damaged.parent.mkdir()
+    for suffix in ("", ".wal", ".base"):
+        shutil.copyfile(str(nested) + suffix, str(damaged) + suffix)
+    wal = damaged.with_suffix(".wal")
+    wire = wal.read_bytes()
+    marker = b"items" + bytes.fromhex("06 00 22 00 00 00 03 00 00 00")
+    assert wire.count(marker) == 1
+    invalid = wire.replace(marker, marker[:-4] + b"\xff" * 4)
+    receipt = bytearray(damaged.read_bytes())
+    assert receipt[48:80] == hashlib.sha256(wire).digest()
+    receipt[48:80] = hashlib.sha256(invalid).digest()
+    receipt[80:] = hashlib.sha256(receipt[:80]).digest()
+    wal.write_bytes(invalid)
+    damaged.write_bytes(receipt)
+    run("nested-check", damaged, code=2)
+    assert wal.read_bytes() == invalid and damaged.read_bytes() == receipt
+    run("nested-check", nested)
+    run("nested-check", str(nested) + ".snapshot")
+    independent = root / "writable-copy"
+    shutil.copyfile(nested, independent)
+    run("nested-check", independent)
+    run("leave", independent, code=-signal.SIGKILL)
+    recovered(independent, 3)
+    recovered(nested, 2)
     unreachable=new("unreachable-base")
     run("unreachable-base",unreachable)
     recovered(unreachable,1)

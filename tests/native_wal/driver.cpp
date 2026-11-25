@@ -186,6 +186,25 @@ int main(int argc, char **argv) try {
 		selection.backend->close();
 		return 0;
 	}
+	if (op == "nested-budget-write" || op == "nested-budget-open") {
+		using namespace graph::storage;
+		expect(argc == 4, "Expected version budget");
+		auto selected = StorageBackendFactory::create(path, std::stoull(argv[3]), OpenMode::OPEN_EXISTING_FILE);
+		selected.backend->open();
+		if (op == "nested-budget-write") {
+			auto &w = dynamic_cast<LogicalGraphTransactionalBackend &>(*selected.backend);
+			auto tx = w.beginLogicalGraphTransaction(false);
+			LogicalGraphMutationBatch batch;
+			LogicalGraphNodeCreateRequest request;
+			request.labels = {"Dense"};
+			request.properties.push_back({"v", graph::PropertyValue(std::vector<graph::PropertyValue>(1900))});
+			batch.node_creates.push_back(std::move(request));
+			(void) tx->stageMutationBatch(std::move(batch));
+			(void) tx->commit();
+		}
+		selected.backend->close();
+		return 0;
+	}
 	if (op == "budget") {
 		using namespace graph::storage;
 		{
@@ -245,6 +264,76 @@ int main(int argc, char **argv) try {
 	}
 	zyx::Database db(path);
 	db.open();
+	if (op == "nested-unique") {
+		query(db, "CREATE CONSTRAINT nested_key FOR(n:Composite) REQUIRE n.k IS UNIQUE");
+		auto insert = [&](const std::string &expression) {
+			auto tx = db.beginTransaction();
+			query(tx, "CREATE (:Composite {k:" + expression + "})");
+			tx.commit();
+		};
+		insert("{a:[], b:[1,NULL,{x:false}]}");
+		bool duplicate = false;
+		try {
+			insert("{b:[1,NULL,{x:false}], a:[]}");
+		} catch (const std::exception &e) {
+			duplicate = std::string_view(e.what()).find("duplicate key") != std::string_view::npos;
+		}
+		expect(duplicate, "Reordered map evaded UNIQUE");
+		insert("{a:[], b:[1.0,NULL,{x:false}]}");
+		insert("{a:[], b:[NULL,1,{x:false}]}");
+		db.save();
+		db.close();
+		db.open();
+		expect(scalar(db, count) == 3, "Nested key type or list order lost");
+		db.close();
+		return 0;
+	}
+	if (op == "nested-write" || op == "nested-check") {
+		auto read = [&](auto &handle, bool edge, int64_t expected) {
+			auto r = query(handle, edge ? "MATCH ()-[r:NEST]->() RETURN r.payload" :
+										"MATCH (n:Nested) RETURN n.payload");
+			expect(r.hasNext(), "Missing nested property");
+			r.next();
+			// Result::get exposes the product C++ map text representation.
+			auto expectedResult = query(handle, "RETURN {items:[" + std::to_string(expected) + ",NULL,{}]}");
+			expect(expectedResult.hasNext(), "Missing literal result");
+			expectedResult.next();
+			expect(r.get(0) == expectedResult.get(0) && !r.hasNext(), "Wrong nested projection");
+		};
+		if (op == "nested-write") {
+			auto w = db.beginTransaction();
+			query(w, "CREATE (:Nested {payload:{items:[1,NULL,{}]}})-[:NEST {payload:{items:[2,NULL,{}]}}]->(:End)");
+			read(w, false, 1);
+			w.commit();
+			auto old = db.beginReadOnlyTransaction();
+			auto u = db.beginTransaction();
+			query(u, "MATCH ()-[r:NEST]->() SET r.payload={items:[3,NULL,{}]}");
+			read(u, true, 3);
+			u.rollback();
+			read(db, true, 2);
+			{
+				std::ofstream out(path + ".snapshot", std::ios::binary);
+				db.exportSegmentedSnapshot(out);
+				out.close();
+				expect(out.good(), "Nested export failed");
+			}
+			auto v = db.beginTransaction();
+			query(v, "MATCH (n:Nested) SET n.payload={items:[4,NULL,{}]}");
+			v.commit();
+			db.save();
+			read(old, false, 1);
+			old.commit();
+			auto final = db.beginTransaction();
+			query(final, "MATCH ()-[r:NEST]->() SET r.payload={items:[5,NULL,{}]}");
+			final.commit();
+			raise(SIGKILL);
+		}
+		bool exported = path.ends_with(".snapshot");
+		read(db, false, exported ? 1 : 4);
+		read(db, true, exported ? 2 : 5);
+		db.close();
+		return 0;
+	}
 	if (op == "checkpoint-locators") {
 		auto orphanCount = [&] {
 			size_t count = 0;

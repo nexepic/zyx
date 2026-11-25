@@ -1,16 +1,39 @@
 #include "UniqueDelta.hpp"
+#include "graph/core/GuardedPropertyCopy.hpp"
+#include "graph/core/PropertyDecodeAllocationScope.hpp"
 #include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
 namespace graph::storage::nativewal {
+	namespace {
+		bool container(const PropertyValue &v) {
+			return v.getType() == PropertyType::LIST || v.getType() == PropertyType::MAP;
+		}
+		// Containers carry complete canonical values, including binary leaves.
+		// Keep the native writer's existing top-level scalar contract.
+		void checkKind(const PropertyValue &v) {
+			const auto t = v.getType();
+			require(container(v) || t == PropertyType::NULL_TYPE || t == PropertyType::BOOLEAN ||
+							t == PropertyType::INTEGER || t == PropertyType::DOUBLE || t == PropertyType::STRING,
+					"Unsupported native WAL property type");
+		}
+	}
 	void Encoder::value(const PropertyValue &v) {
-		auto type = v.getType();
-		require(type == PropertyType::NULL_TYPE || type == PropertyType::BOOLEAN || type == PropertyType::INTEGER ||
-						type == PropertyType::DOUBLE || type == PropertyType::STRING,
-				"Native WAL supports scalar properties only");
 		auto size = CanonicalPropertyValueCodec::encodedSize(v);
 		require(size <= maxValue, "Native WAL value limit exceeded");
+		checkKind(v);
 		num(size);
 		room(size);
-		CanonicalPropertyValueCodec::append(bytes, v);
+		if (container(v)) {
+			// The canonical encoder orders maps with its destination allocator.
+			// Charge both that workspace and the temporary encoded value.
+			require(bool(budget), "Missing native container encoding budget");
+			VersionMemoryResource memory(budget);
+			std::pmr::vector<std::byte> wire(&memory);
+			wire.reserve(size);
+			CanonicalPropertyValueCodec::append(wire, v);
+			raw(wire);
+		} else {
+			CanonicalPropertyValueCodec::append(bytes, v);
+		}
 	}
 	namespace {
 		void labels(const std::vector<std::string> &names) {
@@ -30,7 +53,7 @@ namespace graph::storage::nativewal {
 				w.value(p.value);
 			}
 		}
-		auto decodeProperties(Decoder &r) {
+		auto decodeProperties(Decoder &r, VersionCharge &scratch) {
 			std::vector<LogicalGraphPropertyEntry> out;
 			auto n = r.count(maxFields);
 			std::set<std::string> seen;
@@ -38,10 +61,19 @@ namespace graph::storage::nativewal {
 				auto key = r.text();
 				require(!key.empty() && seen.insert(key).second, "Duplicate native WAL property");
 				auto bytes = r.take(r.count(maxValue));
-				require(CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes).has_value(),
-						"Unsupported native WAL property");
 				size_t offset = 0;
-				auto value = CanonicalPropertyValueCodec::decodeNext(bytes, offset);
+				PropertyValue value;
+				if (CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes)) {
+					value = CanonicalPropertyValueCodec::decodeNext(bytes, offset);
+				} else {
+					auto *query = property_decode::AllocationScope::current();
+					value = CanonicalPropertyValueCodec::decodeNextWithAdmission(bytes, offset,
+						[&](const auto &shape) {
+							scratch.add(shape.maximum_heap_request_bytes);
+							if (query) query->admit(shape.maximum_heap_request_bytes);
+						}, [&] { if (query) query->checkpoint(); });
+					checkKind(value);
+				}
 				require(offset == bytes.size(), "Invalid native WAL property extent");
 				out.push_back({std::move(key), std::move(value)});
 			}
@@ -50,11 +82,9 @@ namespace graph::storage::nativewal {
 		auto properties(const std::vector<LogicalGraphWriteProperty> &props) {
 			require(props.size() <= maxFields, "Too many native WAL properties");
 			std::vector<LogicalGraphPropertyEntry> out;
-			Encoder check(maxState);
+			out.reserve(props.size());
 			for (auto &p: props) {
-				check.text(p.key);
-				check.value(p.value);
-				out.push_back({p.key, p.value});
+				out.push_back({p.key, container(p.value) ? property_copy::copyPropertyValueGuarded(p.value, [] {}) : p.value});
 			}
 			return out;
 		}
@@ -96,6 +126,8 @@ namespace graph::storage::nativewal {
 				wire += 8 + CanonicalPropertyValueCodec::encodedSize(p.value);
 				if (auto str = std::get_if<std::string>(&p.value.getVariant()))
 					heap += str->capacity() + 1;
+				else if (container(p.value))
+					heap += CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value);
 			}
 			return {wire, heap};
 		}
@@ -118,6 +150,7 @@ namespace graph::storage::nativewal {
 		auto ids = preview(s, b);
 		// Bound input copying even when a single batch contains many large
 		// values. The final encoded state and the replay delta have separate limits.
+		VersionCharge containerCopies(s.budget, 0);
 		size_t remaining = maxState;
 		auto charge = [&](size_t bytes) {
 			require(bytes <= remaining, "Native statement payload limit exceeded");
@@ -127,7 +160,12 @@ namespace graph::storage::nativewal {
 			require(props.size() <= maxFields, "Too many native fields");
 			for (auto &p: props) {
 				charge(p.key.size());
-				charge(CanonicalPropertyValueCodec::encodedSize(p.value));
+				auto size = CanonicalPropertyValueCodec::encodedSize(p.value);
+				require(size <= maxValue && p.key.size() <= maxValue, "Native WAL value limit exceeded");
+				checkKind(p.value);
+				charge(size);
+				if (container(p.value))
+					containerCopies.add(CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value));
 				charge(16);
 			}
 		};
@@ -165,8 +203,16 @@ namespace graph::storage::nativewal {
 			bool edge = p.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE;
 			auto id = resolve(p.entity, edge, ids);
 			auto replace = [&](auto &rows) {
-				auto row = rows.at(id);
-				row.properties = properties(p.properties);
+				auto prior = rows.find(id);
+				require(prior != rows.end(), "Unknown native WAL property owner");
+				// Replace the fields without copying the superseded property graph.
+				const auto &old = prior->second;
+				using Row = std::decay_t<decltype(old)>;
+				Row row;
+				if constexpr (std::is_same_v<Row, LogicalGraphNode>)
+					row = {old.node_id, old.labels, properties(p.properties)};
+				else
+					row = {old.edge_id, old.source_node_id, old.target_node_id, old.type, properties(p.properties)};
 				rows.insert_or_assign(id, std::move(row));
 			};
 			if (edge)
@@ -178,7 +224,13 @@ namespace graph::storage::nativewal {
 		for (auto &n: b.node_label_replacements) {
 			labels(n.labels);
 			auto id = resolve(n.node, false, ids);
-			auto row = s.nodes.at(id);
+			auto prior = s.nodes.find(id);
+			require(prior != s.nodes.end(), "Unknown native WAL label owner");
+			const auto &old = prior->second;
+			VersionCharge copying(s.budget, 0);
+			for (const auto &p : old.properties)
+				if (container(p.value)) copying.add(CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value));
+			auto row = old;
 			row.labels = n.labels;
 			s.nodes.insert_or_assign(id, std::move(row));
 			changed.nodes.insert(id);
@@ -372,7 +424,7 @@ namespace graph::storage::nativewal {
 		debug::PerfTrace::addValue("native_wal.unique.affected_probe_rows", inspected);
 	}
 	Bytes encodeDelta(const State &s, const Changes &changed) {
-		Encoder w(maxState);
+		Encoder w(maxState, s.budget);
 		w.num(s.nodeHigh);
 		w.num(s.edgeHigh);
 		auto append = [&](const auto &ids, const auto &rows) {
@@ -392,30 +444,30 @@ namespace graph::storage::nativewal {
 	void encodeBaseRow(Encoder &w, const LogicalGraphNode &row) { encodeRow(w, row); }
 	void encodeBaseRow(Encoder &w, const LogicalGraphEdge &row) { encodeRow(w, row); }
 	namespace {
-		LogicalGraphNode readNode(Decoder &r, uint64_t id) {
+		LogicalGraphNode readNode(Decoder &r, uint64_t id, VersionCharge &scratch) {
 			LogicalGraphNode n{id, {}};
 			auto count = r.count(maxFields);
 			while (count--)
 				n.labels.push_back(r.text());
 			labels(n.labels);
-			n.properties = decodeProperties(r);
+			n.properties = decodeProperties(r, scratch);
 			return n;
 		}
-		LogicalGraphEdge readEdge(Decoder &r, uint64_t id) {
+		LogicalGraphEdge readEdge(Decoder &r, uint64_t id, VersionCharge &scratch) {
 			auto a = r.num(), b = r.num();
 			auto type = r.text();
-			return {id, a, b, std::move(type), decodeProperties(r)};
+			return {id, a, b, std::move(type), decodeProperties(r, scratch)};
 		}
 	} // namespace
-	LogicalGraphNode baseNode(uint64_t id, Span bytes) {
+	LogicalGraphNode baseNode(uint64_t id, Span bytes, VersionCharge &scratch) {
 		Decoder r{bytes};
-		auto row = readNode(r, id);
+		auto row = readNode(r, id, scratch);
 		require(r.bytes.empty(), "Trailing native node");
 		return row;
 	}
-	LogicalGraphEdge baseEdge(uint64_t id, Span bytes) {
+	LogicalGraphEdge baseEdge(uint64_t id, Span bytes, VersionCharge &scratch) {
 		Decoder r{bytes};
-		auto row = readEdge(r, id);
+		auto row = readEdge(r, id, scratch);
 		require(r.bytes.empty(), "Trailing native edge");
 		return row;
 	}
@@ -459,9 +511,10 @@ namespace graph::storage::nativewal {
 				if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
 					if (s.declaration && !s.columnOverflow && changedColumnIds.size() <= ColumnChanges::limit)
 						changedColumnIds.push_back(id);
-				if (r.count(1))
-					map.insert_or_assign(id, decode(id));
-				else {
+				if (r.count(1)) {
+					VersionCharge scratch(s.budget, 0);
+					map.insert_or_assign(id, decode(id, scratch));
+				} else {
 					bool existed = map.erase(id);
 					if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
 						removedNode |= existed;
@@ -470,9 +523,9 @@ namespace graph::storage::nativewal {
 					unique.observe(id, before, unique.key(s, id));
 			}
 		};
-		rows(s.nodes, s.nodeHigh, nh, [&](uint64_t id) { return readNode(r, id); });
-		rows(s.edges, s.edgeHigh, eh, [&](uint64_t id) {
-			auto edge = readEdge(r, id);
+		rows(s.nodes, s.nodeHigh, nh, [&](uint64_t id, VersionCharge &scratch) { return readNode(r, id, scratch); });
+		rows(s.edges, s.edgeHigh, eh, [&](uint64_t id, VersionCharge &scratch) {
+			auto edge = readEdge(r, id, scratch);
 			require(s.nodes.contains(edge.source_node_id) && s.nodes.contains(edge.target_node_id),
 					"Native WAL dangling relationship");
 			return edge;

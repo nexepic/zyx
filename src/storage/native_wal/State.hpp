@@ -100,7 +100,8 @@ namespace graph::storage::nativewal {
 	struct Encoder {
 		Bytes bytes;
 		size_t limit;
-		explicit Encoder(size_t maximum) : limit(maximum) {}
+		std::shared_ptr<VersionBudget> budget;
+		explicit Encoder(size_t maximum, std::shared_ptr<VersionBudget> b = {}) : limit(maximum), budget(std::move(b)) {}
 		void room(size_t n) const { require(n <= limit - bytes.size(), "Native WAL encoding budget exceeded"); }
 		void raw(Span s) {
 			room(s.size());
@@ -152,8 +153,8 @@ namespace graph::storage::nativewal {
 	Bytes encodeDelta(const State &, const Changes &);
 	void encodeBaseRow(Encoder &, const LogicalGraphNode &);
 	void encodeBaseRow(Encoder &, const LogicalGraphEdge &);
-	LogicalGraphNode baseNode(uint64_t, Span);
-	LogicalGraphEdge baseEdge(uint64_t, Span);
+	LogicalGraphNode baseNode(uint64_t, Span, VersionCharge &);
+	LogicalGraphEdge baseEdge(uint64_t, Span, VersionCharge &);
 	class UniqueDelta;
 	void applyDelta(State &, Span, UniqueDelta &);
 } // namespace graph::storage::nativewal

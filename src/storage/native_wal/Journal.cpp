@@ -463,7 +463,7 @@ namespace graph::storage::nativewal {
 						head.num(s.nodes.size());
 						head.num(s.edges.size());
 						put(head.bytes);
-						Encoder encoded(maxState);
+						Encoder encoded(maxState, s.budget);
 						VersionCharge rowBuffer(s.budget, 0);
 						nodeStart = head.bytes.size();
 						std::shared_ptr<IndexedColumn> projection;
@@ -524,7 +524,7 @@ namespace graph::storage::nativewal {
 															 LogicalGraphNode>) {
 									if (projection) {
 										VersionCharge decode(s.budget, 3 * size + 4096);
-										projection->observe(*s.declaration, baseNode(id, encoded.bytes));
+										projection->observe(*s.declaration, baseNode(id, encoded.bytes, decode));
 									}
 								}
 								offset += size + 16;
@@ -702,7 +702,7 @@ namespace graph::storage::nativewal {
 					auto offset = c.position;
 					Bytes b(size);
 					c.consume(b);
-					auto row = decode(id, b);
+					auto row = decode(id, b, scratch);
 					if constexpr (std::is_same_v<decltype(row), LogicalGraphNode>)
 						if (projection)
 							projection->observe(*s->declaration, row);
