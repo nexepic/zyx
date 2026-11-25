@@ -81,6 +81,8 @@ namespace graph::storage {
 
 	const char *StorageFormatProbe::describe(StorageFormatKind kind) {
 		switch (kind) {
+			case StorageFormatKind::SFM_CHECKPOINT:
+                return "experimental checkpoint";
 			case StorageFormatKind::SFM_EMPTY:
 				return "empty";
 			case StorageFormatKind::SFM_RELOCATABLE:

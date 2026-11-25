@@ -21,6 +21,7 @@ namespace graph::storage {
 		SFM_RELOCATABLE_INCOMPLETE = 2,
 		SFM_TRUNCATED = 3,
 		SFM_UNRECOGNIZED = 4,
+        SFM_CHECKPOINT = 5,
 	};
 
 	struct StorageFormatInfo {

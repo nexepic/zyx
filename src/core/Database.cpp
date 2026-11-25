@@ -55,7 +55,7 @@ namespace graph {
 		}
 
 		debug::ScopedPerfTimer totalTimer("db.open.total");
-		// Public Database creation is exclusively native relocatable.
+		// Creation uses relocatable storage. Existing files are selected by the storage factory.
 		{
 			debug::ScopedPerfTimer storageTimer("db.open.storage");
 			if (!backend_) {
@@ -63,9 +63,6 @@ namespace graph {
 						storage::StorageBackendFactory::create(dbPath, cacheSize_, openMode_);
 				backend_ = std::move(selection.backend);
 				relocatableStorage_ = std::move(selection.relocatable_storage);
-				if (!relocatableStorage_) {
-					throw std::logic_error("public Database requires a native relocatable storage backend");
-				}
 			}
 			backend_->open();
 		}
@@ -194,6 +191,8 @@ namespace graph {
 				queryEngine = std::make_shared<query::QueryEngine>(
 						std::static_pointer_cast<storage::LogicalGraphReadBackend>(relocatableStorage_),
 						std::static_pointer_cast<storage::LogicalGraphWriteBackend>(relocatableStorage_), std::move(options));
+			} else if (auto reader = std::dynamic_pointer_cast<storage::LogicalGraphReadBackend>(backend_)) {
+				queryEngine = std::make_shared<query::QueryEngine>(std::move(reader));
 			} else {
 				throw std::logic_error("Database has no open storage backend for query execution");
 			}

@@ -8,11 +8,14 @@
 
 #include "graph/storage/StorageBackendFactory.hpp"
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
+#include "CheckpointReadBackend.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/StorageFormat.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -63,6 +66,11 @@ namespace graph::storage {
 										: OpenMode::OPEN_EXISTING_FILE;
 			auto relocatable = std::make_shared<RelocatableStorageBackend>(std::move(options));
 			return {relocatable, relocatable};
+		}
+		std::array<char, 8> signature{};
+		if (probe_io->readAt(0, signature.data(), signature.size()) == signature.size() &&
+			std::string_view(signature.data(), signature.size()) == "ZYXcp002") {
+			return {openCheckpointBackend(database_path, cache_size), nullptr};
 		}
 		throw std::runtime_error("Database refuses a " + std::string(StorageFormatProbe::describe(format.kind)) +
 								 " file because it is not a complete native relocatable database");

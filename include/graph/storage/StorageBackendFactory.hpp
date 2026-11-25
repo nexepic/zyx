@@ -28,8 +28,7 @@ namespace graph::storage {
 
 	class StorageBackendFactory final {
 	public:
-		// The normal Database opening path supports only the native relocatable
-		// single-file format. All historical formats fail closed.
+		// New files use relocatable storage. Authenticated standalone cp002 files open read-only.
 		[[nodiscard]] static StorageBackendSelection create(std::string database_path, size_t cache_size,
 															OpenMode open_mode);
 	};
