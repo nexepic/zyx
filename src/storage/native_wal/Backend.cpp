@@ -11,7 +11,7 @@ namespace graph::storage::nativewal {
 		std::optional<LogicalGraphMutationFence> mutationFence() const override {
 			LogicalGraphMutationFence f;
 			f.backend_token = 0x6e673031;
-			f.format_token = 1;
+			f.format_token = 3;
 			std::memcpy(f.graph_state_tokens.data(), data->identity.data(), 16);
 			f.graph_state_tokens[2] = data->sequence;
 			return f;
@@ -22,11 +22,10 @@ namespace graph::storage::nativewal {
 		LogicalGraphEdge readEdge(uint64_t id) const override { return data->edges.at(id); }
 		template<class Map, class Visitor>
 		static void visit(const Map &rows, size_t limit, const Visitor &fn) {
-			for (auto &[id, row]: rows) {
+			rows.visitAfter(0, [&](auto it) {
 				require(limit-- > 0, "Native graph visit limit exceeded");
-				if (!fn(row))
-					break;
-			}
+				return fn(it->second);
+			});
 		}
 		void visitNodes(size_t max, const std::function<bool(const LogicalGraphNode &)> &f) const override {
 			visit(data->nodes, max, f);
@@ -37,10 +36,14 @@ namespace graph::storage::nativewal {
 		LogicalGraphNodePage scanNodesAfter(uint64_t after, size_t max, size_t pages) const override {
 			require(max && pages, "Invalid native graph scan size");
 			LogicalGraphNodePage page;
-			auto it = data->nodes.upper_bound(after);
-			for (; it != data->nodes.end() && page.nodes.size() < std::min(max, size_t(64)); ++it)
+			data->nodes.visitAfter(after, [&](auto it) {
+				if (page.nodes.size() == std::min(max, size_t(64))) {
+					page.may_have_more = true;
+					return false;
+				}
 				page.nodes.push_back(it->second);
-			page.may_have_more = it != data->nodes.end();
+				return true;
+			});
 			page.metadata_pages_visited = 1;
 			return page;
 		}
@@ -97,7 +100,8 @@ namespace graph::storage::nativewal {
 			for (size_t i = 0; i < ids.size(); ++i) {
 				require(prev < ids[i], "Invalid native graph owner order");
 				prev = ids[i];
-				for (auto &p: rows.at(prev).properties)
+				auto found = rows.checked(prev);
+				for (auto &p: found->second.properties)
 					for (size_t k = 0; k < keys.size(); ++k)
 						if (keys[k] == p.key) {
 							admit(CanonicalPropertyValueCodec::encodedSize(p.value) + p.key.size() + 8);
@@ -123,7 +127,8 @@ namespace graph::storage::nativewal {
 			for (auto id: ids) {
 				require(id > previous, "Invalid native entity order");
 				previous = id;
-				const auto &source = rows.at(id);
+				auto found = rows.checked(id);
+				const auto &source = found->second;
 				Row row{};
 				if constexpr (std::is_same_v<Row, LogicalGraphNode>) {
 					row.node_id = id;
@@ -257,12 +262,18 @@ namespace graph::storage::nativewal {
 		size_t memory;
 		bool ro;
 		std::shared_ptr<Journal> journal;
+		std::shared_ptr<resource::DatabaseResourceBudget> resources;
 
 	public:
 		Backend(std::string p, bool readOnly, size_t bytes) : path(std::move(p)), memory(bytes), ro(readOnly) {}
 		void open() override {
-			if (!journal)
-				journal = std::make_shared<Journal>(path, ro, memory);
+			if (!journal) {
+				auto opened = std::make_shared<Journal>(path, ro, memory);
+				const auto &id = opened->snapshot()->identity;
+				resources = resource::ProcessResourceDomains::defaultOwner()->domain(
+						"native-wal:" + std::string(reinterpret_cast<const char *>(id.data()), id.size()));
+				journal = std::move(opened);
+			}
 		}
 		void flush() override {
 			if (journal)
@@ -273,6 +284,7 @@ namespace graph::storage::nativewal {
 				return;
 			require(journal.use_count() == 1, "Native graph has active transactions");
 			auto closing = std::move(journal);
+			resources.reset();
 			closing->checkpoint();
 		}
 		bool isOpen() const override { return bool(journal); }
@@ -280,10 +292,9 @@ namespace graph::storage::nativewal {
 		StorageFormatKind formatKind() const override { return StorageFormatKind::SFM_NATIVE_WAL; }
 		std::shared_ptr<resource::DatabaseResourceBudget> queryResourceDomain() const override {
 			require(bool(journal), "Native graph is closed");
-			auto s = journal->snapshot();
-			return resource::ProcessResourceDomains::defaultOwner()->domain(
-					"native-wal:" +
-					std::string(reinterpret_cast<const char *>(s->identity.data()), s->identity.size()));
+			// An existing transaction still owns its earlier immutable snapshot
+			// if a different writer has since failed. Budget identity is per open.
+			return resources;
 		}
 		StorageBackendCapabilities capabilities() const override { return {true, true, false, true, !ro}; }
 		std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {

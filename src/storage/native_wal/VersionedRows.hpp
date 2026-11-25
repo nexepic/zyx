@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -24,6 +25,7 @@ namespace graph::storage::nativewal {
 					throw std::length_error("Native graph version memory budget exceeded");
 			} while (!used.compare_exchange_weak(prior, prior + n));
 		}
+		size_t capacity() const { return maximum; }
 		void release(size_t n) { used.fetch_sub(n); }
 	};
 
@@ -37,6 +39,12 @@ namespace graph::storage::nativewal {
 		}
 		~VersionCharge() { budget->release(bytes); }
 		VersionCharge(const VersionCharge &) = delete;
+		void growTo(size_t n) {
+			if (n > bytes) {
+				budget->acquire(n - bytes);
+				bytes = n;
+			}
+		}
 	};
 
 	// A persistent AVL tree. Path copies share immutable entries (including
@@ -48,6 +56,7 @@ namespace graph::storage::nativewal {
 			VersionCharge charge;
 			size_t wire;
 			Pair value;
+			std::function<Row()> load;
 			Entry(const std::shared_ptr<VersionBudget> &b, uint64_t key, Row row, size_t encoded, size_t heap) :
 				charge(b, sizeof(Entry) + 64 + heap), wire(encoded), value(key, std::move(row)) {}
 		};
@@ -129,14 +138,41 @@ namespace graph::storage::nativewal {
 		struct Iterator {
 			const VersionedRows *rows;
 			const Entry *entry;
-			const Pair &operator*() const { return entry->value; }
-			const Pair *operator->() const { return &entry->value; }
+			mutable Item loaded{};
+			size_t encodedBytes() const { return entry->wire; }
+			const Pair &operator*() const {
+				if (!entry->load)
+					return entry->value;
+				if (!loaded) {
+					auto row = entry->load();
+					auto [wire, heap] = rowCost(row);
+					loaded = std::make_shared<Entry>(rows->budget, entry->value.first, std::move(row), wire, heap);
+				}
+				return loaded->value;
+			}
+			const Pair *operator->() const { return &operator*(); }
 			Iterator &operator++() {
 				*this = rows->upper_bound(entry->value.first);
 				return *this;
 			}
-			bool operator==(const Iterator &) const = default;
+			bool operator==(const Iterator &other) const { return rows == other.rows && entry == other.entry; }
 		};
+		// An ordered range pays for one lower-bound descent. A false callback
+		// stops before materializing any subsequent row, including disk-backed rows.
+		template<class Visitor>
+		void visitAfter(uint64_t after, const Visitor &visit) const {
+			auto walk = [&](auto &&self, const Node *n) -> bool {
+				while (n) {
+					if (n->item->value.first > after) {
+						if (!self(self, n->left.get()) || !visit(Iterator{this, n->item.get()}))
+							return false;
+					}
+					n = n->right.get();
+				}
+				return true;
+			};
+			walk(walk, root.get());
+		}
 		Iterator begin() const { return {this, bound(0)}; }
 		Iterator end() const { return {this, nullptr}; }
 		Iterator upper_bound(uint64_t id) const { return {this, id == UINT64_MAX ? nullptr : bound(id + 1)}; }
@@ -147,11 +183,19 @@ namespace graph::storage::nativewal {
 		size_t size() const { return count; }
 		size_t encodedBytes() const { return wireSize; }
 		bool contains(uint64_t id) const { return find(id) != end(); }
-		const Row &at(uint64_t id) const {
+		Iterator checked(uint64_t id) const {
 			auto it = find(id);
 			if (it == end())
 				throw std::out_of_range("Unknown native graph ID");
-			return it->second;
+			return it;
+		}
+		Row at(uint64_t id) const { return checked(id)->second; }
+		void admitBaseRecord(uint64_t id, size_t wire, std::function<Row()> load) {
+			auto item = std::make_shared<Entry>(budget, id, Row{}, wire, 192);
+			item->load = std::move(load);
+			root = replace(root, id, item);
+			wireSize += wire;
+			++count;
 		}
 		void insert_or_assign(uint64_t id, Row row) {
 			auto [wire, heap] = rowCost(row);

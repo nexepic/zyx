@@ -104,6 +104,54 @@ int main(int argc, char **argv) try {
 		std::cout << graph::storage::createNativeWalDatabase(path) << "\n";
 		return 0;
 	}
+	if (op == "budget-point" || op == "budget-recover" || op == "late-damage") {
+		using namespace graph::storage;
+		auto selection = StorageBackendFactory::create(path, std::stoull(argv[3]),
+													   op != "budget-recover" ? OpenMode::OPEN_READ_ONLY_EXISTING_FILE
+																			  : OpenMode::OPEN_EXISTING_FILE);
+		selection.backend->open();
+		auto &reader = dynamic_cast<LogicalGraphReadBackend &>(*selection.backend);
+		auto old = reader.openLogicalGraphReadSnapshot();
+		auto get = [](auto &r, int id) {
+			auto n = r.readNode(id);
+			return std::get<std::string>(n.properties.front().value.getVariant());
+		};
+		expect(get(*old, 1) == std::string(8192, 'z') && get(*old, 320) == std::string(8192, '0'),
+			   "Wrong budgeted recovery");
+		if (op == "late-damage") {
+			// Last row is 320 and the last 32 bytes are the authenticated footer.
+			std::fstream f(path + ".base", std::ios::in | std::ios::out | std::ios::binary);
+			f.seekp(-64, std::ios::end);
+			f.put('!');
+			f.flush();
+			expect(bool(f), "Cannot damage disposable base");
+			expect(get(*old, 1) == std::string(8192, 'z'), "Unrelated row changed");
+			bool refused = false;
+			try {
+				(void) get(*old, 320);
+			} catch (const std::exception &e) {
+				refused = std::string(e.what()).find("base row changed") != std::string::npos;
+			}
+			expect(refused, "Authenticated deferred row accepted changed contents");
+		}
+		if (op == "budget-recover") {
+			auto &writer = dynamic_cast<LogicalGraphTransactionalBackend &>(*selection.backend);
+			auto tx = writer.beginLogicalGraphTransaction(false);
+			LogicalGraphMutationBatch batch;
+			LogicalGraphMutationEntityReference ref;
+			ref.value = 320;
+			batch.property_replacements.push_back({ref, {{"payload", graph::PropertyValue(std::string(8192, 'B'))}}});
+			tx->stageMutationBatch(std::move(batch));
+			tx->commit();
+			selection.backend->flush();
+			auto fresh = reader.openLogicalGraphReadSnapshot();
+			expect(get(*fresh, 320) == std::string(8192, 'B') && get(*old, 320) == std::string(8192, '0'),
+				   "Budgeted checkpoint broke old view");
+		}
+		old.reset();
+		selection.backend->close();
+		return 0;
+	}
 	if (op == "budget") {
 		using namespace graph::storage;
 		{
@@ -163,6 +211,79 @@ int main(int argc, char **argv) try {
 	}
 	zyx::Database db(path);
 	db.open();
+	if (op == "large-leave") {
+		for (int i = 0; i < 10; ++i) {
+			auto tx = db.beginTransaction();
+			std::vector<std::unordered_map<std::string, zyx::Value>> rows(32, {{"payload", std::string(8192, '0')}});
+			tx.createNodes("Large", rows);
+			tx.commit();
+		}
+		db.save();
+		for (int i = 0; i < 80; ++i) {
+			auto tx = db.beginTransaction();
+			auto r = tx.execute("MATCH (n:Large) WHERE id(n)=1 SET n.payload=$s",
+								{{"s", std::string(8192, i == 79 ? 'z' : 'a' + i % 20)}});
+			expect(r.isSuccess(), r.getError());
+			tx.commit();
+		}
+		std::cout << "ack" << std::endl;
+		kill(getpid(), SIGKILL);
+	}
+	if (op == "unreachable-base") {
+		auto a = db.beginTransaction();
+		query(a, "CREATE (:A)");
+		a.commit();
+		auto pinned = db.beginReadOnlyTransaction();
+		std::filesystem::rename(path + ".base", path + ".held");
+		auto b = db.beginTransaction();
+		query(b, "CREATE (:B)");
+		bool rejected = false;
+		try {
+			b.commit();
+		} catch (const std::exception &e) {
+			rejected = std::string(e.what()).find("base") != std::string::npos;
+		}
+		std::filesystem::rename(path + ".held", path + ".base");
+		expect(rejected, "Acknowledged an append while its required base name was missing");
+		expect(scalar(pinned, count) == 1, "Already pinned reader lost its acknowledged snapshot");
+		pinned.commit();
+		bool blocked = false;
+		try {
+			auto tx = db.beginTransaction();
+		} catch (const std::exception &) {
+			blocked = true;
+		}
+		expect(blocked, "Writer continued after loss of a dependency");
+		return 0;
+	}
+	if (op == "replace-path") {
+		std::filesystem::copy_file(path, path + ".replacement");
+		std::filesystem::rename(path + ".replacement", path);
+		auto tx = db.beginTransaction();
+		query(tx, "CREATE (:Lost)");
+		bool rejected = false;
+		try {
+			tx.commit();
+		} catch (const std::exception &e) {
+			rejected = std::string(e.what()).find("base") != std::string::npos;
+		}
+		expect(rejected, "Acknowledged write against replaced base identity");
+		expect(!std::filesystem::exists(path + ".wal"), "Uncertain base published a WAL");
+		return 0;
+	}
+	if (op == "locked-checkpoint") {
+		auto old = db.beginReadOnlyTransaction();
+		auto w = db.beginTransaction();
+		query(w, "CREATE (:A)");
+		w.commit();
+		setenv("ZYX_TEST_NATIVE_IO", "m.renamed=stop", 1);
+		db.save();
+		unsetenv("ZYX_TEST_NATIVE_IO");
+		expect(scalar(old, count) == 0 && scalar(db, count) == 1, "Checkpoint changed transaction snapshot");
+		old.commit();
+		db.close();
+		return 0;
+	}
 	if (op == "uncertain") {
 		auto a = db.beginTransaction();
 		(void) a.createNode("First");

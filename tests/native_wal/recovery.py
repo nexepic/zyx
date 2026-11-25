@@ -21,11 +21,18 @@ def run(op, path, fault=None, code=0, error=None):
 def recovered(path, expected):
     assert run("count", path) == str(expected), (path, expected)
     assert not path.with_suffix(".wal").exists()
+    assert not path.with_suffix(".base").exists()
 
 with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    unreachable=new("unreachable-base")
+    run("unreachable-base",unreachable)
+    recovered(unreachable,1)
+    replaced = new("replace-path")
+    run("replace-path",replaced)
+    recovered(replaced,0)
     graph = new("graph")
     run("graph", graph)
     run("exported",graph.with_suffix(".cp003"))
@@ -70,17 +77,48 @@ with tempfile.TemporaryDirectory() as name:
         path = new(kind+"-short")
         run("append",path,kind+".write=short")
         recovered(path,1)
+    # Directory lock survives replacement of the main inode. The stopped
+    # writer has a genuine older in-process snapshot and an acknowledged B.
+    handoff = new("handoff")
+    with subprocess.Popen([driver,"locked-checkpoint",str(handoff)],env=env) as writer:
+        try:
+            _, status = os.waitpid(writer.pid,os.WUNTRACED)
+            assert os.WIFSTOPPED(status) and os.WSTOPSIG(status)==signal.SIGSTOP,status
+            run("append",handoff,code=2,error="lock native graph directory")
+            run("read-only",handoff,code=2,error="lock native graph directory")
+        finally:
+            if writer.poll() is None: os.kill(writer.pid,signal.SIGCONT)
+        assert writer.wait(timeout=20)==0
+    recovered(handoff,1)
+    for event in ("b.link","b.linked","b.dirsync","b.dirsynced"):
+        path=new("anchor-"+event)
+        run("append",path,event+"=kill",killed)
+        recovered(path,0)
+    for event in ("b.link","b.dirsync"):
+        path=new("anchor-error-"+event)
+        run("append",path,event+"=eio",2)
+        recovered(path,0)
     original = new("confirmed")
     empty_main = original.read_bytes()
     assert run("leave",original,code=killed)=="ack"
     log = original.with_suffix(".wal")
     old_log = log.read_bytes()
+    anchor_path=original.with_suffix(".base")
+    anchor_bytes=anchor_path.read_bytes()
+    run("append",anchor_path,code=2,error="Managed native base")
+    run("read-only",anchor_path,code=2,error="Managed native base")
+    assert anchor_path.read_bytes()==anchor_bytes and log.read_bytes()==old_log
     for event in ("m.write","m.synced","m.renamed","m.dirsynced","w.unlink","w.unlinked","u.dirsynced"):
         dest = root / ("checkpoint-"+event)
         shutil.copytree(original.parent,dest)
         run("checkpoint",dest/"main",event+"=kill",killed)
         recovered(dest/"main",1)
         count += 1
+    for event in ("b.unlink","b.unlinked","d.dirsynced"):
+        dest=root/("drop-anchor-"+event)
+        shutil.copytree(original.parent,dest)
+        run("checkpoint",dest/"main",event+"=kill",killed)
+        recovered(dest/"main",1)
     outsider = new("outsider")
     run("leave",outsider,code=killed)
     for label, value in (("missing",None),("truncated",old_log[:-1]),("different",outsider.with_suffix(".wal").read_bytes())):
@@ -90,6 +128,13 @@ with tempfile.TemporaryDirectory() as name:
         if value is None:p.unlink()
         else:p.write_bytes(value)
         run("count",dest/"main",code=2,error={"missing":"requires missing WAL","truncated":"Missing native graph WAL prefix","different":"WAL receipt mismatch"}[label])
+    for label, blob, error in (("lost",None,"requires missing base"),("wrong",outsider.with_suffix(".base").read_bytes(),"base generation mismatch")):
+        dest=root/("base-"+label)
+        shutil.copytree(original.parent,dest)
+        anchor_path=dest/"main.base"
+        if blob is None:anchor_path.unlink()
+        else:anchor_path.write_bytes(blob)
+        run("count",dest/"main",code=2,error=error)
     # A matching outer digest must not mask a stale generation or a gap
     # within the supposedly committed prefix.
     for label, offset, error in (("identity",8,"WAL generation mismatch"),("sequence",old_log.index(b"ZYXtx002")+8,"WAL sequence gap")):
@@ -164,8 +209,11 @@ with tempfile.TemporaryDirectory() as name:
         directory.mkdir()
         target=directory/"main"
         target.write_bytes(main)
+        if main in (prior,new_main):
+            (directory/"main.base").write_bytes(anchor)
         if wal is not None:(directory/"main.wal").write_bytes(wal)
         recovered(target,expected)
+    anchor=pair.with_suffix(".base").read_bytes()
     prior=pair.with_suffix(".prior").read_bytes()
     old=pair.with_suffix(".prior-wal").read_bytes()
     new_log=pair.with_suffix(".wal").read_bytes()
@@ -193,3 +241,31 @@ with tempfile.TemporaryDirectory() as name:
     model("standalone-resurrected-name",pair.read_bytes(),old,2)
     model("standalone-clean-name",pair.read_bytes(),None,2)
     print("durable namespace model: 7 replay states; real commit order:"," ".join(stages))
+
+    large=new("large")
+    run("large-leave",large,code=killed)
+    base=large.with_suffix(".base")
+    wal=large.with_suffix(".wal")
+    sizes=(base.stat().st_size,wal.stat().st_size)
+    assert min(sizes)>512*1024 and sizes[0]>2*1024*1024
+    before=[hashlib.sha256(p.read_bytes()).digest() for p in (large,base,wal)]
+    upper=512*1024
+    run("budget-point",large,str(upper))
+    lower=0
+    while lower+1<upper:
+        probe=(upper+lower)//2
+        child=subprocess.run([driver,"budget-point",str(large),str(probe)],env=env,capture_output=True,text=True,timeout=25)
+        if child.returncode==0:upper=probe
+        else:
+            assert child.returncode==2 and "budget" in child.stderr,child
+            lower=probe
+    run("budget-point",large,str(upper))
+    run("budget-point",large,str(lower),2,"budget")
+    assert before==[hashlib.sha256(p.read_bytes()).digest() for p in (large,base,wal)]
+    damaged=root/"large-corrupt"
+    shutil.copytree(large.parent,damaged)
+    run("late-damage",damaged/"main",str(512*1024))
+    run("budget-point",damaged/"main",str(512*1024),2,"checksum mismatch")
+    run("budget-recover",large,str(512*1024))
+    assert not base.exists() and not wal.exists()
+    print("bounded recovery: base bytes",sizes[0],"WAL bytes",sizes[1],"first accepted budget",upper,"rejected",lower)

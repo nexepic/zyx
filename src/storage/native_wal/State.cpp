@@ -210,7 +210,6 @@ namespace graph::storage::nativewal {
 				require(s.nodes.contains(it->second.source_node_id) && s.nodes.contains(it->second.target_node_id),
 						"Native WAL dangling relationship");
 		}
-		require(s.encodedSize() <= maxState, "Native graph encoded state budget exceeded");
 		return ids;
 	}
 	namespace {
@@ -246,24 +245,35 @@ namespace graph::storage::nativewal {
 		append(changed.edges, s.edges);
 		return std::move(w.bytes);
 	}
-	Bytes encodeBase(const State &s) {
-		Encoder w(maxState);
-		w.room(s.encodedSize());
-		w.bytes.reserve(s.encodedSize());
-		w.num(s.nodeHigh);
-		w.num(s.edgeHigh);
-		auto append = [&](const auto &rows) {
-			w.num(rows.size());
-			for (auto &[id, row]: rows) {
-				w.num(id);
-				w.num(1);
-				encodeRow(w, row);
-			}
-		};
-		append(s.nodes);
-		append(s.edges);
-		require(w.bytes.size() == s.encodedSize(), "Native checkpoint size accounting mismatch");
-		return std::move(w.bytes);
+	void encodeBaseRow(Encoder &w, const LogicalGraphNode &row) { encodeRow(w, row); }
+	void encodeBaseRow(Encoder &w, const LogicalGraphEdge &row) { encodeRow(w, row); }
+	namespace {
+		LogicalGraphNode readNode(Decoder &r, uint64_t id) {
+			LogicalGraphNode n{id, {}};
+			auto count = r.count(maxFields);
+			while (count--)
+				n.labels.push_back(r.text());
+			labels(n.labels);
+			n.properties = decodeProperties(r);
+			return n;
+		}
+		LogicalGraphEdge readEdge(Decoder &r, uint64_t id) {
+			auto a = r.num(), b = r.num();
+			auto type = r.text();
+			return {id, a, b, std::move(type), decodeProperties(r)};
+		}
+	} // namespace
+	LogicalGraphNode baseNode(uint64_t id, Span bytes) {
+		Decoder r{bytes};
+		auto row = readNode(r, id);
+		require(r.bytes.empty(), "Trailing native node");
+		return row;
+	}
+	LogicalGraphEdge baseEdge(uint64_t id, Span bytes) {
+		Decoder r{bytes};
+		auto row = readEdge(r, id);
+		require(r.bytes.empty(), "Trailing native edge");
+		return row;
 	}
 	void applyDelta(State &s, Span bytes) {
 		Decoder r{bytes};
@@ -288,25 +298,16 @@ namespace graph::storage::nativewal {
 				}
 			}
 		};
-		rows(s.nodes, s.nodeHigh, nh, [&](uint64_t id) {
-			LogicalGraphNode n{id, {}};
-			auto count = r.count(maxFields);
-			while (count--)
-				n.labels.push_back(r.text());
-			labels(n.labels);
-			n.properties = decodeProperties(r);
-			return n;
-		});
+		rows(s.nodes, s.nodeHigh, nh, [&](uint64_t id) { return readNode(r, id); });
 		rows(s.edges, s.edgeHigh, eh, [&](uint64_t id) {
-			auto a = r.num(), b = r.num();
-			require(s.nodes.contains(a) && s.nodes.contains(b), "Native WAL dangling relationship");
-			auto type = r.text();
-			return LogicalGraphEdge{id, a, b, std::move(type), decodeProperties(r)};
+			auto edge = readEdge(r, id);
+			require(s.nodes.contains(edge.source_node_id) && s.nodes.contains(edge.target_node_id),
+					"Native WAL dangling relationship");
+			return edge;
 		});
 		require(r.bytes.empty(), "Trailing native WAL delta");
 		s.nodeHigh = nh;
 		s.edgeHigh = eh;
-		require(s.encodedSize() <= maxState, "Native graph encoded state budget exceeded");
 		if (removedNode)
 			for (auto &[id, e]: s.edges)
 				require(s.nodes.contains(e.source_node_id) && s.nodes.contains(e.target_node_id),

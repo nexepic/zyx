@@ -81,6 +81,9 @@ namespace graph::storage::nativewal {
 	LogicalGraphMutationBatchResult preview(const State &, const LogicalGraphMutationBatch &);
 	LogicalGraphMutationBatchResult apply(State &, Changes &, const LogicalGraphMutationBatch &);
 	Bytes encodeDelta(const State &, const Changes &);
-	Bytes encodeBase(const State &);
+	void encodeBaseRow(Encoder &, const LogicalGraphNode &);
+	void encodeBaseRow(Encoder &, const LogicalGraphEdge &);
+	LogicalGraphNode baseNode(uint64_t, Span);
+	LogicalGraphEdge baseEdge(uint64_t, Span);
 	void applyDelta(State &, Span);
 } // namespace graph::storage::nativewal

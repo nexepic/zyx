@@ -7,7 +7,7 @@ namespace graph::storage::nativewal {
 	class Journal {
 		struct Files;
 		std::unique_ptr<Files> files;
-		Bytes base;
+		Digest baseDigest{};
 		size_t walLength = 0;
 		utils::Sha256 walHash;
 		uint64_t baseSequence = 0;

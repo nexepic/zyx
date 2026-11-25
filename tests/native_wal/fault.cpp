@@ -23,6 +23,8 @@ static int fault(char k, const char *name) {
 	if (getenv("ZYX_TEST_NATIVE_IO") && !strcmp(getenv("ZYX_TEST_NATIVE_IO"), "trace"))
 		fprintf(stderr, "IO %c.%s\n", k, name);
 	const char *mode = action(k, name);
+	if (!strcmp(mode, "stop"))
+		raise(SIGSTOP);
 	if (!strcmp(mode, "kill"))
 		kill(getpid(), SIGKILL);
 	if (!strcmp(mode, "eio")) {
@@ -40,7 +42,7 @@ ssize_t write(int fd, const void *data, size_t len) {
 		errno = EIO;
 		return -1;
 	}
-	if (len >= 8 && (!memcmp(data, "ZYXng002", 8) || !memcmp(data, "ZYXnw002", 8) || !memcmp(data, "ZYXtx002", 8))) {
+	if (len >= 8 && (!memcmp(data, "ZYXng003", 8) || !memcmp(data, "ZYXnw003", 8) || !memcmp(data, "ZYXtx002", 8))) {
 		kind = ((const char *) data)[4] == 'g' ? 'm' : (((const char *) data)[3] == 't' ? 'a' : 'w');
 
 		if (fault(kind, "write") < 0)
@@ -87,13 +89,30 @@ int renameat(int a, const char *old, int b, const char *newname) {
 	}
 	return ret;
 }
+int linkat(int a, const char *oldname, int b, const char *newname, int flags) {
+	static auto real = reinterpret_cast<decltype(&linkat)>(dlsym(RTLD_NEXT, "linkat"));
+	if (fault('b', "link") < 0)
+		return -1;
+	int rc = real(a, oldname, b, newname, flags);
+	if (!rc) {
+		last = 'b';
+		fault('b', "linked");
+	}
+	return rc;
+}
 int unlinkat(int fd, const char *name, int flags) {
 	static int (*real)(int, const char *, int);
 	if (!real)
 		real = reinterpret_cast<decltype(real)>(dlsym(RTLD_NEXT, "unlinkat"));
+	if (strstr(name, ".base") && fault('b', "unlink") < 0)
+		return -1;
 	if (strstr(name, ".wal") && fault('w', "unlink") < 0)
 		return -1;
 	int ret = real(fd, name, flags);
+	if (!ret && strstr(name, ".base")) {
+		last = 'd';
+		fault('b', "unlinked");
+	}
 	if (!ret && strstr(name, ".wal")) {
 		last = 'u';
 		fault('w', "unlinked");
