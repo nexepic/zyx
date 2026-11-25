@@ -266,6 +266,111 @@ namespace graph::storage::nativewal {
 			return true;
 		});
 	}
+	// The preceding snapshot is already valid. Any new violation therefore
+	// has at least one surviving changed owner. Keep only those owners' final
+	// canonical keys and compare against the final graph (including WAL rows).
+	void validateAffectedScope(const State &s, const State *prior, const ScopedUnique &scope,
+							   const ChangedNodeIds &ids) {
+		VersionMemoryResource memory(s.budget);
+		// The canonical wire format tags INTEGER separately and encodes
+		// int64 bits injectively. All other types retain their complete wire key.
+		using Key = std::variant<int64_t, std::pmr::vector<std::byte>>;
+		std::pmr::map<Key, uint64_t> claims(&memory);
+		auto encode = [&](const LogicalGraphNode &n) -> std::optional<Key> {
+			if (std::ranges::find(n.labels, scope.label) == n.labels.end())
+				return {};
+			const auto field = std::ranges::find(n.properties, scope.key, &LogicalGraphPropertyEntry::key);
+			if (field == n.properties.end() || field->value.getType() == PropertyType::NULL_TYPE)
+				return {};
+			if (const auto *v = std::get_if<int64_t>(&field->value.getVariant()))
+				return *v;
+			std::pmr::vector<std::byte> wire(&memory);
+			CanonicalPropertyValueCodec::append(wire, field->value);
+			return Key{std::move(wire)};
+		};
+		auto duplicate = [&] {
+			throw UniqueViolation("Constraint violation: '" + scope.name + "' has a duplicate key");
+		};
+		ids([&](uint64_t id) {
+			auto now = s.nodes.find(id);
+			if (now == s.nodes.end())
+				return;
+			auto key = encode(now->second);
+			if (!key)
+				return;
+			if (prior) {
+				const auto old = prior->nodes.find(id);
+				if (old != prior->nodes.end() && key == encode(old->second))
+					return;
+			}
+			if (!claims.emplace(std::move(*key), id).second)
+				duplicate();
+		});
+		if (claims.empty())
+			return;
+		auto inspect = [&](const LogicalGraphNode &row) {
+			auto key = encode(row);
+			if (!key)
+				return;
+			auto hit = claims.find(*key);
+			if (hit != claims.end() && hit->second != row.node_id)
+				duplicate();
+		};
+		size_t inspected = 0;
+		size_t projected = 0;
+		const bool sameScope =
+				s.column && s.declaration && s.declaration->label == scope.label && s.declaration->key == scope.key;
+		if (sameScope && s.column->complete) {
+			// The sealed complete base contains only exact integers in this
+			// scope. An absent base key still requires the full resident overlay.
+			for (const auto &[key, claimant]: claims) {
+				const auto *integer = std::get_if<int64_t>(&key);
+				if (!integer)
+					continue;
+				const int64_t value = *integer;
+				const auto &postings = s.column->postings;
+				for (auto i = std::ranges::lower_bound(postings, Posting{value, 0});
+					 i != postings.end() && i->first == value; ++i) {
+					if (i->second == claimant)
+						continue;
+					auto owner = s.nodes.find(i->second);
+					if (owner != s.nodes.end() && owner.onDisk()) {
+						++inspected;
+						inspect(owner->second);
+					}
+				}
+			}
+			s.nodes.visitResident([&](const auto &entry) {
+				++inspected;
+				inspect(entry.second);
+				return true;
+			});
+		} else {
+			// The id-ordered column authenticates only its listed base rows.
+			// Walk it alongside the ordered final graph. A missing id, another
+			// scope or a resident replacement requires the authoritative value.
+			size_t pos = 0;
+			s.nodes.visitAfter(0, [&](auto row) {
+				if (sameScope && row.onDisk()) {
+					const auto &column = s.column->column;
+					while (pos < column.size() && column[pos].first < row.id())
+						++pos;
+					if (pos < column.size() && column[pos].first == row.id()) {
+						++projected;
+						auto hit = claims.find(Key{column[pos++].second});
+						if (hit == claims.end() || hit->second == row.id())
+							return true;
+					}
+				}
+				++inspected;
+				inspect(row->second);
+				return true;
+			});
+		}
+		debug::PerfTrace::addValue("native_wal.unique.projected_base_rows", projected);
+		debug::PerfTrace::addValue("native_wal.unique.affected_keys", claims.size());
+		debug::PerfTrace::addValue("native_wal.unique.affected_probe_rows", inspected);
+	}
 	Bytes encodeDelta(const State &s, const Changes &changed) {
 		Encoder w(maxState);
 		w.num(s.nodeHigh);
@@ -320,12 +425,25 @@ namespace graph::storage::nativewal {
 		require(nh >= s.nodeHigh && eh >= s.edgeHigh && nh <= INT64_MAX && eh <= INT64_MAX,
 				"Invalid native WAL identity high-water mark");
 		bool removedNode = false;
+		VersionMemoryResource idMemory(s.budget);
+		std::pmr::vector<uint64_t> changedIds(&idMemory);
+		bool haveIds = true;
 		std::vector<uint64_t> changedColumnIds;
 		auto rows = [&](auto &map, uint64_t old, uint64_t high, auto decode) {
 			auto count = r.count(2 * maxRows);
 			constexpr bool nodes = std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>;
-			if constexpr (nodes)
+			if constexpr (nodes) {
+				if (s.unique || s.catalog) {
+					try {
+						changedIds.reserve(count);
+					} catch (const std::length_error &) {
+						haveIds = false;
+					} catch (const std::bad_alloc &) {
+						haveIds = false;
+					}
+				}
 				unique.reserve(count);
+			}
 			uint64_t previous = 0;
 			while (count--) {
 				auto id = r.num();
@@ -333,8 +451,11 @@ namespace graph::storage::nativewal {
 						"Invalid or resurrected native WAL id");
 				previous = id;
 				UniqueDelta::Key before;
-				if constexpr (nodes)
+				if constexpr (nodes) {
+					if (haveIds && (s.unique || s.catalog))
+						changedIds.push_back(id);
 					before = unique.key(s, id);
+				}
 				if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
 					if (s.declaration && !s.columnOverflow && changedColumnIds.size() <= ColumnChanges::limit)
 						changedColumnIds.push_back(id);
@@ -364,5 +485,18 @@ namespace graph::storage::nativewal {
 			for (auto &[id, e]: s.edges)
 				require(s.nodes.contains(e.source_node_id) && s.nodes.contains(e.target_node_id),
 						"Native WAL dangling relationship");
+		if (s.unique || s.catalog) {
+			if (haveIds) {
+				unique.validate(s, nullptr, [&](const auto &visit) {
+					for (auto id: changedIds)
+						visit(id);
+				});
+			} else {
+				// An absent optional change list carries no coverage proof.
+				// Preserve the original full audit for this WAL transaction.
+				validateUnique(s);
+				validateCatalog(s);
+			}
+		}
 	}
 } // namespace graph::storage::nativewal

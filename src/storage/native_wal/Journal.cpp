@@ -799,8 +799,6 @@ namespace graph::storage::nativewal {
 				log.consume(delta);
 				UniqueDelta check(*s, uniqueOwners);
 				applyDelta(*s, delta, check);
-				check.validate(*s);
-				validateCatalog(*s);
 				s->sequence = seq;
 				check.advance(*s);
 				size_t padding = (alignment - log.position % alignment) % alignment;
@@ -971,10 +969,12 @@ namespace graph::storage::nativewal {
 			check.reserve(changed.nodes.size());
 			for (auto id: changed.nodes)
 				check.observe(id, check.key(*current, id), check.key(*next, id));
-			check.validate(*next);
 		}
-		if (!changed.nodes.empty())
-			validateCatalog(*next);
+		if (!changed.nodes.empty() && (next->unique || next->catalog))
+			check.validate(*next, current.get(), [&](const auto &visit) {
+				for (auto id: changed.nodes)
+					visit(id);
+			});
 		auto delta = encodeDelta(*next, changed);
 		try {
 			files->checkAuthority();

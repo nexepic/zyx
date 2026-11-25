@@ -130,13 +130,21 @@ namespace graph::storage::nativewal {
 			if (before.value != after.value && after.value)
 				claims.emplace_back(*after.value, id);
 		}
-		void validate(const State &s) {
+		void validate(const State &s, const State *prior, const ChangedNodeIds &changed) {
 			if (!covered) {
 				if (s.unique)
-					debug::PerfTrace::addValue("native_wal.unique.full_audit_rows", s.nodes.size());
-				validateUnique(s);
-				return;
-			}
+					validateAffectedScope(
+							s, prior, {s.unique->name, s.declaration->label, s.declaration->key, s.unique->revision},
+							changed);
+			} else
+				validateIntegers(s);
+			if (s.catalog)
+				for (const auto &scope: s.catalog->entries)
+					validateAffectedScope(s, prior, scope, changed);
+		}
+
+	private:
+		void validateIntegers(const State &s) {
 			debug::PerfTrace::addValue("native_wal.unique.claims", claims.size());
 			std::ranges::sort(claims);
 			std::optional<int64_t> previous;
@@ -147,6 +155,8 @@ namespace graph::storage::nativewal {
 				previous = value;
 			}
 		}
+
+	public:
 		void advance(const State &s) {
 			if (covered)
 				owners.advance(s, claims);

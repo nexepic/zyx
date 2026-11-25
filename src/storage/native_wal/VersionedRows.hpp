@@ -3,6 +3,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <memory_resource>
 #include <stdexcept>
 #include <utility>
 
@@ -28,6 +29,30 @@ namespace graph::storage::nativewal {
 		}
 		size_t capacity() const { return maximum; }
 		void release(size_t n) { used.fetch_sub(n); }
+	};
+
+	// Charge the actual vector allocations, including both buffers during a
+	// reallocation. Once the old allocation is freed its admission is returned,
+	// including when version-owned containers outlive the operation.
+	class VersionMemoryResource final : public std::pmr::memory_resource {
+		std::shared_ptr<VersionBudget> budget;
+		void *do_allocate(size_t bytes, size_t alignment) override {
+			budget->acquire(bytes);
+			try {
+				return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+			} catch (...) {
+				budget->release(bytes);
+				throw;
+			}
+		}
+		void do_deallocate(void *p, size_t bytes, size_t alignment) noexcept override {
+			std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+			budget->release(bytes);
+		}
+		bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+
+	public:
+		explicit VersionMemoryResource(std::shared_ptr<VersionBudget> b) : budget(std::move(b)) {}
 	};
 
 	class VersionCharge {

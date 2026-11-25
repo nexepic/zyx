@@ -121,19 +121,23 @@ namespace {
 			auto key = std::ranges::find(row.properties, "k", &LogicalGraphPropertyEntry::key);
 			if (key == row.properties.end())
 				throw std::runtime_error("Checkpoint lost the indexed key");
-			return std::get<int64_t>(key->value.getVariant());
+			return key->value;
 		};
-		for (int64_t key: {-1, -2}) {
+		// After the numeric checkpoints an incomplete base must permit a
+		// mixed key transition without retaining one canonical key per row.
+		for (const auto &key : {graph::PropertyValue(int64_t(-1)), graph::PropertyValue(int64_t(-2)),
+							graph::PropertyValue(std::string("mixed")), graph::PropertyValue(int64_t(-3)),
+							graph::PropertyValue(std::string("mixed"))}) {
 			LogicalGraphMutationEntityReference first;
 			first.value = 1;
 			LogicalGraphMutationBatch changes;
-			changes.property_replacements.push_back({first, {{"k", graph::PropertyValue(key)}}});
+			changes.property_replacements.push_back({first, {{"k", key}}});
 			auto tx = writer.beginLogicalGraphTransaction(false);
 			(void) tx->stageMutationBatch(std::move(changes));
 			(void) tx->commit();
 			tx.reset();
 			backend->flush();
-			check(readKey(*old) == 0 && readKey(*reader.openLogicalGraphReadSnapshot()) == key,
+			check(readKey(*old) == graph::PropertyValue(int64_t(0)) && readKey(*reader.openLogicalGraphReadSnapshot()) == key,
 				  "Checkpoint changed a pinned or current indexed row");
 		}
 		old.reset();
@@ -346,6 +350,62 @@ int main(int argc, char **argv) try {
 		count(db, "n.k=100", 0);
 		check(duplicate(db), "failed batch changed uniqueness");
 		db.close();
+		return 0;
+	}
+	if (op == "mixed-seed") {
+		auto tx = db.beginTransaction();
+		execute(tx, "MATCH(n:Item) WHERE id(n)=1 SET n.k='base-owner'");
+		tx.commit();
+		db.save();
+		db.close();
+		return 0;
+	}
+	if (op == "mixed-prefix") {
+		for (const auto *key: {"'free-owner'", "4"}) {
+			auto tx = db.beginTransaction();
+			execute(tx, std::string("MATCH(n:Item) WHERE id(n)=2 SET n.k=") + key);
+			tx.commit();
+		}
+		std::_Exit(0);
+	}
+	if (op == "accept-mixed") {
+		count(db, "n.k='base-owner'", 1);
+		count(db, "n.k=4", 1);
+		return 0;
+	}
+	if (op == "mixed-owners") {
+		auto old = db.beginReadOnlyTransaction();
+		auto swap = db.beginTransaction();
+		execute(swap, "MATCH(n:Item) WHERE id(n)=2 SET n.k=1");
+		execute(swap, "MATCH(n:Item) WHERE id(n)=1 SET n.k='overlay'");
+		swap.commit();
+		auto reject = [&](const std::string &value) {
+			auto tx = db.beginTransaction();
+			execute(tx, "CREATE (:Item {k:" + value + "})");
+			try {
+				tx.commit();
+			} catch (const std::exception &e) {
+				check(std::string(e.what()).find("duplicate key") != std::string::npos, e.what());
+				return;
+			}
+			throw std::runtime_error("Missing mixed UNIQUE violation");
+		};
+		reject("'overlay'");
+		count(old, "n.k=1", 1);
+		count(old, "n.k='overlay'", 0);
+		db.save();
+		count(old, "n.k=2", 1);
+		old.commit();
+		db.close();
+		db.open();
+		reject("1");
+		reject("'overlay'");
+		auto replace = db.beginTransaction();
+		execute(replace, "MATCH(n:Item) WHERE n.k='overlay' DELETE n");
+		execute(replace, "CREATE (:Item {k:'overlay'})");
+		replace.commit();
+		db.save();
+		count(db, "n.k='overlay'", 1);
 		return 0;
 	}
 	if (op == "prefix") {

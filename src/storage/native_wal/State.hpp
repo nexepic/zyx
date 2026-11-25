@@ -89,6 +89,8 @@ namespace graph::storage::nativewal {
 	};
 	void validateScope(const State &, const ScopedUnique &, const std::function<void()> & = {},
 					   const std::function<void(size_t)> & = {});
+	using ChangedNodeIds = std::function<void(const std::function<void(uint64_t)> &)>;
+	void validateAffectedScope(const State &, const State *prior, const ScopedUnique &, const ChangedNodeIds &);
 	void validateCatalog(const State &);
 	void validateUnique(const State &, const std::function<void()> &check = {},
 						const std::function<void(size_t)> &admit = {});
