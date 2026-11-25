@@ -1,3 +1,4 @@
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(zyxdb_core MODULE src/zyxdb/_core.cpp)
