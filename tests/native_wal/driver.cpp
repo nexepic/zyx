@@ -251,6 +251,7 @@ int main(int argc, char **argv) try {
 		db.save();
 		expect(payload(db, 1) == std::string(43, 'q') && payload(db, 320) == std::string(8192, '0'),
 			   "Moved row used an old offset in new image");
+		expect(orphanCount() == 0, "Shifted rows retain a superseded inode");
 		db.close();
 		db.open();
 		expect(payload(db, 320) == std::string(8192, '0'), "Checkpoint relocation failed reopen");
