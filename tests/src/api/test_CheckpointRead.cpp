@@ -184,6 +184,35 @@ namespace {
 		graph::Database graph(path.string(), graph::storage::OpenMode::OPEN_READ_ONLY_EXISTING_FILE, 64);
 		EXPECT_THROW(graph.open(), std::runtime_error);
 	}
+	TEST_F(CheckpointReadTest, CompleteVisitorsRejectTruncationButPreserveExactAndEarlyStops) {
+		using namespace graph::storage;
+		graph::Database graph(path.string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE, 4096);
+		graph.open();
+		auto backend = std::dynamic_pointer_cast<LogicalGraphReadBackend>(graph.getStorageBackend());
+		auto snap = backend->openLogicalGraphReadSnapshot();
+		size_t calls = 0;
+		auto more = [&](const auto &) {
+			++calls;
+			return true;
+		};
+		EXPECT_THROW(snap->visitNodeRefs(1, more), std::runtime_error);
+		EXPECT_EQ(calls, 1U);
+		calls = 0;
+		EXPECT_NO_THROW(snap->visitNodeRefs(2, more));
+		EXPECT_EQ(calls, 2U);
+		calls = 0;
+		EXPECT_NO_THROW(snap->visitNodeRefs(1, [&](const auto &) {
+			++calls;
+			return false;
+		}));
+		EXPECT_EQ(calls, 1U);
+		EXPECT_THROW(snap->visitNodes(1, more), std::runtime_error);
+		EXPECT_THROW(snap->visitEdges(2, more), std::runtime_error);
+		EXPECT_THROW(snap->visitAdjacentEdges(5, LogicalGraphReadDirection::LGRD_OUTGOING, 1, more),
+					 std::runtime_error);
+		EXPECT_NO_THROW(snap->visitAdjacentEdges(5, LogicalGraphReadDirection::LGRD_OUTGOING, 1,
+												 [](const auto &) { return false; }));
+	}
 	TEST_F(CheckpointReadTest, DeniesWriteTransaction) {
 		ASSERT_EQ(zyx_driver_db_open(path.string().c_str(), &db, &err), ZYX_DRIVER_OK);
 		EXPECT_NE(zyx_driver_txn_begin(db, &tx, &err), ZYX_DRIVER_OK);

@@ -176,6 +176,16 @@ namespace graph::storage {
 				return std::ranges::equal_range(v, id, {}, [&](auto i) { return img->field(i, offset); });
 			}
 
+			template<class Range, class Visitor>
+			static void visitComplete(const Range &range, size_t limit, Visitor &&visitor) {
+				for (auto i: range) {
+					require(limit > 0, "cp002 scan exceeded its record bound before completion");
+					--limit;
+					if (!visitor(i))
+						return;
+				}
+			}
+
 		public:
 			explicit Snapshot(std::shared_ptr<const Image> data) : img(std::move(data)) {}
 			std::optional<LogicalGraphMutationFence> mutationFence() const override { return img->fence; }
@@ -253,17 +263,11 @@ namespace graph::storage {
 			}
 			void visitNodes(size_t max, const std::function<bool(const LogicalGraphNode &)> &f) const override {
 				require(max > 0 && bool(f), "Invalid Node visit bound");
-				for (auto i: img->nodes) {
-					if (!f(img->node(i)) || --max == 0)
-						break;
-				}
+				visitComplete(img->nodes, max, [&](auto i) { return f(img->node(i)); });
 			}
 			void visitEdges(size_t max, const std::function<bool(const LogicalGraphEdge &)> &f) const override {
 				require(max > 0 && bool(f), "Invalid Edge visit bound");
-				for (auto i: img->edges) {
-					if (!f(img->edge(i)) || --max == 0)
-						break;
-				}
+				visitComplete(img->edges, max, [&](auto i) { return f(img->edge(i)); });
 			}
 			LogicalGraphNodePage scanNodesAfter(uint64_t after, size_t max, size_t pages) const override {
 				require(max && pages, "Invalid node scan bound");
@@ -299,10 +303,7 @@ namespace graph::storage {
 			void visitAdjacentEdges(uint64_t id, LogicalGraphReadDirection dir, size_t max,
 									const std::function<bool(const LogicalGraphEdge &)> &f) const override {
 				require(max > 0 && bool(f), "Invalid Adjacency visit bound");
-				for (auto i: adjacent(id, dir)) {
-					if (!f(img->edge(i)) || --max == 0)
-						break;
-				}
+				visitComplete(adjacent(id, dir), max, [&](auto i) { return f(img->edge(i)); });
 			}
 		};
 		class ReadTxn final : public LogicalGraphTransaction {
