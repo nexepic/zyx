@@ -31,6 +31,15 @@ with tempfile.TemporaryDirectory() as name:
     run("exported",graph.with_suffix(".cp003"))
     run("cycles",new("cycles"))
     run("rollover",new("rollover"))
+    # These events only occur when a *new* WAL is being installed. Arm
+    # after the first generation exists, then check the last actual ack.
+    for event, code in (("w.renamed=kill", -signal.SIGKILL), ("w.sync=eio", 2)):
+        path = new("rollover-" + event)
+        acknowledged = run("rollover",path,event,code).splitlines()
+        assert 1 < len(acknowledged) < 26, acknowledged
+        run("rollover-value",path,acknowledged[-1])
+        assert not path.with_suffix(".wal").exists()
+        print("automatic rollover",event,"restored",len(acknowledged),"acknowledged updates")
     run("types",new("types"))
     run("topology",new("topology"))
     run("cap",new("cap"))

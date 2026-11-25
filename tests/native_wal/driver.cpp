@@ -88,6 +88,13 @@ namespace {
 		expect(scalar(exported, "MATCH ()-[r:LINK]->() RETURN r.w AS w") == 5, "Export has wrong edge");
 		exported.close();
 	}
+	void expectRolloverValue(auto &handle, char value) {
+		auto result =
+				handle.execute("MATCH (n:Roll) WHERE n.payload=$s RETURN count(n)", {{"s", std::string(8192, value)}});
+		expect(result.isSuccess() && result.hasNext(), result.getError());
+		result.next();
+		expect(std::get<int64_t>(result.get(0)) == 120 && !result.hasNext(), "Wrong rollover snapshot");
+	}
 } // namespace
 int main(int argc, char **argv) try {
 	if (argc < 3)
@@ -275,6 +282,11 @@ int main(int argc, char **argv) try {
 		expect(!ddl.isSuccess(), "Claimed an unsupported persistent constraint");
 		return 0;
 	}
+	if (op == "rollover-value") {
+		expect(argc == 4 && std::string(argv[3]).size() == 1, "Missing last acknowledged value");
+		expectRolloverValue(db, argv[3][0]);
+		return 0;
+	}
 	if (op == "rollover") {
 		auto seed = db.beginTransaction();
 		std::vector<std::unordered_map<std::string, zyx::Value>> rows(120, {{"payload", std::string(8192, '0')}});
@@ -283,29 +295,27 @@ int main(int argc, char **argv) try {
 		auto old = db.beginReadOnlyTransaction();
 		uintmax_t prior = 0;
 		bool rolled = false;
+		if (argc == 4)
+			setenv("ZYX_TEST_NATIVE_IO", argv[3], 1);
 		for (int i = 0; i < 26; ++i) {
 			auto tx = db.beginTransaction();
 			auto result = tx.execute("MATCH (n:Roll) SET n.payload=$s", {{"s", std::string(8192, 'a' + i)}});
 			expect(result.isSuccess(), result.getError());
 			tx.commit();
+			if (argc == 4)
+				std::cout << char('a' + i) << std::endl;
 			auto size = std::filesystem::file_size(path + ".wal");
 			rolled |= size < prior;
 			prior = size;
 		}
 		expect(rolled, "Automatic WAL rollover did not run");
-		auto matches = [](auto &handle, char value) {
-			auto result = handle.execute("MATCH (n:Roll) WHERE n.payload=$s RETURN count(n)",
-										 {{"s", std::string(8192, value)}});
-			expect(result.isSuccess() && result.hasNext(), result.getError());
-			result.next();
-			expect(std::get<int64_t>(result.get(0)) == 120 && !result.hasNext(), "Wrong rollover snapshot");
-		};
-		matches(old, '0');
-		matches(db, 'z');
+
+		expectRolloverValue(old, '0');
+		expectRolloverValue(db, 'z');
 		old.commit();
 		db.close();
 		db.open();
-		matches(db, 'z');
+		expectRolloverValue(db, 'z');
 		return 0;
 	}
 	if (op == "cycles") {
