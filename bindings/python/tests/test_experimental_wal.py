@@ -116,3 +116,20 @@ def test_stream_uses_payload_of_key_cursor(tmp_path,monkeypatch):
     monkeypatch.setattr(KernelTransaction,'get',duplicate_lookup)
     assert read(db,'MATCH (all:Item) RETURN all.val AS v LIMIT 3')==[[0],[1],[2]]
     db.close()
+
+@pytest.mark.parametrize('backend',['native','experimental-wal'])
+def test_public_graph_ids_survive_reopen(tmp_path,backend):
+    path=str(tmp_path/'db')
+    db=zyxdb.Database(path,backend=backend)
+    a,b=db.create_nodes('Item',[{'id':120},{'id':88}])
+    e1,e2=db.create_edges('Link',[(a,b,{'w':9}),(a,b,{'w':9})])
+    q='MATCH (start:Item)-[rel:Link]->(end:Item) RETURN id(start) AS a,ID(rel) AS eid,id(end) AS b'
+    expected=[[a,e1,b],[a,e2,b]]
+    assert sorted(read(db,q))==expected
+    db.close()
+    db=zyxdb.Database(path,backend=backend)
+    assert sorted(read(db,q))==expected
+    read(db,'MATCH (n:Item {id:88}) DETACH DELETE n')
+    replacement=db.create_node('Item',{'id':88})
+    assert replacement!=b and read(db,q)==[]
+    db.close()

@@ -2,6 +2,7 @@
 // any storage operation; unsupported operators fail without a partial execution.
 #include <algorithm>
 #include <cstdint>
+#include <cctype>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -41,6 +42,14 @@ py::tuple expression(const Expression &e) {
         if (p->isNull()) return py::make_tuple("literal",py::none());
         if (p->isInteger()) return py::make_tuple("literal",p->getIntegerValue());
         if (p->isPropertyValue()) return py::make_tuple("literal",scalar(p->getPropertyValue()));
+    }
+    if (auto call=dynamic_cast<const FunctionCallExpression*>(&e)) {
+        auto name=call->getFunctionName();
+        std::transform(name.begin(),name.end(),name.begin(),[](unsigned char c) { return std::tolower(c); });
+        if (name=="id" && !call->isDistinct() && call->getArguments().size()==1) {
+            const auto *entity=dynamic_cast<const VariableReferenceExpression*>(call->getArguments()[0].get());
+            if (entity && !entity->hasProperty()) return py::make_tuple("entity_id",entity->getVariableName());
+        }
     }
     if (auto p=dynamic_cast<const BinaryOpExpression*>(&e)) {
         if (p->getOperator()==BinaryOperatorType::BOP_EQUAL)
