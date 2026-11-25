@@ -11,6 +11,7 @@
 #include "graph/storage/StorageBackendFactory.hpp"
 #include "zyx/zyx.hpp"
 #include "LocatorBudget.hpp"
+#include "LongProperties.hpp"
 #include "RelocationGraph.hpp"
 namespace {
 	void expect(bool condition, const std::string &error) {
@@ -102,6 +103,10 @@ int main(int argc, char **argv) try {
 	if (argc < 3)
 		throw std::runtime_error("driver OP MAIN_OR_NEW_DIRECTORY [FAULT]");
 	std::string op = argv[1], path = argv[2];
+	if (op.starts_with("long-")) {
+		long_property_test::exercise(op, path, argc > 3 ? argv[3] : nullptr);
+		return 0;
+	}
 	if (op == "init") {
 		std::cout << graph::storage::createNativeWalDatabase(path) << "\n";
 		return 0;

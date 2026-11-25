@@ -10,7 +10,7 @@ namespace graph::storage::nativewal {
 	using Span = std::span<const std::byte>;
 	using Digest = std::array<std::byte, 32>;
 	using Identity = std::array<std::byte, 16>;
-	constexpr size_t maxRows = (2U << 20) / 24, maxFields = 32, maxValue = 16384, maxState = 2 << 20, maxWal = 16 << 20;
+	constexpr size_t maxRows = (2U << 20) / 24, maxFields = 32, maxName = 16384, maxState = 2 << 20, maxWal = 16 << 20;
 	inline void require(bool condition, const char *message) {
 		if (!condition)
 			throw std::runtime_error(message);
@@ -113,7 +113,7 @@ namespace graph::storage::nativewal {
 				bytes.push_back(std::byte(n >> (8 * i)));
 		}
 		void text(std::string_view s) {
-			require(s.size() <= maxValue, "Native WAL string limit exceeded");
+			require(s.size() <= maxName, "Native WAL string limit exceeded");
 			num(s.size());
 			raw(std::as_bytes(std::span(s)));
 		}
@@ -141,7 +141,7 @@ namespace graph::storage::nativewal {
 			return static_cast<size_t>(n);
 		}
 		std::string text() {
-			auto s = take(count(maxValue));
+			auto s = take(count(maxName));
 			return {reinterpret_cast<const char *>(s.data()), s.size()};
 		}
 		void magic(std::string_view s) {
@@ -150,7 +150,8 @@ namespace graph::storage::nativewal {
 	};
 	LogicalGraphMutationBatchResult preview(const State &, const LogicalGraphMutationBatch &);
 	LogicalGraphMutationBatchResult apply(State &, Changes &, const LogicalGraphMutationBatch &);
-	Bytes encodeDelta(const State &, const Changes &);
+	size_t deltaBytes(const State &, const Changes &);
+	void encodeDelta(Encoder &, const State &, const Changes &);
 	void encodeBaseRow(Encoder &, const LogicalGraphNode &);
 	void encodeBaseRow(Encoder &, const LogicalGraphEdge &);
 	LogicalGraphNode baseNode(uint64_t, Span, VersionCharge &);

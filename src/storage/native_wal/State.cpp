@@ -7,18 +7,20 @@ namespace graph::storage::nativewal {
 		bool container(const PropertyValue &v) {
 			return v.getType() == PropertyType::LIST || v.getType() == PropertyType::MAP;
 		}
-		// Containers carry complete canonical values, including binary leaves.
-		// Keep the native writer's existing top-level scalar contract.
+		bool copiesHeap(const PropertyValue &v) {
+			return container(v) || v.getType() == PropertyType::BYTES || v.getType() == PropertyType::STRING;
+		}
 		void checkKind(const PropertyValue &v) {
 			const auto t = v.getType();
 			require(container(v) || t == PropertyType::NULL_TYPE || t == PropertyType::BOOLEAN ||
-							t == PropertyType::INTEGER || t == PropertyType::DOUBLE || t == PropertyType::STRING,
+							t == PropertyType::INTEGER || t == PropertyType::DOUBLE || t == PropertyType::STRING ||
+							t == PropertyType::BYTES,
 					"Unsupported native WAL property type");
 		}
 	}
 	void Encoder::value(const PropertyValue &v) {
 		auto size = CanonicalPropertyValueCodec::encodedSize(v);
-		require(size <= maxValue, "Native WAL value limit exceeded");
+		require(size <= maxState, "Native WAL value exceeds record limit");
 		checkKind(v);
 		num(size);
 		room(size);
@@ -40,7 +42,7 @@ namespace graph::storage::nativewal {
 			require(names.size() <= maxFields, "Too many native WAL labels");
 			std::set<std::string_view> seen;
 			for (auto &n: names)
-				require(!n.empty() && n.size() <= maxValue && seen.insert(n).second,
+				require(!n.empty() && n.size() <= maxName && seen.insert(n).second,
 						"Invalid or duplicate native WAL label");
 		}
 		void encodeProperties(Encoder &w, const std::vector<LogicalGraphPropertyEntry> &props) {
@@ -60,7 +62,7 @@ namespace graph::storage::nativewal {
 			while (n--) {
 				auto key = r.text();
 				require(!key.empty() && seen.insert(key).second, "Duplicate native WAL property");
-				auto bytes = r.take(r.count(maxValue));
+				auto bytes = r.take(r.count(maxState));
 				size_t offset = 0;
 				PropertyValue value;
 				if (CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes)) {
@@ -126,7 +128,7 @@ namespace graph::storage::nativewal {
 				wire += 8 + CanonicalPropertyValueCodec::encodedSize(p.value);
 				if (auto str = std::get_if<std::string>(&p.value.getVariant()))
 					heap += str->capacity() + 1;
-				else if (container(p.value))
+				else if (container(p.value) || p.value.getType() == PropertyType::BYTES)
 					heap += CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value);
 			}
 			return {wire, heap};
@@ -150,7 +152,7 @@ namespace graph::storage::nativewal {
 		auto ids = preview(s, b);
 		// Bound input copying even when a single batch contains many large
 		// values. The final encoded state and the replay delta have separate limits.
-		VersionCharge containerCopies(s.budget, 0);
+		VersionCharge valueCopies(s.budget, 0);
 		size_t remaining = maxState;
 		auto charge = [&](size_t bytes) {
 			require(bytes <= remaining, "Native statement payload limit exceeded");
@@ -161,11 +163,11 @@ namespace graph::storage::nativewal {
 			for (auto &p: props) {
 				charge(p.key.size());
 				auto size = CanonicalPropertyValueCodec::encodedSize(p.value);
-				require(size <= maxValue && p.key.size() <= maxValue, "Native WAL value limit exceeded");
+				require(size <= maxState && p.key.size() <= maxName, "Native WAL value limit exceeded");
 				checkKind(p.value);
 				charge(size);
-				if (container(p.value))
-					containerCopies.add(CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value));
+				if (copiesHeap(p.value))
+					valueCopies.add(CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value));
 				charge(16);
 			}
 		};
@@ -192,7 +194,7 @@ namespace graph::storage::nativewal {
 			changed.nodes.insert(id);
 		}
 		for (auto &e: b.edge_creates) {
-			require(e.type.size() <= maxValue, "Native WAL relationship type too long");
+			require(e.type.size() <= maxName, "Native WAL relationship type too long");
 			auto id = ++s.edgeHigh;
 			s.edges.insert_or_assign(id,
 									 LogicalGraphEdge{id, resolve(e.source, false, ids), resolve(e.target, false, ids),
@@ -229,7 +231,8 @@ namespace graph::storage::nativewal {
 			const auto &old = prior->second;
 			VersionCharge copying(s.budget, 0);
 			for (const auto &p : old.properties)
-				if (container(p.value)) copying.add(CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value));
+				if (copiesHeap(p.value))
+					copying.add(CanonicalPropertyValueCodec::guardedCopyHeapUpper(p.value));
 			auto row = old;
 			row.labels = n.labels;
 			s.nodes.insert_or_assign(id, std::move(row));
@@ -423,8 +426,23 @@ namespace graph::storage::nativewal {
 		debug::PerfTrace::addValue("native_wal.unique.affected_keys", claims.size());
 		debug::PerfTrace::addValue("native_wal.unique.affected_probe_rows", inspected);
 	}
-	Bytes encodeDelta(const State &s, const Changes &changed) {
-		Encoder w(maxState, s.budget);
+	size_t deltaBytes(const State &s, const Changes &changed) {
+		// Two identity high-water marks and two changed-ID counts. Row
+		// metadata includes its ID and presence tag, also used by the delta.
+		size_t size = 32;
+		auto measure = [&](const auto &ids, const auto &rows) {
+			for (auto id : ids) {
+				auto it = rows.find(id);
+				const size_t bytes = it == rows.end() ? 16 : it.encodedBytes();
+				require(bytes <= maxState - size, "Native WAL transaction exceeds record limit");
+				size += bytes;
+			}
+		};
+		measure(changed.nodes, s.nodes);
+		measure(changed.edges, s.edges);
+		return size;
+	}
+	void encodeDelta(Encoder &w, const State &s, const Changes &changed) {
 		w.num(s.nodeHigh);
 		w.num(s.edgeHigh);
 		auto append = [&](const auto &ids, const auto &rows) {
@@ -439,7 +457,6 @@ namespace graph::storage::nativewal {
 		};
 		append(changed.nodes, s.nodes);
 		append(changed.edges, s.edges);
-		return std::move(w.bytes);
 	}
 	void encodeBaseRow(Encoder &w, const LogicalGraphNode &row) { encodeRow(w, row); }
 	void encodeBaseRow(Encoder &w, const LogicalGraphEdge &row) { encodeRow(w, row); }

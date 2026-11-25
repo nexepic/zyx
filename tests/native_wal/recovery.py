@@ -28,6 +28,45 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    run("long-limits", new("long-limits"))
+    long_seed = new("long-seed")
+    run("long-seed", long_seed)
+    def long_copy(name):
+        path = root / name / "main"
+        path.parent.mkdir()
+        shutil.copyfile(long_seed, path)
+        return path
+    independent = long_copy("long-life")
+    run("long-life", independent)
+    run("long-A", str(independent) + ".view")
+    run("long-B", independent)
+    run("long-delete", independent)
+    run("long-A", long_seed)
+    for tag, mode in (("w", "long-fault"), ("a", "long-append-fault")):
+        for event, code, state in (("write=after-window-eio", 2, "A"),
+                                   ("sync=eio", 2, "A"),
+                                   ("write=short", -signal.SIGKILL, "B")):
+            path = long_copy(tag + event)
+            run(mode, path, tag + "." + event, code=code)
+            run("long-" + state, path)
+    dirty = long_copy("long-confirmed")
+    run("long-fault", dirty, "m.renamed=kill", code=-signal.SIGKILL)
+    for kind in ("truncated", "changed"):
+        broken = root / ("long-" + kind) / "main"
+        broken.parent.mkdir()
+        for suffix in ("", ".wal", ".base"):
+            shutil.copyfile(str(dirty) + suffix, str(broken) + suffix)
+        wal = broken.with_suffix(".wal")
+        data = bytearray(wal.read_bytes())
+        assert len(data) > 3 * 32768
+        if kind == "truncated":
+            del data[2 * 32768:]
+        else:
+            data[2 * 32768 + 7] ^= 1
+        wal.write_bytes(data)
+        run("long-B", broken, code=2)
+    run("long-B", dirty)
+    print("Long graph: rollback, independent backup, pinned A/export A, checkpoint B, delete, 2 x 3 multi-window faults, 2 damaged prefixes and aggregate limit passed")
     budget = new("nested-budget")
     for op in ("nested-budget-write", "nested-budget-open"):
         before = hashlib.sha256(budget.read_bytes()).digest()

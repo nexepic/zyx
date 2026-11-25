@@ -356,7 +356,7 @@ namespace graph::storage::nativewal {
 		}
 		static void writeComplete(int fd, Span bytes) {
 			while (!bytes.empty()) {
-				auto n = ::write(fd, bytes.data(), bytes.size());
+				auto n = ::write(fd, bytes.data(), std::min(bytes.size(), size_t{32768}));
 				if (n < 0 && errno == EINTR)
 					continue;
 				if (n < 0)
@@ -975,10 +975,24 @@ namespace graph::storage::nativewal {
 				for (auto id: changed.nodes)
 					visit(id);
 			});
-		auto delta = encodeDelta(*next, changed);
+		const size_t payload = deltaBytes(*next, changed);
+		const bool rotate = needsStabilization || payload + 24 + files->alignment - 1 > maxWal - walLength;
+		const size_t header = (rotate || !walLength ? 72 : 0) + 24;
+		const size_t unpadded = header + payload;
+		const size_t frameSize = unpadded + (files->alignment - unpadded % files->alignment) % files->alignment;
+		// Admit the final extent before allocating or modifying the namespace.
+		// Encode into its final position; no second transaction-sized copy is
+		// required for either the generation header or aligned append.
+		VersionCharge frameCharge(next->budget, frameSize);
+		Encoder frame(frameSize, next->budget);
+		frame.bytes.reserve(frameSize);
+		frame.bytes.resize(header);
+		encodeDelta(frame, *next, changed);
+		require(frame.bytes.size() == unpadded, "Native WAL measured delta size mismatch");
+		frame.bytes.resize(frameSize);
 		try {
 			files->checkAuthority();
-			if (needsStabilization || delta.size() + 24 + files->alignment - 1 > maxWal - walLength)
+			if (rotate)
 				checkpointLocked();
 			// Unchanged entries in this private transaction still carry the
 			// original offsets. Inherit the locator map published for that
@@ -992,7 +1006,7 @@ namespace graph::storage::nativewal {
 			next->changedColumn = current->changedColumn;
 			next->columnOverflow = current->columnOverflow;
 			next->recordColumnChanges(changed.nodes);
-			Encoder bytes(maxWal);
+			Encoder bytes(header);
 			if (walLength == 0) {
 				bytes.magic("ZYXnw003");
 				bytes.raw(next->identity);
@@ -1002,22 +1016,18 @@ namespace graph::storage::nativewal {
 			}
 			bytes.magic("ZYXtx002");
 			bytes.num(next->sequence);
-			bytes.num(delta.size());
-			bytes.raw(delta);
-			// Seal the current file/VM block before acknowledging its contents.
-			// The next append starts at a new boundary even after a short write.
-			size_t padding = (files->alignment - bytes.bytes.size() % files->alignment) % files->alignment;
-			bytes.room(padding);
-			bytes.bytes.resize(bytes.bytes.size() + padding);
+			bytes.num(payload);
+			require(bytes.bytes.size() == header, "Native WAL generation header mismatch");
+			std::copy(bytes.bytes.begin(), bytes.bytes.end(), frame.bytes.begin());
 			auto hash = walHash;
-			hash.update(bytes.bytes);
-			auto length = walLength + bytes.bytes.size();
+			hash.update(frame.bytes);
+			auto length = walLength + frameSize;
 			auto receipt = manifest(*next, baseSequence, {}, length, hash.finalize());
 			if (walLength == 0) {
 				files->retainBase();
-				files->install(files->log, bytes.bytes);
+				files->install(files->log, frame.bytes);
 			} else
-				files->append(bytes.bytes, walLength);
+				files->append(frame.bytes, walLength);
 			files->install(files->main, receipt);
 			if (!walLength)
 				files->checkBaseName(true);
