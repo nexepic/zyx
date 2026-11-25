@@ -31,6 +31,11 @@ with tempfile.TemporaryDirectory() as name:
     tiny = new("tiny-wal")
     run("tiny-wal-writes", tiny, code=-signal.SIGKILL)
     recovered(tiny, 2)
+    for prefix, count in (("w", 0), ("a", 1)):
+        tiny_fault = new("tiny-" + prefix)
+        run("tiny-wal-writes", tiny_fault, prefix + ".write=before-padding-eio", code=2)
+        recovered(tiny_fault, count)
+    print("4 KiB version budget: aligned generation and append replayed; EIO before padding kept the prior receipt")
     run("long-limits", new("long-limits"))
     long_seed = new("long-seed")
     run("long-seed", long_seed)

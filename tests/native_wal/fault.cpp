@@ -70,8 +70,9 @@ ssize_t write(int fd, const void *data, size_t len) {
 		}
 		if (fault(kind, "write") < 0)
 			return -1;
-		if (!strcmp(action(kind, "write"), "after-window-eio") && len == 32768) {
-			// Complete a full physical window, then fail the continuation.
+		if ((!strcmp(action(kind, "write"), "after-window-eio") && len == 32768) ||
+			(!strcmp(action(kind, "write"), "before-padding-eio") && len < 4096)) {
+			// Complete this write, then reject the continuation on the same fd.
 			partial = fd;
 		}
 		if (!strcmp(action(kind, "write"), "partial-eio")) {

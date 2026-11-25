@@ -193,6 +193,8 @@ int main(int argc, char **argv) try {
 	}
 	if (op == "tiny-wal-writes") {
 		using namespace graph::storage;
+		if (argc > 3)
+			setenv("ZYX_TEST_NATIVE_IO", argv[3], 1);
 		auto selection = StorageBackendFactory::create(path, 4096, OpenMode::OPEN_EXISTING_FILE);
 		selection.backend->open();
 		auto &writer = dynamic_cast<LogicalGraphTransactionalBackend &>(*selection.backend);
