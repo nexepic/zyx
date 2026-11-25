@@ -211,6 +211,52 @@ int main(int argc, char **argv) try {
 	}
 	zyx::Database db(path);
 	db.open();
+	if (op == "checkpoint-locators") {
+		auto orphanCount = [&] {
+			size_t count = 0;
+			for (const auto &entry : std::filesystem::directory_iterator("/proc/self/fd")) {
+				std::error_code error;
+				auto link = std::filesystem::read_symlink(entry.path(), error).string();
+				count += !error && link.starts_with(path) && link.ends_with(" (deleted)");
+			}
+			return count;
+		};
+		auto payload = [](auto &handle, int64_t id) {
+			auto r = handle.execute("MATCH (n:Large) WHERE id(n)=$i RETURN n.payload", {{"i", id}});
+			expect(r.isSuccess() && r.hasNext(), "Missing checkpoint row");
+			r.next();
+			return std::get<std::string>(r.get(0));
+		};
+		auto put = [](auto &tx, size_t size, char value) {
+			auto r = tx.execute("MATCH (n:Large) WHERE id(n)=1 SET n.payload=$s", {{"s", std::string(size, value)}});
+			expect(r.isSuccess(), r.getError());
+		};
+		{
+			auto old = db.beginReadOnlyTransaction();
+			auto pending = db.beginTransaction();
+			put(pending, 8192, 'p');
+			db.save();
+			expect(orphanCount() == 1 && payload(old, 1) == std::string(8192, 'z'), "Old base was released early");
+			pending.commit();
+			expect(payload(db, 320) == std::string(8192, '0'), "Pending transaction lost unchanged row");
+			old.commit();
+		}
+		db.save();
+		expect(orphanCount() == 0, "Current snapshot retained unlinked base after release");
+		{
+			auto w = db.beginTransaction();
+			put(w, 43, 'q');
+			w.commit();
+		}
+		db.save();
+		expect(payload(db, 1) == std::string(43, 'q') && payload(db, 320) == std::string(8192, '0'),
+			   "Moved row used an old offset in new image");
+		db.close();
+		db.open();
+		expect(payload(db, 320) == std::string(8192, '0'), "Checkpoint relocation failed reopen");
+		db.close();
+		return 0;
+	}
 	if (op == "large-leave") {
 		for (int i = 0; i < 10; ++i) {
 			auto tx = db.beginTransaction();

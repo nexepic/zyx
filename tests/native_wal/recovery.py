@@ -81,6 +81,8 @@ with tempfile.TemporaryDirectory() as name:
     # Directory lock survives replacement of the main inode. The stopped
     # writer has a genuine older in-process snapshot and an acknowledged B.
     handoff = new("handoff")
+    other = handoff.parent/"second"
+    shutil.copyfile(new("independent-identity"), other)
     with subprocess.Popen([driver,"locked-checkpoint",str(handoff)],env=env) as writer:
         try:
             deadline=time.monotonic()+20
@@ -93,12 +95,24 @@ with tempfile.TemporaryDirectory() as name:
                     raise AssertionError("writer did not stop at publication")
                 time.sleep(0.01)
             assert os.WIFSTOPPED(status) and os.WSTOPSIG(status)==signal.SIGSTOP,status
+            run("append", other, code=2, error="lock native graph directory")
+            alias_dir = root/"external-alias"
+            alias_dir.mkdir()
+            alias = alias_dir/"main"
+            os.link(handoff, alias)
+            try:
+                run("append", alias, code=2, error="private, unaliased files")
+            finally:
+                alias.unlink()
             run("append",handoff,code=2,error="lock native graph directory")
             run("read-only",handoff,code=2,error="lock native graph directory")
         finally:
             if writer.poll() is None: os.kill(writer.pid,signal.SIGCONT)
         assert writer.wait(timeout=20)==0
     recovered(handoff,1)
+    run("append", other)
+    recovered(other, 1)
+    print("Directory lock: independent main refused during handoff, writable after release; external hard link refused")
     for event in ("b.link","b.linked","b.dirsync","b.dirsynced"):
         path=new("anchor-"+event)
         run("append",path,event+"=kill",killed)
@@ -281,6 +295,10 @@ with tempfile.TemporaryDirectory() as name:
     shutil.copytree(large.parent,damaged)
     run("late-damage",damaged/"main",str(512*1024))
     run("budget-point",damaged/"main",str(512*1024),2,"checksum mismatch")
+    relocated = root/"checkpoint-locators"
+    shutil.copytree(large.parent, relocated)
+    run("checkpoint-locators", relocated/"main")
+    print("Checkpoint locators: old pin retains one inode; released pin leaves none; shifted row survives reopen")
     run("budget-recover",large,str(512*1024))
     assert not base.exists() and not wal.exists()
     print("bounded recovery: base bytes",sizes[0],"WAL bytes",sizes[1],"first accepted budget",upper,"rejected",lower)

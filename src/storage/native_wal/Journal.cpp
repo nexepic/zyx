@@ -11,7 +11,9 @@
 namespace graph::storage::nativewal {
 	namespace {
 		[[noreturn]] void fail(const char *action) { throw std::system_error(errno, std::generic_category(), action); }
-		struct File {
+		void readExact(int fd, uint64_t offset, std::span<std::byte> target);
+		struct File : BaseInput {
+			void read(size_t offset, std::span<std::byte> bytes) const override { readExact(fd, offset, bytes); }
 			int fd;
 			explicit File(int f) : fd(f) {
 				if (fd < 0)
@@ -72,6 +74,7 @@ namespace graph::storage::nativewal {
 			size_t extent, filled = 0, next = 0;
 			VersionCharge admission;
 			Bytes window;
+			bool authenticatedWindow = false;
 
 		public:
 			utils::Sha256 hash;
@@ -92,11 +95,27 @@ namespace graph::storage::nativewal {
 					}
 					auto n = std::min(out.size(), filled - next);
 					auto part = Span(window).subspan(next, n);
-					hash.update(part);
+					if (!authenticatedWindow)
+						hash.update(part);
 					std::ranges::copy(part, out.begin());
 					next += n;
 					position += n;
 					out = out.subspan(n);
+				}
+			}
+			void authenticateWal(Span expected) {
+				while (position < extent) {
+					filled = std::min(window.size(), remaining());
+					readExact(fd, position, std::span(window).first(filled));
+					hash.update(Span(window).first(filled));
+					position += filled;
+				}
+				require(std::ranges::equal(hash.finalize(), expected), "Native graph WAL receipt mismatch");
+				position = next = 0;
+				authenticatedWindow = filled == extent;
+				if (!authenticatedWindow) {
+					filled = 0;
+					hash = utils::Sha256{};
 				}
 			}
 			template<size_t N>
@@ -284,9 +303,10 @@ namespace graph::storage::nativewal {
 		void install(const std::string &name, Span b) {
 			installStream(name, [&](int fd) { writeComplete(fd, b); });
 		}
-		Digest installBase(const State &s) {
+		Digest installBase(State &s) {
 			utils::Sha256 hash;
 			struct stat written{};
+			bool nodeOffsetsMatch = true, edgeOffsetsMatch = true;
 			installStream(main, [&](int fd) {
 				// Coalesce small rows while hashing the exact independent main image.
 				auto window = std::min(size_t(16384), s.budget->capacity() / 16);
@@ -321,9 +341,10 @@ namespace graph::storage::nativewal {
 				put(head.bytes);
 				Encoder encoded(maxState);
 				VersionCharge rowBuffer(s.budget, 0);
-				auto rows = [&](const auto &table) {
+				size_t offset = head.bytes.size();
+				auto rows = [&](const auto &table, bool &offsetsMatch) {
 					table.visitAfter(0, [&](auto it) {
-						const auto &[id, row] = *it;
+						auto id = it.id();
 						auto size = it.encodedBytes() - 16;
 						require(size <= maxState, "Native checkpoint row exceeds encoding limit");
 						if (size > encoded.bytes.capacity()) {
@@ -332,7 +353,14 @@ namespace graph::storage::nativewal {
 							rowBuffer.growTo(size);
 							encoded.bytes.reserve(size);
 						}
-						encodeBaseRow(encoded, row);
+						if (it.onDisk()) {
+							encoded.bytes.resize(size);
+							it.readImage(encoded.bytes);
+							offsetsMatch = offsetsMatch && it.offset() == offset + 16;
+						} else {
+							encodeBaseRow(encoded, it->second);
+						}
+						offset += size + 16;
 						require(encoded.bytes.size() == size, "Native checkpoint size accounting mismatch");
 						std::array<std::byte, 16> h{};
 						for (unsigned i = 0; i < 8; ++i) {
@@ -345,8 +373,8 @@ namespace graph::storage::nativewal {
 						return true;
 					});
 				};
-				rows(s.nodes);
-				rows(s.edges);
+				rows(s.nodes, nodeOffsetsMatch);
+				rows(s.edges, edgeOffsetsMatch);
 				flush();
 				writeComplete(fd, hash.finalize());
 				written = metadata(fd);
@@ -355,6 +383,12 @@ namespace graph::storage::nativewal {
 			auto st = metadata(published->fd);
 			require(sameContentStamp(written, st), "Published native base identity changed");
 			remember(published, st);
+			// Entries are immutable; the new snapshot may redirect exact byte
+			// locations only after the independent image and name are durable.
+			if (nodeOffsetsMatch)
+				s.nodes.bindInput(published);
+			if (edgeOffsetsMatch)
+				s.edges.bindInput(published);
 			return hash.finalize();
 		}
 		void removeWal() {
@@ -419,7 +453,7 @@ namespace graph::storage::nativewal {
 			const bool lazy = c.remaining() > std::min(size_t(256 * 1024), memory / 2);
 			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode) {
 				uint64_t prior = 0;
-				while (n--) {
+				table.loadSorted(n, [&] {
 					auto id = c.num();
 					auto size = c.count(maxState);
 					require(id > prior && id <= high && size <= c.remaining(), "Invalid native base row extent");
@@ -433,19 +467,10 @@ namespace graph::storage::nativewal {
 						require(s->nodes.contains(row.source_node_id) && s->nodes.contains(row.target_node_id),
 								"Native WAL dangling relationship");
 					if (!lazy)
-						table.insert_or_assign(id, std::move(row));
-					else {
-						auto tag = digest(b);
-						auto budget = s->budget;
-						table.admitBaseRecord(id, size + 16, [file, offset, size, id, tag, decode, budget] {
-							VersionCharge scratch(budget, 3 * size + 4096);
-							Bytes data(size);
-							readExact(file->fd, offset, data);
-							require(digest(data) == tag, "Immutable native base row changed");
-							return decode(id, data);
-						});
-					}
-				}
+						return table.residentRecord(id, std::move(row));
+					return table.baseRecord(id, size + 16, offset, digest(b), decode);
+				});
+				table.bindInput(file);
 			};
 			rows(nodes, s->nodeHigh, s->nodes, baseNode);
 			rows(edges, s->edgeHigh, s->edges, baseEdge);
@@ -461,16 +486,10 @@ namespace graph::storage::nativewal {
 			finish(m);
 			auto [wal, length] = files->openInput(files->log);
 			require(length >= needed, "Missing native graph WAL prefix");
-			Cursor w(wal->fd, needed, s->budget, memory);
-			// Authenticate before interpreting payloads. The same private FD is
-			// hashed again during replay so altered bytes cannot enter a snapshot.
-			{
-				std::array<std::byte, 1024> block;
-				while (w.remaining())
-					w.consume(std::span(block).first(std::min(block.size(), w.remaining())));
-				require(std::ranges::equal(w.hash.finalize(), expected), "Native graph WAL receipt mismatch");
-			}
 			Cursor log(wal->fd, needed, s->budget, memory);
+			// A receipt fitting one admitted window can be replayed directly
+			// from those authenticated bytes. Larger WALs rehash during replay.
+			log.authenticateWal(expected);
 			auto wh = log.fixed<72>();
 			Decoder h{wh};
 			h.magic("ZYXnw003");
@@ -525,8 +544,10 @@ namespace graph::storage::nativewal {
 		return current;
 	}
 	void Journal::checkpointLocked() {
-		auto fresh = files->installBase(*current);
+		auto rebased = std::make_shared<State>(*current);
+		auto fresh = files->installBase(*rebased);
 		files->removeWal();
+		current = std::move(rebased);
 		baseDigest = fresh;
 		baseSequence = current->sequence;
 		walLength = 0;
@@ -550,7 +571,11 @@ namespace graph::storage::nativewal {
 						 const Changes &changed) {
 		std::lock_guard lock(gate);
 		require(!readOnly && !poisoned, "Native graph writer unavailable");
-		if (current != expected)
+		// A checkpoint may replace the physical root at the same revision.
+		// The budget is owned by exactly one open journal and shared by every
+		// derived root; matching a copied file's identity alone is insufficient.
+		if (current != expected && (!expected || current->budget != expected->budget ||
+									current->sequence != expected->sequence))
 			throw LogicalGraphMutationConflict("Stale native graph write snapshot");
 		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
 		next->sequence = current->sequence + 1;
@@ -558,6 +583,13 @@ namespace graph::storage::nativewal {
 		try {
 			if (needsStabilization || delta.size() + 24 + files->alignment - 1 > maxWal - walLength)
 				checkpointLocked();
+			// Unchanged entries in this private transaction still carry the
+			// original offsets. A checkpoint of that same logical version may
+			// have redirected their table to byte-identical locations.
+			if (current != expected) {
+				next->nodes.inheritInput(current->nodes);
+				next->edges.inheritInput(current->edges);
+			}
 			Encoder bytes(maxWal);
 			if (walLength == 0) {
 				bytes.magic("ZYXnw003");

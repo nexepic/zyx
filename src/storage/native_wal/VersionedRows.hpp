@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/utils/Sha256.hpp"
 namespace graph::storage::nativewal {
 	std::pair<size_t, size_t> rowCost(const LogicalGraphNode &);
 	std::pair<size_t, size_t> rowCost(const LogicalGraphEdge &);
@@ -47,16 +48,27 @@ namespace graph::storage::nativewal {
 		}
 	};
 
+	class BaseInput {
+	public:
+		virtual ~BaseInput() = default;
+		virtual void read(size_t offset, std::span<std::byte> bytes) const = 0;
+	};
+
 	// A persistent AVL tree. Path copies share immutable entries (including
 	// property payloads); a snapshot owns only its root until rows diverge.
 	template<class Row>
 	class VersionedRows {
 		using Pair = std::pair<uint64_t, Row>;
+		struct Record {
+			size_t offset;
+			std::array<std::byte, 32> digest;
+			Row (*decode)(uint64_t, std::span<const std::byte>);
+		};
 		struct Entry {
 			VersionCharge charge;
 			size_t wire;
 			Pair value;
-			std::function<Row()> load;
+			std::unique_ptr<Record> record;
 			Entry(const std::shared_ptr<VersionBudget> &b, uint64_t key, Row row, size_t encoded, size_t heap) :
 				charge(b, sizeof(Entry) + 64 + heap), wire(encoded), value(key, std::move(row)) {}
 		};
@@ -74,7 +86,8 @@ namespace graph::storage::nativewal {
 		};
 		std::shared_ptr<VersionBudget> budget;
 		Link root;
-		size_t count = 0, wireSize = 0;
+		size_t count = 0, wireSize = 0, diskRows = 0;
+		std::shared_ptr<const BaseInput> input;
 		static int depth(const Link &n) { return n ? n->height : 0; }
 		Link node(Item e, Link l, Link r) const {
 			return std::make_shared<Node>(budget, std::move(e), std::move(l), std::move(r));
@@ -140,11 +153,23 @@ namespace graph::storage::nativewal {
 			const Entry *entry;
 			mutable Item loaded{};
 			size_t encodedBytes() const { return entry->wire; }
+			uint64_t id() const { return entry->value.first; }
+			bool onDisk() const { return bool(entry->record); }
+			size_t offset() const { return entry->record->offset; }
+			void readImage(std::span<std::byte> data) const {
+				rows->input->read(offset(), data);
+				if (utils::Sha256::digest(data) != entry->record->digest)
+					throw std::runtime_error("Immutable native base row changed");
+			}
 			const Pair &operator*() const {
-				if (!entry->load)
+				if (!onDisk())
 					return entry->value;
 				if (!loaded) {
-					auto row = entry->load();
+					auto size = encodedBytes() - 16;
+					VersionCharge scratch(rows->budget, 3 * size + 4096);
+					std::vector<std::byte> data(size);
+					readImage(data);
+					auto row = entry->record->decode(id(), data);
 					auto [wire, heap] = rowCost(row);
 					loaded = std::make_shared<Entry>(rows->budget, entry->value.first, std::move(row), wire, heap);
 				}
@@ -190,20 +215,45 @@ namespace graph::storage::nativewal {
 			return it;
 		}
 		Row at(uint64_t id) const { return checked(id)->second; }
-		void admitBaseRecord(uint64_t id, size_t wire, std::function<Row()> load) {
-			auto item = std::make_shared<Entry>(budget, id, Row{}, wire, 192);
-			item->load = std::move(load);
-			root = replace(root, id, item);
-			wireSize += wire;
-			++count;
+		// Decode the authenticated stream in key order. Construct one AVL node
+		// per record directly instead of path-copying a private prefix for each ID.
+		template<class Read>
+		void loadSorted(size_t n, Read read) {
+			auto build = [&](auto &&self, size_t length) -> Link {
+				if (!length)
+					return {};
+				auto left = self(self, length / 2);
+				auto item = read();
+				wireSize += item->wire;
+				diskRows += bool(item->record);
+				auto right = self(self, length - length / 2 - 1);
+				return node(std::move(item), std::move(left), std::move(right));
+			};
+			root = build(build, n);
+			count = n;
 		}
+		Item residentRecord(uint64_t id, Row row) const {
+			auto [wire, heap] = rowCost(row);
+			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap);
+		}
+		Item baseRecord(uint64_t id, size_t wire, size_t offset, const std::array<std::byte, 32> &digest,
+						Row (*decode)(uint64_t, std::span<const std::byte>)) const {
+			auto item = std::make_shared<Entry>(budget, id, Row{}, wire, 192);
+			item->record = std::make_unique<Record>(Record{offset, digest, decode});
+			return item;
+		}
+		void bindInput(std::shared_ptr<const BaseInput> file) { input = diskRows ? std::move(file) : nullptr; }
+		void inheritInput(const VersionedRows &other) { bindInput(other.input); }
 		void insert_or_assign(uint64_t id, Row row) {
 			auto [wire, heap] = rowCost(row);
 			auto old = find(id);
 			auto bytes = wireSize + wire - (old.entry ? old.entry->wire : 0);
 			bool added = !old.entry;
 			auto item = std::make_shared<Entry>(budget, id, std::move(row), wire, heap);
+			bool wasOnDisk = old.entry && old.onDisk();
 			root = replace(root, id, item);
+			if (wasOnDisk && !--diskRows)
+				input.reset();
 			wireSize = bytes;
 			count += added;
 		}
@@ -212,7 +262,10 @@ namespace graph::storage::nativewal {
 			if (!old.entry)
 				return false;
 			auto bytes = old.entry->wire;
+			bool wasOnDisk = old.onDisk();
 			root = replace(root, id, {});
+			if (wasOnDisk && !--diskRows)
+				input.reset();
 			wireSize -= bytes;
 			--count;
 			return true;
