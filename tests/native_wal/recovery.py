@@ -11,9 +11,9 @@ import time
 
 driver, shim = map(os.path.abspath, sys.argv[1:3])
 env = {**os.environ, "LD_PRELOAD": shim}
-def run(op, path, fault=None, code=0, error=None):
+def run(op, path, fault=None, code=0, error=None, timeout=25):
     args = [driver, op, str(path)] + ([fault] if fault else [])
-    proc = subprocess.run(args, env=env, capture_output=True, text=True, timeout=25)
+    proc = subprocess.run(args, env=env, capture_output=True, text=True, timeout=timeout)
     assert proc.returncode == code, (args, proc.returncode, proc.stderr)
     if error is not None:
         assert error in proc.stderr, (args, proc.stderr, error)
@@ -51,6 +51,12 @@ with tempfile.TemporaryDirectory() as name:
     run("types",new("types"))
     run("topology",new("topology"))
     run("cap",new("cap"))
+    run("locator-budget", new("locator-budget"))
+    moved = new("relocation-graph")
+    run("relocation-graph", moved, timeout=180)
+    run("relocation-export", moved.with_suffix(".relocation.cp003"))
+    print("Variable-width graph, independent export, two pinned versions and locator allocation denial: pass")
+    print("Later staged row committed across physical relocation; 0->7->0 rejected with stale snapshot conflict")
     run("budget",new("budget"))
     run("uncertain",new("uncertain"))
     print("independent export reopen; 12 checkpoints/24 commits with pinned reader: pass")

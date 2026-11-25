@@ -10,6 +10,8 @@
 #include "graph/storage/NativeWalDatabase.hpp"
 #include "graph/storage/StorageBackendFactory.hpp"
 #include "zyx/zyx.hpp"
+#include "LocatorBudget.hpp"
+#include "RelocationGraph.hpp"
 namespace {
 	void expect(bool condition, const std::string &error) {
 		if (!condition)
@@ -104,6 +106,18 @@ int main(int argc, char **argv) try {
 		std::cout << graph::storage::createNativeWalDatabase(path) << "\n";
 		return 0;
 	}
+	if (op == "relocation-graph") {
+		relocation_test::exercise(path);
+		return 0;
+	}
+	if (op == "relocation-export") {
+		relocation_test::verifyIndependentExport(path);
+		return 0;
+	}
+	if (op == "locator-budget") {
+		exerciseLocatorBudget(path);
+		return 0;
+	}
 	if (op == "budget-point" || op == "budget-recover" || op == "late-damage") {
 		using namespace graph::storage;
 		auto selection = StorageBackendFactory::create(path, std::stoull(argv[3]),
@@ -147,6 +161,26 @@ int main(int argc, char **argv) try {
 			auto fresh = reader.openLogicalGraphReadSnapshot();
 			expect(get(*fresh, 320) == std::string(8192, 'B') && get(*old, 320) == std::string(8192, '0'),
 				   "Budgeted checkpoint broke old view");
+			fresh.reset();
+			tx.reset();
+			for (int cycle = 0; cycle < 12; ++cycle) {
+				if (cycle == 6)
+					old.reset();
+				auto step = writer.beginLogicalGraphTransaction(false);
+				auto id = static_cast<uint64_t>(2 + (cycle * 131) % 317);
+				auto value = std::string(cycle % 2 ? 8192 : 43, 'k' + cycle);
+				LogicalGraphMutationBatch updates;
+				ref.value = id;
+				updates.property_replacements.push_back({ref, {{"payload", graph::PropertyValue(value)}}});
+				step->stageMutationBatch(std::move(updates));
+				step->commit();
+				step.reset();
+				selection.backend->flush();
+				auto view = reader.openLogicalGraphReadSnapshot();
+				expect(get(*view, id) == value && get(*view, 320) == std::string(8192, 'B') &&
+							   (!old || get(*old, id) == std::string(8192, '0')),
+					   "Tight-budget relocation changed snapshot contents");
+			}
 		}
 		old.reset();
 		selection.backend->close();
