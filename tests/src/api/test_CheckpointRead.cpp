@@ -384,6 +384,16 @@ TEST_F(CheckpointReadTest, ExportsNativeVariablePropertiesAndReadsLabelsWithoutT
 						 ->openLogicalGraphReadSnapshot();
 		EXPECT_EQ(r->readNodeShaped(1, {.include_labels = true}).labels, pinned->readNode(1).labels);
 		EXPECT_EQ(r->readEdge(1), pinned->readEdge(1));
+		ASSERT_TRUE(r->supportsNativeEdgeRefScans());
+		std::vector<EntityRef> refs;
+		r->visitEdgeRefs(1, [&](const EntityRef &ref) {
+			refs.push_back(ref);
+			return true;
+		});
+		ASSERT_EQ(refs, (std::vector<EntityRef>{{1, true, 1, 1, 0}}));
+		auto topology = r->readEdgeShaped(1, {.include_type = true});
+		EXPECT_EQ(topology.type, "Cites");
+		EXPECT_TRUE(topology.properties.empty());
 		if (damaged) {
 			EXPECT_THROW(r->readNode(1), std::runtime_error);
 		} else {

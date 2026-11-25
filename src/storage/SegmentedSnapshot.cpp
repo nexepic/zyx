@@ -401,6 +401,30 @@ namespace graph::storage {
 					n.properties = readProperties(false, id);
 				return n;
 			}
+			bool supportsNativeEdgeRefScans() const override { return true; }
+			void visitEdgeRefs(size_t max, const std::function<bool(const EntityRef &)> &visitor) const override {
+				check(bool(visitor), "Invalid cp003 relationship visitor");
+				// No compact type tokens are advertised. Typed predicates resolve
+				// the stored relationship name through the common topology path.
+				visitEdgeTopologies(max, [&](const LogicalGraphEdgeTopology &e) {
+					return visitor({e.edge_id, true, e.source_node_id, e.target_node_id, 0});
+				});
+			}
+			LogicalGraphEdge readEdgeShaped(uint64_t id, const EntityReadShape &s) const override {
+				validateEntityReadShape(s);
+				LogicalGraphEdge e;
+				img->visit(1, id, [&](auto k, Cursor c) {
+					if (k == id)
+						e = edgeIdentity(k, c);
+					return false;
+				});
+				check(e.edge_id, "Unknown cp003 edge");
+				if (!s.include_type)
+					e.type.clear();
+				if (s.all_properties || !s.property_tokens.empty())
+					e.properties = readProperties(true, id);
+				return e;
+			}
 			void visitEdgeTopologies(size_t maximum,
 									 const std::function<bool(const LogicalGraphEdgeTopology &)> &f) const override {
 				check(maximum && f, "Invalid cp003 topology visit");
@@ -422,14 +446,10 @@ namespace graph::storage {
 				return n;
 			}
 			LogicalGraphEdge readEdge(uint64_t id) const override {
-				LogicalGraphEdge e;
-				img->visit(1, id, [&](auto k, Cursor c) {
-					if (k == id)
-						e = edge(k, c);
-					return false;
-				});
-				check(e.edge_id, "Unknown cp003 edge");
-				return e;
+				EntityReadShape shape;
+				shape.include_type = true;
+				shape.all_properties = true;
+				return readEdgeShaped(id, shape);
 			}
 			void visitNodes(size_t max, const std::function<bool(const LogicalGraphNode &)> &f) const override {
 				check(max && f, "Invalid cp003 node visit");
