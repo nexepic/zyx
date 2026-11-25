@@ -15,6 +15,8 @@ def run(*args,code=0):
 
 with tempfile.TemporaryDirectory() as d:
     root=Path(d)
+    labels=Path(run("init",root/"labels"))
+    run("labels",labels)
     seed=Path(run("init",root/"seed"));run("seed",seed)
     def clone(source,name):return shutil.copytree(source.parent,root/name)/"main"
     test=clone(seed,"semantics");assert run("semantics",test,code=-signal.SIGKILL)=="ack";run("replay",test)

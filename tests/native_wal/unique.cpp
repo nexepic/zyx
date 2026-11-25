@@ -1,6 +1,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <set>
 #include <stdexcept>
 #include "graph/storage/LogicalGraphSchema.hpp"
 #include "graph/storage/NativeWalDatabase.hpp"
@@ -34,6 +35,61 @@ namespace {
 			check(std::string(e.what()).find("duplicate key") != std::string::npos, e.what());
 			return true;
 		}
+	}
+
+	auto labelledMembers(auto &db, const std::string &label) {
+		auto result = execute(db, "MATCH(n:" + label + ") RETURN id(n),n.tag,n.k");
+		std::set<std::pair<int64_t, std::string>> members;
+		while (result.hasNext()) {
+			result.next();
+			check(result.get(2) == zyx::Value(int64_t(77)), "key changed");
+			check(members.emplace(std::get<int64_t>(result.get(0)), std::get<std::string>(result.get(1))).second,
+				  "duplicate output");
+		}
+		return members;
+	}
+	void rejectLabelAddition(zyx::Database &db, const std::string &tag) {
+		auto tx = db.beginTransaction();
+		execute(tx, "MATCH(n:Seed {tag:'" + tag + "'}) SET n:Item");
+		check(labelledMembers(tx, "Item").size() == 2, "private label not visible");
+		try {
+			tx.commit();
+		} catch (const std::exception &e) {
+			check(std::string(e.what()).find("duplicate key") != std::string::npos, e.what());
+			return;
+		}
+		throw std::runtime_error("duplicate label membership committed");
+	}
+	void checkLabelTransfer(zyx::Database &db) {
+		auto seed = db.beginTransaction();
+		execute(seed, "CREATE (:Seed:Item {k:77,tag:'A'}),(:Seed {k:77,tag:'B'})");
+		seed.commit();
+		execute(db, ddl);
+		auto old = db.beginReadOnlyTransaction();
+		const auto before = labelledMembers(old, "Item");
+		const auto both = labelledMembers(old, "Seed");
+		check(before.size() == 1 && before.begin()->second == "A" && both.size() == 2, "invalid initial graph");
+		auto after = both;
+		after.erase(*before.begin());
+		check(after.size() == 1 && after.begin()->second == "B", "missing B");
+
+		rejectLabelAddition(db, "B");
+		check(labelledMembers(db, "Item") == before, "rejection changed graph");
+		auto tx = db.beginTransaction();
+		execute(tx, "MATCH(n:Seed {tag:'B'}) SET n:Item");
+		check(labelledMembers(tx, "Item") == both, "private add");
+		execute(tx, "MATCH(n:Seed {tag:'A'}) REMOVE n:Item");
+		check(labelledMembers(tx, "Item") == after, "private remove");
+		tx.commit();
+		check(labelledMembers(old, "Item") == before && labelledMembers(db, "Item") == after, "old/current mismatch");
+		db.save();
+		check(labelledMembers(old, "Item") == before && labelledMembers(db, "Item") == after, "checkpoint mismatch");
+		old.commit();
+		db.close();
+		db.open();
+		check(labelledMembers(db, "Item") == after && labelledMembers(db, "Seed") == both, "reopen mismatch");
+		rejectLabelAddition(db, "A");
+		check(labelledMembers(db, "Item") == after, "second rejection changed graph");
 	}
 } // namespace
 int main(int argc, char **argv) try {
@@ -72,6 +128,10 @@ int main(int argc, char **argv) try {
 	}
 	zyx::Database db(p);
 	db.open();
+	if (op == "labels") {
+		checkLabelTransfer(db);
+		return 0;
+	}
 	if (op == "seed" || op == "dirty-seed") {
 		auto w = db.beginTransaction();
 		execute(w, "CREATE (:Item {k:1,v:0}),(:Item {k:2}),(:Item),(:Item {k:null})");
