@@ -70,13 +70,37 @@ namespace graph::storage::nativewal {
 					"Invalid native WAL creation reference");
 			return (edge ? ids.created_edge_ids : ids.created_node_ids).at(r.value);
 		}
-		void validate(const State &s) {
-			require(s.nodes.size() + s.edges.size() <= maxRows, "Native WAL entity limit exceeded");
-			for (auto &[id, e]: s.edges)
-				require(s.nodes.contains(e.source_node_id) && s.nodes.contains(e.target_node_id),
-						"Native WAL dangling relationship");
+		template<class T>
+		std::pair<size_t, size_t> cost(const T &row) {
+			// Includes the ID and presence tag as stored in a base or delta.
+			size_t wire = 16, heap = row.properties.capacity() * sizeof(LogicalGraphPropertyEntry);
+			auto text = [&](const std::string &name) {
+				wire += 8 + name.size();
+				heap += name.capacity() + 1;
+			};
+			if constexpr (std::is_same_v<T, LogicalGraphNode>) {
+				wire += 8;
+				heap += row.labels.capacity() * sizeof(std::string);
+				for (auto &l: row.labels)
+					text(l);
+			} else {
+				wire += 16;
+				text(row.type);
+			}
+			wire += 8;
+			std::set<std::string_view> seen;
+			for (auto &p: row.properties) {
+				require(!p.key.empty() && seen.insert(p.key).second, "Invalid or duplicate native WAL property");
+				text(p.key);
+				wire += 8 + CanonicalPropertyValueCodec::encodedSize(p.value);
+				if (auto str = std::get_if<std::string>(&p.value.getVariant()))
+					heap += str->capacity() + 1;
+			}
+			return {wire, heap};
 		}
 	} // namespace
+	std::pair<size_t, size_t> rowCost(const LogicalGraphNode &n) { return cost(n); }
+	std::pair<size_t, size_t> rowCost(const LogicalGraphEdge &e) { return cost(e); }
 	LogicalGraphMutationBatchResult preview(const State &s, const LogicalGraphMutationBatch &b) {
 		require(!b.creation_identity_plan, "External identity plans are unsupported");
 		LogicalGraphMutationBatchResult r;
@@ -125,26 +149,37 @@ namespace graph::storage::nativewal {
 		for (auto &n: b.node_creates) {
 			labels(n.labels);
 			auto id = ++s.nodeHigh;
-			s.nodes.emplace(id, LogicalGraphNode{id, n.labels, properties(n.properties)});
+			s.nodes.insert_or_assign(id, LogicalGraphNode{id, n.labels, properties(n.properties)});
 			changed.nodes.insert(id);
 		}
 		for (auto &e: b.edge_creates) {
 			require(e.type.size() <= maxValue, "Native WAL relationship type too long");
 			auto id = ++s.edgeHigh;
-			s.edges.emplace(id, LogicalGraphEdge{id, resolve(e.source, false, ids), resolve(e.target, false, ids),
-												 e.type, properties(e.properties)});
+			s.edges.insert_or_assign(id,
+									 LogicalGraphEdge{id, resolve(e.source, false, ids), resolve(e.target, false, ids),
+													  e.type, properties(e.properties)});
 			changed.edges.insert(id);
 		}
 		for (auto &p: b.property_replacements) {
 			bool edge = p.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE;
 			auto id = resolve(p.entity, edge, ids);
-			(edge ? s.edges.at(id).properties : s.nodes.at(id).properties) = properties(p.properties);
+			auto replace = [&](auto &rows) {
+				auto row = rows.at(id);
+				row.properties = properties(p.properties);
+				rows.insert_or_assign(id, std::move(row));
+			};
+			if (edge)
+				replace(s.edges);
+			else
+				replace(s.nodes);
 			(edge ? changed.edges : changed.nodes).insert(id);
 		}
 		for (auto &n: b.node_label_replacements) {
 			labels(n.labels);
 			auto id = resolve(n.node, false, ids);
-			s.nodes.at(id).labels = n.labels;
+			auto row = s.nodes.at(id);
+			row.labels = n.labels;
+			s.nodes.insert_or_assign(id, std::move(row));
 			changed.nodes.insert(id);
 		}
 		for (auto &e: b.edge_deletes) {
@@ -164,58 +199,78 @@ namespace graph::storage::nativewal {
 				require(n.detach && ++count <= n.maximum_detach_edges,
 						"Native WAL node deletion has incident relationships");
 				changed.edges.insert(it->first);
-				it = s.edges.erase(it);
+				auto erased = it->first;
+				s.edges.erase(erased);
+				it = s.edges.upper_bound(erased);
 			}
 		}
-		validate(s);
+		for (auto id: ids.created_edge_ids) {
+			auto it = s.edges.find(id);
+			if (it != s.edges.end())
+				require(s.nodes.contains(it->second.source_node_id) && s.nodes.contains(it->second.target_node_id),
+						"Native WAL dangling relationship");
+		}
+		require(s.encodedSize() <= maxState, "Native graph encoded state budget exceeded");
 		return ids;
 	}
-	Bytes encodeDelta(const State &s, const Changes &c) {
+	namespace {
+		void encodeRow(Encoder &w, const LogicalGraphNode &n) {
+			labels(n.labels);
+			w.num(n.labels.size());
+			for (auto &l: n.labels)
+				w.text(l);
+			encodeProperties(w, n.properties);
+		}
+		void encodeRow(Encoder &w, const LogicalGraphEdge &e) {
+			w.num(e.source_node_id);
+			w.num(e.target_node_id);
+			w.text(e.type);
+			encodeProperties(w, e.properties);
+		}
+	} // namespace
+	Bytes encodeDelta(const State &s, const Changes &changed) {
 		Encoder w(maxState);
 		w.num(s.nodeHigh);
 		w.num(s.edgeHigh);
-		w.num(c.nodes.size());
-		for (auto id: c.nodes) {
-			w.num(id);
-			auto it = s.nodes.find(id);
-			w.num(it != s.nodes.end());
-			if (it != s.nodes.end()) {
-				auto &n = it->second;
-				labels(n.labels);
-				w.num(n.labels.size());
-				for (auto &l: n.labels)
-					w.text(l);
-				encodeProperties(w, n.properties);
+		auto append = [&](const auto &ids, const auto &rows) {
+			w.num(ids.size());
+			for (auto id: ids) {
+				w.num(id);
+				auto it = rows.find(id);
+				w.num(it != rows.end());
+				if (it != rows.end())
+					encodeRow(w, it->second);
 			}
-		}
-		w.num(c.edges.size());
-		for (auto id: c.edges) {
-			w.num(id);
-			auto it = s.edges.find(id);
-			w.num(it != s.edges.end());
-			if (it != s.edges.end()) {
-				auto &e = it->second;
-				w.num(e.source_node_id);
-				w.num(e.target_node_id);
-				w.text(e.type);
-				encodeProperties(w, e.properties);
-			}
-		}
+		};
+		append(changed.nodes, s.nodes);
+		append(changed.edges, s.edges);
 		return std::move(w.bytes);
 	}
 	Bytes encodeBase(const State &s) {
-		Changes c;
-		for (auto &[id, n]: s.nodes)
-			c.nodes.insert(id);
-		for (auto &[id, e]: s.edges)
-			c.edges.insert(id);
-		return encodeDelta(s, c);
+		Encoder w(maxState);
+		w.room(s.encodedSize());
+		w.bytes.reserve(s.encodedSize());
+		w.num(s.nodeHigh);
+		w.num(s.edgeHigh);
+		auto append = [&](const auto &rows) {
+			w.num(rows.size());
+			for (auto &[id, row]: rows) {
+				w.num(id);
+				w.num(1);
+				encodeRow(w, row);
+			}
+		};
+		append(s.nodes);
+		append(s.edges);
+		require(w.bytes.size() == s.encodedSize(), "Native checkpoint size accounting mismatch");
+		return std::move(w.bytes);
 	}
 	void applyDelta(State &s, Span bytes) {
 		Decoder r{bytes};
 		auto nh = r.num(), eh = r.num();
 		require(nh >= s.nodeHigh && eh >= s.edgeHigh && nh <= INT64_MAX && eh <= INT64_MAX,
 				"Invalid native WAL identity high-water mark");
+		bool removedNode = false;
 		auto rows = [&](auto &map, uint64_t old, uint64_t high, auto decode) {
 			auto count = r.count(2 * maxRows);
 			uint64_t previous = 0;
@@ -226,8 +281,11 @@ namespace graph::storage::nativewal {
 				previous = id;
 				if (r.count(1))
 					map.insert_or_assign(id, decode(id));
-				else
-					map.erase(id);
+				else {
+					bool existed = map.erase(id);
+					if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
+						removedNode |= existed;
+				}
 			}
 		};
 		rows(s.nodes, s.nodeHigh, nh, [&](uint64_t id) {
@@ -241,12 +299,17 @@ namespace graph::storage::nativewal {
 		});
 		rows(s.edges, s.edgeHigh, eh, [&](uint64_t id) {
 			auto a = r.num(), b = r.num();
+			require(s.nodes.contains(a) && s.nodes.contains(b), "Native WAL dangling relationship");
 			auto type = r.text();
 			return LogicalGraphEdge{id, a, b, std::move(type), decodeProperties(r)};
 		});
 		require(r.bytes.empty(), "Trailing native WAL delta");
 		s.nodeHigh = nh;
 		s.edgeHigh = eh;
-		validate(s);
+		require(s.encodedSize() <= maxState, "Native graph encoded state budget exceeded");
+		if (removedNode)
+			for (auto &[id, e]: s.edges)
+				require(s.nodes.contains(e.source_node_id) && s.nodes.contains(e.target_node_id),
+						"Native WAL dangling relationship");
 	}
 } // namespace graph::storage::nativewal

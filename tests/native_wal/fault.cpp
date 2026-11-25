@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+static int partial = -1;
 static char kind = '?', last = '?';
 static const char *action(char k, const char *name) {
 	const char *env = getenv("ZYX_TEST_NATIVE_IO");
@@ -34,11 +35,20 @@ ssize_t write(int fd, const void *data, size_t len) {
 	static ssize_t (*real)(int, const void *, size_t);
 	if (!real)
 		real = reinterpret_cast<decltype(real)>(dlsym(RTLD_NEXT, "write"));
-	if (len >= 8 && (!memcmp(data, "ZYXng001", 8) || !memcmp(data, "ZYXnw001", 8))) {
-		kind = ((const char *) data)[4] == 'g' ? 'm' : 'w';
+	if (fd == partial) {
+		partial = -1;
+		errno = EIO;
+		return -1;
+	}
+	if (len >= 8 && (!memcmp(data, "ZYXng002", 8) || !memcmp(data, "ZYXnw002", 8) || !memcmp(data, "ZYXtx002", 8))) {
+		kind = ((const char *) data)[4] == 'g' ? 'm' : (((const char *) data)[3] == 't' ? 'a' : 'w');
 
 		if (fault(kind, "write") < 0)
 			return -1;
+		if (!strcmp(action(kind, "write"), "partial-eio")) {
+			partial = fd;
+			len = 1;
+		}
 		if (!strcmp(action(kind, "write"), "short"))
 			len = 1;
 		if (!strcmp(action(kind, "write"), "zero"))

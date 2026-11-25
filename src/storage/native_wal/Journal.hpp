@@ -7,7 +7,9 @@ namespace graph::storage::nativewal {
 	class Journal {
 		struct Files;
 		std::unique_ptr<Files> files;
-		Bytes base, wal;
+		Bytes base;
+		size_t walLength = 0;
+		utils::Sha256 walHash;
 		uint64_t baseSequence = 0;
 		bool readOnly, poisoned = false, needsStabilization = true;
 		std::mutex gate;
@@ -15,7 +17,7 @@ namespace graph::storage::nativewal {
 		void checkpointLocked();
 
 	public:
-		Journal(const std::string &, bool);
+		Journal(const std::string &, bool, size_t memory);
 		~Journal();
 		static std::string create(const std::string &);
 		std::shared_ptr<const State> snapshot();

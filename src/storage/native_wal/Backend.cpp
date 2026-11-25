@@ -210,7 +210,7 @@ namespace graph::storage::nativewal {
 			auto ids = apply(*next, changed, b);
 			require(changed.nodes.size() + changed.edges.size() <= maxRows * 2,
 					"Native transaction change limit exceeded");
-			(void) encodeBase(*next);
+
 			auto result = created;
 			require(result.created_node_ids.size() + result.created_edge_ids.size() + ids.created_node_ids.size() +
 									ids.created_edge_ids.size() <=
@@ -254,14 +254,15 @@ namespace graph::storage::nativewal {
 						  public LogicalGraphReadBackend,
 						  public LogicalGraphTransactionalBackend {
 		std::string path;
+		size_t memory;
 		bool ro;
 		std::shared_ptr<Journal> journal;
 
 	public:
-		Backend(std::string p, bool readOnly) : path(std::move(p)), ro(readOnly) {}
+		Backend(std::string p, bool readOnly, size_t bytes) : path(std::move(p)), memory(bytes), ro(readOnly) {}
 		void open() override {
 			if (!journal)
-				journal = std::make_shared<Journal>(path, ro);
+				journal = std::make_shared<Journal>(path, ro, memory);
 		}
 		void flush() override {
 			if (journal)
@@ -296,8 +297,8 @@ namespace graph::storage::nativewal {
 	};
 } // namespace graph::storage::nativewal
 namespace graph::storage {
-	std::shared_ptr<StorageBackend> openNativeWalBackend(const std::string &path, bool readOnly) {
-		return std::make_shared<nativewal::Backend>(path, readOnly);
+	std::shared_ptr<StorageBackend> openNativeWalBackend(const std::string &path, bool readOnly, size_t memory) {
+		return std::make_shared<nativewal::Backend>(path, readOnly, memory);
 	}
 	std::string createNativeWalDatabase(const std::string &directory) { return nativewal::Journal::create(directory); }
 } // namespace graph::storage

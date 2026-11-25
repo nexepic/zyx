@@ -30,9 +30,12 @@ with tempfile.TemporaryDirectory() as name:
     run("graph", graph)
     run("exported",graph.with_suffix(".cp003"))
     run("cycles",new("cycles"))
+    run("rollover",new("rollover"))
     run("types",new("types"))
     run("topology",new("topology"))
     run("cap",new("cap"))
+    run("budget",new("budget"))
+    run("uncertain",new("uncertain"))
     print("independent export reopen; 12 checkpoints/24 commits with pinned reader: pass")
     print("public Cypher graphs, private writes, stable IDs, snapshot, checkpoint, conflict, rollback, export: pass")
     killed = -signal.SIGKILL
@@ -80,7 +83,7 @@ with tempfile.TemporaryDirectory() as name:
         run("count",dest/"main",code=2,error={"missing":"requires missing WAL","truncated":"Missing native graph WAL prefix","different":"WAL receipt mismatch"}[label])
     # A matching outer digest must not mask a stale generation or a gap
     # within the supposedly committed prefix.
-    for label, offset, error in (("identity",8,"WAL generation mismatch"),("sequence",32,"WAL sequence gap")):
+    for label, offset, error in (("identity",8,"WAL generation mismatch"),("sequence",old_log.index(b"ZYXtx002")+8,"WAL sequence gap")):
         dest=root/("resigned-"+label)
         shutil.copytree(original.parent,dest)
         changed=bytearray(old_log)
@@ -125,9 +128,28 @@ with tempfile.TemporaryDirectory() as name:
     child = subprocess.run([driver,"chain",str(pair),"trace"],env=env,capture_output=True,text=True,timeout=25)
     assert child.returncode==killed and child.stdout.strip()=="ack", child
     stages=[line[3:] for line in child.stderr.splitlines() if line.startswith("IO ")]
-    expected=[kind+"."+event for kind in ("w","m") for event in
+    expected=["a.write","a.sync","a.synced"]+[kind+"."+event for kind in ("m",) for event in
               ("write","sync","synced","rename","renamed","dirsync","dirsynced")]
     assert stages==expected,(stages,expected)
+    for event in ("a.write","a.sync","a.synced","m.write","m.renamed","m.dirsynced"):
+        damaged=new("hot-"+event)
+        run("chain",damaged,event+"=kill",killed)
+        recovered(damaged,2 if event in ("m.renamed","m.dirsynced") else 1)
+    for stage in ("a.write","a.sync","m.sync","m.dirsync"):
+        damaged=new("hot-err-"+stage)
+        run("chain",damaged,stage+"=eio",2)
+        recovered(damaged,2 if stage=="m.dirsync" else 1)
+    partial=new("partial-append")
+    run("chain",partial,"a.write=partial-eio",2)
+    recovered(partial,1)
+    for stage in ("m.sync","m.renamed","m.dirsynced","w.unlinked","u.dirsynced"):
+        dest=root/("checkpoint-after-appends"+stage)
+        shutil.copytree(pair.parent,dest)
+        run("checkpoint",dest/"main",stage+"=kill",killed)
+        recovered(dest/"main",2)
+    complete=new("hot-short")
+    run("chain",complete,"a.write=short",killed)
+    recovered(complete,2)
     def model(label,main,wal,expected):
         directory=root/("model-"+label)
         directory.mkdir()

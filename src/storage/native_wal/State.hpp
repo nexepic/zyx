@@ -1,7 +1,7 @@
 #pragma once
 #include <cstring>
-#include <map>
 #include <set>
+#include "VersionedRows.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/utils/Sha256.hpp"
@@ -10,7 +10,7 @@ namespace graph::storage::nativewal {
 	using Span = std::span<const std::byte>;
 	using Digest = std::array<std::byte, 32>;
 	using Identity = std::array<std::byte, 16>;
-	constexpr size_t maxRows = 4096, maxFields = 32, maxValue = 16384, maxState = 2 << 20, maxWal = 16 << 20;
+	constexpr size_t maxRows = (2U << 20) / 24, maxFields = 32, maxValue = 16384, maxState = 2 << 20, maxWal = 16 << 20;
 	inline void require(bool condition, const char *message) {
 		if (!condition)
 			throw std::runtime_error(message);
@@ -18,8 +18,12 @@ namespace graph::storage::nativewal {
 	struct State {
 		Identity identity{};
 		uint64_t sequence = 0, nodeHigh = 0, edgeHigh = 0;
-		std::map<uint64_t, LogicalGraphNode> nodes;
-		std::map<uint64_t, LogicalGraphEdge> edges;
+		std::shared_ptr<VersionBudget> budget;
+		VersionedRows<LogicalGraphNode> nodes;
+		VersionedRows<LogicalGraphEdge> edges;
+		explicit State(size_t memory = 64U << 20) :
+			budget(std::make_shared<VersionBudget>(memory)), nodes(budget), edges(budget) {}
+		size_t encodedSize() const { return 32 + nodes.encodedBytes() + edges.encodedBytes(); }
 	};
 	struct Changes {
 		std::set<uint64_t> nodes, edges;

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <unistd.h>
+#include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/storage/NativeWalDatabase.hpp"
 #include "graph/storage/StorageBackendFactory.hpp"
 #include "zyx/zyx.hpp"
@@ -96,6 +97,49 @@ int main(int argc, char **argv) try {
 		std::cout << graph::storage::createNativeWalDatabase(path) << "\n";
 		return 0;
 	}
+	if (op == "budget") {
+		using namespace graph::storage;
+		{
+			zyx::Database seed(path);
+			seed.open();
+			auto t = seed.beginTransaction();
+			(void) t.createNode("Bound", {{"v", std::string(4096, '0')}});
+			t.commit();
+			seed.close();
+		}
+		auto selection = StorageBackendFactory::create(path, 32 * 1024, OpenMode::OPEN_EXISTING_FILE);
+		selection.backend->open();
+		auto &writer = dynamic_cast<LogicalGraphTransactionalBackend &>(*selection.backend);
+		auto &reader = dynamic_cast<LogicalGraphReadBackend &>(*selection.backend);
+		std::vector<std::unique_ptr<LogicalGraphReadSnapshot>> pins;
+		auto replace = [&](char c) {
+			auto t = writer.beginLogicalGraphTransaction(false);
+			LogicalGraphMutationBatch batch;
+			LogicalGraphMutationEntityReference node;
+			node.value = 1;
+			batch.property_replacements.push_back({node, {{"v", graph::PropertyValue(std::string(4096, c))}}});
+			(void) t->stageMutationBatch(std::move(batch));
+			(void) t->commit();
+		};
+		bool full = false;
+		for (int i = 0; i < 32; ++i) {
+			pins.emplace_back(reader.openLogicalGraphReadSnapshot());
+			try {
+				replace('a' + i % 20);
+			} catch (const std::length_error &e) {
+				expect(std::string(e.what()).find("version memory budget") != std::string::npos, e.what());
+				full = true;
+				break;
+			}
+		}
+		expect(full && pins.size() > 1, "Retained versions escaped their budget");
+		expect(pins.front()->readNode(1).properties.front().value == graph::PropertyValue(std::string(4096, '0')),
+			   "Old version changed");
+		pins.clear();
+		replace('z');
+		selection.backend->close();
+		return 0;
+	}
 	if (op == "hold-read" || op == "read-only") {
 		auto sel = graph::storage::StorageBackendFactory::create(
 				path, 8 * 1024 * 1024, graph::storage::OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
@@ -112,6 +156,42 @@ int main(int argc, char **argv) try {
 	}
 	zyx::Database db(path);
 	db.open();
+	if (op == "uncertain") {
+		auto a = db.beginTransaction();
+		(void) a.createNode("First");
+		a.commit();
+		auto b = db.beginTransaction();
+		(void) b.createNode("Second");
+		setenv("ZYX_TEST_NATIVE_IO", "m.dirsync=eio", 1);
+		bool lost = false;
+		try {
+			b.commit();
+		} catch (const std::exception &) {
+			lost = true;
+		}
+		expect(lost, "Uncertain publish acknowledged");
+		unsetenv("ZYX_TEST_NATIVE_IO");
+		bool blocked = false;
+		try {
+			auto t = db.beginTransaction();
+		} catch (const std::exception &) {
+			blocked = true;
+		}
+		expect(blocked, "Used poisoned generation");
+		try {
+			db.close();
+		} catch (const std::exception &) {
+		}
+		db.open();
+		expect(scalar(db, count) == 2, "Wrong visible state after uncertain directory sync");
+		auto c = db.beginTransaction();
+		(void) c.createNode("AfterRecovery");
+		c.commit();
+		db.close();
+		db.open();
+		expect(scalar(db, count) == 3, "Failed recovery continuation");
+		return 0;
+	}
 	if (op == "graph") {
 		exerciseGraph(db, path);
 		return 0;
@@ -145,9 +225,14 @@ int main(int argc, char **argv) try {
 	}
 	if (op == "cap") {
 		auto tx = db.beginTransaction();
+		auto ids = tx.createNodes("Bound", std::vector<std::unordered_map<std::string, zyx::Value>>(4097));
+		expect(ids.size() == 4097, "Byte-admitted rows missing");
+		tx.commit();
+		tx = db.beginTransaction();
 		bool refused = false;
 		try {
-			(void) tx.createNodes("Bound", std::vector<std::unordered_map<std::string, zyx::Value>>(4097));
+			std::vector<std::unordered_map<std::string, zyx::Value>> wide(256, {{"s", std::string(12000, 'x')}});
+			(void) tx.createNodes("Wide", wide);
 		} catch (const std::exception &) {
 			refused = true;
 		}
@@ -155,7 +240,7 @@ int main(int argc, char **argv) try {
 		tx.rollback();
 		db.close();
 		db.open();
-		expect(scalar(db, count) == 0, "Oversized statement leaked");
+		expect(scalar(db, count) == 4097, "Oversized statement leaked");
 		return 0;
 	}
 	if (op == "types") {
@@ -188,6 +273,39 @@ int main(int argc, char **argv) try {
 		bad.rollback();
 		auto ddl = db.execute("CREATE CONSTRAINT experiment_key FOR (n:Owner) REQUIRE n.i IS UNIQUE");
 		expect(!ddl.isSuccess(), "Claimed an unsupported persistent constraint");
+		return 0;
+	}
+	if (op == "rollover") {
+		auto seed = db.beginTransaction();
+		std::vector<std::unordered_map<std::string, zyx::Value>> rows(120, {{"payload", std::string(8192, '0')}});
+		(void) seed.createNodes("Roll", rows);
+		seed.commit();
+		auto old = db.beginReadOnlyTransaction();
+		uintmax_t prior = 0;
+		bool rolled = false;
+		for (int i = 0; i < 26; ++i) {
+			auto tx = db.beginTransaction();
+			auto result = tx.execute("MATCH (n:Roll) SET n.payload=$s", {{"s", std::string(8192, 'a' + i)}});
+			expect(result.isSuccess(), result.getError());
+			tx.commit();
+			auto size = std::filesystem::file_size(path + ".wal");
+			rolled |= size < prior;
+			prior = size;
+		}
+		expect(rolled, "Automatic WAL rollover did not run");
+		auto matches = [](auto &handle, char value) {
+			auto result = handle.execute("MATCH (n:Roll) WHERE n.payload=$s RETURN count(n)",
+										 {{"s", std::string(8192, value)}});
+			expect(result.isSuccess() && result.hasNext(), result.getError());
+			result.next();
+			expect(std::get<int64_t>(result.get(0)) == 120 && !result.hasNext(), "Wrong rollover snapshot");
+		};
+		matches(old, '0');
+		matches(db, 'z');
+		old.commit();
+		db.close();
+		db.open();
+		matches(db, 'z');
 		return 0;
 	}
 	if (op == "cycles") {
