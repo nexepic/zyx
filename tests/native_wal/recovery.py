@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 driver, shim = map(os.path.abspath, sys.argv[1:3])
 env = {**os.environ, "LD_PRELOAD": shim}
@@ -82,7 +83,15 @@ with tempfile.TemporaryDirectory() as name:
     handoff = new("handoff")
     with subprocess.Popen([driver,"locked-checkpoint",str(handoff)],env=env) as writer:
         try:
-            _, status = os.waitpid(writer.pid,os.WUNTRACED)
+            deadline=time.monotonic()+20
+            while True:
+                pid, status = os.waitpid(writer.pid,os.WUNTRACED|os.WNOHANG)
+                if pid:
+                    break
+                if time.monotonic()>=deadline:
+                    writer.kill()
+                    raise AssertionError("writer did not stop at publication")
+                time.sleep(0.01)
             assert os.WIFSTOPPED(status) and os.WSTOPSIG(status)==signal.SIGSTOP,status
             run("append",handoff,code=2,error="lock native graph directory")
             run("read-only",handoff,code=2,error="lock native graph directory")
@@ -100,7 +109,13 @@ with tempfile.TemporaryDirectory() as name:
         recovered(path,0)
     original = new("confirmed")
     empty_main = original.read_bytes()
-    assert run("leave",original,code=killed)=="ack"
+    first=subprocess.run([driver,"leave",str(original),"trace"],env=env,capture_output=True,text=True,timeout=25)
+    assert first.returncode==killed and first.stdout.strip()=="ack", first
+    trace=[line[3:] for line in first.stderr.splitlines() if line.startswith("IO ")]
+    required=["b.link","b.linked","b.dirsync","b.dirsynced"]+[kind+"."+stage for kind in ("w","m") for stage in
+              ("write","sync","synced","rename","renamed","dirsync","dirsynced")]
+    assert trace==required,trace
+    print("first receipt fence order:", " ".join(trace))
     log = original.with_suffix(".wal")
     old_log = log.read_bytes()
     anchor_path=original.with_suffix(".base")
