@@ -287,3 +287,83 @@ def test_pending_primary_key_queries_keep_the_overlay(tmp_path, monkeypatch):
     t.rollback()
     assert read(db,'MATCH (n:Item {id:9}) RETURN id(n) AS eid')==[]
     db.close()
+
+def test_query_only_reader_keeps_its_committed_view(tmp_path):
+    live=tmp_path/'live'
+    writer=db_at(live)
+    writer.create_nodes('Item',[{'id':k,'val':v,'grp':True} for k,v in
+                               enumerate([None,False,-0.0,0.0,1,1.0])])
+    writer.save()
+    ro=zyxdb.Database(str(live),backend='experimental-wal',query_only=True)
+    old=ro.begin_read_only_transaction()
+    assert read(old,'MATCH (n:Item) WHERE n.val=$v RETURN n.id AS k',v=0.0)==[[2],[3]]
+    for q in ('CREATE (:Item {id:7})','MATCH (n:Item {id:1}) SET n.val=3'):
+        with pytest.raises(PermissionError):old.execute(q)
+    old.rollback()
+    for operation in (ro.begin_transaction,ro.save,lambda:ro.create_node('Item',{'id':7}),
+                      lambda:ro.execute('CREATE (:Item {id:7})')):
+        with pytest.raises(PermissionError):operation()
+    old=ro.begin_read_only_transaction()
+    assert read(old,'MATCH (n:Item {id:1}) RETURN n.val AS v')==[[False]]
+    writer.execute('MATCH (n:Item {id:1}) SET n.val=44')
+    writer.create_node('Item',{'id':8,'val':True})
+    assert read(old,'MATCH (n:Item {id:1}) RETURN n.val AS v')==[[False]]
+    old.commit()
+    assert read(ro,'MATCH (n:Item) WHERE n.val=$v RETURN n.id AS k',v=True)==[[8]]
+    assert read(ro,'MATCH (n:Item {id:1}) RETURN n.val AS v')==[[44]]
+    assert read(ro,'MATCH (n:Item) RETURN n.id AS k LIMIT 1')==[[0]]
+    writer.save()
+    assert read(ro,'MATCH (n:Item) WHERE n.val=$v RETURN n.id AS k',v=1.0)==[[5]]
+    ro.close();writer.close()
+    with pytest.raises(FileNotFoundError):
+        zyxdb.Database(str(tmp_path/'absent'),backend='experimental-wal',query_only=True)
+
+def test_query_only_projection_matches_scalar_and_large_receipt_history(tmp_path):
+    live = tmp_path / 'types'
+    w = db_at(live)
+    w.create_nodes('Item',[{'id':k,'val':v} for k,v in enumerate(
+        [None,False,True,-0.0,0.0,1.0,1,-(1<<63),(1<<63)-1])])
+    w.create_node('Item',{'id':9})
+    w.save()
+    r = zyxdb.Database(str(live),backend='experimental-wal',query_only=True)
+    for v in (None,False,True,0.0,1,1.0,-(1<<63),(1<<63)-1):
+        sql='MATCH (n:Item) WHERE n.val=$v RETURN n.id AS k,n.val AS v'
+        assert repr(read(r,sql,v=v)) == repr(read(w,sql,v=v))
+    for j in range(132):
+        read(w,'MATCH (n:Item {id:4}) SET n.val=$v',v=j)
+    w.save()
+    assert read(r,'MATCH (n:Item {id:4}) RETURN n.val AS v') == [[131]]
+    read(w,'MATCH (n:Item {id:4}) SET n.val=$v',v=132)
+    assert read(r,'MATCH (n:Item {id:4}) RETURN n.val AS v') == [[132]]
+    w.close();r.close()
+
+def test_query_only_full_typed_multiset_and_stream_boundaries(tmp_path):
+    live = tmp_path / 'windows'
+    writer = db_at(live)
+    writer.create_nodes('Item', [
+        {'id': 2*k, 'val': [False, 1, -0.0, None][k%4], 'grp': k%7}
+        for k in range(2060)
+    ])
+    writer.save()
+    reader = zyxdb.Database(str(live), backend='experimental-wal', query_only=True)
+    all_rows = 'MATCH (n:Item) RETURN n.id AS k,id(n) AS eid,n.val AS v,n.grp AS g'
+    filtered = ('MATCH (n:Item) WHERE n.grp=$g '
+                'RETURN n.id AS k,id(n) AS eid,n.val AS v')
+    # Pin before writes. Check the original ordered typed output after publication.
+    cursor = reader.execute(all_rows)
+    before = read(writer, all_rows)
+    assert repr(next(iter(cursor)).values()) == repr(before[0])
+    tx = writer.begin_transaction()
+    for k in (0, 2046, 2048, 4096):
+        read(tx, 'MATCH (n:Item {id:$k}) SET n.grp=$g', k=k, g=4)
+    for k in (-1, 1, 2047, 4097, 5001):
+        read(tx, 'CREATE (:Item {id:$k,val:$v,grp:$g})', k=k, v=-0.0, g=4)
+    tx.commit()
+    assert repr([r.values() for r in cursor]) == repr(before[1:])
+    for suffix in ('', ' LIMIT 0', ' LIMIT 1', ' LIMIT 128', ' LIMIT 2048'):
+        for q, params in ((all_rows, {}), (filtered, {'g':4}), (filtered, {'g':99})):
+            assert repr(read(reader,q+suffix,**params)) == repr(read(writer,q+suffix,**params))
+    writer.save()
+    assert repr(read(reader,all_rows)) == repr(read(writer,all_rows))
+    reader.close()
+    writer.close()

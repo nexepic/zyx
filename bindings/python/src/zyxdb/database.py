@@ -29,13 +29,22 @@ class Database:
             db.execute("CREATE (n:Test {x: 1})")
     """
 
-    def __init__(self, path: str, *, open: bool = True, backend: str = "native") -> None:
+    def __init__(self, path: str, *, open: bool = True, backend: str = "native",
+                 query_only: bool = False) -> None:
+        """query_only admits reads on an existing experimental database.
+
+        Normal WAL verification, recovery and last-close maintenance may write
+        files. Logical writes and explicit checkpoint requests are rejected.
+        """
+        if query_only and backend != "experimental-wal":
+            raise ValueError("query_only requires the experimental WAL backend")
         if backend == "native":
             self._db = _CoreDatabase(path)
         elif backend == "experimental-wal":
             from zyxdb import _wal_plan
             from zyx_development_wal.adapter import DatabaseAdapter
-            self._db = DatabaseAdapter(path, _wal_plan.compile)
+            options = {"query_only": True} if query_only else {}
+            self._db = DatabaseAdapter(path, _wal_plan.compile, **options)
         else:
             raise ValueError(f"Unknown database backend: {backend!r}")
         if open:
