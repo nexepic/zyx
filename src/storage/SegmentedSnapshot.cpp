@@ -1,11 +1,14 @@
 #include "graph/storage/SegmentedSnapshot.hpp"
+#include <bit>
 #include <cstring>
 #include <fstream>
 #include <map>
 #include <mutex>
 #include <set>
 #include "CheckpointReadBackend.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
+#include "graph/storage/SnapshotNodeIndex.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/utils/Sha256.hpp"
 #include "query/execution/ProcessResourceDomains.hpp"
@@ -226,7 +229,22 @@ namespace graph::storage {
 		w.flush();
 		finishSnapshot(out, w, w.dir);
 	}
-	void exportTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns) {
+	namespace {
+		using Posting = std::pair<int64_t, uint64_t>;
+		constexpr size_t maxIndexNodes = 131072, maxPostings = 32768;
+		bool safeInteger(int64_t v) {
+			constexpr int64_t exact = (int64_t{1} << 53) - 1;
+			return v >= -exact && v <= exact;
+		}
+		struct IndexedField {
+			uint64_t declaration, revision;
+			uint32_t label, key;
+			uint64_t off, bytes;
+			std::array<std::byte, 32> digest;
+		};
+	} // namespace
+	static void writeTokenized(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns,
+							   std::optional<SnapshotNodeIndex> index) {
 		check(out.tellp() == 0, "Snapshot export requires a new empty stream");
 		Dictionary dict;
 		{
@@ -343,8 +361,24 @@ namespace graph::storage {
 			}
 			emit(2 + unsigned(edges), id, owner);
 		};
+		std::vector<Posting> postings;
+		size_t nodeCount = 0;
 		uint64_t last = 0;
 		source.visitNodes(SIZE_MAX, [&](const LogicalGraphNode &n) {
+			if (index && ++nodeCount > maxIndexNodes)
+				index.reset();
+			if (index && std::ranges::find(n.labels, index->label) != n.labels.end()) {
+				for (const auto &p: n.properties) {
+					if (p.key != index->property || p.value.getType() == PropertyType::NULL_TYPE)
+						continue;
+					const auto *integer = std::get_if<int64_t>(&p.value.getVariant());
+					if (!integer || !safeInteger(*integer) || postings.size() == maxPostings) {
+						index.reset();
+						break;
+					}
+					postings.emplace_back(*integer, n.node_id);
+				}
+			}
 			check(n.node_id > last && n.labels.size() <= (maxBlock - 24) / 4, "Invalid snapshot node");
 			last = n.node_id;
 			Bytes b;
@@ -370,7 +404,7 @@ namespace graph::storage {
 		while (!lanes.empty())
 			flush(lanes.begin());
 		Bytes directory;
-		put(directory, unsigned(columns));
+		put(directory, index && !postings.empty() ? 2 : unsigned(columns));
 		for (const auto &table: dict.names) {
 			put(directory, table.size());
 			for (const auto &word: table) {
@@ -380,12 +414,42 @@ namespace graph::storage {
 		}
 		if (columns)
 			append(directory, std::as_bytes(std::span(dict.lanes)));
+		if (index && !postings.empty()) {
+			std::ranges::sort(postings);
+			Bytes raw;
+			raw.reserve(postings.size() * 16);
+			for (auto [value, id]: postings) {
+				put(raw, std::bit_cast<uint64_t>(value));
+				put(raw, id);
+			}
+			put(directory, index->id);
+			put(directory, index->generation);
+			token(directory, dict.find(NameSpace::NS_LABEL, index->label));
+			token(directory, dict.find(NameSpace::NS_PROPERTY, index->property));
+			put(directory, w.offset);
+			put(directory, raw.size());
+			append(directory, Hash::digest(raw));
+			// Bind catalog provenance and ordered postings to this graph directory.
+			Hash binding;
+			binding.update(directory);
+			binding.update(w.dir);
+			append(directory, binding.finalize());
+			write(out, raw);
+			w.offset += raw.size();
+		}
 		check(directory.size() <= maxDirectory && w.dir.size() <= maxDirectory - directory.size(),
 			  "Snapshot directory too large");
 		append(directory, w.dir);
 		finishSnapshot(out, w, directory);
 	}
 
+	void exportTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns) {
+		writeTokenized(source, out, columns, std::nullopt);
+	}
+	void exportIndexedTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out) {
+		auto *catalog = dynamic_cast<const SnapshotNodeIndexSource *>(&source);
+		writeTokenized(source, out, true, catalog ? catalog->singleNodePropertyIndex() : std::nullopt);
+	}
 
 	namespace {
 		struct Block {
@@ -408,6 +472,9 @@ namespace graph::storage {
 			mutable std::array<std::shared_ptr<const Window>, 8> fields;
 			std::optional<Dictionary> dictionary;
 			bool columns = false;
+			std::optional<IndexedField> descriptor;
+			std::optional<resource::ResourceLease> postingLease;
+			std::vector<Posting> postings;
 			const Dictionary *dict() const { return dictionary ? &*dictionary : nullptr; }
 			mutable std::mutex mutex;
 			mutable std::ifstream in;
@@ -463,8 +530,8 @@ namespace graph::storage {
 				size_t dictionaryBytes = 0;
 				if (v4) {
 					auto mode = r.num();
-					check(mode <= 1, "Invalid snapshot layout");
-					columns = mode == 1;
+					check(mode <= 2, "Invalid snapshot layout");
+					columns = mode != 0;
 					dictionary.emplace();
 					for (auto &table: dictionary->names) {
 						auto count = r.num();
@@ -493,6 +560,22 @@ namespace graph::storage {
 							dictionary->lanes.push_back(mask);
 						}
 					}
+					if (mode == 2) {
+						IndexedField idx{r.num(), r.num(), token(r), token(r), r.num(), r.num(), {}};
+						check(idx.declaration && idx.revision && idx.bytes && idx.bytes % 16 == 0 &&
+									  idx.bytes / 16 <= maxPostings && idx.off >= headerSize && idx.off <= off &&
+									  idx.bytes == off - idx.off,
+							  "Invalid snapshot index extent");
+						(void) dictionary->lookup(NameSpace::NS_LABEL, idx.label);
+						(void) dictionary->lookup(NameSpace::NS_PROPERTY, idx.key);
+						std::ranges::copy(r.take(32), idx.digest.begin());
+						Hash binding;
+						binding.update(Span(d).first(d.size() - r.b.size()));
+						auto expectedBinding = r.take(32);
+						binding.update(r.b);
+						check(std::ranges::equal(binding.finalize(), expectedBinding), "Stale snapshot index binding");
+						descriptor = idx;
+					}
 					check(r.b.size() % entrySize == 0, "Invalid snapshot directory length");
 					entries = r.b.size() / entrySize;
 					lease->set(size + entries * sizeof(Block) + dictionaryBytes);
@@ -516,7 +599,7 @@ namespace graph::storage {
 					blocks.push_back(b);
 					next += b.size;
 				}
-				check(next == off, "Unaccounted cp003 payload");
+				check(next == (descriptor ? descriptor->off : off), "Unaccounted snapshot payload");
 				if (v4) {
 					std::ranges::sort(blocks, {}, [](const Block &b) { return std::pair{b.kind, b.first}; });
 					for (size_t i = 1; i < blocks.size(); ++i)
@@ -612,7 +695,7 @@ namespace graph::storage {
 				return true;
 			}
 		};
-		class Snapshot final : public LogicalGraphReadSnapshot {
+		class Snapshot final : public LogicalGraphReadSnapshot, public SnapshotNodeIndexSource {
 			std::shared_ptr<const Image> img;
 			using Admission = std::function<void(size_t)>;
 			PropertyValue field(bool edges, uint64_t id, uint32_t key, std::string_view spelling,
@@ -703,6 +786,128 @@ namespace graph::storage {
 
 		public:
 			explicit Snapshot(std::shared_ptr<const Image> image) : img(std::move(image)) {}
+			static void validateIndex(const std::shared_ptr<Image> &image) {
+				if (!image->descriptor)
+					return;
+				const auto &d = *image->descriptor;
+				resource::ResourceLease lease(image->account);
+				if (image->account->available() < d.bytes * 2 + maxBlock * 4 || !lease.trySet(d.bytes * 2)) {
+					image->descriptor.reset();
+					return;
+				}
+				std::vector<Posting> entries;
+				entries.reserve(d.bytes / 16);
+				{
+					auto raw = image->read(d.off, d.bytes);
+					check(Hash::digest(raw) == d.digest, "Invalid snapshot index digest");
+					Cursor c{raw};
+					while (!c.b.empty()) {
+						Posting p{std::bit_cast<int64_t>(c.num()), c.num()};
+						check(safeInteger(p.first) && p.second && (entries.empty() || entries.back() < p),
+							  "Invalid snapshot posting");
+						entries.push_back(p);
+					}
+				}
+				Snapshot audit(image);
+				std::array keys{image->dict()->lookup(NameSpace::NS_PROPERTY, d.key)};
+				size_t nodes = 0, values = 0;
+				image->visit(0, 0, [&](uint64_t id, Cursor c) {
+					check(++nodes <= maxIndexNodes, "Invalid indexed snapshot node count");
+					auto n = c.num();
+					bool match = false;
+					while (n--) {
+						auto label = token(c);
+						(void) image->dict()->lookup(NameSpace::NS_LABEL, label);
+						match |= label == d.label;
+					}
+					check(c.b.empty(), "Invalid indexed node labels");
+					if (!match)
+						return true;
+					bool seen = false;
+					audit.selected(
+							false, std::array{id}, keys, [](size_t) {},
+							[&](size_t, size_t, Span bytes) {
+								auto v = CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes);
+								check(!seen && v.has_value(), "Invalid indexed snapshot field");
+								seen = true;
+								if (v->type == PropertyType::NULL_TYPE)
+									return;
+								check(v->type == PropertyType::INTEGER &&
+											  std::binary_search(entries.begin(), entries.end(),
+																 Posting{std::bit_cast<int64_t>(v->bits), id}),
+									  "Incomplete snapshot index");
+								++values;
+							});
+					return true;
+				});
+				check(values == entries.size(), "Surplus snapshot index postings");
+				lease.set(entries.capacity() * sizeof(Posting));
+				image->postings = std::move(entries);
+				image->postingLease.emplace(std::move(lease));
+				debug::PerfTrace::addValue("snapshot.index.audit_nodes", nodes);
+				debug::PerfTrace::addValue("snapshot.index.audit_values", values);
+			}
+			std::optional<SnapshotNodeIndex> singleNodePropertyIndex() const override {
+				if (!img->descriptor)
+					return std::nullopt;
+				const auto &d = *img->descriptor;
+				return SnapshotNodeIndex{d.declaration, d.revision,
+										 std::string(img->dict()->lookup(NameSpace::NS_LABEL, d.label)),
+										 std::string(img->dict()->lookup(NameSpace::NS_PROPERTY, d.key))};
+			}
+			std::optional<uint64_t> nativeSnapshotGeneration() const override {
+				if (!img->descriptor)
+					return std::nullopt;
+				return img->fence.graph_state_tokens.front() ? img->fence.graph_state_tokens.front() : 1;
+			}
+			bool supportsNativeExactNodeCandidates() const override { return img->descriptor.has_value(); }
+			bool supportsNativeRangeNodeCandidates() const override { return img->descriptor.has_value(); }
+			std::optional<bool>
+			visitNodeCandidatesByPropertyRange(const std::vector<std::string> &labels,
+											   const LogicalGraphPropertyRange &r, size_t nodes, size_t properties,
+											   size_t bytes, const IndexCandidateBatchVisitor &visitor) const override {
+				if (!img->descriptor || labels.size() != 1 || !properties)
+					return std::nullopt;
+				const auto &d = *img->descriptor;
+				if (labels.front() != img->dict()->lookup(NameSpace::NS_LABEL, d.label) ||
+					r.key != img->dict()->lookup(NameSpace::NS_PROPERTY, d.key))
+					return std::nullopt;
+				const auto *lo = std::get_if<int64_t>(&r.min_value.getVariant());
+				const auto *hi = std::get_if<int64_t>(&r.max_value.getVariant());
+				if ((!lo && !hi) || (lo ? !safeInteger(*lo) : r.min_value.getType() != PropertyType::NULL_TYPE) ||
+					(hi ? !safeInteger(*hi) : r.max_value.getType() != PropertyType::NULL_TYPE))
+					return std::nullopt;
+				const auto &list = img->postings;
+				auto bound = [&](int64_t v, bool after) {
+					return after ? std::ranges::upper_bound(list, Posting{v, UINT64_MAX})
+								 : std::ranges::lower_bound(list, Posting{v, 0});
+				};
+				auto first = lo ? bound(*lo, !r.min_inclusive) : list.begin();
+				auto end = hi ? bound(*hi, r.max_inclusive) : list.end();
+				auto count = static_cast<size_t>(std::max<ptrdiff_t>(0, end - first));
+				if (count > 64 || count > nodes || count > bytes / sizeof(EntityRef))
+					return std::nullopt;
+				IndexCandidateBatch batch;
+				batch.snapshot_generation = *nativeSnapshotGeneration();
+				batch.candidates.reserve(count);
+				for (size_t i = 0; i < count; ++i)
+					batch.candidates.push_back(EntityRef{first[i].second});
+				std::ranges::sort(batch.candidates, {}, &EntityRef::entity_id);
+				debug::PerfTrace::addValue("snapshot.index.candidates", count);
+				return visitor(batch);
+			}
+			std::optional<bool>
+			visitNodeCandidatesByExactProperties(const std::vector<std::string> &labels,
+												 const std::vector<std::pair<std::string, PropertyValue>> &properties,
+												 size_t nodes, size_t fields, size_t bytes,
+												 const IndexCandidateBatchVisitor &visitor) const override {
+				if (properties.size() != 1 || properties[0].second.getType() != PropertyType::INTEGER)
+					return std::nullopt;
+				return visitNodeCandidatesByPropertyRange(
+						labels, {properties[0].first, properties[0].second, properties[0].second, true, true}, nodes,
+						fields, bytes, visitor);
+			}
+
 			std::optional<LogicalGraphMutationFence> mutationFence() const override { return img->fence; }
 			bool containsNode(uint64_t id) const override {
 				bool hit = false;
@@ -1133,8 +1338,11 @@ namespace graph::storage {
 		public:
 			Backend(std::string file, size_t bytes) : path(std::move(file)), budget(bytes) {}
 			void open() override {
-				if (!image)
-					image = std::make_shared<Image>(path, budget);
+				if (!image) {
+					auto next = std::make_shared<Image>(path, budget);
+					Snapshot::validateIndex(next);
+					image = std::move(next);
+				}
 			}
 			void close() override {
 				check(image.use_count() <= 1, "Checkpoint has active snapshots");

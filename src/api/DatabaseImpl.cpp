@@ -1477,6 +1477,8 @@ namespace zyx {
 		auto snapshot = backend->openLogicalGraphReadSnapshot();
 		switch (layout) {
 			case SnapshotLayout::SL_SEGMENTED_ROW: return graph::storage::exportSegmentedSnapshot(*snapshot, destination);
+			case SnapshotLayout::SL_INDEXED_TOKEN_COLUMN:
+				return graph::storage::exportIndexedTokenizedSnapshot(*snapshot, destination);
 			case SnapshotLayout::SL_TOKEN_ROW: return graph::storage::exportTokenizedSnapshot(*snapshot, destination, false);
 			case SnapshotLayout::SL_TOKEN_COLUMN: return graph::storage::exportTokenizedSnapshot(*snapshot, destination, true);
 		}

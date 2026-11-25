@@ -516,3 +516,96 @@ TEST_F(CheckpointReadTest, AuthenticatedColumnRunsPreserveBorrowedTextAndPresenc
 	}), std::runtime_error);
 	EXPECT_EQ(attempts, 2U);
 }
+
+TEST_F(CheckpointReadTest, DeclaredIndexIsBoundToOneExportAndItsCompleteLiveRows) {
+	using Layout = zyx::Database::SnapshotLayout;
+	auto dir = std::filesystem::path(path.string() + ".indexed");
+	std::filesystem::create_directory(dir);
+	struct Cleanup {
+		std::filesystem::path dir;
+		~Cleanup() {
+			std::error_code ec;
+			std::filesystem::remove_all(dir, ec);
+		}
+	} cleanup{dir};
+	zyx::Database writer((dir / "source").string());
+	writer.open();
+	auto exec = [&](const char *q) {
+		auto r = writer.execute(q);
+		ASSERT_TRUE(r.isSuccess()) << r.getError();
+		while (r.hasNext())
+			r.next();
+		ASSERT_TRUE(r.isSuccess()) << r.getError();
+	};
+	exec("CREATE (:K {K:7}),(:K {K:9}),(:K {K:7}),(:K),(:Other {K:7})");
+	exec("MATCH (n:K) WHERE n.K=9 DELETE n");
+	exec("MATCH (n:K {K:7}) CREATE (n)-[:K]->(n)");
+	auto exportTo = [&](const char *name) {
+		std::ofstream out(dir / name, std::ios::binary);
+		writer.exportSegmentedSnapshot(out, Layout::SL_INDEXED_TOKEN_COLUMN);
+		out.close();
+		ASSERT_TRUE(out);
+	};
+	exportTo("undeclared");
+	exec("CREATE INDEX declared FOR (n:K) ON (n.K)");
+	exportTo("pinned");
+	exec("CREATE (:K {K:7.0})");
+	exportTo("mixed");
+	{
+		std::ofstream out(dir / "oracle", std::ios::binary);
+		writer.exportSegmentedSnapshot(out, Layout::SL_SEGMENTED_ROW);
+		out.close();
+		ASSERT_TRUE(out);
+	}
+	writer.close();
+	for (auto name: {"undeclared", "pinned", "mixed"}) {
+		const bool indexed = std::string_view(name) == "pinned";
+		graph::Database db((dir / name).string(), graph::storage::OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+		db.open();
+		auto snapshot = std::dynamic_pointer_cast<graph::storage::LogicalGraphReadBackend>(db.getStorageBackend())
+								->openLogicalGraphReadSnapshot();
+		ASSERT_EQ(snapshot->supportsNativeExactNodeCandidates(), indexed);
+		if (indexed) {
+			std::vector<uint64_t> ids;
+			auto done = snapshot->visitNodeCandidatesByPropertyRange(
+					{"K"}, {"K", graph::PropertyValue(int64_t(6)), graph::PropertyValue(int64_t(8)), false, false}, 10,
+					10, 4096, [&](const graph::storage::IndexCandidateBatch &batch) {
+						EXPECT_EQ(batch.snapshot_generation, snapshot->nativeSnapshotGeneration());
+						for (const auto &ref: batch.candidates)
+							ids.push_back(ref.entity_id);
+						return true;
+					});
+			ASSERT_EQ(done, std::optional<bool>(true));
+			EXPECT_EQ(ids, (std::vector<uint64_t>{1, 3}));
+		}
+		zyx::Database publicDB((dir / name).string());
+		publicDB.open();
+		auto rows = publicDB.execute("MATCH(n:K) WHERE n.K=7 RETURN id(n) ORDER BY id(n)");
+		ASSERT_TRUE(rows.isSuccess()) << rows.getError();
+		std::vector<int64_t> ids;
+		while (rows.hasNext()) {
+			rows.next();
+			ids.push_back(std::get<int64_t>(rows.get(0)));
+		}
+		ASSERT_TRUE(rows.isSuccess()) << rows.getError();
+		if (std::string_view(name) == "mixed") {
+			zyx::Database oracle((dir / "oracle").string());
+			oracle.open();
+			auto q = oracle.execute("MATCH(n:K) WHERE n.K=7 RETURN id(n) ORDER BY id(n)");
+			ASSERT_TRUE(q.isSuccess());
+			std::vector<int64_t> expected;
+			while (q.hasNext()) {
+				q.next();
+				expected.push_back(std::get<int64_t>(q.get(0)));
+			}
+			ASSERT_TRUE(q.isSuccess());
+			EXPECT_EQ(ids, expected);
+			auto typed = publicDB.execute("MATCH(n:K) WHERE n.K=7.0 RETURN n.K");
+			ASSERT_TRUE(typed.isSuccess());
+			ASSERT_TRUE(typed.hasNext());
+			typed.next();
+			EXPECT_EQ(typed.get(0), zyx::Value(7.0));
+		} else
+			EXPECT_EQ(ids, (std::vector<int64_t>{1, 3}));
+	}
+}

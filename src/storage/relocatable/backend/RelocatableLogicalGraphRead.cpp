@@ -1,7 +1,8 @@
-#include "graph/storage/LogicalGraphNodeScan.hpp"
-#include "graph/storage/LogicalGraphJointPropertyRead.hpp"
-#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
 #include "graph/core/PropertyDecodeAllocationScope.hpp"
+#include "graph/storage/LogicalGraphJointPropertyRead.hpp"
+#include "graph/storage/LogicalGraphNodeScan.hpp"
+#include "graph/storage/SnapshotNodeIndex.hpp"
+#include "graph/storage/relocatable/property/BudgetedPresenceScope.hpp"
 /**
  * @file RelocatableLogicalGraphRead.cpp
  * @brief relocatable implementation of the format-independent logical graph reader.
@@ -45,11 +46,14 @@ namespace graph::storage {
 		}
 	} // namespace
 
-	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalGraphNodeScanProvider, public LogicalQueryScratchProvider,
+	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot,
+													  public SnapshotNodeIndexSource,
+													  public LogicalGraphNodeScanProvider,
+													  public LogicalQueryScratchProvider,
 #if defined(ZYX_ENABLE_STORAGE_TEST_HOOKS) || (defined(ZYX_EXPERIMENTAL_BUDGETED_PRESENCE) && ZYX_EXPERIMENTAL_BUDGETED_PRESENCE)
-            public LogicalGraphBudgetedNonNullProvider,
+													  public LogicalGraphBudgetedNonNullProvider,
 #endif
-            public utils::OwnedPmrObject {
+													  public utils::OwnedPmrObject {
 	public:
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
@@ -58,7 +62,26 @@ namespace graph::storage {
                 if (const auto *root = backend_.verifiedScanRoot(snapshot_.metadataSnapshot())) scan_root_.emplace(*root);
             }
 
-        void enableCoveredControl(uint64_t indexId, size_t maximumEdges, size_t maximumMetadataPages,
+			std::optional<SnapshotNodeIndex> singleNodePropertyIndex() const override {
+				const auto &pin = snapshot_.metadataSnapshot();
+				const auto definitions =
+						backend_.readAllIndexDefinitions(pin, backend_.options_.maximum_index_definitions);
+				std::optional<SnapshotNodeIndex> selected;
+				for (const auto &d: definitions) {
+					if (d.entity_kind != IndexDefinitionEntityKind::IDEK_NODE ||
+						d.kind != IndexDefinitionKind::IDK_PROPERTY || !d.label_token_id ||
+						d.property_names.size() != 1)
+						continue;
+					if (selected)
+						return std::nullopt;
+					selected = SnapshotNodeIndex{d.index_id, pin.superblock().generation.value(),
+												 backend_.resolveNodeLabelToken(pin, d.label_token_id),
+												 d.property_names.front()};
+				}
+				return selected;
+			}
+
+		void enableCoveredControl(uint64_t indexId, size_t maximumEdges, size_t maximumMetadataPages,
             std::shared_ptr<std::pmr::memory_resource> memory, const CancellationCheckpoint *cancellation) {
             if (covered_ || !memory || !backend_.isReadOnly())
                 throw std::invalid_argument("covered candidate control requires a read-only backend and private account");

@@ -298,7 +298,7 @@ namespace zyx {
         // seekable binary stream. The caller owns final close and publication.
         // The segmented interchange format carries no index or constraint definitions.
         void exportSegmentedSnapshot(std::ostream &destination) const;
-		enum class SnapshotLayout { SL_SEGMENTED_ROW, SL_TOKEN_ROW, SL_TOKEN_COLUMN };
+		enum class SnapshotLayout { SL_SEGMENTED_ROW, SL_TOKEN_ROW, SL_TOKEN_COLUMN, SL_INDEXED_TOKEN_COLUMN };
 		void exportSegmentedSnapshot(std::ostream &destination, SnapshotLayout layout) const;
 		void save() const; // Flushes data to disk
 
