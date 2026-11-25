@@ -144,7 +144,8 @@ class Result:
     def to_df(self) -> Any:
         """Convert to a pandas DataFrame (requires pandas)."""
         import pandas as pd  # noqa: PLC0415
-        return pd.DataFrame(self.data(), columns=self.columns)
+        columns = self.columns  # Exhausting the native cursor releases its metadata.
+        return pd.DataFrame(self.data(), columns=columns)
 
     def __repr__(self) -> str:
         status = "ok" if self.is_success else f"error={self.error!r}"

@@ -129,6 +129,17 @@ class TestResultIteration:
         assert len(data) == 1
         assert data[0]["x"] == 1
 
+    def test_to_df_preserves_named_value(self, db):
+        pytest.importorskip("pandas")
+        frame = db.execute("RETURN 42 AS answer").to_df()
+        assert frame.to_dict("list") == {"answer": [42]}
+
+    def test_to_df_preserves_empty_column_order(self, db):
+        pytest.importorskip("pandas")
+        frame = db.execute("MATCH (n:Absent) RETURN n.z AS zed, n.a AS alpha").to_df()
+        assert frame.shape == (0, 2)
+        assert list(frame.columns) == ["zed", "alpha"]
+
 
 class TestRecord:
     def test_getitem_str(self):
