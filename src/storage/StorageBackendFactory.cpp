@@ -72,6 +72,8 @@ namespace graph::storage {
 			std::string_view(signature.data(), signature.size()) == "ZYXcp002") {
 			return {openCheckpointBackend(database_path, cache_size), nullptr};
 		}
+		if (std::string_view(signature.data(), signature.size()) == "ZYXcp003")
+			return {openSegmentedBackend(database_path, cache_size), nullptr};
 		throw std::runtime_error("Database refuses a " + std::string(StorageFormatProbe::describe(format.kind)) +
 								 " file because it is not a complete native relocatable database");
 	}

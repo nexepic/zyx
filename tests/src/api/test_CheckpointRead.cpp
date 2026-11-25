@@ -6,6 +6,8 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
+#include "graph/storage/SegmentedSnapshot.hpp"
+#include "zyx/zyx.hpp"
 #include "graph/utils/Sha256.hpp"
 #include "zyx/zyx_driver_abi.h"
 
@@ -286,3 +288,138 @@ namespace {
 		EXPECT_EQ(tx, nullptr);
 	}
 } // namespace
+
+
+TEST_F(CheckpointReadTest, SegmentedNativeExportPinsContentAndRejectsDamagedAccess) {
+	using namespace graph::storage;
+	graph::Database source(path.string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+	source.open();
+	auto logical = std::dynamic_pointer_cast<LogicalGraphReadBackend>(source.getStorageBackend());
+	auto pinned = logical->openLogicalGraphReadSnapshot();
+	auto dest = path;
+	dest += ".standalone";
+	struct Cleanup {
+		std::filesystem::path path;
+		~Cleanup() {
+			std::error_code ec;
+			std::filesystem::remove(path, ec);
+		}
+	} cleanup{dest};
+	{
+		std::ofstream out(dest, std::ios::binary);
+		exportSegmentedSnapshot(*pinned, out);
+		out.close();
+		ASSERT_TRUE(out);
+	}
+	graph::Database result(dest.string(), OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+	result.open();
+	auto reader = std::dynamic_pointer_cast<LogicalGraphReadBackend>(result.getStorageBackend())
+						  ->openLogicalGraphReadSnapshot();
+	EXPECT_EQ(reader->readNode(5), pinned->readNode(5));
+	EXPECT_EQ(reader->readEdge(9), pinned->readEdge(9));
+	EXPECT_THROW(reader->readNode(3), std::runtime_error);
+	reader.reset();
+	result.close();
+	{
+		std::fstream f(dest, std::ios::in | std::ios::out | std::ios::binary);
+		f.seekp(40);
+		f.put(0);
+		f.close();
+		ASSERT_TRUE(f);
+	}
+	result.open();
+	reader = std::dynamic_pointer_cast<LogicalGraphReadBackend>(result.getStorageBackend())
+					 ->openLogicalGraphReadSnapshot();
+	EXPECT_EQ(reader->readEdge(8), pinned->readEdge(8));
+	EXPECT_THROW(reader->readNode(1), std::runtime_error);
+	reader.reset();
+	result.close();
+	{
+		std::fstream f(dest, std::ios::in | std::ios::out | std::ios::binary);
+		f.seekg(8);
+		auto byte = f.get();
+		f.seekp(8);
+		f.put(char(byte ^ 1));
+	}
+	EXPECT_THROW(result.open(), std::runtime_error);
+}
+
+TEST_F(CheckpointReadTest, ExportsNativeVariablePropertiesAndReadsLabelsWithoutThePropertySegment) {
+	using namespace graph::storage;
+	const auto dir = path.string() + ".work";
+	ASSERT_TRUE(std::filesystem::create_directory(dir));
+	struct RemoveDir {
+		std::filesystem::path p;
+		~RemoveDir() {
+			std::error_code ec;
+			std::filesystem::remove_all(p, ec);
+		}
+	} cleanup{dir};
+	const auto live = dir + "/live", dest = dir + "/export";
+	std::string title;
+	for (size_t i = 0; i < 24000; ++i)
+		title += "水";
+	{
+		zyx::Database writer(live);
+		writer.open();
+		ASSERT_TRUE(writer.execute("CREATE (:Paper:Draft {title:$p})", {{"p", zyx::Value(title)}}).isSuccess());
+		ASSERT_TRUE(writer.execute("MATCH (a:Paper) CREATE (a)-[:Cites {note:$p}]->(a)", {{"p", zyx::Value(title)}})
+							.isSuccess());
+		writer.close();
+	}
+	graph::Database source(live, OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+	source.open();
+	auto pinned = std::dynamic_pointer_cast<LogicalGraphReadBackend>(source.getStorageBackend())
+						  ->openLogicalGraphReadSnapshot();
+	{
+		std::ofstream f(dest, std::ios::binary);
+		exportSegmentedSnapshot(*pinned, f);
+		f.close();
+		ASSERT_TRUE(f);
+	}
+	auto checkSnapshot = [&](bool damaged) {
+		graph::Database copy(dest, OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+		copy.open();
+		auto r = std::dynamic_pointer_cast<LogicalGraphReadBackend>(copy.getStorageBackend())
+						 ->openLogicalGraphReadSnapshot();
+		EXPECT_EQ(r->readNodeShaped(1, {.include_labels = true}).labels, pinned->readNode(1).labels);
+		EXPECT_EQ(r->readEdge(1), pinned->readEdge(1));
+		if (damaged) {
+			EXPECT_THROW(r->readNode(1), std::runtime_error);
+		} else {
+			EXPECT_EQ(r->readNode(1), pinned->readNode(1));
+		}
+	};
+	checkSnapshot(false);
+	// Read the canonical little-endian directory to locate the node property
+	// block. Damaging it must leave labels and relationship properties readable.
+	std::fstream file(dest, std::ios::binary | std::ios::in | std::ios::out);
+	auto readWord = [&]() {
+		std::array<unsigned char, 8> b{};
+		file.read(reinterpret_cast<char *>(b.data()), 8);
+		uint64_t v = 0;
+		for (unsigned i = 0; i < 8; ++i)
+			v |= uint64_t(b[i]) << (8 * i);
+		return v;
+	};
+	file.seekg(-48, std::ios::end);
+	auto directory = readWord(), bytes = readWord();
+	bool changed = false;
+	for (uint64_t i = 0; i < bytes; i += 72) {
+		file.seekg(directory + i);
+		if (readWord() != 2)
+			continue;
+		file.seekg(directory + i + 24);
+		auto off = readWord();
+		file.seekg(off + 16);
+		auto old = file.get();
+		file.seekp(off + 16);
+		file.put(static_cast<char>(old ^ 1));
+		changed = true;
+		break;
+	}
+	file.close();
+	ASSERT_TRUE(file);
+	ASSERT_TRUE(changed);
+	checkSnapshot(true);
+}

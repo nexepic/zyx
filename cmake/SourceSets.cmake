@@ -179,6 +179,7 @@ set(ZYX_NATIVE_STORAGE_SOURCES
     "${ZYX_SOURCE_ROOT}/storage/LogicalGraphTransactionOverlay.cpp"
     "${ZYX_SOURCE_ROOT}/storage/LogicalGraphPropertyPatch.cpp"
     "${ZYX_SOURCE_ROOT}/storage/StorageBackendFactory.cpp"
+    "${ZYX_SOURCE_ROOT}/storage/SegmentedSnapshot.cpp"
     "${ZYX_SOURCE_ROOT}/storage/CheckpointReadBackend.cpp"
     "${ZYX_SOURCE_ROOT}/storage/StorageFormat.cpp"
     "${ZYX_SOURCE_ROOT}/storage/StorageIO.cpp"
