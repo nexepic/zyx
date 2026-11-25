@@ -30,7 +30,9 @@ py::object scalar(const graph::PropertyValue &v) {
     const auto &value = v.getVariant();
     if (std::holds_alternative<std::monostate>(value)) return py::none();
     if (auto i=std::get_if<int64_t>(&value)) return py::int_(*i);
-    throw std::invalid_argument("experimental backend supports int64 and NULL");
+    if (auto b=std::get_if<bool>(&value)) return py::bool_(*b);
+    if (auto d=std::get_if<double>(&value)) return py::float_(*d);
+    throw std::invalid_argument("unsupported experimental literal type");
 }
 
 py::tuple expression(const Expression &e) {
@@ -40,6 +42,8 @@ py::tuple expression(const Expression &e) {
         return py::make_tuple("reference",p->getVariableName(),p->getPropertyName());
     if (auto p=dynamic_cast<const LiteralExpression*>(&e)) {
         if (p->isNull()) return py::make_tuple("literal",py::none());
+        if (p->isBoolean()) return py::make_tuple("literal",p->getBooleanValue());
+        if (p->isDouble()) return py::make_tuple("literal",p->getDoubleValue());
         if (p->isInteger()) return py::make_tuple("literal",p->getIntegerValue());
         if (p->isPropertyValue()) return py::make_tuple("literal",scalar(p->getPropertyValue()));
     }

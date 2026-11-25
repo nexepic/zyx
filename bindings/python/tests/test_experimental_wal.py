@@ -140,3 +140,69 @@ def test_nested_equality_keeps_types_and_null(tmp_path,backend):
     values=read(db,'RETURN (1=1)=1 AS mixed,(1=1)=(2=2) AS both,NULL=NULL AS missing')
     assert values==[[False,True,None]]
     db.close()
+
+@pytest.mark.parametrize('backend', ['native', 'experimental-wal'])
+def test_typed_scan_through_commit_and_reopen(tmp_path, backend):
+    path = str(tmp_path / 'typed')
+    db = zyxdb.Database(path, backend=backend)
+    values = [False, 0, -0.0, 0.0, True, 1, 1.0, -2.5]
+    with db.begin_transaction() as tx:
+        for i, value in enumerate(values):
+            read(tx, 'CREATE (:Item {id:$k,val:$v})', k=i, v=value)
+        read(tx, 'CREATE (:Item {id:8})')
+        read(tx, 'CREATE (:Item {id:9,val:NULL})')
+    db.close()
+    db = zyxdb.Database(path, backend=backend)
+    lookup = 'MATCH (n:Item) WHERE n.val=$value RETURN n.id AS k,n.val AS v'
+    for value in values + [None]:
+        rows = sorted(read(db, lookup, value=value))
+        expected = [[i,v] for i,v in enumerate(values) if type(v) is type(value) and v == value]
+        assert rows == expected
+        assert all(type(r[1]) is type(value) for r in rows)
+        assert sorted(read(db, 'MATCH (n:Item {val:$value}) RETURN n.id AS k', value=value)) == [[i] for i,_ in expected]
+    assert read(db, 'RETURN true AS yes,2.5 AS d') == [[True, 2.5]]
+    assert len(read(db,'MATCH (n:Item) RETURN n.grp AS missing LIMIT 3')) == 3
+    db.close()
+
+
+def test_shared_checkpoint_from_public_entry(tmp_path):
+    p = tmp_path / 'shared'
+    db = db_at(p)
+    peer = db_at(p)
+    db.create_node('Item', {'id':1, 'val':True})
+    old = peer.begin_read_only_transaction()
+    query = 'MATCH (n:Item) RETURN n.val AS v'
+    assert read(old,query) == [[True]]
+    db.save()
+    for i in range(12):
+        read(db,'MATCH (n:Item {id:1}) SET n.val=$v',v=i+0.5)
+        db.save()
+        assert read(old,query) == [[True]]
+    old.rollback()
+    assert read(peer,query) == [[11.5]]
+    db.close()
+    assert (p/'wal').exists()
+    peer.close()
+    assert list(p.iterdir()) == [p/'main']
+
+
+def test_typed_stream_matches_operator_fallback(tmp_path, monkeypatch):
+    from zyx_development_wal import operators
+    db = db_at(tmp_path/'oracle')
+    db.create_nodes('Item', [{'id': i, 'val': v} for i,v in enumerate([True,1,1.0,-0.0,0.0,None])])
+    tx = db.begin_transaction()
+    read(tx,'MATCH (n:Item {id:0}) SET n.val=$v',v=False)
+    queries = [
+        ('MATCH (n:Item) WHERE $v=n.val RETURN id(n) AS eid,n.val AS v LIMIT 2',{'v':0.0}),
+        ('MATCH (n:Item {val:$v}) RETURN n.val AS v,n.grp AS g',{'v':None}),
+        ('MATCH (n:Item) RETURN n.val AS v,n.id AS k',{}),
+        ('MATCH (n:Item) WHERE n.val=$v RETURN n.id AS k',{'v':False}),
+        ('MATCH (n:Item) WHERE n.val=$v RETURN n.id AS k',{'v':1.0}),
+    ]
+    direct = [read(tx,q,**params) for q,params in queries]
+    monkeypatch.setattr(operators,'projected_scan',lambda *_: None)
+    fallback = [read(tx,q,**params) for q,params in queries]
+    assert repr(direct) == repr(fallback)
+    tx.rollback()
+    assert read(db,'MATCH (n:Item {id:0}) RETURN n.val AS v') == [[True]]
+    db.close()
