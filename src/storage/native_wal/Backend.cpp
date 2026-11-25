@@ -446,12 +446,13 @@ namespace graph::storage::nativewal {
 	};
 	// Schema DDL is a separate auto-commit operation. Read-only opens use Backend.
 	class UniqueBackend final : public Backend, public LogicalGraphSchemaBackend {
-		static LogicalGraphConstraintDefinition definition(const State &s) {
+		static LogicalGraphConstraintDefinition definition(uint64_t revision, const std::string &name,
+														   const std::string &label, const std::string &key) {
 			LogicalGraphConstraintDefinition d;
-			d.constraint_id = s.unique->revision;
-			d.name = s.unique->name;
-			d.label = s.declaration->label;
-			d.property_keys = std::vector<std::string>{s.declaration->key};
+			d.constraint_id = revision;
+			d.name = name;
+			d.label = label;
+			d.property_keys = std::vector<std::string>{key};
 			return d;
 		}
 		[[noreturn]] static void unsupported() { throw std::runtime_error("Native schema operation is unsupported"); }
@@ -479,12 +480,20 @@ namespace graph::storage::nativewal {
 		}
 		std::vector<LogicalGraphConstraintDefinition> listLogicalConstraints(size_t maximum) const override {
 			auto s = schemaJournal().snapshot();
-			if (!s->unique)
-				return {};
-			require(maximum > 0, "Native constraint list exceeds budget");
-			return {definition(*s)};
+			size_t count = size_t(bool(s->unique)) + (s->catalog ? s->catalog->entries.size() : 0);
+			require(count <= maximum, "Native constraint list exceeds budget");
+			std::vector<LogicalGraphConstraintDefinition> result;
+			result.reserve(count);
+			if (s->unique)
+				result.push_back(
+						definition(s->unique->revision, s->unique->name, s->declaration->label, s->declaration->key));
+			if (s->catalog)
+				for (const auto &d: s->catalog->entries)
+					result.push_back(definition(d.revision, d.name, d.label, d.key));
+			std::ranges::sort(result, {}, &LogicalGraphConstraintDefinition::constraint_id);
+			return result;
 		}
-		bool dropLogicalConstraintByName(std::string_view) override { unsupported(); }
+		bool dropLogicalConstraintByName(std::string_view name) override { return schemaJournal().dropUnique(name); }
 		LogicalGraphIndexDefinition createLogicalNodeIndex(const LogicalGraphNodeIndexCreateRequest &) override {
 			unsupported();
 		}

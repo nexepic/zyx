@@ -17,6 +17,7 @@ namespace graph::storage::nativewal {
 		std::shared_ptr<const State> current;
 		void publishBase(std::shared_ptr<State> next, const std::function<void()> &beforePublish = {});
 		void checkpointLocked();
+		void publishSchema(std::shared_ptr<State>, const std::function<void()> &check);
 
 	public:
 		Journal(const std::string &, bool, size_t memory);
@@ -25,6 +26,7 @@ namespace graph::storage::nativewal {
 		std::shared_ptr<const State> snapshot();
 		void commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next, const Changes &);
 		void checkpoint();
+		bool dropUnique(std::string_view name);
 		uint64_t createUnique(const std::string &name, const std::string &label, const std::string &key,
 							  const std::function<void()> &check, const std::function<void(size_t)> &admit);
 	};

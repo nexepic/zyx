@@ -98,6 +98,10 @@ int main(int argc, char **argv) try {
 		std::cout << graph::storage::createNativeWalDatabase(p) << "\n";
 		return 0;
 	}
+	if (op == "other-index") {
+		std::cout << graph::storage::createIndexedNativeWalDatabase(p, "Other", "j") << "\n";
+		return 0;
+	}
 	if (op == "init") {
 		std::cout << graph::storage::createIndexedNativeWalDatabase(p, "Item", "k") << "\n";
 		return 0;
@@ -136,13 +140,125 @@ int main(int argc, char **argv) try {
 		checkLabelTransfer(db);
 		return 0;
 	}
-	if (op == "undeclared") {
-		auto r = db.execute(ddl);
-		check(!r.isSuccess() && r.getError().find("requires its declared") != std::string::npos,
-			  "installed constraint without the declared index");
+	if (op == "dynamic") {
+		const std::string drop = "DROP CONSTRAINT unique_k";
+		auto rollback = db.beginTransaction();
+		check(!rollback.execute(ddl).isSuccess(), "transactional DDL was admitted");
+		rollback.rollback();
+		auto seed = db.beginTransaction();
+		execute(seed, "CREATE (:Item {k:1})");
+		seed.commit();
+		auto old = db.beginReadOnlyTransaction();
+		execute(db, ddl);
+		check(!db.execute(ddl).isSuccess(), "duplicate declaration accepted");
+		check(duplicate(db), "dynamic index absent");
+		auto stale = db.beginTransaction();
+		execute(stale, "CREATE (:Item {k:7})");
+		execute(db, drop);
+		check(!db.execute(drop).isSuccess(), "missing constraint dropped");
+		check(!execute(db, drop + " IF EXISTS").hasNext(), "missing drop returned confirmation");
+		execute(db, ddl);
+		bool conflict = false;
+		try {
+			stale.commit();
+		} catch (const std::exception &e) {
+			conflict = std::string(e.what()).find("Stale") != std::string::npos;
+		}
+		check(conflict, "schema ABA did not fence the old writer");
+		auto pendingWal = db.beginTransaction();
+		execute(pendingWal, "CREATE (:Item {k:8})");
+		pendingWal.commit();
+		auto staged = db.beginTransaction();
+		execute(staged, "CREATE (:Item {k:2})");
+		db.save();
+		staged.commit();
+		count(old, "n.k=2", 0);
+		old.commit();
+		db.close();
+		db.open();
+		check(duplicate(db), "reopen lost uniqueness");
+		execute(db, drop);
+		check(!duplicate(db), "drop still constrained the key");
+		auto rebuild = db.execute(ddl);
+		check(!rebuild.isSuccess() && rebuild.getError().find("duplicate key") != std::string::npos,
+			  "rebuild ignored actual duplicate");
+		execute(db, "CREATE CONSTRAINT another FOR (n:Other) REQUIRE n.value IS UNIQUE");
+		for (int i = 0; i < 2; ++i) {
+			auto other = db.beginTransaction();
+			execute(other, "CREATE (:Other {value:'str'})");
+			bool rejected = false;
+			try {
+				other.commit();
+			} catch (const std::exception &e) {
+				rejected = std::string(e.what()).find("duplicate key") != std::string::npos;
+				if (!rejected)
+					throw;
+			}
+			check(rejected == (i == 1), "new property not protected");
+		}
+		db.close();
+		return 0;
+	}
+	if (op == "several") {
+		const std::string extra = "CREATE CONSTRAINT second FOR(n:Other) REQUIRE n.code IS UNIQUE";
+		execute(db, ddl);
+		execute(db, extra);
+		check(!db.execute("CREATE CONSTRAINT third FOR(n:Other) REQUIRE n.code IS UNIQUE").isSuccess(),
+			  "duplicate scope admitted");
+		auto write = [&](int64_t key, bool accept) {
+			auto tx = db.beginTransaction();
+			execute(tx, "CREATE (:Other {code:" + std::to_string(key) + "})");
+			bool rejected = false;
+			try {
+				tx.commit();
+			} catch (const std::exception &e) {
+				if (std::string(e.what()).find("duplicate key") == std::string::npos)
+					throw;
+				rejected = true;
+			}
+			check(rejected != accept, "secondary scope not enforced");
+		};
+		write(5, true);
+		write(5, false);
+		execute(db, "DROP CONSTRAINT unique_k");
+		db.close();
+		db.open();
+		write(5, false);
+		write(6, true);
+		std::_Exit(0);
+	}
+	if (op == "long-schema-name") {
+		const std::string name(300, 'x');
+		execute(db, "CREATE CONSTRAINT " + name + " FOR(n:Item) REQUIRE n.k IS UNIQUE");
 		auto tx = db.beginTransaction();
-		execute(tx, "CREATE (:Item {k:1}),(:Item {k:1})");
+		execute(tx, "CREATE (:Item {k:1})");
 		tx.commit();
+		std::_Exit(0);
+	}
+	if (op == "recover-long-name") {
+		check(duplicate(db), "long-name declaration absent after WAL recovery");
+		execute(db, "DROP CONSTRAINT " + std::string(300, 'x'));
+		check(!duplicate(db), "long-name drop failed");
+		db.close();
+		return 0;
+	}
+	if (op == "finish-several") {
+		auto result = execute(db, "SHOW CONSTRAINT");
+		check(result.hasNext(), "missing secondary");
+		result.next();
+		check(result.get(0) == zyx::Value(std::string("second")) && !result.hasNext(), "wrong declaration");
+		execute(db, "DROP CONSTRAINT second");
+		auto tx = db.beginTransaction();
+		execute(tx, "CREATE (:Other {code:6})");
+		tx.commit();
+		check(!db.execute("CREATE CONSTRAINT second FOR(n:Other) REQUIRE n.code IS UNIQUE").isSuccess(),
+			  "secondary duplicate survived rebuild");
+		db.close();
+		return 0;
+	}
+	if (op == "accept-drop") {
+		count(db, "n.k=3", 1);
+		check(!duplicate(db), "dropped constraint recovered");
 		db.close();
 		return 0;
 	}
@@ -243,10 +359,10 @@ int main(int argc, char **argv) try {
 		db.close();
 		return 0;
 	}
-	if (op == "ddl") {
+	if (op == "ddl" || op == "drop") {
 		if (argc > 3)
 			setenv("ZYX_TEST_NATIVE_IO", argv[3], 1);
-		auto r = db.execute(ddl);
+		auto r = db.execute(op == "ddl" ? ddl : "DROP CONSTRAINT unique_k");
 		if (!r.isSuccess()) {
 			std::cerr << r.getError() << std::endl;
 			std::_Exit(2);

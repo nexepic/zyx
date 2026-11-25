@@ -215,9 +215,16 @@ namespace graph::storage::nativewal {
 			}
 		};
 		Digest digest(Span b) { return utils::Sha256::digest(b); }
+		std::string_view signature(const State &s) {
+			if (s.catalog || (s.unique && (s.unique->ownsProjection || s.unique->name.size() > 256)))
+				return "ZYXng006";
+			if (s.unique)
+				return "ZYXng005";
+			return s.declaration ? "ZYXng004" : "ZYXng003";
+		}
 		Bytes manifest(const State &s, uint64_t baseSequence, Span base, size_t length, const Digest &hash) {
 			Encoder w(maxState + 256);
-			w.magic(s.unique ? "ZYXng005" : s.declaration ? "ZYXng004" : "ZYXng003");
+			w.magic(signature(s));
 			w.raw(s.identity);
 			w.num(baseSequence);
 			w.num(s.sequence);
@@ -445,7 +452,7 @@ namespace graph::storage::nativewal {
 								buffer.raw(b);
 						};
 						Encoder head(112);
-						head.magic(s.unique ? "ZYXng005" : s.declaration ? "ZYXng004" : "ZYXng003");
+						head.magic(signature(s));
 						head.raw(s.identity);
 						head.num(s.sequence);
 						head.num(s.sequence);
@@ -460,8 +467,25 @@ namespace graph::storage::nativewal {
 						VersionCharge rowBuffer(s.budget, 0);
 						nodeStart = head.bytes.size();
 						std::shared_ptr<IndexedColumn> projection;
+						if (signature(s) == "ZYXng006") {
+							Encoder record(16384);
+							record.num(s.unique ? (s.unique->ownsProjection ? 3 : 2) : (s.declaration ? 1 : 0));
+							record.num(s.catalog ? s.catalog->entries.size() : 0);
+							put(record.bytes);
+							nodeStart += record.bytes.size();
+							if (s.catalog)
+								for (const auto &entry: s.catalog->entries) {
+									record.bytes.clear();
+									record.text(entry.name);
+									record.text(entry.label);
+									record.text(entry.key);
+									record.num(entry.revision);
+									put(record.bytes);
+									nodeStart += record.bytes.size();
+								}
+						}
 						if (s.declaration) {
-							Encoder names(3 * (256 + 8) + 8);
+							Encoder names(16384);
 							names.text(s.declaration->label);
 							names.text(s.declaration->key);
 							if (s.unique) {
@@ -599,9 +623,10 @@ namespace graph::storage::nativewal {
 		Cursor m(main->fd, extent, s->budget, memory);
 		auto head = m.fixed<80>();
 		Decoder r{head};
+		const bool catalogFormat = std::memcmp(head.data(), "ZYXng006", 8) == 0;
 		bool unique = std::memcmp(head.data(), "ZYXng005", 8) == 0;
 		bool indexed = unique || std::memcmp(head.data(), "ZYXng004", 8) == 0;
-		r.magic(unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
+		r.magic(catalogFormat ? "ZYXng006" : unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
 		std::ranges::copy(r.take(16), s->identity.begin());
 		baseSequence = r.num();
 		auto sequence = r.num();
@@ -622,23 +647,48 @@ namespace graph::storage::nativewal {
 			require(s->nodeHigh <= INT64_MAX && s->edgeHigh <= INT64_MAX, "Invalid native base ID high-water mark");
 			auto nodes = c.count(c.remaining() / 16), edges = c.count(c.remaining() / 16);
 			std::shared_ptr<IndexedColumn> projection;
+			auto name = [&](size_t limit) {
+				auto n = c.count(limit);
+				require(n > 0, "Empty native schema name");
+				std::string value(n, char{});
+				c.consume(std::as_writable_bytes(std::span(value)));
+				return value;
+			};
+			bool ownsProjection = false;
+			if (catalogFormat) {
+				const auto mode = c.count(3);
+				indexed = mode >= 1;
+				unique = mode >= 2;
+				ownsProjection = mode == 3;
+				const auto count = c.count(UniqueCatalog::maximum - size_t(unique));
+				require(count <= c.remaining() / 35, "Invalid native schema extent");
+				if (count) {
+					auto catalog = std::make_shared<UniqueCatalog>(s->budget, count);
+					for (size_t i = 0; i < count; ++i) {
+						ScopedUnique entry{name(4096), name(4096), name(1024), c.num()};
+						require(entry.revision && entry.revision <= baseSequence &&
+										(!i || entry.revision > catalog->entries.back().revision),
+								"Invalid native schema revision");
+						catalog->append(entry);
+					}
+					s->catalog = std::move(catalog);
+				}
+			}
 			if (indexed) {
-				auto name = [&] {
-					auto n = c.count(256);
-					require(n > 0, "Empty native index name");
-					std::string value(n, char{});
-					c.consume(std::as_writable_bytes(std::span(value)));
-					return value;
-				};
-				s->declaration = std::make_shared<ColumnDeclaration>(ColumnDeclaration{name(), name()});
+				s->declaration = std::make_shared<ColumnDeclaration>(ColumnDeclaration{name(4096), name(1024)});
 				if (unique) {
-					auto constraint = name();
+					auto constraint = name(4096);
 					auto revision = c.num();
 					require(revision && revision <= baseSequence, "Invalid unique declaration revision");
-					s->unique = std::make_shared<UniqueDeclaration>(UniqueDeclaration{std::move(constraint), revision});
+					s->unique = std::make_shared<UniqueDeclaration>(
+							UniqueDeclaration{std::move(constraint), revision, ownsProjection});
 				}
 				projection = std::make_shared<IndexedColumn>(s->budget);
 			}
+			// A subsequent receipt must select the same format as its sealed
+			// anchor, including when the catalog has just one long durable name.
+			require(signature(*s) == std::string_view(reinterpret_cast<const char *>(head.data()), 8),
+					"Noncanonical native schema header");
 			const bool lazy = c.remaining() > std::min(size_t(256 * 1024), memory / 2);
 			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode) {
 				uint64_t prior = 0;
@@ -677,6 +727,22 @@ namespace graph::storage::nativewal {
 				s->column = std::move(projection);
 			}
 			baseDigest = finish(c);
+			if (s->catalog) {
+				VersionCharge audit(s->budget, (s->catalog->entries.size() + 1) * 256);
+				std::set<std::string_view> names;
+				std::set<std::pair<std::string_view, std::string_view>> scopes;
+				std::set<uint64_t> revisions;
+				if (s->unique) {
+					names.insert(s->unique->name);
+					scopes.emplace(s->declaration->label, s->declaration->key);
+					revisions.insert(s->unique->revision);
+				}
+				for (const auto &entry: s->catalog->entries)
+					require(names.insert(entry.name).second && scopes.emplace(entry.label, entry.key).second &&
+									revisions.insert(entry.revision).second,
+							"Duplicate native schema declaration");
+				validateCatalog(*s);
+			}
 			// Every posting was reconstructed from its row and matched to the
 			// sealed base. With complete integer coverage, adjacent keys are
 			// an exhaustive uniqueness audit, including an empty declaration.
@@ -713,7 +779,7 @@ namespace graph::storage::nativewal {
 			Cursor a(anchor.first->fd, anchor.second, s->budget, memory);
 			auto ah = a.fixed<80>();
 			Decoder ar{ah};
-			ar.magic(unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
+			ar.magic(catalogFormat ? "ZYXng006" : unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
 			require(std::ranges::equal(ar.take(16), s->identity) && ar.num() == baseSequence &&
 							ar.num() == baseSequence && ar.num() == 0 && std::ranges::equal(ar.take(32), digest({})),
 					"Native graph base generation mismatch");
@@ -732,6 +798,7 @@ namespace graph::storage::nativewal {
 				UniqueDelta check(*s, uniqueOwners);
 				applyDelta(*s, delta, check);
 				check.validate(*s);
+				validateCatalog(*s);
 				s->sequence = seq;
 				check.advance(*s);
 				size_t padding = (alignment - log.position % alignment) % alignment;
@@ -776,16 +843,76 @@ namespace graph::storage::nativewal {
 								   const std::function<void()> &check, const std::function<void(size_t)> &admit) {
 		std::lock_guard lock(gate);
 		require(!readOnly && !poisoned, "Native schema writer unavailable");
-		require(!name.empty() && name.size() <= 256 && !current->unique && current->declaration &&
-						current->declaration->key == key && current->declaration->label == label,
-				"Native UNIQUE requires its declared node property index");
+		require(!name.empty() && name.size() <= 4096 && !key.empty() && key.size() <= 1024 && !label.empty() &&
+						label.size() <= 4096,
+				"Invalid native UNIQUE name or scope");
+		const bool matchesColumn =
+				current->declaration && current->declaration->label == label && current->declaration->key == key;
+		const auto clashes = [&](const ScopedUnique &d) {
+			return d.name == name || (d.label == label && d.key == key);
+		};
+		require(!(current->unique && (current->unique->name == name || matchesColumn)) &&
+						(!current->catalog || std::ranges::none_of(current->catalog->entries, clashes)),
+				"System Catalog constraint definition duplicates a durable name or schema");
+		require(!current->catalog ||
+						current->catalog->entries.size() + size_t(bool(current->unique)) < UniqueCatalog::maximum,
+				"Native constraint catalog is full");
 		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
 		auto next = std::make_shared<State>(*current);
 		++next->sequence;
-		next->unique = std::make_shared<UniqueDeclaration>(UniqueDeclaration{name, next->sequence});
-		validateUnique(*next, check, admit);
+		ScopedUnique entry{name, label, key, next->sequence};
+		validateScope(*next, entry, check, admit);
+		if (!next->declaration || (matchesColumn && !next->unique)) {
+			const bool ownsProjection = !next->declaration;
+			if (ownsProjection)
+				next->declaration = std::make_shared<ColumnDeclaration>(ColumnDeclaration{label, key});
+			next->unique = std::make_shared<UniqueDeclaration>(UniqueDeclaration{name, next->sequence, ownsProjection});
+		} else {
+			size_t count = next->catalog ? next->catalog->entries.size() : 0;
+			auto catalog = std::make_shared<UniqueCatalog>(next->budget, count + 1);
+			if (next->catalog)
+				for (const auto &existing: next->catalog->entries)
+					catalog->append(existing);
+			catalog->append(entry);
+			next->catalog = std::move(catalog);
+		}
+		publishSchema(std::move(next), check);
+		return current->sequence;
+	}
+	bool Journal::dropUnique(std::string_view name) {
+		std::lock_guard lock(gate);
+		require(!readOnly && !poisoned, "Native schema writer unavailable");
+		const bool primary = current->unique && current->unique->name == name;
+		if (!primary && (!current->catalog || std::ranges::find(current->catalog->entries, name, &ScopedUnique::name) ==
+													  current->catalog->entries.end()))
+			return false;
+		require(current->sequence < UINT64_MAX, "Native graph sequence exhausted");
+		auto next = std::make_shared<State>(*current);
+		++next->sequence;
+		if (primary && next->unique->ownsProjection) {
+			next->declaration.reset();
+			next->column.reset();
+			next->changedColumn.reset();
+			next->columnOverflow = false;
+		}
+		if (primary)
+			next->unique.reset();
+		else if (next->catalog->entries.size() == 1)
+			next->catalog.reset();
+		else {
+			auto catalog = std::make_shared<UniqueCatalog>(next->budget, next->catalog->entries.size() - 1);
+			for (const auto &existing: next->catalog->entries)
+				if (existing.name != name)
+					catalog->append(existing);
+			next->catalog = std::move(catalog);
+		}
+		publishSchema(std::move(next), {});
+		return true;
+	}
+	void Journal::publishSchema(std::shared_ptr<State> next, const std::function<void()> &check) {
 		if (check)
 			check();
+		bool crossedPublicationBoundary = false;
 		bool cancelledBeforeRename = false;
 		auto beforePublish = [&] {
 			try {
@@ -795,11 +922,17 @@ namespace graph::storage::nativewal {
 				cancelledBeforeRename = true;
 				throw;
 			}
+			crossedPublicationBoundary = true;
 		};
 		try {
 			files->checkAuthority();
 			publishBase(std::move(next), beforePublish);
-			return current->sequence;
+		} catch (const std::length_error &) {
+			poisoned = crossedPublicationBoundary;
+			throw;
+		} catch (const std::bad_alloc &) {
+			poisoned = crossedPublicationBoundary;
+			throw;
 		} catch (...) {
 			if (!cancelledBeforeRename)
 				poisoned = true;
@@ -838,6 +971,8 @@ namespace graph::storage::nativewal {
 				check.observe(id, check.key(*current, id), check.key(*next, id));
 			check.validate(*next);
 		}
+		if (!changed.nodes.empty())
+			validateCatalog(*next);
 		auto delta = encodeDelta(*next, changed);
 		try {
 			files->checkAuthority();
@@ -910,6 +1045,7 @@ namespace graph::storage::nativewal {
 		unavailable();
 	}
 	void Journal::checkpoint() { unavailable(); }
+	bool Journal::dropUnique(std::string_view) { unavailable(); }
 	uint64_t Journal::createUnique(const std::string &, const std::string &, const std::string &,
 								   const std::function<void()> &, const std::function<void(size_t)> &) {
 		unavailable();

@@ -38,7 +38,46 @@ with tempfile.TemporaryDirectory() as d:
     run("large-delta", clone(active, "large-delta"))
     run("owner-limit", clone(active, "owner-limit"))
     unindexed = Path(run("unindexed", root / "unindexed"))
-    run("undeclared", unindexed)
+    run("dynamic", unindexed)
+    long_name = Path(run("init", root / "long-schema-name"))
+    run("long-schema-name", long_name)
+    run("recover-long-name", long_name)
+    for init in ("init", "unindexed"):
+        several = Path(run(init, root / ("several-" + init)))
+        run("several", several)
+        run("finish-several", several)
+    derived = Path(run("unindexed", root / "derived"))
+    run("seed", derived)
+    for event, code in events:
+        visible = code == 0 or event.split("=")[0] in ("renamed", "dirsync", "dirsynced")
+        p = clone(derived, "derived-create-" + event)
+        run("ddl", p, "m." + event, code=code)
+        run("defined" if visible else "old", p)
+    run("ddl", derived)
+    independent = root / "independent-dynamic"
+    independent.mkdir()
+    shutil.copyfile(derived, independent / "main")
+    run("defined", independent / "main")
+    run("drop", independent / "main")
+    run("old", independent / "main")
+    run("defined", derived)
+    # The extended schema header is part of the root. A freshly sealed
+    # impossible catalog extent must be rejected before opening a snapshot.
+    impossible = clone(derived, "invalid-catalog")
+    bad_header = bytearray(impossible.read_bytes()[:-32])
+    assert bad_header[:8] == b"ZYXng006" and struct.unpack_from("<QQ", bad_header, 112) == (3, 0)
+    struct.pack_into("<Q", bad_header, 120, 2**64 - 1)
+    impossible.write_bytes(bad_header + hashlib.sha256(bad_header).digest())
+    run("defined", impossible, code=1)
+    run("change", derived)  # DROP folds an already acknowledged WAL into the new base.
+    for event, code in events:
+        visible = code == 0 or event.split("=")[0] in ("renamed", "dirsync", "dirsynced")
+        p = clone(derived, "derived-drop-" + event)
+        run("drop", p, "m." + event, code=code)
+        if visible:
+            run("accept-drop", p)
+        else:
+            run("changed", p)
     # Produce matching integer columns and postings with a duplicate using a
     # real unconstrained writer. Re-seal the same base with a declaration:
     # successful byte authentication must still fail its semantic audit.
@@ -55,27 +94,33 @@ with tempfile.TemporaryDirectory() as d:
     image[pos:pos] = struct.pack("<Q", 1) + b"u" + image[24:32]
     fabricated.write_bytes(image + hashlib.sha256(image).digest())
     run("defined", fabricated, code=1, error="duplicate key")
-    prefix = clone(active, "prefix")
-    run("prefix", prefix)
-    run("accept-prefix", clone(prefix, "legal-prefix"))
-    truncated = clone(prefix, "truncated-prefix")
-    with truncated.with_suffix(".wal").open("r+b") as f:
-        f.truncate(os.fstat(f.fileno()).st_size - 1)
-    run("accept-prefix", truncated, code=1, error="Missing native graph WAL prefix")
-    # Keep both WAL transactions, use a duplicate in the first and leave the
-    # later repair intact. The receipt authenticates these exact modified bytes.
-    log = prefix.with_suffix(".wal")
-    contents = log.read_bytes()
-    marker = struct.pack("<Q", 4328719365)
-    assert contents.count(marker) == 1
-    invalid = contents.replace(marker, struct.pack("<Q", 1))
-    log.write_bytes(invalid)
-    receipt = bytearray(prefix.read_bytes())
-    assert len(receipt) == 112 and receipt[48:80] == hashlib.sha256(contents).digest()
-    receipt[48:80] = hashlib.sha256(invalid).digest()
-    receipt[80:] = hashlib.sha256(receipt[:80]).digest()
-    prefix.write_bytes(receipt)
-    run("accept-prefix", prefix, code=1, error="duplicate key")
+    unrelated = Path(run("other-index", root / "unrelated-index"))
+    run("seed", unrelated)
+    run("ddl", unrelated)
+    # Also exercise the authoritative fallback against a different column's
+    # legitimately empty postings, including the illegal intermediate prefix.
+    for tag, template in (("projected", active), ("other-column", unrelated)):
+        prefix = clone(template, tag + "-prefix")
+        run("prefix", prefix)
+        run("accept-prefix", clone(prefix, tag + "-legal-prefix"))
+        truncated = clone(prefix, tag + "-truncated-prefix")
+        with truncated.with_suffix(".wal").open("r+b") as f:
+            f.truncate(os.fstat(f.fileno()).st_size - 1)
+        run("accept-prefix", truncated, code=1, error="Missing native graph WAL prefix")
+        # Keep both WAL transactions, use a duplicate in the first and leave the
+        # later repair intact. The receipt authenticates these exact modified bytes.
+        log = prefix.with_suffix(".wal")
+        contents = log.read_bytes()
+        marker = struct.pack("<Q", 4328719365)
+        assert contents.count(marker) == 1
+        invalid = contents.replace(marker, struct.pack("<Q", 1))
+        log.write_bytes(invalid)
+        receipt = bytearray(prefix.read_bytes())
+        assert len(receipt) == 112 and receipt[48:80] == hashlib.sha256(contents).digest()
+        receipt[48:80] = hashlib.sha256(invalid).digest()
+        receipt[80:] = hashlib.sha256(receipt[:80]).digest()
+        prefix.write_bytes(receipt)
+        run("accept-prefix", prefix, code=1, error="duplicate key")
     # Copy only a closed, independently durable root. The writable copy can
     # advance and enforce its declaration without changing the source.
     run("defined", active)  # Close the writable source cleanly before copying.
@@ -99,4 +144,4 @@ with tempfile.TemporaryDirectory() as d:
     foreign=Path(run("init",root/"foreign"));run("seed",foreign);run("ddl",foreign);run("change",foreign)
     for ext in (".wal",".base"):
         p=clone(confirmed,"wrong"+ext);shutil.copyfile(foreign.with_suffix(ext),p.with_suffix(ext));run("changed",p,code=1)
-    print("Public UNIQUE, snapshot fencing, cancellation, mixed key changes, NULL/missing, WAL replay, foreign/missing dependencies and 35 fault cases passed")
+    print("Public UNIQUE, snapshot fencing, cancellation, mixed key changes, NULL/missing, WAL replay, foreign/missing dependencies and 49 fault cases passed")

@@ -21,8 +21,32 @@ namespace graph::storage::nativewal {
 	struct UniqueDeclaration {
 		std::string name;
 		uint64_t revision;
+		bool ownsProjection = false;
+	};
+	// Additional scopes share the transaction root and use authoritative row
+	// validation when the single projected column belongs to another scope.
+	struct ScopedUnique {
+		std::string name, label, key;
+		uint64_t revision;
+	};
+	struct UniqueCatalog {
+		static constexpr size_t maximum = 65536;
+		VersionCharge charge;
+		std::vector<ScopedUnique> entries;
+		size_t retained;
+		UniqueCatalog(const std::shared_ptr<VersionBudget> &budget, size_t count) :
+			charge(budget, sizeof(UniqueCatalog) + count * sizeof(ScopedUnique)),
+			retained(sizeof(UniqueCatalog) + count * sizeof(ScopedUnique)) {
+			entries.reserve(count);
+		}
+		void append(const ScopedUnique &d) {
+			retained += d.name.size() + d.label.size() + d.key.size() + 3;
+			charge.growTo(retained);
+			entries.push_back(d);
+		}
 	};
 	struct State {
+		std::shared_ptr<const UniqueCatalog> catalog;
 		std::shared_ptr<const UniqueDeclaration> unique;
 		Identity identity{};
 		std::shared_ptr<const ColumnDeclaration> declaration;
@@ -63,6 +87,9 @@ namespace graph::storage::nativewal {
 			budget(std::make_shared<VersionBudget>(memory)), nodes(budget), edges(budget) {}
 		size_t encodedSize() const { return 32 + nodes.encodedBytes() + edges.encodedBytes(); }
 	};
+	void validateScope(const State &, const ScopedUnique &, const std::function<void()> & = {},
+					   const std::function<void(size_t)> & = {});
+	void validateCatalog(const State &);
 	void validateUnique(const State &, const std::function<void()> &check = {},
 						const std::function<void(size_t)> &admit = {});
 	struct Changes {

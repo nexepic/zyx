@@ -504,7 +504,9 @@ int main(int argc, char **argv) try {
 		expect(rejected, "Accepted dangling edge");
 		bad.rollback();
 		auto ddl = db.execute("CREATE CONSTRAINT experiment_key FOR (n:Owner) REQUIRE n.i IS UNIQUE");
-		expect(!ddl.isSuccess(), "Claimed an unsupported persistent constraint");
+		expect(ddl.isSuccess(), "Could not publish a single-property native UNIQUE");
+		auto unsupported = db.execute("CREATE CONSTRAINT experiment_nn FOR (n:Owner) REQUIRE n.i IS NOT NULL");
+		expect(!unsupported.isSuccess(), "Claimed an unsupported NOT NULL constraint");
 		return 0;
 	}
 	if (op == "rollover-value") {

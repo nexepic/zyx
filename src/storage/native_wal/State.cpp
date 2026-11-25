@@ -234,6 +234,15 @@ namespace graph::storage::nativewal {
 		if (!s.unique)
 			return;
 		require(bool(s.declaration), "Missing native UNIQUE scope");
+		validateScope(s, {s.unique->name, s.declaration->label, s.declaration->key, s.unique->revision}, check, admit);
+	}
+	void validateCatalog(const State &s) {
+		if (s.catalog)
+			for (const auto &entry: s.catalog->entries)
+				validateScope(s, entry);
+	}
+	void validateScope(const State &s, const ScopedUnique &scope, const std::function<void()> &check,
+					   const std::function<void(size_t)> &admit) {
 		VersionCharge retained(s.budget, 0);
 		std::set<Bytes> keys;
 		size_t charged = 0;
@@ -243,9 +252,9 @@ namespace graph::storage::nativewal {
 			if (admit)
 				admit(row.encodedBytes());
 			const auto &n = row->second;
-			if (std::ranges::find(n.labels, s.declaration->label) == n.labels.end())
+			if (std::ranges::find(n.labels, scope.label) == n.labels.end())
 				return true;
-			const auto field = std::ranges::find(n.properties, s.declaration->key, &LogicalGraphPropertyEntry::key);
+			const auto field = std::ranges::find(n.properties, scope.key, &LogicalGraphPropertyEntry::key);
 			if (field == n.properties.end() || field->value.getType() == PropertyType::NULL_TYPE)
 				return true;
 			VersionCharge scratch(s.budget, 4 * row.encodedBytes() + 4096);
@@ -253,7 +262,7 @@ namespace graph::storage::nativewal {
 			charged += key.capacity() + sizeof(Bytes) + 64;
 			retained.growTo(charged);
 			if (!keys.insert(std::move(key)).second)
-				throw UniqueViolation("Constraint violation: '" + s.unique->name + "' has a duplicate key");
+				throw UniqueViolation("Constraint violation: '" + scope.name + "' has a duplicate key");
 			return true;
 		});
 	}
