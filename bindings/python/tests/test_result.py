@@ -90,11 +90,17 @@ class TestResultIteration:
         assert vals == {1, 2}
 
     def test_fetchmany(self, db):
-        db.execute("CREATE (n:T {x: 1})")
-        db.execute("CREATE (n:T {x: 2})")
-        db.execute("CREATE (n:T {x: 3})")
-        rows = db.execute("MATCH (n:T) RETURN n.x AS x").fetchmany(2)
-        assert len(rows) == 2
+        result = db.execute("UNWIND [1, 2, 3, 4] AS x RETURN x ORDER BY x")
+        assert [r["x"] for r in result.fetchmany(2)] == [1, 2]
+        assert result.fetchone()["x"] == 3
+        assert [r["x"] for r in result.fetchmany(2)] == [4]
+        assert result.fetchone() is None
+
+    @pytest.mark.parametrize("size", [0, -1])
+    def test_fetchmany_nonpositive_preserves_next_row(self, db, size):
+        result = db.execute("RETURN 42 AS answer")
+        assert result.fetchmany(size) == []
+        assert result.fetchone()["answer"] == 42
 
     def test_single(self, db):
         db.execute("CREATE (n:T {x: 42})")

@@ -115,12 +115,7 @@ class Result:
 
     def fetchmany(self, size: int) -> list[Record]:
         """Fetch up to *size* rows."""
-        result = []
-        for i, record in enumerate(self):
-            if i >= size:
-                break
-            result.append(record)
-        return result
+        return [record for _, record in zip(range(size), self)]
 
     def single(self, strict: bool = True) -> Record:
         """Return the single result row.
