@@ -33,6 +33,8 @@
 #include "graph/storage/StorageBackend.hpp"
 #include "graph/storage/StorageBackendFactory.hpp"
 
+namespace zyx { class PublishedSnapshot; }
+
 namespace graph::storage {
 	class RelocatableStorageBackend;
 }
@@ -47,6 +49,7 @@ namespace graph {
 		~Database();
 
 		void open();
+		void openPublishedSnapshot(const zyx::PublishedSnapshot &witness);
 		[[nodiscard]] bool openIfExists();
 		void flush() const;
 		void close() const;

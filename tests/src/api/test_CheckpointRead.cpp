@@ -609,3 +609,69 @@ TEST_F(CheckpointReadTest, DeclaredIndexIsBoundToOneExportAndItsCompleteLiveRows
 			EXPECT_EQ(ids, (std::vector<int64_t>{1, 3}));
 	}
 }
+
+TEST_F(CheckpointReadTest, WitnessIsIssuedForOnePinnedPublicationAndRejectsRebinding) {
+	auto dir = std::filesystem::path(path.string() + ".publication");
+	std::filesystem::create_directory(dir);
+	struct Cleanup {
+		std::filesystem::path dir;
+		~Cleanup() { std::error_code ec; std::filesystem::remove_all(dir, ec); }
+	} cleanup{dir};
+	zyx::Database source((dir / "live").string()), other((dir / "other").string());
+	source.open();
+	other.open();
+	auto prepare = [](zyx::Database &db) {
+		auto rows = db.execute("CREATE (:K {K:17}),(:K {K:19})");
+		ASSERT_TRUE(rows.isSuccess()) << rows.getError();
+		while (rows.hasNext()) rows.next();
+		ASSERT_TRUE(rows.isSuccess());
+		auto ddl = db.execute("CREATE INDEX k FOR (n:K) ON (n.K)");
+		ASSERT_TRUE(ddl.isSuccess()) << ddl.getError();
+	};
+	prepare(source);
+	prepare(other);
+	auto a = source.beginReadOnlyTransaction();
+	auto foreign = other.beginReadOnlyTransaction();
+	auto publish = [&](zyx::Database &db, const zyx::Transaction &tx, const char *file) {
+		std::ofstream dst(dir / file, std::ios::binary);
+		auto witness = db.publishColumnSnapshot(tx, dst);
+		dst.close();
+		EXPECT_TRUE(dst);
+		return witness;
+	};
+	std::ostringstream untouched;
+	EXPECT_THROW(source.publishColumnSnapshot(foreign, untouched), std::logic_error);
+	auto write = source.beginTransaction();
+	EXPECT_THROW(source.publishColumnSnapshot(write, untouched), std::logic_error);
+	ASSERT_EQ(untouched.str(), "");
+	(void)write.createNode("K", {{"K", int64_t(17)}});
+	write.commit();
+	auto wa = publish(source, a, "A");
+	a.commit();
+	EXPECT_THROW(source.publishColumnSnapshot(a, untouched), std::logic_error);
+	auto b = source.beginReadOnlyTransaction();
+	auto wb = publish(source, b, "B");
+	auto wf = publish(other, foreign, "foreign");
+	EXPECT_NE(wa.root(), wf.root());
+	EXPECT_NE(wa.root(), wb.root());
+	zyx::Database wrong((dir / "A").string());
+	EXPECT_THROW(wrong.openPublishedSnapshot(wf), std::runtime_error);
+	EXPECT_THROW(wrong.openPublishedSnapshot(wb), std::runtime_error);
+	EXPECT_FALSE(wrong.hasActiveTransaction());
+	for (auto withProof : {true, false}) {
+		for (auto later : {true, false}) {
+			zyx::Database copy((dir / (later ? "B" : "A")).string());
+			if (withProof) copy.openPublishedSnapshot(later ? wb : wa);
+			else copy.open();
+			auto result = copy.execute("MATCH (n:K) WHERE n.K=17 RETURN id(n) ORDER BY id(n)");
+			ASSERT_TRUE(result.isSuccess()) << result.getError();
+			std::vector<int64_t> ids;
+			while (result.hasNext()) {
+				result.next();
+				ids.push_back(std::get<int64_t>(result.get(0)));
+			}
+			EXPECT_EQ(ids, later ? (std::vector<int64_t>{1,3}) : (std::vector<int64_t>{1}));
+			ASSERT_TRUE(result.isSuccess());
+		}
+	}
+}

@@ -162,14 +162,15 @@ namespace graph::storage {
 				append(payload, b);
 			}
 		};
-		void finishSnapshot(std::ostream &out, Builder &w, const Bytes &directory) {
+		std::array<std::byte, 32> finishSnapshot(std::ostream &out, Builder &w, const Bytes &directory) {
 			Bytes footer;
 			put(footer, w.offset);
 			put(footer, directory.size());
 			Hash hash;
 			hash.update(footer);
 			hash.update(directory);
-			append(footer, hash.finalize());
+			const auto root = hash.finalize();
+			append(footer, root);
 			write(out, directory);
 			write(out, footer);
 			auto end = out.tellp();
@@ -178,6 +179,7 @@ namespace graph::storage {
 			out.seekp(end);
 			out.flush();
 			check(bool(out), "cp003 export flush failed");
+			return root;
 		}
 
 	} // namespace
@@ -243,8 +245,8 @@ namespace graph::storage {
 			std::array<std::byte, 32> digest;
 		};
 	} // namespace
-	static void writeTokenized(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns,
-							   std::optional<SnapshotNodeIndex> index) {
+	static std::array<std::byte, 32> writeTokenized(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns,
+							   std::optional<SnapshotNodeIndex> index, const LogicalGraphMutationFence *origin = nullptr) {
 		check(out.tellp() == 0, "Snapshot export requires a new empty stream");
 		Dictionary dict;
 		{
@@ -404,7 +406,19 @@ namespace graph::storage {
 		while (!lanes.empty())
 			flush(lanes.begin());
 		Bytes directory;
-		put(directory, index && !postings.empty() ? 2 : unsigned(columns));
+		const auto layout = index && !postings.empty() ? 2U : unsigned(columns);
+		put(directory, origin ? layout + 2 : layout);
+		if (origin) {
+			// Canonical little-endian encoding also covers the native WAL UUID
+			// and sequence, or relocatable database ID and graph/schema revisions.
+			Bytes identity;
+			put(identity, origin->backend_token);
+			put(identity, origin->format_token);
+			for (auto word : origin->graph_state_tokens) put(identity, word);
+			put(identity, origin->logical_revision);
+			for (auto word : origin->data_page_root_tokens) put(identity, word);
+			append(directory, Hash::digest(identity));
+		}
 		for (const auto &table: dict.names) {
 			put(directory, table.size());
 			for (const auto &word: table) {
@@ -440,7 +454,14 @@ namespace graph::storage {
 		check(directory.size() <= maxDirectory && w.dir.size() <= maxDirectory - directory.size(),
 			  "Snapshot directory too large");
 		append(directory, w.dir);
-		finishSnapshot(out, w, directory);
+		return finishSnapshot(out, w, directory);
+	}
+
+	std::array<std::byte, 32> publishTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out) {
+		auto origin = source.mutationFence();
+		check(origin && origin->isValid(), "Column publication lacks a stable source identity");
+		auto *catalog = dynamic_cast<const SnapshotNodeIndexSource *>(&source);
+		return writeTokenized(source, out, true, catalog ? catalog->singleNodePropertyIndex() : std::nullopt, &*origin);
 	}
 
 	void exportTokenizedSnapshot(const LogicalGraphReadSnapshot &source, std::ostream &out, bool columns) {
@@ -491,7 +512,7 @@ namespace graph::storage {
 				check(bool(in.read(reinterpret_cast<char *>(b.data()), n)), "Incomplete cp003 read");
 				return b;
 			}
-			Image(const std::string &path, size_t budget) {
+			Image(const std::string &path, size_t budget, const zyx::PublishedSnapshot *witness) {
 				in.rdbuf()->pubsetbuf(nullptr, 0);
 				in.open(path, std::ios::binary | std::ios::ate);
 				auto end = in.tellg();
@@ -521,6 +542,8 @@ namespace graph::storage {
 				hash.update(d);
 				auto digest = hash.finalize();
 				check(std::ranges::equal(digest, c.b), "Invalid cp003 directory digest");
+				if (witness)
+					check(v4 && digest == witness->root(), "Wrong projected snapshot publication root");
 				fence.backend_token = 0x6370303033ULL;
 				fence.format_token = v4 ? 4 : 3;
 				Cursor dc{digest};
@@ -530,7 +553,13 @@ namespace graph::storage {
 				size_t dictionaryBytes = 0;
 				if (v4) {
 					auto mode = r.num();
-					check(mode <= 2, "Invalid snapshot layout");
+					check(mode <= 4, "Invalid snapshot layout");
+					if (mode >= 3) {
+						r.take(32); // Source identity is covered by the publication root.
+						mode -= 2;
+					} else {
+						check(!witness, "Snapshot lacks published provenance");
+					}
 					columns = mode != 0;
 					dictionary.emplace();
 					for (auto &table: dictionary->names) {
@@ -786,7 +815,7 @@ namespace graph::storage {
 
 		public:
 			explicit Snapshot(std::shared_ptr<const Image> image) : img(std::move(image)) {}
-			static void validateIndex(const std::shared_ptr<Image> &image) {
+			static void validateIndex(const std::shared_ptr<Image> &image, bool witnessed) {
 				if (!image->descriptor)
 					return;
 				const auto &d = *image->descriptor;
@@ -808,7 +837,15 @@ namespace graph::storage {
 						entries.push_back(p);
 					}
 				}
+				if (!witnessed)
+					auditCoverage(image, entries);
+				lease.set(entries.capacity() * sizeof(Posting));
+				image->postings = std::move(entries);
+				image->postingLease.emplace(std::move(lease));
+			}
+			static void auditCoverage(const std::shared_ptr<Image> &image, const std::vector<Posting> &entries) {
 				Snapshot audit(image);
+				const auto &d = *image->descriptor;
 				std::array keys{image->dict()->lookup(NameSpace::NS_PROPERTY, d.key)};
 				size_t nodes = 0, values = 0;
 				image->visit(0, 0, [&](uint64_t id, Cursor c) {
@@ -841,9 +878,6 @@ namespace graph::storage {
 					return true;
 				});
 				check(values == entries.size(), "Surplus snapshot index postings");
-				lease.set(entries.capacity() * sizeof(Posting));
-				image->postings = std::move(entries);
-				image->postingLease.emplace(std::move(lease));
 				debug::PerfTrace::addValue("snapshot.index.audit_nodes", nodes);
 				debug::PerfTrace::addValue("snapshot.index.audit_values", values);
 			}
@@ -1333,14 +1367,16 @@ namespace graph::storage {
 							  public LogicalGraphTransactionalBackend {
 			std::string path;
 			size_t budget;
+			std::optional<zyx::PublishedSnapshot> witness;
 			std::shared_ptr<const Image> image;
 
 		public:
-			Backend(std::string file, size_t bytes) : path(std::move(file)), budget(bytes) {}
+			Backend(std::string file, size_t bytes, std::optional<zyx::PublishedSnapshot> proof = {}) :
+				path(std::move(file)), budget(bytes), witness(std::move(proof)) {}
 			void open() override {
 				if (!image) {
-					auto next = std::make_shared<Image>(path, budget);
-					Snapshot::validateIndex(next);
+					auto next = std::make_shared<Image>(path, budget, witness ? &*witness : nullptr);
+					Snapshot::validateIndex(next, witness.has_value());
 					image = std::move(next);
 				}
 			}
@@ -1368,6 +1404,10 @@ namespace graph::storage {
 			}
 		};
 	} // namespace
+	std::shared_ptr<StorageBackend> openPublishedSegmentedBackend(const std::string &path, size_t bytes,
+																 const zyx::PublishedSnapshot &witness) {
+		return std::make_shared<Backend>(path, bytes, witness);
+	}
 	std::shared_ptr<StorageBackend> openSegmentedBackend(const std::string &path, size_t bytes) {
 		return std::make_shared<Backend>(path, bytes);
 	}

@@ -32,6 +32,7 @@
 #include <utility>
 #include <vector>
 #include "value.hpp"
+#include "published_snapshot.hpp"
 
 namespace zyx {
 
@@ -300,6 +301,12 @@ namespace zyx {
         void exportSegmentedSnapshot(std::ostream &destination) const;
 		enum class SnapshotLayout { SL_SEGMENTED_ROW, SL_TOKEN_ROW, SL_TOKEN_COLUMN, SL_INDEXED_TOKEN_COLUMN };
 		void exportSegmentedSnapshot(std::ostream &destination, SnapshotLayout layout) const;
+		// Export a committed pinned column projection. The in-process witness
+		// attests the emitted root, independently of subsequent stream storage.
+		[[nodiscard]] PublishedSnapshot publishColumnSnapshot(const Transaction &reader, std::ostream &destination) const;
+		// The witness authenticates the requested immutable publication. An
+		// ordinary open of an independent file still audits its index coverage.
+		void openPublishedSnapshot(const PublishedSnapshot &witness) const;
 		void save() const; // Flushes data to disk
 
 		// Transaction support

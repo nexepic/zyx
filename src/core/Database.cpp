@@ -19,6 +19,7 @@
  **/
 
 #include "graph/core/Database.hpp"
+#include "graph/storage/SegmentedSnapshot.hpp"
 #include <filesystem>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -68,6 +69,16 @@ namespace graph {
 		}
 
 		// ThreadPool and QueryEngine are deferred to first use.
+	}
+
+	void Database::openPublishedSnapshot(const zyx::PublishedSnapshot &witness) {
+		if (backend_)
+			throw std::logic_error("A publication requires a fresh database handle");
+		if (!std::filesystem::is_regular_file(dbPath))
+			throw std::runtime_error("A publication must name an existing regular file");
+		auto verified = storage::openPublishedSegmentedBackend(dbPath, cacheSize_, witness);
+		verified->open();
+		backend_ = std::move(verified);
 	}
 
 	bool Database::openIfExists() {

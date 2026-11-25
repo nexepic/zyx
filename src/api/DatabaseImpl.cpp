@@ -1484,6 +1484,19 @@ namespace zyx {
 		}
 		throw std::invalid_argument("Unknown snapshot property layout");
 	}
+	PublishedSnapshot Database::publishColumnSnapshot(const Transaction &reader, std::ostream &destination) const {
+		if (!reader.impl_ || reader.impl_->dbImpl_ != impl_.get() || !reader.isActive() || !reader.isReadOnly())
+			throw std::logic_error("Column publication requires an active local read-only transaction");
+		const auto kind = impl_->db_.getStorageBackend()->formatKind();
+		using Kind = graph::storage::StorageFormatKind;
+		if (kind != Kind::SFM_NATIVE_WAL && kind != Kind::SFM_RELOCATABLE)
+			throw std::logic_error("Column publication requires a native source database");
+		return PublishedSnapshot(graph::storage::publishTokenizedSnapshot(reader.impl_->logical_txn_->readSnapshot(),
+																		 destination));
+	}
+	void Database::openPublishedSnapshot(const PublishedSnapshot &witness) const {
+		impl_->db_.openPublishedSnapshot(witness);
+	}
 	void Database::save() const { impl_->db_.flush(); }
 
 	Transaction Database::beginTransaction() {
