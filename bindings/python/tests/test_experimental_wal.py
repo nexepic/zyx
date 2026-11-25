@@ -206,3 +206,84 @@ def test_typed_stream_matches_operator_fallback(tmp_path, monkeypatch):
     tx.rollback()
     assert read(db,'MATCH (n:Item {id:0}) RETURN n.val AS v') == [[True]]
     db.close()
+
+
+def test_host_point_in_time_export_and_restore(tmp_path):
+    import shutil
+    path = tmp_path/'live'
+    backup = tmp_path/'independent.zyx'
+    db = db_at(path)
+    a,b = db.create_nodes('Item',[{'id':17,'val':1.5},{'id':42,'val':True}])
+    edge = db.create_edges('Link',[(a,b,{'w':7})])[0]
+    # The live main is required-WAL here. save() is not used for this backup.
+    raw=tmp_path/'required-only.zyx'
+    shutil.copyfile(path/'main',raw)
+    from zyx_development_wal.durable import Corrupt
+    with pytest.raises(Corrupt,match='WAL'):
+        db_at(raw)
+    with db.begin_transaction() as second:
+        read(second,'MATCH (n:Item {id:17}) SET n.val=9')
+        read(second,'CREATE (:Item {id:99,val:false})')
+        assert db.export_snapshot(str(backup))==2
+    assert read(db,'MATCH (n:Item {id:99}) RETURN n.val AS v')==[[False]]
+    # New process, separate working directory, sole input is the exported file.
+    isolated=tmp_path/'isolated'
+    isolated.mkdir()
+    single=isolated/'only.zyx'
+    shutil.copyfile(backup,single)
+    script="""
+import json,sys
+from zyxdb import Database
+db=Database('only.zyx',backend='experimental-wal')
+def vals(q):
+    r=db.execute(q)
+    assert r.is_success,r.error
+    return [row.values() for row in r]
+print(json.dumps([vals('MATCH (n:Item) RETURN n.id AS k,n.val AS v,id(n) AS sid'),
+                  vals('MATCH (n:Item)-[r:Link]->(m:Item) RETURN id(r) AS rid,r.w AS w'),
+                  vals('MATCH (n:Item {id:99}) RETURN n.val AS v')]))
+try:db.begin_transaction()
+except PermissionError:pass
+else:raise AssertionError('writable export')
+db.close()
+"""
+    import json
+    rows,edges,absent=json.loads(subprocess.check_output([sys.executable,'-c',script],cwd=isolated,text=True))
+    assert rows==[[17,1.5,a],[42,True,b]] and type(rows[1][1]) is bool
+    assert edges==[[edge,7]] and absent==[]
+    assert list(isolated.iterdir())==[single]
+    restored=zyxdb.Database.restore_snapshot(str(single),str(tmp_path/'restored'),backend='experimental-wal')
+    assert read(restored,'MATCH (n:Item {id:17}) RETURN id(n) AS sid,n.val AS v')==[[a,1.5]]
+    assert restored.create_node('Item',{'id':100})>max(a,b)
+    restored.close()
+    assert read(db,'MATCH (n:Item {id:100}) RETURN n.val AS v')==[]
+    db.close()
+    assert set(x.name for x in path.iterdir()) == {'main'}
+    clean = isolated/'clean-B.zyx'
+    shutil.copyfile(path/'main', clean)
+    bview = db_at(clean)
+    assert read(bview,'MATCH (n:Item {id:99}) RETURN n.val AS v') == [[False]]
+    assert read(bview,'MATCH (n:Item {id:17}) RETURN id(n) AS sid,n.val AS v') == [[a,9]]
+    bview.close()
+    invalid_destination = tmp_path/'invalid-restore'
+    with pytest.raises(Corrupt,match='WAL'):
+        zyxdb.Database.restore_snapshot(str(raw),str(invalid_destination),backend='experimental-wal')
+    assert not invalid_destination.exists()
+
+
+def test_pending_primary_key_queries_keep_the_overlay(tmp_path, monkeypatch):
+    from zyx_development_wal.snapshot import Image
+    db=db_at(tmp_path/'delta')
+    t=db.begin_transaction()
+    read(t,'CREATE (:Item {id:9,val:2.5,grp:true})')
+    def forbid(*args):
+        raise AssertionError('point lookup materialized the whole write view')
+    with monkeypatch.context() as m:
+        m.setattr(Image,'clone',forbid)
+        assert read(t,'MATCH (n:Item {id:$k,grp:true}) RETURN n.val AS v',k=9)==[[2.5]]
+        assert read(t,'MATCH (n:Item) WHERE $k=n.id RETURN n.grp AS g',k=9)==[[True]]
+        assert read(t,'MATCH (n:Item) WHERE n.id=$k RETURN id(n) AS eid',k=None)==[]
+        assert read(t,'MATCH (n:Item {id:$k}) RETURN n.val AS v',k=True)==[]
+    t.rollback()
+    assert read(db,'MATCH (n:Item {id:9}) RETURN id(n) AS eid')==[]
+    db.close()

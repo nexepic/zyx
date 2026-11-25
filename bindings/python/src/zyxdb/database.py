@@ -57,6 +57,23 @@ class Database:
         """Flush data to disk."""
         self._db.save()
 
+    def export_snapshot(self, destination: str) -> int:
+        """Export the current committed experimental snapshot to a new file."""
+        exporter = getattr(self._db, "export_snapshot", None)
+        if exporter is None:
+            raise NotImplementedError("This backend has no standalone snapshot exporter")
+        return exporter(destination)
+
+    @classmethod
+    def restore_snapshot(cls, source: str, destination: str, *, backend: str) -> Database:
+        """Restore a standalone snapshot into a new independent writable database."""
+        db = cls(destination, open=False, backend=backend)
+        restore = getattr(db._db, "restore_snapshot", None)
+        if restore is None:
+            raise NotImplementedError("This backend has no standalone snapshot restore")
+        restore(source)
+        return db
+
     def execute(self, cypher: str, **params: Any) -> Result:
         """Execute a Cypher query with optional keyword parameters.
 
