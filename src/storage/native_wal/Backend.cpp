@@ -217,7 +217,8 @@ namespace graph::storage::nativewal {
 		}
 		void visitAdjacentEdgeTopologies(uint64_t id, LogicalGraphReadDirection dir, size_t max,
 								const std::function<bool(const LogicalGraphEdgeTopology &)> &f) const override {
-			require(bool(f), "Missing native topology visitor");
+			if (!f)
+				throw std::invalid_argument("logical graph adjacency topology scan requires a visitor");
 			visitAdjacent(id, dir, max, [&](auto it) { return f(topology(it)); });
 		}
 		using Columns = std::vector<std::vector<PropertyValue>>;
