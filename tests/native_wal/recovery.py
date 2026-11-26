@@ -1,5 +1,6 @@
 """Run against the native SDK driver and Linux syscall interposer, in fresh directories."""
 import hashlib
+import streamed_recovery
 import os
 from pathlib import Path
 import shutil
@@ -28,6 +29,7 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    streamed_recovery.exercise(root, new, driver, env)
     tiny = new("tiny-wal")
     run("tiny-wal-writes", tiny, code=-signal.SIGKILL)
     recovered(tiny, 2)
@@ -74,7 +76,7 @@ with tempfile.TemporaryDirectory() as name:
         wal.write_bytes(data)
         run("long-B", broken, code=2)
     run("long-B", dirty)
-    print("Long graph: rollback, independent backup, pinned A/export A, checkpoint B, delete, 2 x 3 multi-window faults, 2 damaged prefixes and aggregate limit passed")
+    print("Long graph: rollback, independent backup, pinned A/export A, checkpoint B, delete, 2 x 3 multi-window faults, 2 damaged prefixes and multi-row commit passed")
     budget = new("nested-budget")
     for op in ("nested-budget-write", "nested-budget-open"):
         before = hashlib.sha256(budget.read_bytes()).digest()

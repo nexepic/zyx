@@ -65,6 +65,15 @@ namespace graph::storage::nativewal {
 		}
 		~VersionCharge() { if (bytes) budget->release(bytes); }
 		VersionCharge(const VersionCharge &) = delete;
+		// Move a decoded row into its immutable entry without charging its
+		// already-owned payload twice. Extra parse-only allowance ends here.
+		VersionCharge(VersionCharge &source, size_t target) : budget(source.budget), bytes(target) {
+			if (target > source.bytes)
+				budget->acquire(target - source.bytes);
+			else if (source.bytes > target)
+				budget->release(source.bytes - target);
+			source.bytes = 0;
+		}
 		void add(size_t n) {
 			if (n > SIZE_MAX - bytes) throw std::length_error("Native row memory overflow");
 			growTo(bytes + n);
@@ -98,8 +107,8 @@ namespace graph::storage::nativewal {
 			size_t wire;
 			Pair value;
 			std::unique_ptr<Record> record;
-			Entry(const std::shared_ptr<VersionBudget> &b, uint64_t key, Row row, size_t encoded, size_t heap) :
-				charge(b, sizeof(Entry) + 64 + heap), wire(encoded), value(key, std::move(row)) {}
+			Entry(const std::shared_ptr<VersionBudget> &b, uint64_t key, Row row, size_t encoded, size_t heap, VersionCharge *parsed = nullptr) :
+				charge(parsed ? VersionCharge(*parsed, sizeof(Entry) + 64 + heap) : VersionCharge(b, sizeof(Entry) + 64 + heap)), wire(encoded), value(key, std::move(row)) {}
 		};
 		using Item = std::shared_ptr<const Entry>;
 		struct Node;
@@ -288,12 +297,12 @@ namespace graph::storage::nativewal {
 		}
 		void bindInput(std::shared_ptr<const BaseInput> file) { input = diskRows ? std::move(file) : nullptr; }
 		void inheritInput(const VersionedRows &other) { bindInput(other.input); }
-		void insert_or_assign(uint64_t id, Row row) {
+		void insert_or_assign(uint64_t id, Row row, VersionCharge *parsed = nullptr) {
 			auto [wire, heap] = rowCost(row);
 			auto old = find(id);
 			auto bytes = wireSize + wire - (old.entry ? old.entry->wire : 0);
 			bool added = !old.entry;
-			auto item = std::make_shared<Entry>(budget, id, std::move(row), wire, heap);
+			auto item = std::make_shared<Entry>(budget, id, std::move(row), wire, heap, parsed);
 			bool wasOnDisk = old.entry && old.onDisk();
 			root = replace(root, id, item);
 			if (wasOnDisk && !--diskRows)

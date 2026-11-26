@@ -12,6 +12,7 @@
 #include "zyx/zyx.hpp"
 #include "LocatorBudget.hpp"
 #include "LongProperties.hpp"
+#include "StreamedTransactions.hpp"
 #include "RelocationGraph.hpp"
 namespace {
 	void expect(bool condition, const std::string &error) {
@@ -103,6 +104,25 @@ int main(int argc, char **argv) try {
 	if (argc < 3)
 		throw std::runtime_error("driver OP MAIN_OR_NEW_DIRECTORY [FAULT]");
 	std::string op = argv[1], path = argv[2];
+	if (op == "stream-export") {
+		zyx::Database db(path);
+		db.open();
+		std::ofstream out(path + ".view", std::ios::binary);
+		db.exportSegmentedSnapshot(out);
+		out.close();
+		expect(out.good(), "Failed to finish standalone export");
+		return 0;
+	}
+	if (op == "stream-budget-read" || op == "stream-budget-write" ||
+		op == "stream-budget-small-read" || op == "stream-budget-small-write") {
+		streamed_transaction_test::exerciseBudget(path, std::stoull(argv[3]), op.ends_with("-read"),
+												 op.starts_with("stream-budget-small-"));
+		return 0;
+	}
+	if (op.starts_with("stream-")) {
+		streamed_transaction_test::exercise(op, path, argc > 3 ? std::stoull(argv[3]) : 0, argc > 4 ? argv[4] : nullptr);
+		return 0;
+	}
 	if (op.starts_with("long-")) {
 		long_property_test::exercise(op, path, argc > 3 ? argv[3] : nullptr);
 		return 0;
@@ -575,18 +595,12 @@ int main(int argc, char **argv) try {
 		expect(ids.size() == 4097, "Byte-admitted rows missing");
 		tx.commit();
 		tx = db.beginTransaction();
-		bool refused = false;
-		try {
-			std::vector<std::unordered_map<std::string, zyx::Value>> wide(256, {{"s", std::string(12000, 'x')}});
-			(void) tx.createNodes("Wide", wide);
-		} catch (const std::exception &) {
-			refused = true;
-		}
-		expect(refused, "Entity cap was ignored");
+		std::vector<std::unordered_map<std::string, zyx::Value>> wide(256, {{"s", std::string(12000, 'x')}});
+		expect(tx.createNodes("Wide", wide).size() == wide.size(), "Admitted wide batch missing rows");
 		tx.rollback();
 		db.close();
 		db.open();
-		expect(scalar(db, count) == 4097, "Oversized statement leaked");
+		expect(scalar(db, count) == 4097, "Rolled back wide statement leaked");
 		return 0;
 	}
 	if (op == "types") {

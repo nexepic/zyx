@@ -73,17 +73,11 @@ namespace long_property_test {
 				tx.commit();
 			}
 			auto before = db.beginReadOnlyTransaction();
-			bool refused = false;
-			try {
-				auto tx = db.beginTransaction();
-				const Parameters params{{"v", std::string(1100000, 'y')}};
-				run(tx, "CREATE (:TooBig {p:$v})", params);
-				run(tx, "CREATE (:TooBig {p:$v})", params);
-				tx.commit();
-			} catch (const std::exception &e) {
-				refused = std::string_view(e.what()).find("transaction exceeds record limit") != std::string_view::npos;
-			}
-			require(refused, "Oversized combined transaction was not rejected at commit");
+			auto tx = db.beginTransaction();
+			const Parameters params{{"v", std::string(1100000, 'y')}};
+			run(tx, "CREATE (:Combined {p:$v})", params);
+			run(tx, "CREATE (:Combined {p:$v})", params);
+			tx.commit();
 			auto check = [](auto &view) {
 				auto r = run(view, "MATCH(n:Boundary) RETURN n.p ORDER BY id(n)");
 				for (size_t length : {16373, 16374, 16375}) {
@@ -92,13 +86,20 @@ namespace long_property_test {
 					require(std::get<std::string>(r.get(0)) == std::string(length, 'x'), "Boundary value changed");
 				}
 				require(!r.hasNext(), "Duplicate boundary result");
-				require(!run(view, "MATCH(n:TooBig) RETURN id(n)").hasNext(), "Partial oversized transaction");
 			};
 			check(before);
+			require(!run(before, "MATCH(n:Combined) RETURN id(n)").hasNext(), "Fixed snapshot changed");
 			before.commit();
 			db.close();
 			db.open();
 			check(db);
+			auto combined = run(db, "MATCH(n:Combined) RETURN n.p");
+			for (int i = 0; i < 2; ++i) {
+				require(combined.hasNext(), "Missing combined transaction row");
+				combined.next();
+				require(std::get<std::string>(combined.get(0)) == std::string(1100000, 'y'), "Wrong combined row");
+			}
+			require(!combined.hasNext(), "Extra combined transaction row");
 		} else if (op == "long-seed") {
 			auto tx = db.beginTransaction();
 			run(tx, "CREATE (:Long {txt:$txt,doc:$doc})-[:PAY {bin:$bin}]->(:End)", parameters(1));

@@ -151,23 +151,42 @@ namespace graph::storage::nativewal {
 		// the selected receipt prefix, even if an unacknowledged suffix exists.
 		class Cursor {
 			int fd;
-			size_t extent, filled = 0, next = 0;
-			VersionCharge admission;
-			Bytes window;
-			bool authenticatedWindow = false;
+			size_t extent, filled = 0, next = 0, refillSize;
+			VersionMemoryResource memory;
+			std::pmr::vector<std::byte> window;
+			bool authenticatedWindow = false, streamingReplay = false;
 
 		public:
 			utils::Sha256 hash;
 			size_t position = 0;
-			Cursor(int f, size_t end, std::shared_ptr<VersionBudget> budget, size_t memory) :
-				fd(f), extent(end), admission(budget, std::min({size_t(32768), end, memory / 16})),
-				window(std::min({size_t(32768), end, memory / 16})) {
+			Cursor(int f, size_t end, std::shared_ptr<VersionBudget> budget, size_t limit) :
+				fd(f), extent(end), refillSize(std::min({size_t(32768), end, limit / 16})),
+				memory(std::move(budget)), window(refillSize, &memory) {
 				require(!window.empty(), "Native recovery window budget exceeded");
 			}
 			size_t remaining() const { return extent - position; }
+			void suspend() {
+				// A single authenticated window is itself the replay proof. Keep
+				// it until consumed. Other read-ahead can be refilled at position.
+				if (authenticatedWindow && remaining())
+					return;
+				std::pmr::vector<std::byte>(&memory).swap(window);
+				next = filled = 0;
+			}
 			void consume(std::span<std::byte> out) {
 				require(out.size() <= remaining(), "Truncated native graph field");
+				if (!out.empty() && window.empty())
+					window.resize(refillSize);
 				while (!out.empty()) {
+					if (streamingReplay && next == filled && out.size() >= window.size()) {
+						// A decoded field already owns its admitted destination.
+						auto part = out.first(std::min(size_t(32768), out.size()));
+						readExact(fd, position, part);
+						hash.update(part);
+						position += part.size();
+						out = out.subspan(part.size());
+						continue;
+					}
 					if (next == filled) {
 						filled = std::min(window.size(), remaining());
 						readExact(fd, position, std::span(window).first(filled));
@@ -194,14 +213,25 @@ namespace graph::storage::nativewal {
 				position = next = 0;
 				authenticatedWindow = filled == extent;
 				if (!authenticatedWindow) {
+					streamingReplay = true;
+					// Bulk authentication is complete. Retain only lookahead for
+					// small fields while larger fields read into their own buffers.
+					refillSize = std::min(refillSize, size_t(4096));
 					filled = 0;
 					hash = utils::Sha256{};
 				}
 			}
 			template<size_t N>
-			auto fixed() {
+			auto fixed(bool readAhead = true) {
 				std::array<std::byte, N> b;
-				consume(b);
+				if (!readAhead && streamingReplay && next == filled) {
+					require(N <= remaining(), "Truncated native graph field");
+					readExact(fd, position, b);
+					hash.update(b);
+					position += N;
+				} else {
+					consume(b);
+				}
 				return b;
 			}
 			uint64_t num() {
@@ -377,7 +407,8 @@ namespace graph::storage::nativewal {
 			}
 		}
 		std::unique_ptr<File> activeLog;
-		void append(Span bytes, size_t offset, size_t padding) {
+		template<class Emit>
+		void appendStream(size_t offset, Emit emit) {
 			require(bool(activeLog), "Missing native append authority");
 			checkBaseName(false);
 			struct stat st{}, named{};
@@ -386,8 +417,7 @@ namespace graph::storage::nativewal {
 			require(st.st_nlink == 1 && named.st_dev == st.st_dev && named.st_ino == st.st_ino && st.st_size >= 0 &&
 							static_cast<uint64_t>(st.st_size) == offset,
 					"Native WAL append extent or identity changed");
-			writeComplete(activeLog->fd, bytes);
-			emitPadding(padding, [&](Span chunk) { writeComplete(activeLog->fd, chunk); });
+			emit(activeLog->fd);
 			syncFile(activeLog->fd);
 		}
 		template<class Emit>
@@ -646,7 +676,7 @@ namespace graph::storage::nativewal {
 		std::ranges::copy(r.take(16), s->identity.begin());
 		baseSequence = r.num();
 		auto sequence = r.num();
-		auto needed = r.count(maxWal);
+		auto needed = r.count(SIZE_MAX);
 		auto expected = r.take(32);
 		require(baseSequence <= sequence && ((baseSequence == sequence) == (needed == 0)),
 				"Invalid native graph receipt");
@@ -655,6 +685,7 @@ namespace graph::storage::nativewal {
 			auto hash = c.hash.finalize();
 			auto tail = c.fixed<32>();
 			require(!c.remaining() && hash == tail, "Native graph main checksum mismatch");
+			c.suspend();
 			return hash;
 		};
 		auto loadBase = [&](Cursor &c, const std::shared_ptr<File> &file) {
@@ -785,7 +816,8 @@ namespace graph::storage::nativewal {
 			// A receipt fitting one admitted window can be replayed directly
 			// from those authenticated bytes. Larger WALs rehash during replay.
 			log.authenticateWal(expected);
-			auto wh = log.fixed<72>();
+			auto wh = log.fixed<72>(false);
+			log.suspend();
 			Decoder h{wh};
 			h.magic("ZYXnw003");
 			require(std::ranges::equal(s->identity, h.take(16)) && h.num() == baseSequence,
@@ -808,12 +840,9 @@ namespace graph::storage::nativewal {
 				tx.magic("ZYXtx002");
 				auto seq = tx.num();
 				require(s->sequence < UINT64_MAX && seq == s->sequence + 1, "Native graph WAL sequence gap");
-				auto size = tx.count(maxState);
-				VersionCharge charge(s->budget, 3 * size + std::min(size_t(16384), 8 * size));
-				Bytes delta(size);
-				log.consume(delta);
+				auto size = tx.count(log.remaining());
 				UniqueDelta check(*s, uniqueOwners);
-				applyDelta(*s, delta, check);
+				applyDelta(*s, size, [&](std::span<std::byte> bytes) { log.consume(bytes); }, check);
 				s->sequence = seq;
 				check.advance(*s);
 				size_t padding = (alignment - log.position % alignment) % alignment;
@@ -991,29 +1020,36 @@ namespace graph::storage::nativewal {
 					visit(id);
 			});
 		const size_t payload = deltaBytes(*next, changed);
-		const bool rotate = needsStabilization || payload + 24 + files->alignment - 1 > maxWal - walLength;
+		const size_t fileLimit = std::min<uintmax_t>(SIZE_MAX, std::numeric_limits<off_t>::max());
+		require(payload <= fileLimit - 96 - files->alignment, "Native WAL transaction extent overflow");
+		const bool rotate = needsStabilization || (walLength &&
+				(walLength >= maxWal || payload + 24 + files->alignment - 1 > maxWal - walLength));
 		const size_t header = (rotate || !walLength ? 72 : 0) + 24;
 		const size_t unpadded = header + payload;
 		const size_t frameSize = unpadded + (files->alignment - unpadded % files->alignment) % files->alignment;
-		// Admit the final extent before allocating or modifying the namespace.
-		// Encode into its final position; no second transaction-sized copy is
-		// required for either the generation header or aligned append.
-		VersionCharge frameCharge(next->budget, unpadded);
-		size_t resident = unpadded;
-		try {
-			frameCharge.growTo(frameSize);
-			resident = frameSize;
-		} catch (const std::length_error &) {
-			// Only optional coalescing failed admission. Content still has
-			// its full reservation; padding is hashed and written separately.
+		// Small commits retain their single-write path. Large commits stage
+		// only an admitted output window and the row currently being encoded.
+		const bool streamed = frameSize > 32768;
+		const size_t window = streamed ? std::min(size_t(32768), next->budget->capacity() / 16) : unpadded;
+		require(window > 0, "Native WAL output window budget exceeded");
+		VersionCharge frameCharge(next->budget, window);
+		size_t resident = window;
+		if (!streamed) {
+			try {
+				frameCharge.growTo(frameSize);
+				resident = frameSize;
+			} catch (const std::length_error &) {
+				// The authenticated zero suffix can be emitted separately.
+			}
 		}
-		const size_t padding = frameSize - resident;
 		Encoder frame(resident, next->budget);
 		frame.bytes.reserve(resident);
-		frame.bytes.resize(header);
-		encodeDelta(frame, *next, changed);
-		require(frame.bytes.size() == unpadded, "Native WAL measured delta size mismatch");
-		frame.bytes.resize(resident);
+		if (!streamed) {
+			frame.bytes.resize(header);
+			encodeDelta(frame, *next, changed);
+			require(frame.bytes.size() == unpadded, "Native WAL measured delta size mismatch");
+			frame.bytes.resize(resident);
+		}
 		try {
 			files->checkAuthority();
 			if (rotate)
@@ -1042,17 +1078,46 @@ namespace graph::storage::nativewal {
 			bytes.num(next->sequence);
 			bytes.num(payload);
 			require(bytes.bytes.size() == header, "Native WAL generation header mismatch");
-			std::copy(bytes.bytes.begin(), bytes.bytes.end(), frame.bytes.begin());
 			auto hash = walHash;
-			hash.update(frame.bytes);
-			Files::emitPadding(padding, [&](Span chunk) { hash.update(chunk); });
-			auto length = walLength + frameSize;
-			auto receipt = manifest(*next, baseSequence, {}, length, hash.finalize());
-			if (walLength == 0) {
+			auto output = [&](int fd) {
+				auto put = [&](Span data) {
+					hash.update(data);
+					Files::writeComplete(fd, data);
+				};
+				if (!streamed) {
+					std::copy(bytes.bytes.begin(), bytes.bytes.end(), frame.bytes.begin());
+					put(frame.bytes);
+					Files::emitPadding(frameSize - resident, put);
+					return;
+				}
+				size_t emitted = 0;
+				auto buffer = [&](Span data) {
+					require(data.size() <= frameSize - emitted, "Native WAL frame overflow");
+					emitted += data.size();
+					while (!data.empty()) {
+						auto part = data.first(std::min(data.size(), resident - frame.bytes.size()));
+						frame.raw(part);
+						data = data.subspan(part.size());
+						if (frame.bytes.size() == resident) {
+							put(frame.bytes);
+							frame.bytes.clear();
+						}
+					}
+				};
+				buffer(bytes.bytes);
+				writeDelta(*next, changed, buffer);
+				require(emitted == unpadded, "Native WAL measured delta size mismatch");
+				Files::emitPadding(frameSize - unpadded, buffer);
+				if (!frame.bytes.empty())
+					put(frame.bytes);
+			};
+			if (!walLength) {
 				files->retainBase();
-				files->install(files->log, frame.bytes, padding);
+				files->installStream(files->log, output);
 			} else
-				files->append(frame.bytes, walLength, padding);
+				files->appendStream(walLength, output);
+			const auto length = walLength + frameSize;
+			auto receipt = manifest(*next, baseSequence, {}, length, hash.finalize());
 			files->install(files->main, receipt);
 			if (!walLength)
 				files->checkBaseName(true);

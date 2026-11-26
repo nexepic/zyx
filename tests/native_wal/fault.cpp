@@ -13,6 +13,8 @@
 #include <unistd.h>
 
 static int partial = -1;
+static int windowFd = -1;
+static size_t untilFailure = 0;
 static char kind = '?', last = '?';
 static const char *action(char k, const char *name) {
 	const char *env = getenv("ZYX_TEST_NATIVE_IO");
@@ -68,6 +70,11 @@ ssize_t write(int fd, const void *data, size_t len) {
 				return real(fd, data, n);
 			}
 		}
+		const char *window = action(kind, "window");
+		if (*window) {
+			windowFd = fd;
+			untilFailure = strtoul(window, nullptr, 10);
+		}
 		if (fault(kind, "write") < 0)
 			return -1;
 		if ((!strcmp(action(kind, "write"), "after-window-eio") && len == 32768) ||
@@ -83,6 +90,11 @@ ssize_t write(int fd, const void *data, size_t len) {
 			len = 1;
 		if (!strcmp(action(kind, "write"), "zero"))
 			return 0;
+	}
+	if (fd == windowFd && untilFailure && --untilFailure == 0) {
+		windowFd = -1;
+		errno = EIO;
+		return -1;
 	}
 	return real(fd, data, len);
 }

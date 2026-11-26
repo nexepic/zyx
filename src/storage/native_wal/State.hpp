@@ -152,10 +152,11 @@ namespace graph::storage::nativewal {
 	LogicalGraphMutationBatchResult apply(State &, Changes &, const LogicalGraphMutationBatch &);
 	size_t deltaBytes(const State &, const Changes &);
 	void encodeDelta(Encoder &, const State &, const Changes &);
+	void writeDelta(const State &, const Changes &, const std::function<void(Span)> &);
 	void encodeBaseRow(Encoder &, const LogicalGraphNode &);
 	void encodeBaseRow(Encoder &, const LogicalGraphEdge &);
 	LogicalGraphNode baseNode(uint64_t, Span, VersionCharge &);
 	LogicalGraphEdge baseEdge(uint64_t, Span, VersionCharge &);
 	class UniqueDelta;
-	void applyDelta(State &, Span, UniqueDelta &);
+	void applyDelta(State &, size_t, const std::function<void(std::span<std::byte>)> &, UniqueDelta &);
 } // namespace graph::storage::nativewal

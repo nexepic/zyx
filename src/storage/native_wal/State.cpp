@@ -55,17 +55,22 @@ namespace graph::storage::nativewal {
 				w.value(p.value);
 			}
 		}
-		auto decodeProperties(Decoder &r, VersionCharge &scratch) {
+		auto decodeProperties(auto &r, VersionCharge &scratch) {
 			std::vector<LogicalGraphPropertyEntry> out;
 			auto n = r.count(maxFields);
-			std::set<std::string> seen;
+			if constexpr (requires { r.admit(size_t{}); })
+				r.admit(n * sizeof(LogicalGraphPropertyEntry));
+			out.reserve(n);
 			while (n--) {
 				auto key = r.text();
-				require(!key.empty() && seen.insert(key).second, "Duplicate native WAL property");
+				require(!key.empty() && std::ranges::none_of(out, [&](const auto &p) { return p.key == key; }), "Duplicate native WAL property");
 				auto bytes = r.take(r.count(maxState));
 				size_t offset = 0;
 				PropertyValue value;
-				if (CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes)) {
+				if (auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes)) {
+					if constexpr (requires { r.admit(size_t{}); })
+						if (primitive->type == PropertyType::STRING)
+							r.admit(primitive->text.size() + 1);
 					value = CanonicalPropertyValueCodec::decodeNext(bytes, offset);
 				} else {
 					auto *query = property_decode::AllocationScope::current();
@@ -153,7 +158,7 @@ namespace graph::storage::nativewal {
 		// Bound input copying even when a single batch contains many large
 		// values. The final encoded state and the replay delta have separate limits.
 		VersionCharge valueCopies(s.budget, 0);
-		size_t remaining = maxState;
+		size_t remaining = s.budget->capacity();
 		auto charge = [&](size_t bytes) {
 			require(bytes <= remaining, "Native statement payload limit exceeded");
 			remaining -= bytes;
@@ -434,7 +439,8 @@ namespace graph::storage::nativewal {
 			for (auto id : ids) {
 				auto it = rows.find(id);
 				const size_t bytes = it == rows.end() ? 16 : it.encodedBytes();
-				require(bytes <= maxState - size, "Native WAL transaction exceeds record limit");
+				require(bytes - 16 <= maxState, "Native WAL row exceeds record limit");
+				require(bytes <= SIZE_MAX - size, "Native WAL transaction size overflow");
 				size += bytes;
 			}
 		};
@@ -442,35 +448,62 @@ namespace graph::storage::nativewal {
 		measure(changed.edges, s.edges);
 		return size;
 	}
-	void encodeDelta(Encoder &w, const State &s, const Changes &changed) {
-		w.num(s.nodeHigh);
-		w.num(s.edgeHigh);
-		auto append = [&](const auto &ids, const auto &rows) {
-			w.num(ids.size());
-			for (auto id: ids) {
-				w.num(id);
-				auto it = rows.find(id);
-				w.num(it != rows.end());
-				if (it != rows.end())
-					encodeRow(w, it->second);
-			}
+	namespace {
+		template<class Number, class Row>
+		void visitDelta(const State &s, const Changes &changed, Number number, Row row) {
+			number(s.nodeHigh);
+			number(s.edgeHigh);
+			auto append = [&](const auto &ids, const auto &rows) {
+				number(ids.size());
+				for (auto id: ids) {
+					number(id);
+					auto it = rows.find(id);
+					number(it != rows.end());
+					if (it != rows.end())
+						row(it);
+				}
+			};
+			append(changed.nodes, s.nodes);
+			append(changed.edges, s.edges);
+		}
+	}
+	void encodeDelta(Encoder &out, const State &s, const Changes &changed) {
+		visitDelta(s, changed, [&](uint64_t n) { out.num(n); },
+				   [&](auto it) { encodeRow(out, it->second); });
+	}
+	void writeDelta(const State &s, const Changes &changed, const std::function<void(Span)> &emit) {
+		auto number = [&](uint64_t n) {
+			std::array<std::byte, 8> bytes;
+			for (unsigned i = 0; i < bytes.size(); ++i)
+				bytes[i] = std::byte(n >> (8 * i));
+			emit(bytes);
 		};
-		append(changed.nodes, s.nodes);
-		append(changed.edges, s.edges);
+		visitDelta(s, changed, number, [&](auto it) {
+			const size_t size = it.encodedBytes() - 16;
+			VersionCharge scratch(s.budget, size);
+			Encoder row(size, s.budget);
+			row.bytes.reserve(size);
+			encodeRow(row, it->second);
+			require(row.bytes.size() == size, "Native WAL row size mismatch");
+			emit(row.bytes);
+		});
 	}
 	void encodeBaseRow(Encoder &w, const LogicalGraphNode &row) { encodeRow(w, row); }
 	void encodeBaseRow(Encoder &w, const LogicalGraphEdge &row) { encodeRow(w, row); }
 	namespace {
-		LogicalGraphNode readNode(Decoder &r, uint64_t id, VersionCharge &scratch) {
+		LogicalGraphNode readNode(auto &r, uint64_t id, VersionCharge &scratch) {
 			LogicalGraphNode n{id, {}};
 			auto count = r.count(maxFields);
+			if constexpr (requires { r.admit(size_t{}); })
+				r.admit(count * sizeof(std::string));
+			n.labels.reserve(count);
 			while (count--)
 				n.labels.push_back(r.text());
 			labels(n.labels);
 			n.properties = decodeProperties(r, scratch);
 			return n;
 		}
-		LogicalGraphEdge readEdge(Decoder &r, uint64_t id, VersionCharge &scratch) {
+		LogicalGraphEdge readEdge(auto &r, uint64_t id, VersionCharge &scratch) {
 			auto a = r.num(), b = r.num();
 			auto type = r.text();
 			return {id, a, b, std::move(type), decodeProperties(r, scratch)};
@@ -488,8 +521,61 @@ namespace graph::storage::nativewal {
 		require(r.bytes.empty(), "Trailing native edge");
 		return row;
 	}
-	void applyDelta(State &s, Span bytes, UniqueDelta &unique) {
-		Decoder r{bytes};
+	namespace {
+		class DeltaReader {
+			const std::function<void(std::span<std::byte>)> &source;
+			size_t left, rowEnd = 0;
+			VersionMemoryResource memory;
+			std::pmr::vector<std::byte> field;
+			std::array<std::byte, 64> small{};
+			VersionCharge *rowAllocation = nullptr;
+
+		public:
+			DeltaReader(size_t extent, const std::function<void(std::span<std::byte>)> &read,
+						const std::shared_ptr<VersionBudget> &budget)
+				: source(read), left(extent), memory(budget), field(&memory) {}
+			size_t remaining() const { return left; }
+			void beginRow(VersionCharge &scratch) {
+				rowEnd = left > maxState ? left - maxState : 0;
+				rowAllocation = &scratch;
+			}
+			void endRow() {
+				rowEnd = 0;
+				rowAllocation = nullptr;
+			}
+			void admit(size_t bytes) { rowAllocation->add(bytes); }
+			Span take(size_t size) {
+				require(size <= left - rowEnd, "Truncated native WAL transaction or oversized row");
+				std::span<std::byte> dest;
+				if (size <= small.size())
+					dest = std::span(small).first(size);
+				else {
+					if (size > field.capacity())
+						std::pmr::vector<std::byte>(&memory).swap(field);
+					field.resize(size);
+					dest = field;
+				}
+				source(dest);
+				left -= size;
+				return dest;
+			}
+			uint64_t num() { return Decoder{take(8)}.num(); }
+			size_t count(size_t limit) {
+				auto n = num();
+				require(n <= limit, "Native WAL count or length exceeds limit");
+				return size_t(n);
+			}
+			std::string text() {
+				const auto n = count(maxName);
+				admit(n + 1);
+				auto bytes = take(n);
+				return {reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+			}
+		};
+	}
+	void applyDelta(State &s, size_t extent, const std::function<void(std::span<std::byte>)> &read,
+					UniqueDelta &unique) {
+		DeltaReader r(extent, read, s.budget);
 		auto nh = r.num(), eh = r.num();
 		require(nh >= s.nodeHigh && eh >= s.edgeHigh && nh <= INT64_MAX && eh <= INT64_MAX,
 				"Invalid native WAL identity high-water mark");
@@ -498,8 +584,10 @@ namespace graph::storage::nativewal {
 		std::pmr::vector<uint64_t> changedIds(&idMemory);
 		bool haveIds = true;
 		std::vector<uint64_t> changedColumnIds;
+		size_t remainingChanges = 2 * maxRows; // Same ceiling as the writer across nodes and edges.
 		auto rows = [&](auto &map, uint64_t old, uint64_t high, auto decode) {
-			auto count = r.count(2 * maxRows);
+			auto count = r.count(std::min(remainingChanges, r.remaining() / 16));
+			remainingChanges -= count;
 			constexpr bool nodes = std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>;
 			if constexpr (nodes) {
 				if (s.unique || s.catalog) {
@@ -530,7 +618,10 @@ namespace graph::storage::nativewal {
 						changedColumnIds.push_back(id);
 				if (r.count(1)) {
 					VersionCharge scratch(s.budget, 0);
-					map.insert_or_assign(id, decode(id, scratch));
+					r.beginRow(scratch);
+					auto row = decode(id, scratch);
+					r.endRow();
+					map.insert_or_assign(id, std::move(row), &scratch);
 				} else {
 					bool existed = map.erase(id);
 					if constexpr (std::is_same_v<typename std::decay_t<decltype(map)>::mapped_type, LogicalGraphNode>)
@@ -547,7 +638,7 @@ namespace graph::storage::nativewal {
 					"Native WAL dangling relationship");
 			return edge;
 		});
-		require(r.bytes.empty(), "Trailing native WAL delta");
+		require(r.remaining() == 0, "Trailing native WAL delta");
 		s.recordColumnChanges(changedColumnIds);
 		s.nodeHigh = nh;
 		s.edgeHigh = eh;
