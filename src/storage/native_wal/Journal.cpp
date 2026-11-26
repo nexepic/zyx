@@ -300,8 +300,8 @@ namespace graph::storage::nativewal {
 				return false;
 			fail("stat native dependency");
 		}
-		std::pair<std::shared_ptr<File>, size_t> openInput(const std::string &name) {
-			auto fd = openat(directory.fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+		std::pair<std::shared_ptr<File>, size_t> openInput(const std::string &name, int access = O_RDONLY) {
+			auto fd = openat(directory.fd, name.c_str(), access | O_CLOEXEC | O_NOFOLLOW);
 			if (fd < 0 && errno == ENOENT && name == log)
 				throw std::runtime_error("Native graph receipt requires missing WAL");
 			if (fd < 0 && errno == ENOENT && name == anchor())
@@ -331,7 +331,9 @@ namespace graph::storage::nativewal {
 			require(held.st_dev == named.st_dev && held.st_ino == named.st_ino, "Native graph base authority changed");
 		}
 		std::pair<std::shared_ptr<File>, size_t> lockMain(bool ro) {
-			auto opened = openInput(main);
+			// Replacement also needs a writable directory. Require file write access
+			// on the actual inode that grants mutable authority.
+			auto opened = openInput(main, ro ? O_RDONLY : O_RDWR);
 			lockFile(opened.first->fd, ro);
 			authority = opened.first;
 			// An opener may have paused after openat across a rename and unlock.

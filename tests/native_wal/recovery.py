@@ -63,6 +63,17 @@ with tempfile.TemporaryDirectory() as name:
     chunked = new("direct-chunks")
     run("columnar-chunks", chunked, timeout=180)
     run("columnar-verify-chunks", str(chunked) + ".copy", timeout=180)
+    protected = new("direct-protected")
+    original = protected.read_bytes()
+    protected.chmod(0o400)
+    try:
+        if not os.access(protected, os.W_OK):
+            run("columnar-edges", protected, code=2)
+            assert protected.read_bytes() == original
+            assert set(protected.parent.iterdir()) == {protected}
+    finally:
+        protected.chmod(0o600)
+    assert run("direct-count", protected) == "0"
     streamed_recovery.exercise(root, new, driver, env)
     large_row_recovery.exercise(root, new, driver, env)
     for size in (1 << 20, 16 << 20):
