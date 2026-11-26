@@ -18,6 +18,7 @@
  * limitations under the License.
  **/
 
+#include "graph/storage/LogicalGraphBulkPublication.hpp"
 #include "graph/storage/SegmentedSnapshot.hpp"
 #include <algorithm>
 #include <atomic>
@@ -1529,7 +1530,9 @@ namespace zyx {
 			throw std::logic_error("public Database requires a logical transaction backend");
 		}
 		Transaction txn;
-		txn.impl_ = std::make_unique<TransactionImpl>(logicalTransactions->beginLogicalGraphTransaction(false), impl_.get());
+		auto *bulk = dynamic_cast<graph::storage::LogicalGraphBulkPublication *>(logicalTransactions.get());
+		auto transaction = bulk ? bulk->beginStandaloneTransaction() : logicalTransactions->beginLogicalGraphTransaction(false);
+		txn.impl_ = std::make_unique<TransactionImpl>(std::move(transaction), impl_.get());
 		return txn;
 	}
 

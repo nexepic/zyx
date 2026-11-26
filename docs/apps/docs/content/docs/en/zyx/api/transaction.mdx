@@ -49,7 +49,7 @@ one durable native single-file generation through the A/B Superblock pair; it do
 
 ```cpp
 auto tx = db.beginBulkTransaction();
-db.createNodes("Person", {{{"name", std::string("Ada")}}});
+tx.createNodes("Person", {{{"name", std::string("Ada")}}});
 tx.commit();
 ```
 
@@ -57,7 +57,7 @@ For import-style workloads, pair it with the columnar bulk insert APIs to avoid 
 
 ```cpp
 auto tx = db.beginBulkTransaction();
-auto ids = db.createNodesColumnar(
+auto ids = tx.createNodesColumnar(
     "Person",
     2,
     {{"name", {std::string("Ada"), std::string("Grace")}},

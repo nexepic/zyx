@@ -871,9 +871,11 @@ namespace graph::storage::nativewal {
 		require(!poisoned, "Native graph requires recovery");
 		return current;
 	}
-	void Journal::publishBase(std::shared_ptr<State> rebased, const std::function<void()> &beforePublish) {
+	void Journal::publishBase(std::shared_ptr<State> rebased, const std::function<void()> &beforePublish,
+							  bool retireDependencies) {
 		auto fresh = files->installBase(*rebased, beforePublish);
-		files->removeWal();
+		if (retireDependencies)
+			files->removeWal();
 		current = std::move(rebased);
 		uniqueOwners.bind(*current);
 		baseDigest = fresh;
@@ -997,7 +999,7 @@ namespace graph::storage::nativewal {
 		}
 	}
 	void Journal::commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next,
-						 const Changes &changed) {
+						 const Changes &changed, bool standalone) {
 		std::lock_guard lock(gate);
 		require(!readOnly && !poisoned, "Native graph writer unavailable");
 		// A checkpoint may replace the physical root at the same revision.
@@ -1019,6 +1021,35 @@ namespace graph::storage::nativewal {
 				for (auto id: changed.nodes)
 					visit(id);
 			});
+		if (standalone) {
+			// Finish any previously acknowledged prefix before publishing the new
+			// transaction. A dependency cleanup failure cannot then commit this batch.
+			if (needsStabilization || walLength) {
+				try {
+					checkpointLocked();
+				} catch (...) {
+					poisoned = true;
+					throw;
+				}
+			}
+			bool publishing = false;
+			try {
+				files->checkAuthority();
+				if (current != expected) {
+					next->nodes.inheritInput(current->nodes);
+					next->edges.inheritInput(current->edges);
+				}
+				publishBase(std::move(next), [&] { publishing = true; }, false);
+			} catch (...) {
+				if (publishing) {
+					poisoned = true;
+					std::throw_with_nested(std::runtime_error(
+							"Native bulk publication outcome indeterminate; reopen to recover"));
+				}
+				throw;
+			}
+			return;
+		}
 		const size_t payload = deltaBytes(*next, changed);
 		const size_t fileLimit = std::min<uintmax_t>(SIZE_MAX, std::numeric_limits<off_t>::max());
 		require(payload <= fileLimit - 96 - files->alignment, "Native WAL transaction extent overflow");
@@ -1143,7 +1174,7 @@ namespace graph::storage::nativewal {
 	Journal::Journal(const std::string &, bool, size_t) { unavailable(); }
 	Journal::~Journal() = default;
 	std::shared_ptr<const State> Journal::snapshot() { unavailable(); }
-	void Journal::commit(const std::shared_ptr<const State> &, std::shared_ptr<State>, const Changes &) {
+	void Journal::commit(const std::shared_ptr<const State> &, std::shared_ptr<State>, const Changes &, bool) {
 		unavailable();
 	}
 	void Journal::checkpoint() { unavailable(); }

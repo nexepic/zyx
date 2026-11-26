@@ -1,3 +1,4 @@
+#include "graph/storage/LogicalGraphBulkPublication.hpp"
 #include "Backend.hpp"
 #include "Journal.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -314,6 +315,7 @@ namespace graph::storage::nativewal {
 		std::shared_ptr<State> working;
 		Changes changes;
 		bool ro;
+		bool standalone;
 		Status status = Status::LGTTS_ACTIVE;
 		LogicalGraphMutationBatchResult created;
 		void release() {
@@ -325,7 +327,8 @@ namespace graph::storage::nativewal {
 		void active() const { require(status == Status::LGTTS_ACTIVE, "Native transaction ended"); }
 
 	public:
-		Tx(std::shared_ptr<Journal> j, bool readOnly) : owner(std::move(j)), pinned(owner->snapshot()), ro(readOnly) {}
+		Tx(std::shared_ptr<Journal> j, bool readOnly, bool bulk = false) :
+			owner(std::move(j)), pinned(owner->snapshot()), ro(readOnly), standalone(bulk) {}
 		Status state() const override { return status; }
 		bool isReadOnly() const override { return ro; }
 		LogicalGraphReadSnapshot &readSnapshot() override {
@@ -364,7 +367,9 @@ namespace graph::storage::nativewal {
 			active();
 			try {
 				if (working)
-					owner->commit(pinned.data, working, changes);
+					owner->commit(pinned.data, working, changes, standalone);
+				else if (standalone)
+					owner->checkpoint();
 			} catch (const UniqueViolation &) {
 				status = Status::LGTTS_ROLLED_BACK;
 				release();
@@ -389,7 +394,7 @@ namespace graph::storage::nativewal {
 			release();
 		}
 	};
-	class Backend : public StorageBackend, public LogicalGraphReadBackend, public LogicalGraphTransactionalBackend {
+	class Backend : public StorageBackend, public LogicalGraphReadBackend, public LogicalGraphTransactionalBackend, public LogicalGraphBulkPublication {
 		std::string path;
 		size_t memory;
 		bool ro;
@@ -438,6 +443,10 @@ namespace graph::storage::nativewal {
 		std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
 			require(bool(journal), "Native graph is closed");
 			return std::make_unique<Snapshot>(journal->snapshot());
+		}
+		std::unique_ptr<LogicalGraphTransaction> beginStandaloneTransaction() override {
+			require(journal && !ro, "Native bulk write transaction unavailable");
+			return std::make_unique<Tx>(journal, false, true);
 		}
 		std::unique_ptr<LogicalGraphTransaction> beginLogicalGraphTransaction(bool readOnly) override {
 			require(journal && (!ro || readOnly), "Native graph write transaction unavailable");

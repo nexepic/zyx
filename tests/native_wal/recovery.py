@@ -30,6 +30,25 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    # Test the final replacement separately from retiring the *prior* ACKed WAL.
+    for fault, count, code in (
+        ("m.write=kill", 1, -signal.SIGKILL), ("m.write=partial-eio", 1, 2),
+        ("m.sync=eio", 1, 2), ("m.rename=eio", 1, 2),
+        ("m.renamed=kill", 2, -signal.SIGKILL), ("m.dirsync=eio", 2, 2),
+        ("m.write=short", 2, -signal.SIGKILL), (None, 2, -signal.SIGKILL),
+    ):
+        path = new("bulk-clean-" + str(fault))
+        result = run("bulk-publish-clean", path, fault, code, "indeterminate" if fault == "m.dirsync=eio" else None)
+        if fault in (None, "m.write=short"):
+            assert result == "ack" and run("count", str(path) + ".copy") == "2"
+        recovered(path, count)
+    for fault in ("m.sync=eio", "m.dirsync=eio", "w.unlink=eio", "b.unlink=eio", None):
+        path = new("bulk-prior-" + str(fault))
+        result = run("bulk-publish", path, fault, 2 if fault else -signal.SIGKILL)
+        if not fault:
+            assert result == "ack" and run("count", str(path) + ".copy") == "2"
+        recovered(path, 1 if fault else 2)
+    print("Bulk standalone ACK: 8 final publication and 5 prior-WAL cleanup/ACK outcomes passed")
     streamed_recovery.exercise(root, new, driver, env)
     large_row_recovery.exercise(root, new, driver, env)
     for size in (1 << 20, 16 << 20):

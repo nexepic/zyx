@@ -729,6 +729,27 @@ int main(int argc, char **argv) try {
 		db.close();
 		return 0;
 	}
+	if (op == "bulk-publish" || op == "bulk-publish-clean") {
+		auto prefix = db.beginTransaction();
+		auto first = prefix.createNode("Prior");
+		prefix.commit();
+		if (op == "bulk-publish-clean")
+			db.save();
+		auto old = db.beginReadOnlyTransaction();
+		auto bulk = db.beginBulkTransaction();
+		const auto last = bulk.createNode("Marker", {{"v", int64_t(42)}});
+		expect(bulk.createEdge(first, last, "ECHO", {{"w", int64_t(5)}}) > 0, "Invalid edge ID");
+		expect(scalar(bulk, count) == 2 && scalar(old, count) == 1, "Bulk staging visibility");
+		if (argc > 3)
+			setenv("ZYX_TEST_NATIVE_IO", argv[3], 1);
+		bulk.commit();
+		expect(scalar(old, count) == 1 && scalar(db, count) == 2, "Bulk snapshot isolation");
+		expect(!std::filesystem::exists(path + ".wal") && !std::filesystem::exists(path + ".base"),
+			   "Bulk acknowledgement still requires dependencies");
+		std::filesystem::copy_file(path, path + ".copy");
+		std::cout << "ack\n" << std::flush;
+		kill(getpid(), SIGKILL);
+	}
 	if (op == "chain") {
 		auto prefix = db.beginTransaction();
 		query(prefix, "CREATE (:Prior {v: 1})");

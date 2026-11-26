@@ -15,7 +15,8 @@ namespace graph::storage::nativewal {
 		std::mutex gate;
 		UniqueOwners uniqueOwners;
 		std::shared_ptr<const State> current;
-		void publishBase(std::shared_ptr<State> next, const std::function<void()> &beforePublish = {});
+		void publishBase(std::shared_ptr<State> next, const std::function<void()> &beforePublish = {},
+						 bool retireDependencies = true);
 		void checkpointLocked();
 		void publishSchema(std::shared_ptr<State>, const std::function<void()> &check);
 
@@ -24,7 +25,7 @@ namespace graph::storage::nativewal {
 		~Journal();
 		static std::string create(const std::string &, std::shared_ptr<const ColumnDeclaration> = {});
 		std::shared_ptr<const State> snapshot();
-		void commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next, const Changes &);
+		void commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next, const Changes &, bool standalone = false);
 		void checkpoint();
 		bool dropUnique(std::string_view name);
 		uint64_t createUnique(const std::string &name, const std::string &label, const std::string &key,
