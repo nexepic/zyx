@@ -211,6 +211,7 @@ namespace graph::storage::nativewal {
 			mutable Item loaded{};
 			size_t encodedBytes() const { return entry->wire; }
 			uint64_t id() const { return entry->value.first; }
+			const LogicalGraphEdge &edgeHeader() const requires std::is_same_v<Row, LogicalGraphEdge> { return entry->value.second; }
 			bool onDisk() const { return bool(entry->record); }
 			size_t offset() const { return entry->record->offset; }
 			void readImage(std::span<std::byte> data) const {
@@ -310,13 +311,25 @@ namespace graph::storage::nativewal {
 			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap, &scratch);
 		}
 		Item baseRecord(uint64_t id, size_t wire, size_t offset, const std::array<std::byte, 32> &digest,
-						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &), const Item &previous = {}) const {
+						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &), Row &decoded, const Item &previous = {}) const {
 			// A locator holds no file or decoded row. Reuse its allocation only
 			// after the independent stream supplied exactly the same metadata.
 			if (previous && previous->record && previous->value.first == id && previous->wire == wire &&
 				previous->record->offset == offset && previous->record->digest == digest && previous->record->decode == decode)
 				return previous;
-			auto item = std::make_shared<Entry>(budget, id, Row{}, wire, 192);
+			Row header;
+
+			if constexpr (std::is_same_v<Row, LogicalGraphEdge>) {
+				header.source_node_id = decoded.source_node_id;
+				header.target_node_id = decoded.target_node_id;
+				// Reuse inline storage only. For a longer name the selected
+				// edge is authenticated and decoded on demand as before.
+				if (decoded.type.size() <= header.type.capacity()) {
+					header.edge_id = id;
+					header.type.assign(decoded.type);
+				}
+			}
+			auto item = std::make_shared<Entry>(budget, id, std::move(header), wire, 192);
 			item->record = std::make_unique<Record>(Record{offset, digest, decode});
 			return item;
 		}

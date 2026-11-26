@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    run("directional-overlay", new("directional-overlay"))
     integrity_recovery.exercise(root, new, run, driver, env)
     embedded_root_recovery.exercise(root, new, run)
     # Test the final replacement separately from retiring the *prior* ACKed WAL.

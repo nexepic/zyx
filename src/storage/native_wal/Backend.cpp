@@ -159,43 +159,66 @@ namespace graph::storage::nativewal {
 		static bool matches(const LogicalGraphEdge &e, uint64_t id, LogicalGraphReadDirection dir) {
 			return (dir == LogicalGraphReadDirection::LGRD_OUTGOING ? e.source_node_id : e.target_node_id) == id;
 		}
-		LogicalGraphAdjacencyPage scanAdjacentEdges(uint64_t id, LogicalGraphReadDirection dir,
-													std::optional<LogicalGraphAdjacencyContinuation> cursor,
-													size_t max) const override {
+		template<class Page, class Append>
+		Page adjacencyPage(uint64_t id, LogicalGraphReadDirection dir,
+						   std::optional<LogicalGraphAdjacencyContinuation> cursor,
+						   size_t max, Append append) const {
 			require(max && data->nodes.contains(id), "Invalid native adjacency scan");
-			auto it = data->edges.begin();
+			uint64_t after = 0;
 			if (cursor) {
-				it = data->edges.find(cursor->previous_edge_id);
-				require(it != data->edges.end() && matches(it->second, id, dir), "Invalid native adjacency cursor");
-				++it;
+				after = cursor->previous_edge_id;
+				auto previous = data->edges.find(after);
+				require(previous != data->edges.end() && matches(previous.edgeHeader(), id, dir),
+						"Invalid native adjacency cursor");
 			}
-			LogicalGraphAdjacencyPage page;
-			for (; it != data->edges.end(); ++it) {
-				if (!matches(it->second, id, dir))
-					continue;
+			Page page;
+			data->adjacentAfter(id, dir == LogicalGraphReadDirection::LGRD_OUTGOING, after, [&](auto it) {
 				if (cursor) {
-					require(cursor->next_edge_id == it->first, "Invalid native adjacency continuation");
+					require(cursor->next_edge_id == it.id(), "Invalid native adjacency continuation");
 					cursor.reset();
 				}
 				if (page.edges.size() == std::min(max, size_t(64))) {
-					page.continuation = {{page.edges.back().edge_id, it->first}};
-					break;
+					page.continuation = {{page.edges.back().edge_id, it.id()}};
+					return false;
 				}
-				page.edges.push_back(it->second);
-			}
+				append(page, it);
+				return true;
+			});
 			require(!cursor, "Missing native adjacency continuation");
 			return page;
 		}
+		LogicalGraphAdjacencyPage scanAdjacentEdges(uint64_t id, LogicalGraphReadDirection dir,
+				std::optional<LogicalGraphAdjacencyContinuation> cursor, size_t max) const override {
+			return adjacencyPage<LogicalGraphAdjacencyPage>(id, dir, cursor, max,
+				[](auto &p, auto it) { p.edges.push_back(it->second); });
+		}
+		template<class Iterator>
+		static LogicalGraphEdgeTopology topology(const Iterator &it) {
+			const auto &e = it.edgeHeader().edge_id ? it.edgeHeader() : it->second;
+			return {e.edge_id, e.source_node_id, e.target_node_id, e.type};
+		}
+		LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(uint64_t id, LogicalGraphReadDirection dir,
+				std::optional<LogicalGraphAdjacencyContinuation> cursor, size_t max) const override {
+			return adjacencyPage<LogicalGraphAdjacencyTopologyPage>(id, dir, cursor, max,
+				[](auto &p, auto it) { p.edges.push_back(topology(it)); });
+		}
+		bool supportsNativeAdjacentEdgeTopologyPages() const override { return true; }
+		template<class Visitor>
+		void visitAdjacent(uint64_t id, LogicalGraphReadDirection dir, size_t max, Visitor visit) const {
+			require(data->nodes.contains(id), "Missing native adjacency owner");
+			data->adjacentAfter(id, dir == LogicalGraphReadDirection::LGRD_OUTGOING, 0, [&](auto it) {
+				require(max-- > 0, "Native adjacency limit exceeded");
+				return visit(it);
+			});
+		}
 		void visitAdjacentEdges(uint64_t id, LogicalGraphReadDirection dir, size_t max,
 								const std::function<bool(const LogicalGraphEdge &)> &f) const override {
-			require(data->nodes.contains(id), "Missing native adjacency owner");
-			for (auto &[eid, e]: data->edges) {
-				if (!matches(e, id, dir))
-					continue;
-				require(max-- > 0, "Native adjacency limit exceeded");
-				if (!f(e))
-					break;
-			}
+			visitAdjacent(id, dir, max, [&](auto it) { return f(it->second); });
+		}
+		void visitAdjacentEdgeTopologies(uint64_t id, LogicalGraphReadDirection dir, size_t max,
+								const std::function<bool(const LogicalGraphEdgeTopology &)> &f) const override {
+			require(bool(f), "Missing native topology visitor");
+			visitAdjacent(id, dir, max, [&](auto it) { return f(topology(it)); });
 		}
 		using Columns = std::vector<std::vector<PropertyValue>>;
 		using Admission = std::function<void(size_t)>;

@@ -607,6 +607,60 @@ int main(int argc, char **argv) try {
 		exerciseGraph(db, path);
 		return 0;
 	}
+	if (op == "directional-overlay") {
+		auto seed = db.beginBulkTransaction();
+		auto a = seed.createNode("Owner"), b = seed.createNode("End"), noise = seed.createNode("Noise");
+		std::vector<int64_t> from(130, a), to(130, b);
+		auto ids = seed.createEdgesColumnar("Link", from, to);
+		(void)seed.createEdge(a, a, "Link");
+		(void)seed.createEdge(noise, b, "RelationshipTypeLongerThanInlineStorage", {{"blob", std::string(300000, 'x')}});
+		seed.commit();
+		db.close();
+		db.open();
+		const std::string out = "MATCH (:Owner)-[r:Link]->() RETURN id(r)";
+		auto observed = [&](auto &h) {
+			auto r = query(h, out);
+			std::vector<int64_t> result;
+			while (r.hasNext()) {
+				r.next();
+				result.push_back(std::get<int64_t>(r.get(0)));
+			}
+			return result;
+		};
+		ids.push_back(ids.back() + 1);
+		auto pinned = db.beginReadOnlyTransaction();
+		expect(observed(pinned) == ids, "Base traversal order or multiplicity");
+		expect(scalar(pinned, "MATCH (:Noise)-[r:RelationshipTypeLongerThanInlineStorage]->() RETURN count(r)") == 1,
+			   "Long relationship type missing from topology");
+		auto writer = db.beginTransaction();
+		query(writer, "MATCH (:Owner)-[r:Link]->() WHERE id(r) = " + std::to_string(ids[64]) + " DELETE r");
+		query(writer, "MATCH (:Owner)-[r:Link]->() WHERE id(r) = " + std::to_string(ids[0]) + " SET r.mark = 7");
+		auto added = writer.createEdge(a, b, "Link");
+		auto updated = ids;
+		updated.erase(updated.begin() + 64);
+		updated.push_back(added);
+		expect(observed(writer) == updated && observed(pinned) == ids, "Overlay ordered page boundary");
+		writer.commit();
+		auto cancel = db.beginTransaction();
+		query(cancel, "MATCH (n:Owner) DETACH DELETE n");
+		expect(observed(cancel).empty(), "Private detach left incident edges");
+		cancel.rollback();
+		db.save();
+		expect(observed(pinned) == ids && observed(db) == updated, "Pinned checkpoint traversal");
+		expect(scalar(pinned, "MATCH (:Owner)-[r:Link]->() WHERE r.mark = 7 RETURN count(r)") == 0,
+			   "New property visible in pinned adjacency");
+		pinned.commit();
+		db.close();
+		db.open();
+		expect(observed(db) == updated, "Reopened adjacency");
+		expect(scalar(db, "MATCH (:Owner)-[r:Link]->() WHERE r.mark = 7 RETURN id(r)") == ids[0],
+			   "Property-only change lost after reopen");
+		auto detach = db.beginTransaction();
+		query(detach, "MATCH (n:Owner) DETACH DELETE n");
+		detach.commit();
+		expect(scalar(db, "MATCH ()-[e]->() RETURN count(e)") == 1, "Detach changed unrelated edge");
+		return 0;
+	}
 	if (op == "topology") {
 		auto first = db.beginTransaction();
 		auto a = first.createNode("A"), b = first.createNode("B");

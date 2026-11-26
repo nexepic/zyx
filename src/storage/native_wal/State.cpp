@@ -158,6 +158,69 @@ namespace graph::storage::nativewal {
 	} // namespace
 	std::pair<size_t, size_t> rowCost(const LogicalGraphNode &n) { return cost(n); }
 	std::pair<size_t, size_t> rowCost(const LogicalGraphEdge &e) { return cost(e); }
+	// Build only after the entire confirmed prefix has passed recovery. All
+	// endpoint pairs are already present in the pinned primary row headers.
+	void State::buildAdjacency() {
+		discardAdjacency();
+		if (!edges.size()) {
+			adjacencyComplete = true;
+			return;
+		}
+		if (edges.size() > budget->remaining() / (8 * sizeof(AdjacencyOrder::Posting))) return;
+		try {
+			auto order = std::make_shared<AdjacencyOrder>(budget, edges.size());
+			edges.visitAfter(0, [&](auto it) {
+				const auto &edge = it.edgeHeader();
+				order->outgoing.emplace_back(edge.source_node_id, it.id());
+				order->incoming.emplace_back(edge.target_node_id, it.id());
+				return true;
+			});
+			order->sort();
+			adjacency = std::move(order);
+			adjacencyComplete = true;
+		} catch (const std::length_error &) {
+			return;
+		} catch (const std::bad_alloc &) {
+			return;
+		}
+	}
+	// The immutable base is never merged on commit. Binary-sized sorted runs
+	// share all untouched levels with the preceding transaction snapshot.
+	void State::recordNewEndpoints(std::span<const uint64_t> ids) {
+		if (!adjacencyComplete || ids.empty()) return;
+		try {
+			auto runs = std::make_shared<AdjacencyChanges>(budget);
+			if (adjacencyChanges) runs->levels = adjacencyChanges->levels;
+			auto pending = std::make_shared<AdjacencyOrder>(budget, ids.size());
+			for (auto id : ids) {
+				const auto &e = edges.checked(id).edgeHeader();
+				pending->outgoing.emplace_back(e.source_node_id, id);
+				pending->incoming.emplace_back(e.target_node_id, id);
+			}
+			pending->sort();
+			size_t level = 0;
+			for (; level < runs->levels.size(); ++level) {
+				auto &prior = runs->levels[level];
+				if (prior) {
+					auto merged = std::make_shared<AdjacencyOrder>(budget, prior->outgoing.size() + pending->outgoing.size());
+					merged->merge(*prior, *pending);
+					pending = std::move(merged);
+					prior.reset();
+				}
+				if (std::bit_width(pending->outgoing.size()) <= level + 1) break;
+			}
+			if (level == runs->levels.size()) {
+				discardAdjacency();
+				return;
+			}
+			runs->levels[level] = std::move(pending);
+			adjacencyChanges = std::move(runs);
+		} catch (const std::bad_alloc &) {
+			discardAdjacency();
+		} catch (const std::length_error &) {
+			discardAdjacency();
+		}
+	}
 	LogicalGraphMutationBatchResult preview(const State &s, const LogicalGraphMutationBatch &b) {
 		require(!b.creation_identity_plan, "External identity plans are unsupported");
 		LogicalGraphMutationBatchResult r;
@@ -223,6 +286,7 @@ namespace graph::storage::nativewal {
 													  e.type, properties(e.properties)});
 			changed.edges.insert(id);
 		}
+		s.recordNewEndpoints(ids.created_edge_ids);
 		for (auto &p: b.property_replacements) {
 			bool edge = p.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE;
 			auto id = resolve(p.entity, edge, ids);
@@ -268,20 +332,27 @@ namespace graph::storage::nativewal {
 			require(s.nodes.erase(n.node_id), "Unknown native WAL node");
 			changed.nodes.insert(n.node_id);
 			size_t count = 0;
-			for (auto it = s.edges.begin(); it != s.edges.end();) {
-				auto &e = it->second;
-				if (e.source_node_id != n.node_id && e.target_node_id != n.node_id) {
-					++it;
-					continue;
-				}
-				require(n.detach && ++count <= n.maximum_detach_edges,
-						"Native WAL node deletion has incident relationships");
-				changed.edges.insert(it->first);
-				auto erased = it->first;
-				s.edges.erase(erased);
-				it = s.edges.upper_bound(erased);
+			for (bool outgoing : {true, false}) {
+				uint64_t after = 0;
+				size_t used;
+				do {
+					std::array<uint64_t, 64> batch;
+					used = 0;
+					s.adjacentAfter(n.node_id, outgoing, after, [&](auto it) {
+						require(n.detach && ++count <= n.maximum_detach_edges,
+								"Native WAL node deletion has incident relationships");
+						batch[used++] = it.id();
+						return used != batch.size();
+					});
+					for (size_t i = 0; i < used; ++i) {
+						after = batch[i];
+						changed.edges.insert(after);
+						s.edges.erase(after);
+					}
+				} while (used == 64);
 			}
 		}
+		if (!b.edge_deletes.empty() || !b.node_deletes.empty()) s.boundDeadPostings();
 		for (auto id: ids.created_edge_ids) {
 			auto it = s.edges.find(id);
 			if (it != s.edges.end())
@@ -629,6 +700,7 @@ namespace graph::storage::nativewal {
 		bool removedNode = false;
 		VersionMemoryResource idMemory(s.budget);
 		std::pmr::vector<uint64_t> changedIds(&idMemory);
+		std::pmr::vector<uint64_t> newEndpoints(&idMemory);
 		bool haveIds = true;
 		std::vector<uint64_t> changedColumnIds;
 		size_t remainingChanges = 2 * maxRows; // Same ceiling as the writer across nodes and edges.
@@ -668,6 +740,21 @@ namespace graph::storage::nativewal {
 					r.beginRow(scratch);
 					auto row = decode(id, scratch);
 					r.endRow();
+					if constexpr (!nodes) {
+						if (s.adjacencyComplete) {
+							auto oldEdge = map.find(id);
+							if (oldEdge == map.end() || oldEdge.edgeHeader().source_node_id != row.source_node_id ||
+								oldEdge.edgeHeader().target_node_id != row.target_node_id) {
+								try {
+									newEndpoints.push_back(id);
+								} catch (const std::length_error &) {
+									s.discardAdjacency();
+								} catch (const std::bad_alloc &) {
+									s.discardAdjacency();
+								}
+							}
+						}
+					}
 					map.insert_or_assign(id, std::move(row), &scratch);
 				} else {
 					bool existed = map.erase(id);
@@ -686,13 +773,18 @@ namespace graph::storage::nativewal {
 			return edge;
 		});
 		require(r.remaining() == 0, "Trailing native WAL delta");
+		s.recordNewEndpoints(newEndpoints);
+		s.boundDeadPostings();
 		s.recordColumnChanges(changedColumnIds);
 		s.nodeHigh = nh;
 		s.edgeHigh = eh;
 		if (removedNode)
-			for (auto &[id, e]: s.edges)
+			s.edges.visitAfter(0, [&](auto it) {
+				const auto &e = it.edgeHeader();
 				require(s.nodes.contains(e.source_node_id) && s.nodes.contains(e.target_node_id),
 						"Native WAL dangling relationship");
+				return true;
+			});
 		if (s.unique || s.catalog) {
 			if (haveIds) {
 				unique.validate(s, nullptr, [&](const auto &visit) {

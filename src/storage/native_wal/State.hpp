@@ -2,6 +2,8 @@
 #include <cstring>
 #include <set>
 #include "IndexedColumn.hpp"
+#include "AdjacencyOrder.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/utils/Sha256.hpp"
@@ -46,6 +48,54 @@ namespace graph::storage::nativewal {
 		}
 	};
 	struct State {
+		std::shared_ptr<const AdjacencyOrder> adjacency;
+		std::shared_ptr<const AdjacencyChanges> adjacencyChanges;
+		bool adjacencyComplete = true;
+		void discardAdjacency() {
+			adjacencyComplete = false;
+			adjacency.reset();
+			adjacencyChanges.reset();
+		}
+		void buildAdjacency();
+		void recordNewEndpoints(std::span<const uint64_t> ids);
+		void boundDeadPostings() {
+			if (!adjacencyComplete) return;
+			size_t retained = adjacency ? adjacency->outgoing.size() : 0;
+			if (adjacencyChanges)
+				for (const auto &run : adjacencyChanges->levels)
+					if (run) retained += run->outgoing.size();
+			if (retained > edges.size() && retained - edges.size() > std::max(size_t(128), edges.size())) {
+				discardAdjacency();
+				adjacencyComplete = !edges.size();
+			}
+		}
+		template<class Visitor>
+		void adjacentAfter(uint64_t owner, bool outgoing, uint64_t after, Visitor visit) const {
+			auto matches = [&](const LogicalGraphEdge &e) {
+				return (outgoing ? e.source_node_id : e.target_node_id) == owner;
+			};
+			if (!adjacencyComplete) {
+				size_t inspected = 0;
+				edges.visitAfter(after, [&](auto it) {
+					++inspected;
+					return !matches(it.edgeHeader()) || visit(it);
+				});
+				debug::PerfTrace::addValue("native_wal.adjacency.scan_headers", inspected);
+				return;
+			}
+			AdjacentCursor cursor(owner, outgoing, after);
+			if (adjacency) cursor.add(*adjacency);
+			if (adjacencyChanges)
+				for (const auto &run : adjacencyChanges->levels)
+					if (run) cursor.add(*run);
+			size_t inspected = 0;
+			while (auto id = cursor.next()) {
+				++inspected;
+				auto it = edges.find(id);
+				if (it != edges.end() && matches(it.edgeHeader()) && !visit(it)) break;
+			}
+			debug::PerfTrace::addValue("native_wal.adjacency.posting_ids", inspected);
+		}
 		std::shared_ptr<const UniqueCatalog> catalog;
 		std::shared_ptr<const UniqueDeclaration> unique;
 		Identity identity{};

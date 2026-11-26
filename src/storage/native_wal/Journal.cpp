@@ -868,6 +868,7 @@ namespace graph::storage::nativewal {
 			require(signature(*s) == std::string_view(reinterpret_cast<const char *>(head.data()), 8),
 					"Noncanonical native schema header");
 			const bool lazy = c.remaining() > std::min(size_t(256 * 1024), memory / 2);
+			s->discardAdjacency(); // Recovery validates rows and deltas before allocating optional orders.
 			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode, auto inspect, auto previousTable) {
 				uint64_t prior = 0;
 				table.loadSorted(n, [&](const auto &previous) {
@@ -890,7 +891,7 @@ namespace graph::storage::nativewal {
 								"Native WAL dangling relationship");
 					if (!lazy || compact)
 						return table.residentRecord(id, std::move(row), scratch);
-					return table.baseRecord(id, size + 16, offset, digest(b), decode, previous);
+					return table.baseRecord(id, size + 16, offset, digest(b), decode, row, previous);
 				}, previousTable);
 				table.bindInput(file);
 			};
@@ -1098,6 +1099,7 @@ namespace graph::storage::nativewal {
 		}
 		if (!readOnly)
 			files->discardLegacyStage(s->identity);
+		if (!audit) s->buildAdjacency();
 		current = std::move(s);
 	}
 	NativeWalIntegrityReport Journal::verifyIntegrity(size_t workspace) {
