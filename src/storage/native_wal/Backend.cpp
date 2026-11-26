@@ -192,15 +192,10 @@ namespace graph::storage::nativewal {
 			return adjacencyPage<LogicalGraphAdjacencyPage>(id, dir, cursor, max,
 				[](auto &p, auto it) { p.edges.push_back(it->second); });
 		}
-		template<class Iterator>
-		static LogicalGraphEdgeTopology topology(const Iterator &it) {
-			const auto &e = it.edgeHeader().edge_id ? it.edgeHeader() : it->second;
-			return {e.edge_id, e.source_node_id, e.target_node_id, e.type};
-		}
 		LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(uint64_t id, LogicalGraphReadDirection dir,
 				std::optional<LogicalGraphAdjacencyContinuation> cursor, size_t max) const override {
 			return adjacencyPage<LogicalGraphAdjacencyTopologyPage>(id, dir, cursor, max,
-				[](auto &p, auto it) { p.edges.push_back(topology(it)); });
+				[](auto &p, auto it) { p.edges.push_back(it.topology()); });
 		}
 		bool supportsNativeAdjacentEdgeTopologyPages() const override { return true; }
 		template<class Visitor>
@@ -219,7 +214,7 @@ namespace graph::storage::nativewal {
 								const std::function<bool(const LogicalGraphEdgeTopology &)> &f) const override {
 			if (!f)
 				throw std::invalid_argument("logical graph adjacency topology scan requires a visitor");
-			visitAdjacent(id, dir, max, [&](auto it) { return f(topology(it)); });
+			visitAdjacent(id, dir, max, [&](auto it) { return f(it.topology()); });
 		}
 		using Columns = std::vector<std::vector<PropertyValue>>;
 		using Admission = std::function<void(size_t)>;

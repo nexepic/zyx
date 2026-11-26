@@ -607,6 +607,94 @@ int main(int argc, char **argv) try {
 		exerciseGraph(db, path);
 		return 0;
 	}
+	if (op == "type-ack" || op == "type-replay") {
+		const std::string prefix(127, 'T');
+		auto check = [&](auto &view, bool changed) {
+			for (char suffix : {'A', 'B'})
+				expect(scalar(view, "MATCH (:Src)-[r:" + prefix + suffix +
+					"]->(:Dst) WHERE r.mark = 11 RETURN count(r)") == int(suffix == (changed ? 'B' : 'A')),
+					"Wrong relationship type generation");
+		};
+		const auto exported = path + ".view";
+		if (op == "type-replay") {
+			check(db, true);
+			db.save();
+			db.close();
+			db.open();
+			check(db, true);
+			zyx::Database copy(exported);
+			copy.open();
+			check(copy, false);
+			return 0;
+		}
+		auto seed = db.beginBulkTransaction();
+		auto a = seed.createNode("Src"), b = seed.createNode("Dst");
+		seed.createEdge(a, b, prefix + "A", {{"mark", int64_t(11)}, {"payload", std::string(300000, 'W')}});
+		seed.commit();
+		db.close();
+		db.open();
+		auto old = db.beginReadOnlyTransaction();
+		{
+			std::ofstream out(exported, std::ios::binary);
+			db.exportSegmentedSnapshot(out);
+			out.close();
+			expect(out.good(), "Related type snapshot export failed");
+		}
+		for (bool publish : {false, true}) {
+			auto writer = db.beginTransaction();
+			query(writer, "MATCH (:Src)-[r:" + prefix + "A]->() DELETE r");
+			writer.createEdge(a, b, prefix + "B", {{"mark", int64_t(11)}});
+			check(writer, true);
+			check(old, false);
+			if (publish) writer.commit();
+			else writer.rollback();
+			check(db, publish);
+		}
+		check(old, false);
+		::raise(SIGKILL);
+		return 1;
+	}
+	if (op == "directional-type-damage") {
+		const std::string name(257, 'Q');
+		auto seed = db.beginBulkTransaction();
+		auto a = seed.createNode("Owner"), b = seed.createNode("End");
+		seed.createEdge(a, b, name, {{"blob", std::string(300000, 'Z')}});
+		seed.commit();
+		db.close();
+		db.open();
+		auto reader = db.beginReadOnlyTransaction();
+		const auto match = "MATCH (:Owner)-[r:" + name + "]->() ";
+		std::ifstream in(path, std::ios::binary);
+		const std::string image((std::istreambuf_iterator<char>(in)), {});
+		std::fstream out(path, std::ios::in | std::ios::out | std::ios::binary);
+		auto patch = [&](const std::string &find, char value) {
+			auto pos = image.find(find);
+			expect(pos != std::string::npos, "Missing damage marker");
+			out.seekp(pos);
+			out.put(value);
+			out.flush();
+			expect(bool(out), "Failed damage injection");
+		};
+		auto fails = [&](const std::string &q, const std::string &why) {
+			try {
+				auto rows = query(reader, q);
+				while (rows.hasNext()) rows.next();
+			} catch (const std::exception &e) {
+				return std::string(e.what()).find(why) != std::string::npos;
+			}
+			return false;
+		};
+		patch(std::string(1024, 'Z'), 'X');
+		expect(scalar(reader, match + "RETURN count(r)") == 1, "Unrelated changed value affected type");
+		expect(fails(match + "RETURN r.blob", "Immutable native base row changed"), "Row damage missed");
+		patch(std::string(1024, 'Z'), 'Z');
+		patch(name, 'X');
+		expect(fails(match + "RETURN count(r)", "Immutable native relationship type changed"), "Type damage missed");
+		patch(name, 'Q');
+		expect(scalar(reader, match + "RETURN count(r)") == 1, "Restored type not visible");
+		reader.commit();
+		return 0;
+	}
 	if (op == "directional-overlay") {
 		auto seed = db.beginBulkTransaction();
 		auto a = seed.createNode("Owner"), b = seed.createNode("End"), noise = seed.createNode("Noise");
@@ -614,6 +702,14 @@ int main(int argc, char **argv) try {
 		auto ids = seed.createEdgesColumnar("Link", from, to);
 		(void)seed.createEdge(a, a, "Link");
 		(void)seed.createEdge(noise, b, "RelationshipTypeLongerThanInlineStorage", {{"blob", std::string(300000, 'x')}});
+		// Both a shareable spelling and a separately authenticated long field.
+		// Change only the final byte of each name to exercise exact matching.
+		const std::string medium(23, 'M'), large(257, 'L');
+		for (const auto &prefix : {medium, large}) {
+			for (const auto *suffix : {"A", "A", "B"})
+				(void)seed.createEdge(noise, b, prefix + suffix, {{"mark", int64_t(11)}});
+		}
+
 		seed.commit();
 		db.close();
 		db.open();
@@ -632,6 +728,15 @@ int main(int argc, char **argv) try {
 		expect(observed(pinned) == ids, "Base traversal order or multiplicity");
 		expect(scalar(pinned, "MATCH (:Noise)-[r:RelationshipTypeLongerThanInlineStorage]->() RETURN count(r)") == 1,
 			   "Long relationship type missing from topology");
+		auto checkTypes = [&](auto &view) {
+			for (const auto &prefix : {medium, large})
+				for (const auto &[suffix, expected] : std::vector<std::pair<std::string, int>>{{"A", 2}, {"B", 1}, {"C", 0}})
+					expect(scalar(view, "MATCH (:End)<-[r:" + prefix + suffix +
+						"]-(:Noise) WHERE r.mark = 11 RETURN count(r)") == expected,
+						"Relationship type or property predicate mismatch");
+		};
+		checkTypes(pinned);
+
 		auto writer = db.beginTransaction();
 		query(writer, "MATCH (:Owner)-[r:Link]->() WHERE id(r) = " + std::to_string(ids[64]) + " DELETE r");
 		query(writer, "MATCH (:Owner)-[r:Link]->() WHERE id(r) = " + std::to_string(ids[0]) + " SET r.mark = 7");
@@ -653,12 +758,13 @@ int main(int argc, char **argv) try {
 		db.close();
 		db.open();
 		expect(observed(db) == updated, "Reopened adjacency");
+		checkTypes(db);
 		expect(scalar(db, "MATCH (:Owner)-[r:Link]->() WHERE r.mark = 7 RETURN id(r)") == ids[0],
 			   "Property-only change lost after reopen");
 		auto detach = db.beginTransaction();
 		query(detach, "MATCH (n:Owner) DETACH DELETE n");
 		detach.commit();
-		expect(scalar(db, "MATCH ()-[e]->() RETURN count(e)") == 1, "Detach changed unrelated edge");
+		expect(scalar(db, "MATCH ()-[e]->() RETURN count(e)") == 7, "Detach changed unrelated edge");
 		return 0;
 	}
 	if (op == "topology") {

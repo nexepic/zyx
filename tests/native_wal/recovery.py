@@ -32,6 +32,10 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    types = new("type-ack")
+    run("type-ack", types, code=-signal.SIGKILL)
+    run("type-replay", types)
+    run("directional-type-damage", new("directional-type-damage"))
     run("directional-overlay", new("directional-overlay"))
     integrity_recovery.exercise(root, new, run, driver, env)
     embedded_root_recovery.exercise(root, new, run)

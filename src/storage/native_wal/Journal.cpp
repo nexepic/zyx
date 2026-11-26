@@ -871,6 +871,7 @@ namespace graph::storage::nativewal {
 			s->discardAdjacency(); // Recovery validates rows and deltas before allocating optional orders.
 			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode, auto inspect, auto previousTable) {
 				uint64_t prior = 0;
+				typename std::remove_reference_t<decltype(table)>::RecentType recent;
 				table.loadSorted(n, [&](const auto &previous) {
 					auto id = c.num();
 					auto size = c.count(memory);
@@ -891,7 +892,7 @@ namespace graph::storage::nativewal {
 								"Native WAL dangling relationship");
 					if (!lazy || compact)
 						return table.residentRecord(id, std::move(row), scratch);
-					return table.baseRecord(id, size + 16, offset, digest(b), decode, row, previous);
+					return table.baseRecord(id, size + 16, offset, digest(b), decode, row, b, recent, previous);
 				}, previousTable);
 				table.bindInput(file);
 			};

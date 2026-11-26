@@ -114,10 +114,29 @@ namespace graph::storage::nativewal {
 	template<class Row>
 	class VersionedRows {
 		using Pair = std::pair<uint64_t, Row>;
+		// A physical locator already reserves space for allocation overhead. Keep
+		// common names within that allowance; larger names have an independently
+		// authenticated slice in the same immutable row.
+		struct BoundType {
+			size_t length;
+			// Both representations fit one bounded allocation. Named postings
+			// never decide equality using a digest: the external case returns
+			// the authenticated bytes to the ordinary type comparator.
+			std::array<std::byte, 64> bytes{};
+			bool storesName() const { return length <= bytes.size(); }
+			bool matches(std::span<const std::byte> name) const {
+				return storesName() && name.size() == length && std::equal(name.begin(), name.end(), bytes.begin());
+			}
+		};
+		using TypeRef = std::shared_ptr<const BoundType>;
+		struct NoType {};
+		static constexpr size_t locatorAllowance = 192;
+		static constexpr size_t typeOffset = 3 * sizeof(uint64_t); // source, target, name byte count
 		struct Record {
 			size_t offset;
 			std::array<std::byte, 32> digest;
 			Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &);
+			[[no_unique_address]] std::conditional_t<std::is_same_v<Row, LogicalGraphEdge>, TypeRef, NoType> type{};
 		};
 		struct Entry {
 			VersionCharge charge;
@@ -204,6 +223,7 @@ namespace graph::storage::nativewal {
 
 	public:
 		using mapped_type = Row;
+		using RecentType = std::weak_ptr<const BoundType>;
 		explicit VersionedRows(std::shared_ptr<VersionBudget> b) : budget(std::move(b)) {}
 		struct Iterator {
 			const VersionedRows *rows;
@@ -212,6 +232,22 @@ namespace graph::storage::nativewal {
 			size_t encodedBytes() const { return entry->wire; }
 			uint64_t id() const { return entry->value.first; }
 			const LogicalGraphEdge &edgeHeader() const requires std::is_same_v<Row, LogicalGraphEdge> { return entry->value.second; }
+			LogicalGraphEdgeTopology topology() const requires std::is_same_v<Row, LogicalGraphEdge> {
+				const auto &e = edgeHeader();
+				if (e.edge_id) return {id(), e.source_node_id, e.target_node_id, e.type};
+				const auto &bound = *entry->record->type;
+				if (bound.storesName())
+					return {id(), e.source_node_id, e.target_node_id,
+						std::string(reinterpret_cast<const char *>(bound.bytes.data()), bound.length)};
+				VersionCharge scratch(rows->budget, bound.length + 1);
+				std::string name(bound.length, '\0');
+				auto bytes = std::as_writable_bytes(std::span(name));
+				rows->input->read(id(), offset() + typeOffset, bytes);
+				auto digest = utils::Sha256::digest(bytes);
+				if (!std::equal(digest.begin(), digest.end(), bound.bytes.begin()))
+					throw std::runtime_error("Immutable native relationship type changed");
+				return {id(), e.source_node_id, e.target_node_id, std::move(name)};
+			}
 			bool onDisk() const { return bool(entry->record); }
 			size_t offset() const { return entry->record->offset; }
 			void readImage(std::span<std::byte> data) const {
@@ -311,26 +347,54 @@ namespace graph::storage::nativewal {
 			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap, &scratch);
 		}
 		Item baseRecord(uint64_t id, size_t wire, size_t offset, const std::array<std::byte, 32> &digest,
-						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &), Row &decoded, const Item &previous = {}) const {
+						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &), Row &decoded,
+				std::span<const std::byte> image, RecentType &recent, const Item &previous = {}) const {
 			// A locator holds no file or decoded row. Reuse its allocation only
 			// after the independent stream supplied exactly the same metadata.
 			if (previous && previous->record && previous->value.first == id && previous->wire == wire &&
 				previous->record->offset == offset && previous->record->digest == digest && previous->record->decode == decode)
 				return previous;
 			Row header;
-
+			size_t heap = locatorAllowance;
 			if constexpr (std::is_same_v<Row, LogicalGraphEdge>) {
 				header.source_node_id = decoded.source_node_id;
 				header.target_node_id = decoded.target_node_id;
-				// Reuse inline storage only. For a longer name the selected
-				// edge is authenticated and decoded on demand as before.
 				if (decoded.type.size() <= header.type.capacity()) {
 					header.edge_id = id;
 					header.type.assign(decoded.type);
+				} else {
+					heap = std::max(heap, sizeof(Record) + sizeof(BoundType) + 6 * sizeof(void *));
 				}
 			}
-			auto item = std::make_shared<Entry>(budget, id, std::move(header), wire, 192);
-			item->record = std::make_unique<Record>(Record{offset, digest, decode});
+			// Admit the locator and its worst-case private proof before allocating
+			// either. Sharing never makes admission depend on another snapshot.
+			auto item = std::make_shared<Entry>(budget, id, std::move(header), wire, heap);
+			Record record{offset, digest, decode};
+			if constexpr (std::is_same_v<Row, LogicalGraphEdge>) {
+				if (!item->value.second.edge_id) {
+					auto bytes = std::as_bytes(std::span(decoded.type));
+					auto previousType = recent.lock();
+					if (previousType && previousType->matches(bytes)) {
+						record.type = std::move(previousType);
+					} else {
+						auto bound = std::make_shared<BoundType>();
+						bound->length = bytes.size();
+						if (bound->storesName()) {
+							std::copy(bytes.begin(), bytes.end(), bound->bytes.begin());
+							recent = bound;
+						} else {
+							if (offset > SIZE_MAX - typeOffset || image.size() < typeOffset ||
+								bytes.size() > image.size() - typeOffset ||
+								!std::ranges::equal(bytes, image.subspan(typeOffset, bytes.size())))
+								throw std::runtime_error("Invalid native relationship type extent");
+							auto hash = utils::Sha256::digest(bytes);
+							std::copy(hash.begin(), hash.end(), bound->bytes.begin());
+						}
+						record.type = std::move(bound);
+					}
+				}
+			}
+			item->record = std::make_unique<Record>(std::move(record));
 			return item;
 		}
 		void bindInput(std::shared_ptr<const BaseInput> file) { input = diskRows ? std::move(file) : nullptr; }
