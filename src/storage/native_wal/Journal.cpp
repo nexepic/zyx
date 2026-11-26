@@ -159,9 +159,9 @@ namespace graph::storage::nativewal {
 		public:
 			utils::Sha256 hash;
 			size_t position = 0;
-			Cursor(int f, size_t end, std::shared_ptr<VersionBudget> budget, size_t limit) :
-				fd(f), extent(end), refillSize(std::min({size_t(32768), end, limit / 16})),
-				memory(std::move(budget)), window(refillSize, &memory) {
+			Cursor(int f, size_t end, std::shared_ptr<VersionBudget> budget, size_t limit, size_t start = 0) :
+				fd(f), extent(end), refillSize(std::min({size_t(32768), end, limit / 16})), memory(std::move(budget)),
+				window(refillSize, &memory), position(start) {
 				require(!window.empty(), "Native recovery window budget exceeded");
 			}
 			size_t remaining() const { return extent - position; }
@@ -245,6 +245,93 @@ namespace graph::storage::nativewal {
 			}
 		};
 		Digest digest(Span b) { return utils::Sha256::digest(b); }
+		// Separate regions for format, two confirmation receipts and two root slots.
+		// Readers only authenticate the selected slot. Damage is an error.
+		constexpr size_t rootPage = 4096, baseStart = 5 * rootPage;
+		constexpr size_t receipt1 = rootPage, receipt2 = 4 * rootPage;
+		struct EmbeddedRoot {
+			Identity id{};
+			size_t baseEnd = 0, end = 0;
+			uint64_t generation = 0;
+			Digest base{}, chain{};
+			size_t slot = 0;
+			Bytes encode() const {
+				Encoder e(144);
+				e.magic("ZYXrs001");
+				e.raw(id);
+				e.num(baseEnd);
+				e.num(end);
+				e.num(generation);
+				e.raw(base);
+				e.raw(chain);
+				e.raw(digest(e.bytes));
+				return std::move(e.bytes);
+			}
+		};
+		void putAt(int fd, size_t pos, Span data) {
+			while (!data.empty()) {
+				auto n = pwrite(fd, data.data(), data.size(), pos);
+				if (n < 0 && errno == EINTR)
+					continue;
+				if (n < 0)
+					fail("write native embedded generation");
+				require(n > 0, "Zero embedded write");
+				pos += size_t(n);
+				data = data.subspan(size_t(n));
+			}
+		}
+		Bytes receipt(const EmbeddedRoot &root, Span record) {
+			Encoder e(88);
+			e.magic("ZYXok001");
+			e.num(root.generation);
+			e.num(root.slot);
+			e.raw(digest(record));
+			e.raw(digest(e.bytes));
+			return std::move(e.bytes);
+		}
+		struct Confirmation {
+			uint64_t sequence, slot;
+			Digest rootHash;
+		};
+		std::optional<Confirmation> readReceipt(int fd, size_t offset) {
+			std::array<std::byte, 88> wire{};
+			readExact(fd, offset, wire);
+			if (!std::ranges::equal(digest(Span(wire).first(56)), Span(wire).last(32)))
+				return {};
+			Decoder r{wire};
+			r.magic("ZYXok001");
+			Confirmation item{r.num(), r.count(1), {}};
+			std::ranges::copy(r.take(32), item.rootHash.begin());
+			return item;
+		}
+		EmbeddedRoot readRoot(int fd, size_t extent, bool &repair) {
+			auto first = readReceipt(fd, receipt1), second = readReceipt(fd, receipt2);
+			require(first || second, "No valid native confirmation receipt");
+			if (first && second && first->sequence == second->sequence)
+				require(first->rootHash == second->rootHash && first->slot == second->slot,
+						"Conflicting native confirmation receipts");
+			repair = !first || !second || first->sequence != second->sequence;
+			auto selected = !second || (first && first->sequence >= second->sequence) ? *first : *second;
+			EmbeddedRoot root;
+			root.slot = selected.slot;
+			std::array<std::byte, 144> bytes{};
+			readExact(fd, (2 + root.slot) * rootPage, bytes);
+			require(digest(bytes) == selected.rootHash &&
+							std::ranges::equal(digest(Span(bytes).first(112)), Span(bytes).last(32)),
+					"Invalid confirmed native root");
+			Decoder r{bytes};
+			r.magic("ZYXrs001");
+			std::ranges::copy(r.take(16), root.id.begin());
+			root.baseEnd = r.count(extent);
+			root.end = r.count(extent);
+			root.generation = r.num();
+			require(root.generation == selected.sequence, "Native confirmation revision mismatch");
+			require(root.baseEnd >= baseStart + 144 && root.end >= root.baseEnd, "Invalid native root bounds");
+			std::ranges::copy(r.take(32), root.base.begin());
+			std::ranges::copy(r.take(32), root.chain.begin());
+			return root;
+		}
+
 		std::string_view signature(const State &s) {
 			if (s.catalog || (s.unique && (s.unique->ownsProjection || s.unique->name.size() > 256)))
 				return "ZYXng006";
@@ -341,6 +428,7 @@ namespace graph::storage::nativewal {
 			checkAuthority();
 			return opened;
 		}
+		std::optional<EmbeddedRoot> root;
 		std::shared_ptr<File> stable;
 		struct stat authenticated{};
 		static struct stat metadata(int fd) {
@@ -432,7 +520,7 @@ namespace graph::storage::nativewal {
 			const auto &tmp = stage;
 			if (unlinkat(directory.fd, tmp.c_str(), 0) < 0 && errno != ENOENT)
 				fail("discard previous native graph stage");
-			File f(openat(directory.fd, tmp.c_str(), O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW, 0600));
+			File f(openat(directory.fd, tmp.c_str(), O_CREAT | O_EXCL | (name == main ? O_RDWR : O_WRONLY) | O_CLOEXEC | O_NOFOLLOW, 0600));
 			bool renamed = false;
 			try {
 				emit(f.fd);
@@ -471,14 +559,20 @@ namespace graph::storage::nativewal {
 				emitPadding(padding, [&](Span chunk) { writeComplete(fd, chunk); });
 			});
 		}
-		Digest installBase(State &s, const std::function<void()> &beforePublish = {}) {
+		Digest installBase(State &s, const std::function<void()> &beforePublish = {}, bool rooted = false) {
 			utils::Sha256 hash;
 			struct stat written{};
 			CheckpointLocations nodes, edges;
+			std::optional<EmbeddedRoot> prepared;
 			size_t nodeStart = 0, edgeStart = 0;
 			installStream(
 					main,
 					[&](int fd) {
+						if (rooted) {
+							emitPadding(baseStart, [&](Span data) { writeComplete(fd, data); });
+							const std::string_view tag = "ZYXrt002";
+							putAt(fd, 0, std::as_bytes(std::span(tag)));
+						}
 						// Coalesce small rows while hashing the exact independent main image.
 						auto window = std::min(size_t(16384), s.budget->capacity() / 16);
 						VersionCharge buffering(s.budget, window);
@@ -512,7 +606,7 @@ namespace graph::storage::nativewal {
 						put(head.bytes);
 						VersionMemoryResource rowMemory(s.budget);
 						RowEncoder encoded(s.budget->capacity(), s.budget, &rowMemory);
-						nodeStart = head.bytes.size();
+						nodeStart = head.bytes.size() + (rooted ? baseStart : 0);
 						std::shared_ptr<IndexedColumn> projection;
 						if (signature(s) == "ZYXng006") {
 							Encoder record(16384);
@@ -610,6 +704,15 @@ namespace graph::storage::nativewal {
 						}
 						flush();
 						writeComplete(fd, hash.finalize());
+						if (rooted) {
+							auto end = static_cast<size_t>(metadata(fd).st_size);
+							prepared =
+									EmbeddedRoot{s.identity, end, end, s.sequence, hash.finalize(), hash.finalize(), 0};
+							auto record = prepared->encode(), ack = receipt(*prepared, record);
+							putAt(fd, 2 * rootPage, record);
+							putAt(fd, receipt1, ack);
+							putAt(fd, receipt2, ack);
+						}
 						written = metadata(fd);
 					},
 					beforePublish);
@@ -617,6 +720,7 @@ namespace graph::storage::nativewal {
 			auto st = metadata(published->fd);
 			require(sameContentStamp(written, st), "Published native base identity changed");
 			remember(published, st);
+			root = prepared;
 			nodes.bind(s.nodes, published, nodeStart, s.budget);
 			edges.bind(s.edges, published, edgeStart, s.budget);
 			return hash.finalize();
@@ -667,7 +771,13 @@ namespace graph::storage::nativewal {
 		auto [main, extent] = files->lockMain(ro);
 		require(extent >= 112, "Incomplete native graph main");
 		auto initial = Files::metadata(main->fd);
-		Cursor m(main->fd, extent, s->budget, memory);
+		std::array<std::byte, 8> tag{};
+		readExact(main->fd, 0, tag);
+		bool repairReceipts = false;
+		if (std::memcmp(tag.data(), "ZYXrt002", 8) == 0)
+			files->root = readRoot(main->fd, extent, repairReceipts);
+		auto root = files->root;
+		Cursor m(main->fd, root ? root->baseEnd : extent, s->budget, memory, root ? baseStart : 0);
 		auto head = m.fixed<80>();
 		Decoder r{head};
 		const bool catalogFormat = std::memcmp(head.data(), "ZYXng006", 8) == 0;
@@ -804,12 +914,40 @@ namespace graph::storage::nativewal {
 				validateUnique(*s);
 			uniqueOwners.bind(*s);
 		};
+		// The ordinary WAL binds the logical head of this entire authenticated
+		// base, which can itself include confirmed in-file transactions.
+		auto replayEmbedded = [&](const EmbeddedRoot &root, const File &source) {
+			require(baseDigest == root.base, "Invalid embedded base digest");
+			Cursor delta(source.fd, root.end, s->budget, memory, root.baseEnd);
+			auto chain = baseDigest;
+			while (delta.remaining()) {
+				delta.hash = utils::Sha256{};
+				delta.hash.update(chain);
+				auto header = delta.fixed<24>();
+				Decoder tx{header};
+				tx.magic("ZYXtx002");
+				require(s->sequence < UINT64_MAX && tx.num() == s->sequence + 1, "Embedded transaction gap");
+				auto n = tx.count(delta.remaining());
+				UniqueDelta check(*s, uniqueOwners);
+				applyDelta(*s, n, [&](std::span<std::byte> part) { delta.consume(part); }, check);
+				++s->sequence;
+				check.advance(*s);
+				chain = delta.hash.finalize();
+			}
+			require(chain == root.chain && s->sequence == root.generation, "Invalid embedded transaction chain");
+			baseDigest = root.chain;
+			baseSequence = root.generation;
+		};
+		require(!root || (!needed && root->id == s->identity && sequence <= root->generation),
+				"Invalid native root identity or revision");
 		if (!needed) {
 			require(std::ranges::equal(digest({}), expected), "Invalid standalone digest");
 			loadBase(m, main);
+			if (root)
+				replayEmbedded(*root, *main);
 			files->remember(main, initial);
-			needsStabilization =
-					files->exists(files->anchor()) || files->exists(files->log) || files->exists(files->stage);
+			needsStabilization = repairReceipts || files->exists(files->anchor()) || files->exists(files->log) ||
+								 files->exists(files->stage);
 		} else {
 			finish(m);
 			auto [wal, length] = files->openInput(files->log);
@@ -827,14 +965,35 @@ namespace graph::storage::nativewal {
 			auto alignment = h.count(65536);
 			require(alignment >= 4096 && (alignment & (alignment - 1)) == 0, "Invalid native WAL alignment");
 			auto anchor = files->openInput(files->anchor());
-			Cursor a(anchor.first->fd, anchor.second, s->budget, memory);
+			// A required WAL binds one immutable anchor. The sealed logical
+			// head is authenticated before any external transactions are replayed.
+			std::array<std::byte, 8> anchorTag{};
+			readExact(anchor.first->fd, 0, anchorTag);
+			std::optional<EmbeddedRoot> rootedAnchor;
+			if (std::memcmp(anchorTag.data(), "ZYXrt002", 8) == 0) {
+				bool repair = false;
+				rootedAnchor = readRoot(anchor.first->fd, anchor.second, repair);
+				// The external WAL supplies another authenticated binding to this
+				// exact generation and chain digest. A single damaged or stale
+				// redundant receipt need not make an acknowledged WAL unreadable.
+				require(rootedAnchor->id == s->identity && rootedAnchor->generation == baseSequence,
+						"Invalid rooted native WAL dependency");
+			}
+			Cursor a(anchor.first->fd, rootedAnchor ? rootedAnchor->baseEnd : anchor.second, s->budget, memory,
+					 rootedAnchor ? baseStart : 0);
 			auto ah = a.fixed<80>();
 			Decoder ar{ah};
 			ar.magic(catalogFormat ? "ZYXng006" : unique ? "ZYXng005" : indexed ? "ZYXng004" : "ZYXng003");
-			require(std::ranges::equal(ar.take(16), s->identity) && ar.num() == baseSequence &&
-							ar.num() == baseSequence && ar.num() == 0 && std::ranges::equal(ar.take(32), digest({})),
+			require(std::ranges::equal(ar.take(16), s->identity), "Native graph base generation mismatch");
+			auto origin = ar.num();
+			require((rootedAnchor ? origin <= baseSequence : origin == baseSequence) && ar.num() == origin &&
+							ar.num() == 0 && std::ranges::equal(ar.take(32), digest({})),
 					"Native graph base generation mismatch");
+			baseSequence = origin;
+			s->sequence = origin;
 			loadBase(a, anchor.first);
+			if (rootedAnchor)
+				replayEmbedded(*rootedAnchor, *anchor.first);
 			require(std::ranges::equal(h.take(32), baseDigest), "Native graph base digest mismatch");
 			while (log.remaining()) {
 				auto header = log.fixed<24>();
@@ -874,8 +1033,8 @@ namespace graph::storage::nativewal {
 		return current;
 	}
 	void Journal::publishBase(std::shared_ptr<State> rebased, const std::function<void()> &beforePublish,
-							  bool retireDependencies) {
-		auto fresh = files->installBase(*rebased, beforePublish);
+							  bool retireDependencies, bool rooted) {
+		auto fresh = files->installBase(*rebased, beforePublish, rooted);
 		if (retireDependencies)
 			files->removeWal();
 		current = std::move(rebased);
@@ -1023,17 +1182,109 @@ namespace graph::storage::nativewal {
 				for (auto id: changed.nodes)
 					visit(id);
 			});
-		if (standalone) {
-			// Finish any previously acknowledged prefix before publishing the new
-			// transaction. A dependency cleanup failure cannot then commit this batch.
-			if (needsStabilization || walLength) {
+		// Seal only the already acknowledged prefix. A cleanup failure at
+		// this stage must not publish the new transaction. A successful seal
+		// yields a standalone compact base suitable for the sparse path below.
+		if (standalone && (needsStabilization || walLength)) {
+			try {
+				publishBase(std::make_shared<State>(*current), {}, true, true);
+			} catch (...) {
+				poisoned = true;
+				throw;
+			}
+		}
+		if (standalone && files->root && !needsStabilization && !walLength) {
+			auto root = *files->root;
+			size_t payload = deltaBytes(*next, changed);
+			size_t limit = (root.baseEnd - baseStart) / 2;
+			size_t used = root.end - root.baseEnd;
+			// The immutable base can be mostly dead after a large delete or
+			// a wide-to-narrow replacement even when the delta itself is tiny.
+			const auto nodeBytes = next->nodes.encodedBytes(), edgeBytes = next->edges.encodedBytes();
+			const bool fitsLiveSet = nodeBytes >= limit || edgeBytes >= limit - nodeBytes;
+			if (fitsLiveSet && used <= limit && limit - used >= 24 && payload <= limit - used - 24 &&
+				root.end <= size_t(INT64_MAX) - 24 - payload) {
+				files->checkAuthority();
+				require(Files::sameStamp(Files::metadata(files->authority->fd), files->authenticated),
+						"Embedded base changed before append");
+				if (current != expected) {
+					next->nodes.inheritInput(current->nodes);
+					next->edges.inheritInput(current->edges);
+				}
+				next->column = current->column;
+				next->changedColumn = current->changedColumn;
+				next->columnOverflow = current->columnOverflow;
+				next->recordColumnChanges(changed.nodes);
+				auto fd = files->authority->fd;
+				Encoder header(24);
+				header.magic("ZYXtx002");
+				header.num(next->sequence);
+				header.num(payload);
+				utils::Sha256 hash;
+				hash.update(root.chain);
+				auto window = std::min(size_t(32768), next->budget->capacity() / 16);
+				require(window > 0, "Empty embedded output window");
+				VersionCharge charge(next->budget, window);
+				Bytes buffer;
+				buffer.reserve(window);
+				size_t end = root.end;
+				auto flush = [&] {
+					putAt(fd, end, buffer);
+					end += buffer.size();
+					buffer.clear();
+				};
+				bool confirming = false;
+				auto emit = [&](Span data) {
+					hash.update(data);
+					while (!data.empty()) {
+						auto part = data.first(std::min(data.size(), window - buffer.size()));
+						buffer.insert(buffer.end(), part.begin(), part.end());
+						data = data.subspan(part.size());
+						if (buffer.size() == window)
+							flush();
+					}
+				};
 				try {
-					checkpointLocked();
+					emit(header.bytes);
+					writeDelta(*next, changed, emit);
+					flush();
+					require(end - root.end == 24 + payload, "Embedded length mismatch");
+					root.end = end;
+					root.generation = next->sequence;
+					root.chain = hash.finalize();
+					root.slot ^= 1;
+					auto record = root.encode(), ack = receipt(root, record);
+					putAt(fd, (2 + root.slot) * rootPage, record);
+					syncFile(fd);
+					confirming = true;
+					putAt(fd, receipt1, ack);
+					syncFile(fd);
+					putAt(fd, receipt2, ack);
+					syncFile(fd);
+					// Neither durable receipt selects the predecessor now. Readers
+					// pin immutable data extents separately from this control slot.
+					// Retire its signature before ACK so a replay of both old
+					// receipts cannot silently select a previously confirmed root.
+					std::array<std::byte, 8> retired{};
+					putAt(fd, (2 + (root.slot ^ 1)) * rootPage, retired);
+					syncFile(fd);
+					files->authenticated = Files::metadata(fd);
+					files->root = root;
+					baseSequence = root.generation;
+					baseDigest = root.chain;
+					check.advance(*next);
+					current = std::move(next);
 				} catch (...) {
 					poisoned = true;
+					if (confirming)
+						std::throw_with_nested(
+								std::runtime_error("Native bulk publication outcome indeterminate; reopen to recover"));
 					throw;
 				}
+				return;
 			}
+		}
+		if (standalone) {
 			bool publishing = false;
 			try {
 				files->checkAuthority();
@@ -1041,7 +1292,7 @@ namespace graph::storage::nativewal {
 					next->nodes.inheritInput(current->nodes);
 					next->edges.inheritInput(current->edges);
 				}
-				publishBase(std::move(next), [&] { publishing = true; }, false);
+				publishBase(std::move(next), [&] { publishing = true; }, false, true);
 			} catch (...) {
 				if (publishing) {
 					poisoned = true;
@@ -1155,6 +1406,7 @@ namespace graph::storage::nativewal {
 			if (!walLength)
 				files->checkBaseName(true);
 			check.advance(*next);
+			files->root.reset();
 			walLength = length;
 			walHash = hash;
 			current = std::move(next);

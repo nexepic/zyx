@@ -16,7 +16,7 @@ namespace graph::storage::nativewal {
 		UniqueOwners uniqueOwners;
 		std::shared_ptr<const State> current;
 		void publishBase(std::shared_ptr<State> next, const std::function<void()> &beforePublish = {},
-						 bool retireDependencies = true);
+						 bool retireDependencies = true, bool rooted = false);
 		void checkpointLocked();
 		void publishSchema(std::shared_ptr<State>, const std::function<void()> &check);
 

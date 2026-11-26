@@ -76,7 +76,8 @@ namespace graph::storage {
 		if (std::string_view(signature.data(), signature.size()) == "ZYXng003" ||
 			std::string_view(signature.data(), signature.size()) == "ZYXng004" ||
 			std::string_view(signature.data(), signature.size()) == "ZYXng005" ||
-			std::string_view(signature.data(), signature.size()) == "ZYXng006")
+			std::string_view(signature.data(), signature.size()) == "ZYXng006" ||
+			std::string_view(signature.data(), signature.size()) == "ZYXrt002")
 			return {openNativeWalBackend(database_path, open_mode == OpenMode::OPEN_READ_ONLY_EXISTING_FILE,
 										 cache_size),
 					nullptr};

@@ -137,6 +137,15 @@ int main(int argc, char **argv) try {
 		long_property_test::exercise(op, path, argc > 3 ? argv[3] : nullptr);
 		return 0;
 	}
+	if (op == "embedded-batch") {
+		zyx::Database db(path);
+		db.open();
+		auto tx = db.beginBulkTransaction();
+		(void)tx.createNodesColumnar("Item", std::stoull(argv[3]), {});
+		tx.commit();
+		std::cout << scalar(db, count) << std::endl;
+		_Exit(0);
+	}
 	if (op == "init") {
 		std::cout << graph::storage::createNativeWalDatabase(path) << "\n";
 		return 0;
