@@ -206,12 +206,13 @@ namespace graph::storage::nativewal {
 					return entry->value;
 				if (!loaded) {
 					auto size = encodedBytes() - 16;
-					VersionCharge scratch(rows->budget, 3 * size + 4096);
+					VersionCharge wireBytes(rows->budget, size);
+					VersionCharge scratch(rows->budget, 0);
 					std::vector<std::byte> data(size);
 					readImage(data);
 					auto row = entry->record->decode(id(), data, scratch);
 					auto [wire, heap] = rowCost(row);
-					loaded = std::make_shared<Entry>(rows->budget, entry->value.first, std::move(row), wire, heap);
+					loaded = std::make_shared<Entry>(rows->budget, entry->value.first, std::move(row), wire, heap, &scratch);
 				}
 				return loaded->value;
 			}
@@ -285,9 +286,9 @@ namespace graph::storage::nativewal {
 			root = build(build, n);
 			count = n;
 		}
-		Item residentRecord(uint64_t id, Row row) const {
+		Item residentRecord(uint64_t id, Row row, VersionCharge &scratch) const {
 			auto [wire, heap] = rowCost(row);
-			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap);
+			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap, &scratch);
 		}
 		Item baseRecord(uint64_t id, size_t wire, size_t offset, const std::array<std::byte, 32> &digest,
 						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &)) const {

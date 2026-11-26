@@ -97,11 +97,13 @@ namespace graph::storage::nativewal {
 	struct Changes {
 		std::set<uint64_t> nodes, edges;
 	};
-	struct Encoder {
-		Bytes bytes;
+	template<class Buffer> struct BasicEncoder {
+		Buffer bytes;
 		size_t limit;
 		std::shared_ptr<VersionBudget> budget;
-		explicit Encoder(size_t maximum, std::shared_ptr<VersionBudget> b = {}) : limit(maximum), budget(std::move(b)) {}
+		explicit BasicEncoder(size_t maximum, std::shared_ptr<VersionBudget> b = {},
+							  typename Buffer::allocator_type allocator = {}) :
+			bytes(allocator), limit(maximum), budget(std::move(b)) {}
 		void room(size_t n) const { require(n <= limit - bytes.size(), "Native WAL encoding budget exceeded"); }
 		void raw(Span s) {
 			room(s.size());
@@ -120,6 +122,8 @@ namespace graph::storage::nativewal {
 		void magic(std::string_view s) { raw(std::as_bytes(std::span(s))); }
 		void value(const PropertyValue &v);
 	};
+	using Encoder = BasicEncoder<Bytes>;
+	using RowEncoder = BasicEncoder<std::pmr::vector<std::byte>>;
 	struct Decoder {
 		Span bytes;
 		Span take(size_t n) {
@@ -153,8 +157,8 @@ namespace graph::storage::nativewal {
 	size_t deltaBytes(const State &, const Changes &);
 	void encodeDelta(Encoder &, const State &, const Changes &);
 	void writeDelta(const State &, const Changes &, const std::function<void(Span)> &);
-	void encodeBaseRow(Encoder &, const LogicalGraphNode &);
-	void encodeBaseRow(Encoder &, const LogicalGraphEdge &);
+	void encodeBaseRow(RowEncoder &, const LogicalGraphNode &);
+	void encodeBaseRow(RowEncoder &, const LogicalGraphEdge &);
 	LogicalGraphNode baseNode(uint64_t, Span, VersionCharge &);
 	LogicalGraphEdge baseEdge(uint64_t, Span, VersionCharge &);
 	class UniqueDelta;

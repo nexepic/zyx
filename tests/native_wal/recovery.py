@@ -1,6 +1,7 @@
 """Run against the native SDK driver and Linux syscall interposer, in fresh directories."""
 import hashlib
 import streamed_recovery
+import large_row_recovery
 import os
 from pathlib import Path
 import shutil
@@ -30,6 +31,7 @@ with tempfile.TemporaryDirectory() as name:
     def new(label):
         return Path(run("init", root / label))
     streamed_recovery.exercise(root, new, driver, env)
+    large_row_recovery.exercise(root, new, driver, env)
     tiny = new("tiny-wal")
     run("tiny-wal-writes", tiny, code=-signal.SIGKILL)
     recovered(tiny, 2)

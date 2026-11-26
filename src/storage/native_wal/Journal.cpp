@@ -508,8 +508,8 @@ namespace graph::storage::nativewal {
 						head.num(s.nodes.size());
 						head.num(s.edges.size());
 						put(head.bytes);
-						Encoder encoded(maxState, s.budget);
-						VersionCharge rowBuffer(s.budget, 0);
+						VersionMemoryResource rowMemory(s.budget);
+						RowEncoder encoded(s.budget->capacity(), s.budget, &rowMemory);
 						nodeStart = head.bytes.size();
 						std::shared_ptr<IndexedColumn> projection;
 						if (signature(s) == "ZYXng006") {
@@ -546,7 +546,7 @@ namespace graph::storage::nativewal {
 							table.visitAfter(0, [&](auto it) {
 								auto id = it.id();
 								auto size = it.encodedBytes() - 16;
-								require(size <= maxState, "Native checkpoint row exceeds encoding limit");
+								require(size <= s.budget->capacity(), "Native checkpoint row exceeds version budget");
 								// A large-file API can outgrow the in-memory offset type
 								// on a 32-bit host. Include this header and the final digest.
 								if constexpr (sizeof(off_t) > sizeof(size_t))
@@ -554,8 +554,7 @@ namespace graph::storage::nativewal {
 											"Native checkpoint exceeds addressable extent");
 								if (size > encoded.bytes.capacity()) {
 									// The previous buffer is empty and can be freed before growing.
-									Bytes{}.swap(encoded.bytes);
-									rowBuffer.growTo(size);
+									std::pmr::vector<std::byte>(&rowMemory).swap(encoded.bytes);
 									encoded.bytes.reserve(size);
 								}
 								if (it.onDisk()) {
@@ -568,7 +567,7 @@ namespace graph::storage::nativewal {
 								if constexpr (std::is_same_v<typename std::decay_t<decltype(table)>::mapped_type,
 															 LogicalGraphNode>) {
 									if (projection) {
-										VersionCharge decode(s.budget, 3 * size + 4096);
+										VersionCharge decode(s.budget, 0);
 										projection->observe(*s.declaration, baseNode(id, encoded.bytes, decode));
 									}
 								}
@@ -741,10 +740,11 @@ namespace graph::storage::nativewal {
 				uint64_t prior = 0;
 				table.loadSorted(n, [&] {
 					auto id = c.num();
-					auto size = c.count(maxState);
+					auto size = c.count(memory);
 					require(id > prior && id <= high && size <= c.remaining(), "Invalid native base row extent");
 					prior = id;
-					VersionCharge scratch(s->budget, 3 * size + 4096);
+					VersionCharge wire(s->budget, size);
+					VersionCharge scratch(s->budget, 0);
 					auto offset = c.position;
 					Bytes b(size);
 					c.consume(b);
@@ -756,7 +756,7 @@ namespace graph::storage::nativewal {
 						require(s->nodes.contains(row.source_node_id) && s->nodes.contains(row.target_node_id),
 								"Native WAL dangling relationship");
 					if (!lazy)
-						return table.residentRecord(id, std::move(row));
+						return table.residentRecord(id, std::move(row), scratch);
 					return table.baseRecord(id, size + 16, offset, digest(b), decode);
 				});
 				table.bindInput(file);
