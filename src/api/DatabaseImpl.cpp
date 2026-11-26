@@ -1484,6 +1484,12 @@ namespace zyx {
 		}
 		throw std::invalid_argument("Unknown snapshot property layout");
 	}
+	void Database::exportSegmentedSnapshot(const Transaction &reader, std::ostream &destination) const {
+		if (!reader.impl_ || reader.impl_->dbImpl_ != impl_.get() || !reader.isActive() || !reader.isReadOnly())
+			throw std::logic_error("Snapshot export requires an active local read-only transaction");
+		graph::storage::exportSegmentedSnapshot(reader.impl_->logical_txn_->readSnapshot(), destination);
+	}
+
 	PublishedSnapshot Database::publishColumnSnapshot(const Transaction &reader, std::ostream &destination) const {
 		if (!reader.impl_ || reader.impl_->dbImpl_ != impl_.get() || !reader.isActive() || !reader.isReadOnly())
 			throw std::logic_error("Column publication requires an active local read-only transaction");

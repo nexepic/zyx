@@ -236,6 +236,29 @@ namespace graph::storage {
 			return checkedAdd(6U, payloadSize, "Property value wire size overflowed");
 		}
 
+		struct WireSink {
+			const CanonicalPropertyValueCodec::ByteSink &emit;
+			std::pmr::memory_resource &scratch;
+			auto get_allocator() const { return std::pmr::polymorphic_allocator<std::byte>(&scratch); }
+		};
+		void appendU8(WireSink &sink, uint8_t value) {
+			const auto byte = std::byte(value);
+			sink.emit(std::span(&byte, 1));
+		}
+		void appendU32(WireSink &sink, uint32_t value) {
+			std::array<std::byte, 4> word{};
+			LittleEndianCodec::writeU32(word, 0, value);
+			sink.emit(word);
+		}
+		void appendU64(WireSink &sink, uint64_t value) {
+			std::array<std::byte, 8> word{};
+			LittleEndianCodec::writeU64(word, 0, value);
+			sink.emit(word);
+		}
+		void appendBytes(WireSink &sink, std::string_view text) { sink.emit(std::as_bytes(std::span(text))); }
+		void appendBytes(WireSink &sink, std::span<const std::byte> bytes) { sink.emit(bytes); }
+		void encodeValue(WireSink &sink, const PropertyValue &value, uint32_t depth);
+
 		template<class Bytes> void encodePayload(Bytes &payload, const PropertyValue &value, uint32_t depth) {
 			std::visit([&payload, depth]<typename T>(const T &argument) {
 				if constexpr (std::is_same_v<T, std::monostate>) {
@@ -293,6 +316,14 @@ namespace graph::storage {
 						static_assert(std::is_same_v<T, void>, "Unhandled PropertyValue variant");
 					}
 			}, value.getVariant());
+		}
+
+		void encodeValue(WireSink &sink, const PropertyValue &value, uint32_t depth) {
+			const auto bytes = encodedValueSize(value, depth);
+			appendU8(sink, static_cast<uint8_t>(kindFor(value)));
+			appendU8(sink, 0);
+			appendU32(sink, static_cast<uint32_t>(bytes - CanonicalPropertyValueCodec::HEADER_BYTES));
+			encodePayload(sink, value, depth);
 		}
 
         // Write nested payloads directly into the caller's buffer. Both
@@ -595,6 +626,12 @@ namespace graph::storage {
 
 	void CanonicalPropertyValueCodec::append(std::pmr::vector<std::byte> &bytes, const PropertyValue &value) {
 		encodeValue(bytes, value, 0U);
+	}
+
+	void CanonicalPropertyValueCodec::write(const PropertyValue &value, const ByteSink &sink,
+										   std::pmr::memory_resource &scratch) {
+		WireSink output{sink, scratch};
+		encodeValue(output, value, 0);
 	}
 
 	void CanonicalPropertyValueCodec::append(std::vector<std::byte> &bytes, const PropertyValue &value) {

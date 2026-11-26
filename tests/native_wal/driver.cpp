@@ -13,6 +13,7 @@
 #include "LocatorBudget.hpp"
 #include "LongProperties.hpp"
 #include "LargeRows.hpp"
+#include "SnapshotLargeProperties.hpp"
 #include "StreamedTransactions.hpp"
 #include "RelocationGraph.hpp"
 namespace {
@@ -105,6 +106,10 @@ int main(int argc, char **argv) try {
 	if (argc < 3)
 		throw std::runtime_error("driver OP MAIN_OR_NEW_DIRECTORY [FAULT]");
 	std::string op = argv[1], path = argv[2];
+	if (op.starts_with("snapshot-property-")) {
+		snapshot_property_test::exercise(op, path, std::stoull(argv[3]), std::string_view(argv[4]) == "edge");
+		return 0;
+	}
 	if (op.starts_with("large-row-")) {
 		large_row_test::exercise(op, path, std::stoull(argv[3]), argc > 4 ? argv[4] : nullptr);
 		return 0;

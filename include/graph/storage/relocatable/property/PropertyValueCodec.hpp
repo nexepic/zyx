@@ -42,6 +42,10 @@ namespace graph::storage {
 		// temporary. Callers with a bounded destination use this to reject an
 		// oversized value before beginning a scratch or page materialization.
 		[[nodiscard]] static size_t encodedSize(const PropertyValue &value);
+		// Emit canonical bytes without a value-sized intermediate. The caller
+		// owns the output transaction and bounded map-ordering workspace.
+		using ByteSink = std::function<void(std::span<const std::byte>)>;
+		static void write(const PropertyValue &value, const ByteSink &sink, std::pmr::memory_resource &scratch);
 		static void append(std::vector<std::byte> &bytes, const PropertyValue &value);
 		// Destination and canonical-map ordering workspace use the same resource.
 		static void append(std::pmr::vector<std::byte> &bytes, const PropertyValue &value);

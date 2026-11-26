@@ -6,6 +6,7 @@
 #include <mutex>
 #include <set>
 #include "CheckpointReadBackend.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "graph/storage/SnapshotNodeIndex.hpp"
@@ -99,15 +100,35 @@ namespace graph::storage {
 			put(b, p.size());
 			for (const auto &e: p) {
 				text(b, e.key);
-				check(CanonicalPropertyValueCodec::encodedSize(e.value) <= maxBlock - b.size(),
-					  "cp003 property too large");
 				CanonicalPropertyValueCodec::append(b, e.value);
 			}
 		}
-		auto properties(Cursor &c, const Dictionary *dict) {
+		auto properties(Cursor &c, const Dictionary *dict, const std::shared_ptr<resource::ResourceAccount> &account) {
 			std::vector<LogicalGraphPropertyEntry> p;
 			auto count = c.num();
 			check(count <= c.b.size() / (dict ? 9 : 14), "Invalid cp003 property count");
+			// A dedicated large owner can contain many tiny encoded children. Bound
+			// construction from the inspected shapes, even for direct storage callers.
+			std::optional<resource::ResourceLease> decoding;
+			if (c.b.size() > maxBlock - 24) {
+				decoding.emplace(account);
+				check(count <= SIZE_MAX / sizeof(LogicalGraphPropertyEntry), "Snapshot property count overflow");
+				size_t bytes = count * sizeof(LogicalGraphPropertyEntry);
+				auto scan = c;
+				for (size_t i = 0; i < count; ++i) {
+					const auto key = name(scan, dict, NameSpace::NS_PROPERTY);
+					size_t end = 0;
+					const auto shape = CanonicalPropertyValueCodec::inspectNext(scan.b, end);
+					check(key.size() < SIZE_MAX - bytes &&
+						  shape.maximum_heap_request_bytes <= SIZE_MAX - bytes - key.size() - 1,
+						  "Snapshot decoded row size overflow");
+					bytes += key.size() + 1 + shape.maximum_heap_request_bytes;
+					scan.take(end);
+				}
+				check(scan.b.empty(), "Trailing large snapshot property bytes");
+				decoding->set(bytes);
+				p.reserve(count);
+			}
 			for (size_t i = 0; i < count; i++) {
 				auto key = std::string(name(c, dict, NameSpace::NS_PROPERTY));
 				size_t off = 0;
@@ -139,16 +160,65 @@ namespace graph::storage {
 			std::ostream &out;
 			Bytes dir, payload;
 			uint64_t offset = headerSize, kind = 0, first = 0, last = 0;
+			void describe(uint64_t bytes, const std::array<std::byte, 32> &hash) {
+				check(dir.size() <= maxDirectory - entrySize && bytes <= UINT64_MAX - offset,
+					  "cp003 directory capacity exceeded");
+				for (auto v: {kind, first, last, offset, bytes})
+					put(dir, v);
+				append(dir, hash);
+				offset += bytes;
+			}
 			void flush() {
 				if (payload.empty())
 					return;
-				check(dir.size() <= maxDirectory - entrySize, "cp003 directory capacity exceeded");
-				for (auto v: {kind, first, last, offset, uint64_t(payload.size())})
-					put(dir, v);
-				append(dir, Hash::digest(payload));
+				describe(payload.size(), Hash::digest(payload));
 				write(out, payload);
-				offset += payload.size();
 				payload.clear();
+			}
+			void propertyRow(uint64_t id, const std::vector<LogicalGraphPropertyEntry> &fields) {
+				uint64_t size = 8;
+				for (const auto &field: fields) {
+					const auto value = CanonicalPropertyValueCodec::encodedSize(field.value);
+					check(field.key.size() <= maxBlock - 8 && size <= UINT64_MAX - 16 - field.key.size() - value,
+						  "Invalid snapshot property extent");
+					size += 8 + field.key.size() + value;
+				}
+				if (size <= maxBlock - 16) {
+					Bytes b;
+					props(b, fields);
+					row(id, b);
+					return;
+				}
+				check(id > last && size <= UINT64_MAX - 16, "Invalid snapshot property owner");
+				flush();
+				first = last = id;
+				Hash hash;
+				uint64_t written = 0;
+				auto emit = [&](Span data) {
+					while (!data.empty()) {
+						auto part = data.first(std::min(data.size(), targetBytes));
+						hash.update(part);
+						write(out, part);
+						written += part.size();
+						data = data.subspan(part.size());
+					}
+				};
+				auto word = [&](uint64_t value) {
+					std::array<std::byte, 8> bytes{};
+					for (size_t i = 0; i < bytes.size(); ++i) bytes[i] = std::byte(value >> (8 * i));
+					emit(bytes);
+				};
+				word(id);
+				word(size);
+				word(fields.size());
+				query::execution::MaterializedByteBudget scratch(maxDirectory);
+				for (const auto &field: fields) {
+					word(field.key.size());
+					emit(std::as_bytes(std::span(field.key)));
+					CanonicalPropertyValueCodec::write(field.value, emit, scratch);
+				}
+				check(written == size + 16, "Snapshot property encoding changed extent");
+				describe(written, hash.finalize());
 			}
 			void row(uint64_t id, const Bytes &b) {
 				check(id > last && b.size() <= maxBlock - 16, "Invalid cp003 row order or size");
@@ -214,18 +284,14 @@ namespace graph::storage {
 		w.kind = 2;
 		w.last = 0;
 		source.visitNodes(std::numeric_limits<size_t>::max(), [&](const LogicalGraphNode &n) {
-			Bytes b;
-			props(b, n.properties);
-			w.row(n.node_id, b);
+			w.propertyRow(n.node_id, n.properties);
 			return true;
 		});
 		w.flush();
 		w.kind = 3;
 		w.last = 0;
 		source.visitEdges(std::numeric_limits<size_t>::max(), [&](const LogicalGraphEdge &e) {
-			Bytes b;
-			props(b, e.properties);
-			w.row(e.edge_id, b);
+			w.propertyRow(e.edge_id, e.properties);
 			return true;
 		});
 		w.flush();
@@ -618,7 +684,9 @@ namespace graph::storage {
 						   (columns && (b.kind - 4) / 2 < dictionary->names[0].size() &&
 							dictionary->separate(static_cast<uint32_t>((b.kind - 4) / 2), b.kind % 2))) &&
 								  b.first && b.last >= b.first && b.size >= (b.kind < 4 ? 16U : 9U) &&
-								  b.size <= maxBlock && b.off == next && b.size <= off - next,
+								  (b.size <= maxBlock || (!v4 && (b.kind == 2 || b.kind == 3) &&
+														 b.first == b.last && b.size <= SIZE_MAX)) &&
+								  b.off == next && b.size <= off - next,
 						  "Invalid cp003 segment");
 					if (!v4 && !blocks.empty()) {
 						auto &prev = blocks.back();
@@ -666,7 +734,8 @@ namespace graph::storage {
 				if (current && current->offset == b.off)
 					return current;
 				current.reset();
-				if (dictionary && account->available() < b.size + (b.size / 8) * sizeof(uint32_t)) {
+				if ((dictionary && account->available() < b.size + (b.size / 8) * sizeof(uint32_t)) ||
+					(b.size > maxBlock && account->available() < b.size)) {
 					for (auto &saved: fields)
 						if (saved.use_count() == 1)
 							saved.reset();
@@ -761,7 +830,7 @@ namespace graph::storage {
 									t.take(end);
 								}
 							}
-							result = properties(c, img->dict());
+							result = properties(c, img->dict(), img->account);
 						} else {
 							auto count = c.num();
 							check(count <= c.b.size() / 4, "Invalid snapshot owner keys");

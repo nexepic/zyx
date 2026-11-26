@@ -32,6 +32,27 @@ with tempfile.TemporaryDirectory() as name:
         return Path(run("init", root / label))
     streamed_recovery.exercise(root, new, driver, env)
     large_row_recovery.exercise(root, new, driver, env)
+    for size in (1 << 20, 16 << 20):
+        for owner in ("node", "edge"):
+            path = root / f"export-{owner}-{size}"
+            def property_run(op, target):
+                return subprocess.run([driver, "snapshot-property-" + op, target, str(size), owner],
+                                      env=env, text=True, capture_output=True, timeout=120)
+            for op, target in (("export", path), ("read", path.with_suffix(".zyx")), ("current", path / "main")):
+                result = property_run(op, target)
+                assert result.returncode == 0, (op, result.stderr)
+            partial = path.with_suffix(".partial")
+            assert partial.stat().st_size == 128 * 1024
+            assert property_run("read", partial).returncode == 2
+            damaged = path.with_suffix(".zyx")
+            with damaged.open("r+b") as stream:
+                chunk = stream.read(4096)
+                start = chunk.index(b"x" * 64)
+                stream.seek(start + size // 2)
+                stream.write(b"!")
+            rejection = property_run("read", damaged)
+            assert rejection.returncode == 2 and "segment digest" in rejection.stderr, rejection
+    print("Pinned large node and edge properties: short output rejected, independent reopen and corruption checked")
     tiny = new("tiny-wal")
     run("tiny-wal-writes", tiny, code=-signal.SIGKILL)
     recovered(tiny, 2)
