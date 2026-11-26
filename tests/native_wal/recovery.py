@@ -49,6 +49,20 @@ with tempfile.TemporaryDirectory() as name:
             assert result == "ack" and run("count", str(path) + ".copy") == "2"
         recovered(path, 1 if fault else 2)
     print("Bulk standalone ACK: 8 final publication and 5 prior-WAL cleanup/ACK outcomes passed")
+    for fault, expected, code in (
+        ("m.write=partial-eio", 0, 2), ("m.sync=eio", 0, 2), ("m.rename=eio", 0, 2),
+        ("m.renamed=kill", 4, -signal.SIGKILL), ("m.dirsync=eio", 4, 2),
+        ("m.write=short", 4, -signal.SIGKILL), (None, 4, -signal.SIGKILL),
+    ):
+        path = new("direct-edges-" + str(fault))
+        result = run("columnar-edges", path, fault, code, "indeterminate" if fault == "m.dirsync=eio" else None)
+        if fault in (None, "m.write=short"):
+            assert result == "ack" and run("direct-count", str(path) + ".copy") == "4"
+        assert run("direct-count", path) == str(expected)
+    print("Database::createEdgesColumnar: structured validation, IDs, atomic recovery and independent ACK copy passed")
+    chunked = new("direct-chunks")
+    run("columnar-chunks", chunked, timeout=180)
+    run("columnar-verify-chunks", str(chunked) + ".copy", timeout=180)
     streamed_recovery.exercise(root, new, driver, env)
     large_row_recovery.exercise(root, new, driver, env)
     for size in (1 << 20, 16 << 20):

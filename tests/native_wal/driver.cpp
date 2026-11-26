@@ -729,6 +729,83 @@ int main(int argc, char **argv) try {
 		db.close();
 		return 0;
 	}
+	if (op == "columnar-chunks") {
+		auto seed = db.beginBulkTransaction();
+		const auto id = seed.createNode("Endpoint");
+		seed.commit();
+		const size_t rows = 90000;
+		std::vector<int64_t> sources(rows, id), targets(rows, id);
+		std::vector<zyx::PropertyColumn> columns{{"row", {}}};
+		for (size_t row = 0; row < rows; ++row)
+			columns.front().values.emplace_back(int64_t(row));
+		targets.back() = INT64_MAX;
+		try {
+			(void) db.createEdgesColumnar("DIRECT", sources, targets, columns);
+			throw std::runtime_error("Accepted invalid final columnar endpoint");
+		} catch (const zyx::BulkInputError &e) {
+			expect(e.rowIndex() == rows - 1 && e.fieldPath() == "target_id", "Lost global row ordinal");
+		}
+		targets.back() = id;
+		const auto ids = db.createEdgesColumnar("DIRECT", sources, targets, columns);
+		expect(ids.size() == rows, "Direct ID count");
+		for (size_t row = 0; row < rows; ++row)
+			expect(ids[row] == int64_t(row + 1), "Noncontiguous direct IDs after rejected input");
+		std::filesystem::copy_file(path, path + ".copy");
+		return 0;
+	}
+	if (op == "columnar-verify-chunks") {
+		db.close();
+		using namespace graph::storage;
+		auto selected = StorageBackendFactory::create(path, 64U << 20, OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+		selected.backend->open();
+		auto snapshot = dynamic_cast<LogicalGraphReadBackend &>(*selected.backend).openLogicalGraphReadSnapshot();
+		size_t rows = 0;
+		snapshot->visitEdges(90001, [&](const LogicalGraphEdge &edge) {
+			expect(edge.type == "DIRECT" && edge.source_node_id == 1 && edge.target_node_id == 1 &&
+							edge.properties.size() == 1 && edge.properties.front().key == "row" &&
+							std::get<int64_t>(edge.properties.front().value.getVariant()) == int64_t(edge.edge_id - 1),
+				   "Reopened chunk belongs to a different edge");
+			++rows;
+			return true;
+		});
+		expect(rows == 90000, "Lost direct edges on reopen");
+		return 0;
+	}
+	if (op == "columnar-edges") {
+		auto seed = db.beginBulkTransaction();
+		const auto a = seed.createNode("Endpoint"), b = seed.createNode("Endpoint");
+		seed.commit();
+		for (bool readOnly: {true, false}) {
+			auto active = readOnly ? db.beginReadOnlyTransaction() : db.beginTransaction();
+			expect(db.createEdgesColumnar("DIRECT", {}, {}).empty(), "Empty direct batch must succeed");
+			bool refused = false;
+			try {
+				(void) db.createEdgesColumnar("DIRECT", {a}, {b});
+			} catch (const std::logic_error &) {
+				refused = true;
+			}
+			expect(refused, "Direct write accepted with active transaction");
+			active.rollback();
+		}
+		try {
+			(void) db.createEdgesColumnar("DIRECT", {a, b}, {b, INT64_MAX});
+			throw std::runtime_error("Invalid endpoint accepted");
+		} catch (const zyx::BulkInputError &e) {
+			expect(e.rowIndex() == 1 && e.fieldPath() == "target_id", "Wrong invalid endpoint diagnostic");
+		}
+		if (argc > 3)
+			setenv("ZYX_TEST_NATIVE_IO", argv[3], 1);
+		auto ids = db.createEdgesColumnar("DIRECT", {a, a, b, a}, {b, b, a, a},
+										  {{"i", {int64_t(0), int64_t(1), int64_t(2), int64_t(3)}}});
+		expect(ids == std::vector<int64_t>({1, 2, 3, 4}), "Unexpected direct edge IDs");
+		std::filesystem::copy_file(path, path + ".copy");
+		std::cout << "ack\n" << std::flush;
+		kill(getpid(), SIGKILL);
+	}
+	if (op == "direct-count") {
+		std::cout << scalar(db, "MATCH ()-[e:DIRECT]->() RETURN count(e)") << "\n";
+		return 0;
+	}
 	if (op == "bulk-publish" || op == "bulk-publish-clean") {
 		auto prefix = db.beginTransaction();
 		auto first = prefix.createNode("Prior");

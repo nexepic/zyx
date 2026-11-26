@@ -426,15 +426,10 @@ namespace zyx {
 		}
 	}
 
-		[[nodiscard]] std::vector<graph::storage::LogicalGraphEdgeCreateRequest>
-		makeLogicalColumnarEdgeRequests(const std::string &edgeType, const std::vector<int64_t> &sourceIds,
-									  const std::vector<int64_t> &targetIds,
-									  const std::vector<detail::BulkPropertyColumn> &columns,
-									  const std::string_view context) {
-		if (sourceIds.size() != targetIds.size()) {
-			throw std::invalid_argument(std::string(context) + " requires matching source and target counts");
-		}
-		validateInternalPropertyColumns(columns, sourceIds.size(), context);
+	[[nodiscard]] std::vector<graph::storage::LogicalGraphEdgeCreateRequest>
+	makeLogicalEdgeRequestRange(const std::string &edgeType, std::span<const int64_t> sourceIds,
+								std::span<const int64_t> targetIds,
+								const std::vector<detail::BulkPropertyColumn> &columns, size_t firstRow) {
 		std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests(sourceIds.size());
 		for (size_t row = 0U; row < requests.size(); ++row) {
 			requests[row].source_node_id = checkedDirectWriteEndpoint(sourceIds[row], "source");
@@ -444,11 +439,23 @@ namespace zyx {
 		}
 		for (const detail::BulkPropertyColumn &column: columns) {
 			for (size_t row = 0U; row < requests.size(); ++row) {
-				requests[row].properties.push_back({column.key, column.values[row]});
+				requests[row].properties.push_back({column.key, column.values[firstRow + row]});
 			}
 		}
-			return requests;
+		return requests;
+	}
+
+		[[nodiscard]] std::vector<graph::storage::LogicalGraphEdgeCreateRequest>
+		makeLogicalColumnarEdgeRequests(const std::string &edgeType, const std::vector<int64_t> &sourceIds,
+									  const std::vector<int64_t> &targetIds,
+									  const std::vector<detail::BulkPropertyColumn> &columns,
+									  const std::string_view context) {
+		if (sourceIds.size() != targetIds.size()) {
+			throw std::invalid_argument(std::string(context) + " requires matching source and target counts");
 		}
+		validateInternalPropertyColumns(columns, sourceIds.size(), context);
+		return makeLogicalEdgeRequestRange(edgeType, sourceIds, targetIds, columns, 0);
+	}
 
 		void validateLogicalColumnarEdgeEndpoints(graph::storage::LogicalGraphReadBackend &readBackend,
 											 const std::vector<int64_t> &sourceIds,
@@ -1039,6 +1046,7 @@ namespace zyx {
 		void registerPublicTransaction(TransactionImpl *transaction);
 		void unregisterPublicTransaction(TransactionImpl *transaction) noexcept;
 		[[nodiscard]] graph::storage::LogicalGraphReadBackend &resolveLogicalReadTarget() const;
+		void requireNoActiveDirectWriteTransaction() const;
 		[[nodiscard]] graph::storage::LogicalGraphWriteBackend &resolveLogicalWriteTarget() const;
 
 		void ensureOpen() {
@@ -1185,11 +1193,14 @@ namespace zyx {
 		return *logicalReads;
 	}
 
-	graph::storage::LogicalGraphWriteBackend &DatabaseImpl::resolveLogicalWriteTarget() const {
+	void DatabaseImpl::requireNoActiveDirectWriteTransaction() const {
 		if (active_public_transactions_.load(std::memory_order_acquire) != 0U) {
 			throw std::logic_error("direct public API writes are not allowed while a transaction is active");
 		}
+	}
 
+	graph::storage::LogicalGraphWriteBackend &DatabaseImpl::resolveLogicalWriteTarget() const {
+		requireNoActiveDirectWriteTransaction();
 		const auto logicalWrites = db_.getLogicalGraphWriteBackend();
 		if (!logicalWrites) {
 			throw std::logic_error("logical backend was opened read-only and cannot perform public API writes");
@@ -1828,12 +1839,36 @@ namespace zyx {
 		}
 		impl_->ensureOpen();
 		const std::vector<detail::BulkPropertyColumn> internalColumns = toInternalPropertyColumns(columns);
-		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
-		auto &logicalReads = impl_->resolveLogicalReadTarget();
-		validateLogicalColumnarEdgeEndpoints(logicalReads, sourceIds, targetIds);
-		const std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests =
-				makeLogicalColumnarEdgeRequests(edgeType, sourceIds, targetIds, internalColumns, "createEdgesColumnar");
-		return checkedDirectWriteIds(logicalWrites.createLogicalEdges(requests), "Edge");
+		const auto backend = impl_->db_.getStorageBackend();
+		if (auto *bulk = dynamic_cast<graph::storage::LogicalGraphBulkPublication *>(backend.get());
+			bulk && !backend->isReadOnly()) {
+			impl_->requireNoActiveDirectWriteTransaction();
+			auto transaction = bulk->beginStandaloneTransaction();
+			graph::storage::LogicalGraphTransactionOverlay overlay(*transaction);
+			// Validate and stage against one fixed revision. Prepare the public ID
+			// result before publication so an allocation failure cannot lose its ACK.
+			validateLogicalColumnarEdgeEndpoints(overlay, sourceIds, targetIds);
+			std::vector<int64_t> ids;
+			ids.reserve(count);
+			// Bound temporary mutation requests without exposing a partial batch.
+			constexpr size_t chunkRows = 4096;
+			for (size_t offset = 0; offset < count;) {
+				const size_t size = std::min(chunkRows, count - offset);
+				const auto requests = makeLogicalEdgeRequestRange(edgeType, std::span(sourceIds).subspan(offset, size),
+																  std::span(targetIds).subspan(offset, size),
+																  internalColumns, offset);
+				for (auto id: overlay.createLogicalEdges(requests))
+					ids.push_back(checkedDirectWriteId(id, "Edge"));
+				offset += size;
+			}
+			(void) transaction->commit();
+			return ids;
+		}
+		auto &writes = impl_->resolveLogicalWriteTarget();
+		validateLogicalColumnarEdgeEndpoints(impl_->resolveLogicalReadTarget(), sourceIds, targetIds);
+		auto requests = makeLogicalColumnarEdgeRequests(edgeType, sourceIds, targetIds, internalColumns,
+														"createEdgesColumnar");
+		return checkedDirectWriteIds(writes.createLogicalEdges(requests), "Edge");
 	}
 
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
