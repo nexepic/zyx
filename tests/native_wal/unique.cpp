@@ -1,3 +1,4 @@
+#include "IntegrityProbe.hpp"
 #include "confirmation_budget.hpp"
 #include "projection_budget.hpp"
 #include <csignal>
@@ -146,6 +147,7 @@ namespace {
 } // namespace
 int main(int argc, char **argv) try {
 	std::string op = argv[1], p = argv[2];
+	if (op == "integrity-ro") return integrity_test::inspect(p, false, 64U << 20);
 	if (op == "pinned-projection") {
 		checkpointWithPinnedProjection(p);
 		return 0;

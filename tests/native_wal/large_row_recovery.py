@@ -1,7 +1,38 @@
 """Large canonical values spanning WAL windows. Every read opens a new process."""
+import hashlib
+from integrity_recovery import probe
 import shutil
 import signal
 import subprocess
+
+
+def audit_nested_string(driver, main, env, active_wal):
+    payload = main.with_suffix(".wal") if active_wal else main
+    with probe(driver, main, "ro", env) as verify:
+        healthy = verify()
+        assert healthy.startswith("ok "), healthy
+        valid = payload.read_bytes()
+        broken = bytearray(valid)
+        data = valid.index(b"a" * 1024)
+        assert valid[data - 10:data - 8] == bytes([5, 0])
+        broken[data - 9] = 1  # Invalid flags on the nested canonical string.
+        if active_wal:
+            receipt = main.read_bytes()
+            control = bytearray(receipt)
+            assert control[48:80] == hashlib.sha256(valid).digest()
+            control[48:80] = hashlib.sha256(broken).digest()
+            control[-32:] = hashlib.sha256(control[:-32]).digest()
+            main.write_bytes(control)
+        else:
+            assert valid.startswith(b"ZYXng")
+            broken[-32:] = hashlib.sha256(broken[:-32]).digest()
+        payload.write_bytes(broken)
+        error = verify()
+        assert error.startswith("invalid ") and "flags" in error, error
+        payload.write_bytes(valid)
+        if active_wal:
+            main.write_bytes(receipt)
+        assert verify() == healthy
 
 
 def exercise(root, new, driver, env):
@@ -17,8 +48,10 @@ def exercise(root, new, driver, env):
     size = 16 << 20
     run("large-row-schema", scoped, size)
     run("large-row-write", scoped, size, expected=killed)
+    audit_nested_string(driver, scoped, env, True)
     run("large-row-read", scoped, size)  # Reopen the WAL and checkpoint on close.
     run("large-row-read", scoped, size)  # Independently audit the clean base.
+    audit_nested_string(driver, scoped, env, False)
     run("large-row-duplicate", scoped, size)
 
     for mode, tag, size in (("large-row-write", "w", 16 << 20), ("large-row-append", "a", 8 << 20)):

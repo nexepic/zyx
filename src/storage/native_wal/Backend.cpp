@@ -394,10 +394,11 @@ namespace graph::storage::nativewal {
 			release();
 		}
 	};
-	class Backend : public StorageBackend, public LogicalGraphReadBackend, public LogicalGraphTransactionalBackend, public LogicalGraphBulkPublication {
+	class Backend : public StorageBackend, public NativeWalIntegrityBackend, public LogicalGraphReadBackend, public LogicalGraphTransactionalBackend, public LogicalGraphBulkPublication {
 		std::string path;
 		size_t memory;
 		bool ro;
+		mutable std::mutex lifecycle;
 		std::shared_ptr<Journal> journal;
 		std::shared_ptr<resource::DatabaseResourceBudget> resources;
 
@@ -410,6 +411,7 @@ namespace graph::storage::nativewal {
 	public:
 		Backend(std::string p, bool readOnly, size_t bytes) : path(std::move(p)), memory(bytes), ro(readOnly) {}
 		void open() override {
+			std::lock_guard lock(lifecycle);
 			if (!journal) {
 				auto opened = std::make_shared<Journal>(path, ro, memory);
 				const auto &id = opened->snapshot()->identity;
@@ -423,12 +425,34 @@ namespace graph::storage::nativewal {
 				journal->checkpoint();
 		}
 		void close() override {
+			std::lock_guard lock(lifecycle);
 			if (!journal)
 				return;
 			require(journal.use_count() == 1, "Native graph has active transactions");
 			auto closing = std::move(journal);
 			resources.reset();
 			closing->checkpoint();
+		}
+		NativeWalIntegrityReport verifyIntegrity() const override {
+			std::lock_guard lock(lifecycle);
+			if (!journal)
+				throw std::logic_error("native WAL backend is not open");
+			// Prepay maintenance outside the publication gate. During replay,
+			// allocations draw on the local grant and the shared version quota.
+			const auto kind = resource::ResourceClass::RCK_MAINTENANCE;
+			const auto limit = std::min(memory, resources->classMaximum(kind));
+			if (!limit) throw resource::ResourceAdmissionDenied();
+			resource::ResourceAccount account(resources, kind, limit);
+			resource::ResourceLease lease(account);
+			const auto grant = std::min(journal->snapshot()->budget->remaining(), account.available());
+			if (!grant || !lease.trySet(grant)) throw resource::ResourceAdmissionDenied();
+			try {
+				return journal->verifyIntegrity(grant);
+			} catch (const std::length_error &) {
+				// The replay verifier uses the native version quota. Expose
+				// admission failure with the public maintenance error type.
+				throw resource::ResourceAdmissionDenied();
+			}
 		}
 		bool isOpen() const override { return bool(journal); }
 		bool isReadOnly() const override { return ro; }

@@ -1,5 +1,6 @@
 #pragma once
 #include <mutex>
+#include "graph/storage/NativeWalDatabase.hpp"
 #include "UniqueDelta.hpp"
 namespace graph::storage::nativewal {
 	// An exclusively opened directory is the writer identity. Only immutable,
@@ -19,6 +20,8 @@ namespace graph::storage::nativewal {
 						 bool retireDependencies = true, bool rooted = false);
 		bool sealWal();
 		void checkpointLocked();
+		explicit Journal(std::unique_ptr<Files> inspection);
+		void recover(std::shared_ptr<State> s, NativeWalIntegrityReport *audit, const State *retained = nullptr);
 		void publishSchema(std::shared_ptr<State>, const std::function<void()> &check);
 
 	public:
@@ -27,6 +30,7 @@ namespace graph::storage::nativewal {
 		static std::string create(const std::string &, std::shared_ptr<const ColumnDeclaration> = {});
 		std::shared_ptr<const State> snapshot();
 		void commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next, const Changes &, bool standalone = false);
+		NativeWalIntegrityReport verifyIntegrity(size_t workspace);
 		void checkpoint();
 		bool dropUnique(std::string_view name);
 		uint64_t createUnique(const std::string &name, const std::string &label, const std::string &key,

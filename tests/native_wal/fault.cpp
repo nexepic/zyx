@@ -36,6 +36,30 @@ static int fault(char k, const char *name) {
 	}
 	return 0;
 }
+// Pause only the armed audit thread on the first real WAL read, after
+// the receipt has selected a generation. Other storage I/O runs normally.
+static thread_local int auditSignal = -1, auditRelease = -1;
+extern "C" void zyxArmWalAudit(int signalFd, int releaseFd) {
+	auditSignal = signalFd;
+	auditRelease = releaseFd;
+}
+ssize_t pread(int fd, void *out, size_t size, off_t offset) {
+	static auto real = reinterpret_cast<decltype(&pread)>(dlsym(RTLD_NEXT, "pread"));
+	const auto result = real(fd, out, size, offset);
+	if (auditSignal >= 0 && result > 0) {
+		char name[64], path[4096];
+		snprintf(name, sizeof(name), "/proc/self/fd/%d", fd);
+		const auto n = readlink(name, path, sizeof(path));
+		if (n >= 4 && !memcmp(path + n - 4, ".wal", 4)) {
+			const int notify = auditSignal;
+			auditSignal = -1;
+			char byte = '1';
+			if (write(notify, &byte, 1) != 1 || read(auditRelease, &byte, 1) != 1)
+				_exit(81);
+		}
+	}
+	return result;
+}
 int flock(int fd, int operation) {
 	static auto real = reinterpret_cast<decltype(&flock)>(dlsym(RTLD_NEXT, "flock"));
 	if (!strcmp(action('f', "admit"), "stop")) {

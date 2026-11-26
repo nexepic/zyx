@@ -13,6 +13,7 @@
 #include "LocatorBudget.hpp"
 #include "LongProperties.hpp"
 #include "LargeRows.hpp"
+#include "IntegrityProbe.hpp"
 #include "SnapshotLargeProperties.hpp"
 #include "StreamedTransactions.hpp"
 #include "RelocationGraph.hpp"
@@ -146,6 +147,22 @@ int main(int argc, char **argv) try {
 		tx.commit();
 		_Exit(0);
 	}
+	if (op == "integrity-fixture") {
+		auto main = graph::storage::createIndexedNativeWalDatabase(path, "K", "k");
+		zyx::Database seed(main);
+		seed.open();
+		auto tx = seed.beginTransaction();
+		auto a = tx.createNode("K", {{"k", int64_t(17)}});
+		auto b = tx.createNode("K", {{"k", int64_t(19)}});
+		(void)tx.createEdge(a, b, "T");
+		if (argc > 3) (void)tx.createNode("K", {{"k", std::string("nineteen")}});
+		tx.commit();
+		seed.save();
+		seed.close();
+		return 0;
+	}
+	if (op == "integrity-ro" || op == "integrity-rw")
+		return integrity_test::inspect(path, op == "integrity-rw", argc > 3 ? std::stoull(argv[3]) : (64U << 20));
 	if (op == "embedded-batch") {
 		zyx::Database db(path);
 		db.open();

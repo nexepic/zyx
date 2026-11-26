@@ -1,5 +1,6 @@
 """Public Cypher semantics, schema publication and WAL receipt failures."""
 import hashlib
+from integrity_recovery import probe
 import os
 import struct
 from pathlib import Path
@@ -52,8 +53,12 @@ with tempfile.TemporaryDirectory() as d:
     assert receipt[48:80] == hashlib.sha256(wire).digest()
     receipt[48:80] = hashlib.sha256(invalid).digest()
     receipt[80:] = hashlib.sha256(receipt[:80]).digest()
-    log.write_bytes(invalid)
-    mixed.write_bytes(receipt)
+    with probe(driver, mixed, "ro", os.environ) as verify:
+        assert verify().split()[4] == "2"
+        log.write_bytes(invalid)
+        mixed.write_bytes(receipt)
+        result = verify()
+        assert result.startswith("invalid ") and "duplicate key" in result, result
     run("accept-mixed", mixed, code=1, error="duplicate key")
     run("overlay", clone(active, "overlay"))
     run("large-delta", clone(active, "large-delta"))

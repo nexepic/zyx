@@ -1,4 +1,5 @@
 #include "Journal.hpp"
+#include "graph/storage/relocatable/format/Format.hpp"
 #include <filesystem>
 #include <system_error>
 #include <utility>
@@ -382,6 +383,12 @@ namespace graph::storage::nativewal {
 			alignment = static_cast<size_t>(std::max({long(4096), page, static_cast<long>(info.st_blksize)}));
 			require(alignment <= 65536 && (alignment & (alignment - 1)) == 0, "Unsupported native WAL block alignment");
 		}
+		// The live Journal holds its gate and original file lock throughout the
+		// audit. Duplicate the directory descriptor so relative names cannot
+		// resolve against a different directory after a rename.
+		explicit Files(const Files &held) :
+			directory(fcntl(held.directory.fd, F_DUPFD_CLOEXEC, 0)), main(held.main), log(held.log),
+			stage(held.stage), alignment(held.alignment) {}
 		std::string anchor() const { return main + ".base"; }
 		bool exists(const std::string &name) const {
 			struct stat st{};
@@ -771,8 +778,17 @@ namespace graph::storage::nativewal {
 	}
 	Journal::Journal(const std::string &path, bool ro, size_t memory) :
 		files(std::make_unique<Files>(path)), readOnly(ro) {
-		auto s = std::make_shared<State>(memory);
-		auto [main, extent] = files->lockMain(ro);
+		recover(std::make_shared<State>(memory), nullptr);
+	}
+	Journal::Journal(std::unique_ptr<Files> inspection) : files(std::move(inspection)), readOnly(true) {}
+	void Journal::recover(std::shared_ptr<State> s, NativeWalIntegrityReport *audit, const State *retained) {
+		const auto memory = s->budget->capacity();
+		auto [main, extent] = audit ? files->openInput(files->main) : files->lockMain(readOnly);
+		struct CheckedFile {
+			std::shared_ptr<File> file;
+			struct stat stamp;
+		};
+		std::optional<CheckedFile> walInput, baseInput;
 		require(extent >= 112, "Incomplete native graph main");
 		auto initial = Files::metadata(main->fd);
 		std::array<std::byte, 8> tag{};
@@ -852,33 +868,34 @@ namespace graph::storage::nativewal {
 			require(signature(*s) == std::string_view(reinterpret_cast<const char *>(head.data()), 8),
 					"Noncanonical native schema header");
 			const bool lazy = c.remaining() > std::min(size_t(256 * 1024), memory / 2);
-			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode) {
+			auto rows = [&](size_t n, uint64_t high, auto &table, auto decode, auto inspect, auto previousTable) {
 				uint64_t prior = 0;
-				table.loadSorted(n, [&] {
+				table.loadSorted(n, [&](const auto &previous) {
 					auto id = c.num();
 					auto size = c.count(memory);
 					require(id > prior && id <= high && size <= c.remaining(), "Invalid native base row extent");
 					prior = id;
+					const bool compact = audit && size > s->budget->remaining() / 2;
 					VersionCharge wire(s->budget, size);
 					VersionCharge scratch(s->budget, 0);
 					auto offset = c.position;
 					Bytes b(size);
 					c.consume(b);
-					auto row = decode(id, b, scratch);
+					auto row = compact ? inspect(id, b, scratch, *s) : decode(id, b, scratch);
 					if constexpr (std::is_same_v<decltype(row), LogicalGraphNode>)
 						if (projection)
 							projection->observe(*s->declaration, row);
 					if constexpr (std::is_same_v<decltype(row), LogicalGraphEdge>)
 						require(s->nodes.contains(row.source_node_id) && s->nodes.contains(row.target_node_id),
 								"Native WAL dangling relationship");
-					if (!lazy)
+					if (!lazy || compact)
 						return table.residentRecord(id, std::move(row), scratch);
-					return table.baseRecord(id, size + 16, offset, digest(b), decode);
-				});
+					return table.baseRecord(id, size + 16, offset, digest(b), decode, previous);
+				}, previousTable);
 				table.bindInput(file);
 			};
-			rows(nodes, s->nodeHigh, s->nodes, baseNode);
-			rows(edges, s->edgeHigh, s->edges, baseEdge);
+			rows(nodes, s->nodeHigh, s->nodes, baseNode, inspectBaseNode, retained ? &retained->nodes : nullptr);
+			rows(edges, s->edgeHigh, s->edges, baseEdge, inspectBaseEdge, retained ? &retained->edges : nullptr);
 			if (projection) {
 				projection->buildPostings();
 				require(c.num() == projection->column.size() && c.num() == projection->complete,
@@ -890,6 +907,8 @@ namespace graph::storage::nativewal {
 				projection->releaseUnusablePostings();
 				s->column = std::move(projection);
 			}
+			if (audit)
+				audit->base_generation = s->sequence;
 			baseDigest = finish(c);
 			if (s->catalog) {
 				VersionCharge audit(s->budget, (s->catalog->entries.size() + 1) * 256);
@@ -933,8 +952,10 @@ namespace graph::storage::nativewal {
 				require(s->sequence < UINT64_MAX && tx.num() == s->sequence + 1, "Embedded transaction gap");
 				auto n = tx.count(delta.remaining());
 				UniqueDelta check(*s, uniqueOwners);
-				applyDelta(*s, n, [&](std::span<std::byte> part) { delta.consume(part); }, check);
+				applyDelta(*s, n, [&](std::span<std::byte> part) { delta.consume(part); }, check, audit != nullptr);
 				++s->sequence;
+				if (audit)
+					++audit->embedded_transactions;
 				check.advance(*s);
 				chain = delta.hash.finalize();
 			}
@@ -960,6 +981,8 @@ namespace graph::storage::nativewal {
 				sealBase = m.fixed<144>();
 			finish(m);
 			auto [wal, length] = files->openInput(files->log);
+			if (audit)
+				walInput.emplace(CheckedFile{wal, Files::metadata(wal->fd)});
 			require(length >= needed, "Missing native graph WAL prefix");
 			Cursor log(wal->fd, needed, s->budget, memory);
 			// A receipt fitting one admitted window can be replayed directly
@@ -980,6 +1003,8 @@ namespace graph::storage::nativewal {
 			readExact(anchor.first->fd, 0, anchorTag);
 			std::optional<EmbeddedRoot> rootedAnchor;
 			auto beforeAnchor = Files::metadata(anchor.first->fd);
+			if (audit)
+				baseInput.emplace(CheckedFile{anchor.first, beforeAnchor});
 			if (sealBase) {
 				require(std::memcmp(anchorTag.data(), "ZYXrt002", 8) == 0, "Invalid seal dependency");
 				rootedAnchor = decodeRoot(*sealBase, anchor.second);
@@ -1018,8 +1043,10 @@ namespace graph::storage::nativewal {
 				require(s->sequence < UINT64_MAX && seq == s->sequence + 1, "Native graph WAL sequence gap");
 				auto size = tx.count(log.remaining());
 				UniqueDelta check(*s, uniqueOwners);
-				applyDelta(*s, size, [&](std::span<std::byte> bytes) { log.consume(bytes); }, check);
+				applyDelta(*s, size, [&](std::span<std::byte> bytes) { log.consume(bytes); }, check, audit != nullptr);
 				s->sequence = seq;
+				if (audit)
+					++audit->wal_transactions;
 				check.advance(*s);
 				size_t padding = (alignment - log.position % alignment) % alignment;
 				std::array<std::byte, 512> zeros;
@@ -1039,9 +1066,65 @@ namespace graph::storage::nativewal {
 			require(std::ranges::equal(walHash.finalize(), expected) && s->sequence == sequence,
 					"Incomplete native graph transaction");
 		}
-		if (!ro)
+		if (audit) {
+			// Check the final merged graph, including survival of endpoints
+			// across separate WAL transactions and the high-water marks.
+			s->nodes.visitAfter(0, [&](const auto &it) {
+				require(it.id() <= s->nodeHigh && (it.onDisk() || it->second.node_id == it.id()), "Invalid verified node identity");
+				++audit->nodes;
+				return true;
+			});
+			for (const auto &[id, row] : s->edges) {
+				require(id && id <= s->edgeHigh && row.edge_id == id && s->nodes.contains(row.source_node_id) &&
+								s->nodes.contains(row.target_node_id), "Invalid verified edge or endpoint");
+				++audit->edges;
+			}
+			auto unchanged = [&](const std::string &name, const CheckedFile &input) {
+				struct stat named{};
+				if (fstatat(files->directory.fd, name.c_str(), &named, AT_SYMLINK_NOFOLLOW) < 0)
+					fail("stat verified native input");
+				require(Files::sameStamp(input.stamp, named) &&
+								Files::sameStamp(input.stamp, Files::metadata(input.file->fd)),
+						"Native audit input changed");
+			};
+			unchanged(files->main, CheckedFile{main, initial});
+			if (walInput) unchanged(files->log, *walInput);
+			if (baseInput) unchanged(files->anchor(), *baseInput);
+			audit->generation = s->sequence;
+			audit->confirmed_wal_bytes = walLength;
+			audit->unique_constraints = size_t(bool(s->unique)) + (s->catalog ? s->catalog->entries.size() : 0);
+			audit->has_declared_column = bool(s->declaration);
+			audit->base_column_complete = s->column && s->column->complete;
+		}
+		if (!readOnly)
 			files->discardLegacyStage(s->identity);
 		current = std::move(s);
+	}
+	NativeWalIntegrityReport Journal::verifyIntegrity(size_t workspace) {
+		std::lock_guard lock(gate);
+		require(!poisoned, "Native graph requires recovery");
+		NativeWalIntegrityReport report;
+		try {
+			files->checkAuthority();
+			Journal inspected(std::make_unique<Files>(*files));
+			auto budget = std::make_shared<VersionBudget>(current->budget, workspace);
+			inspected.recover(std::make_shared<State>(std::move(budget)), &report, current.get());
+			const auto &view = *inspected.current;
+			require(view.identity == current->identity && view.sequence == current->sequence &&
+							view.nodeHigh == current->nodeHigh && view.edgeHigh == current->edgeHigh &&
+							report.nodes == current->nodes.size() && report.edges == current->edges.size() &&
+							baseSequence == inspected.baseSequence && baseDigest == inspected.baseDigest &&
+							walLength == inspected.walLength && (!walLength || walHash.finalize() == inspected.walHash.finalize()),
+					"Verified files do not match the confirmed native generation");
+			files->checkAuthority();
+		} catch (const std::system_error &) {
+			throw;
+		} catch (const FormatException &) {
+			throw;
+		} catch (const std::runtime_error &e) {
+			throw FormatException(FormatError::FERR_INVALID_STATE, e.what());
+		}
+		return report;
 	}
 	Journal::~Journal() = default;
 	std::shared_ptr<const State> Journal::snapshot() {
@@ -1568,6 +1651,7 @@ namespace graph::storage::nativewal {
 	} // namespace
 	std::string Journal::create(const std::string &, std::shared_ptr<const ColumnDeclaration>) { unavailable(); }
 	Journal::Journal(const std::string &, bool, size_t) { unavailable(); }
+	NativeWalIntegrityReport Journal::verifyIntegrity(size_t workspace) { unavailable(); }
 	Journal::~Journal() = default;
 	std::shared_ptr<const State> Journal::snapshot() { unavailable(); }
 	void Journal::commit(const std::shared_ptr<const State> &, std::shared_ptr<State>, const Changes &, bool) {

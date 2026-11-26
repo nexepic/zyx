@@ -84,7 +84,9 @@ namespace graph::storage::nativewal {
 		VersionedRows<LogicalGraphNode> nodes;
 		VersionedRows<LogicalGraphEdge> edges;
 		explicit State(size_t memory = 64U << 20) :
-			budget(std::make_shared<VersionBudget>(memory)), nodes(budget), edges(budget) {}
+			State(std::make_shared<VersionBudget>(memory)) {}
+		explicit State(std::shared_ptr<VersionBudget> sharedBudget) :
+			budget(std::move(sharedBudget)), nodes(budget), edges(budget) {}
 		size_t encodedSize() const { return 32 + nodes.encodedBytes() + edges.encodedBytes(); }
 	};
 	void validateScope(const State &, const ScopedUnique &, const std::function<void()> & = {},
@@ -161,6 +163,8 @@ namespace graph::storage::nativewal {
 	void encodeBaseRow(RowEncoder &, const LogicalGraphEdge &);
 	LogicalGraphNode baseNode(uint64_t, Span, VersionCharge &);
 	LogicalGraphEdge baseEdge(uint64_t, Span, VersionCharge &);
+	LogicalGraphNode inspectBaseNode(uint64_t, Span, VersionCharge &, const State &);
+	LogicalGraphEdge inspectBaseEdge(uint64_t, Span, VersionCharge &, const State &);
 	class UniqueDelta;
-	void applyDelta(State &, size_t, const std::function<void(std::span<std::byte>)> &, UniqueDelta &);
+	void applyDelta(State &, size_t, const std::function<void(std::span<std::byte>)> &, UniqueDelta &, bool audit = false);
 } // namespace graph::storage::nativewal

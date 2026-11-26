@@ -1,6 +1,7 @@
 """Run against the native SDK driver and Linux syscall interposer, in fresh directories."""
 import hashlib
 import embedded_root_recovery
+import integrity_recovery
 import streamed_recovery
 import large_row_recovery
 import os
@@ -31,6 +32,7 @@ with tempfile.TemporaryDirectory() as name:
     root = Path(name)
     def new(label):
         return Path(run("init", root / label))
+    integrity_recovery.exercise(root, new, run, driver, env)
     embedded_root_recovery.exercise(root, new, run)
     # Test the final replacement separately from retiring the *prior* ACKed WAL.
     for fault, count, code in (

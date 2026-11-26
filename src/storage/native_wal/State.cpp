@@ -68,6 +68,22 @@ namespace graph::storage::nativewal {
 				auto bytes = r.take(r.count(SIZE_MAX));
 				size_t offset = 0;
 				PropertyValue value;
+				if constexpr (requires { r.auditSchema; }) {
+					const auto *schema = r.auditSchema;
+					if (schema && (!schema->declaration || schema->declaration->key != key) &&
+						(!schema->catalog || std::ranges::none_of(schema->catalog->entries,
+							[&](const auto &entry) { return entry.key == key; }))) {
+						size_t checked = 0;
+						const auto shape = CanonicalPropertyValueCodec::inspectNext(bytes, checked);
+						require(checked == bytes.size(), "Invalid native WAL property extent");
+						// A nonempty container, string or byte sequence is supported
+						// by the native codec. Scalar kinds still take the type check.
+						if (shape.list_elements || shape.map_entries || shape.string_bytes || shape.binary_bytes) {
+							out.push_back({std::move(key), {}});
+							continue;
+						}
+					}
+				}
 				if (auto primitive = CanonicalPropertyValueCodec::tryBorrowPrimitive(bytes)) {
 					if constexpr (requires { r.admit(size_t{}); })
 						if (primitive->type == PropertyType::STRING)
@@ -521,6 +537,24 @@ namespace graph::storage::nativewal {
 			}
 		};
 	}
+	namespace {
+		struct AuditRowDecoder : RowDecoder {
+			const State *auditSchema;
+		};
+	}
+	LogicalGraphNode inspectBaseNode(uint64_t id, Span bytes, VersionCharge &scratch, const State &schema) {
+		AuditRowDecoder reader{{{bytes}, scratch}, &schema};
+		auto row = readNode(reader, id, scratch);
+		require(reader.bytes.empty(), "Trailing native node");
+		return row;
+	}
+	LogicalGraphEdge inspectBaseEdge(uint64_t id, Span bytes, VersionCharge &scratch, const State &schema) {
+		AuditRowDecoder reader{{{bytes}, scratch}, &schema};
+		auto row = readEdge(reader, id, scratch);
+		require(reader.bytes.empty(), "Trailing native edge");
+		return row;
+	}
+
 	LogicalGraphNode baseNode(uint64_t id, Span bytes, VersionCharge &scratch) {
 		RowDecoder r{{bytes}, scratch};
 		auto row = readNode(r, id, scratch);
@@ -543,9 +577,10 @@ namespace graph::storage::nativewal {
 			VersionCharge *rowAllocation = nullptr;
 
 		public:
-			DeltaReader(size_t extent, const std::function<void(std::span<std::byte>)> &read,
+			const State *auditSchema;
+			DeltaReader(const State *schema, size_t extent, const std::function<void(std::span<std::byte>)> &read,
 						const std::shared_ptr<VersionBudget> &budget)
-				: source(read), left(extent), rowLimit(budget->capacity()), memory(budget), field(&memory) {}
+				: source(read), left(extent), rowLimit(budget->capacity()), memory(budget), field(&memory), auditSchema(schema) {}
 			size_t remaining() const { return left; }
 			void beginRow(VersionCharge &scratch) {
 				rowEnd = left > rowLimit ? left - rowLimit : 0;
@@ -586,8 +621,8 @@ namespace graph::storage::nativewal {
 		};
 	}
 	void applyDelta(State &s, size_t extent, const std::function<void(std::span<std::byte>)> &read,
-					UniqueDelta &unique) {
-		DeltaReader r(extent, read, s.budget);
+					UniqueDelta &unique, bool audit) {
+		DeltaReader r(audit ? &s : nullptr, extent, read, s.budget);
 		auto nh = r.num(), eh = r.num();
 		require(nh >= s.nodeHigh && eh >= s.edgeHigh && nh <= INT64_MAX && eh <= INT64_MAX,
 				"Invalid native WAL identity high-water mark");

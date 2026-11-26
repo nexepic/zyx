@@ -17,18 +17,35 @@ namespace graph::storage::nativewal {
 	class VersionBudget {
 		std::atomic<size_t> used{0};
 		size_t maximum;
+		std::shared_ptr<VersionBudget> parent;
 
 	public:
 		explicit VersionBudget(size_t bytes) : maximum(bytes) {}
+		VersionBudget(std::shared_ptr<VersionBudget> shared, size_t grant) :
+			maximum(grant), parent(std::move(shared)) {}
 		void acquire(size_t n) {
 			size_t prior = used.load();
 			do {
 				if (n > maximum - prior)
 					throw std::length_error("Native graph version memory budget exceeded");
 			} while (!used.compare_exchange_weak(prior, prior + n));
+			if (parent) {
+				try {
+					parent->acquire(n);
+				} catch (...) {
+					used.fetch_sub(n);
+					throw;
+				}
+			}
 		}
-		size_t capacity() const { return maximum; }
-		void release(size_t n) { used.fetch_sub(n); }
+		// Decoders use the configured storage limit for supported extents.
+		// A smaller maintenance grant is an allocation refusal, not bad data.
+		size_t capacity() const { return parent ? parent->capacity() : maximum; }
+		size_t remaining() const { return maximum - used.load(); }
+		void release(size_t n) {
+			if (parent) parent->release(n);
+			used.fetch_sub(n);
+		}
 	};
 
 	// Charge the actual vector allocations, including both buffers during a
@@ -272,18 +289,20 @@ namespace graph::storage::nativewal {
 		// Decode the authenticated stream in key order. Construct one AVL node
 		// per record directly instead of path-copying a private prefix for each ID.
 		template<class Read>
-		void loadSorted(size_t n, Read read) {
-			auto build = [&](auto &&self, size_t length) -> Link {
+		void loadSorted(size_t n, Read read, const VersionedRows *prior = nullptr) {
+			auto build = [&](auto &&self, size_t length, const Link &previous) -> Link {
 				if (!length)
 					return {};
-				auto left = self(self, length / 2);
-				auto item = read();
+				auto left = self(self, length / 2, previous ? previous->left : Link{});
+				auto item = read(previous ? previous->item : Item{});
 				wireSize += item->wire;
 				diskRows += bool(item->record);
-				auto right = self(self, length - length / 2 - 1);
+				auto right = self(self, length - length / 2 - 1, previous ? previous->right : Link{});
+				if (previous && previous->item == item && previous->left == left && previous->right == right)
+					return previous;
 				return node(std::move(item), std::move(left), std::move(right));
 			};
-			root = build(build, n);
+			root = build(build, n, prior ? prior->root : Link{});
 			count = n;
 		}
 		Item residentRecord(uint64_t id, Row row, VersionCharge &scratch) const {
@@ -291,7 +310,12 @@ namespace graph::storage::nativewal {
 			return std::make_shared<Entry>(budget, id, std::move(row), wire, heap, &scratch);
 		}
 		Item baseRecord(uint64_t id, size_t wire, size_t offset, const std::array<std::byte, 32> &digest,
-						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &)) const {
+						Row (*decode)(uint64_t, std::span<const std::byte>, VersionCharge &), const Item &previous = {}) const {
+			// A locator holds no file or decoded row. Reuse its allocation only
+			// after the independent stream supplied exactly the same metadata.
+			if (previous && previous->record && previous->value.first == id && previous->wire == wire &&
+				previous->record->offset == offset && previous->record->digest == digest && previous->record->decode == decode)
+				return previous;
 			auto item = std::make_shared<Entry>(budget, id, Row{}, wire, 192);
 			item->record = std::make_unique<Record>(Record{offset, digest, decode});
 			return item;
