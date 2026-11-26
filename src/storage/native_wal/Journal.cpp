@@ -304,6 +304,21 @@ namespace graph::storage::nativewal {
 			std::ranges::copy(r.take(32), item.rootHash.begin());
 			return item;
 		}
+		EmbeddedRoot decodeRoot(Span bytes, size_t extent) {
+			EmbeddedRoot root;
+			require(bytes.size() == 144 && std::ranges::equal(digest(bytes.first(112)), bytes.last(32)),
+					"Invalid confirmed native root");
+			Decoder r{bytes};
+			r.magic("ZYXrs001");
+			std::ranges::copy(r.take(16), root.id.begin());
+			root.baseEnd = r.count(extent);
+			root.end = r.count(extent);
+			root.generation = r.num();
+			require(root.baseEnd >= baseStart + 144 && root.end >= root.baseEnd, "Invalid native root bounds");
+			std::ranges::copy(r.take(32), root.base.begin());
+			std::ranges::copy(r.take(32), root.chain.begin());
+			return root;
+		}
 		EmbeddedRoot readRoot(int fd, size_t extent, bool &repair) {
 			auto first = readReceipt(fd, receipt1), second = readReceipt(fd, receipt2);
 			require(first || second, "No valid native confirmation receipt");
@@ -312,23 +327,12 @@ namespace graph::storage::nativewal {
 						"Conflicting native confirmation receipts");
 			repair = !first || !second || first->sequence != second->sequence;
 			auto selected = !second || (first && first->sequence >= second->sequence) ? *first : *second;
-			EmbeddedRoot root;
-			root.slot = selected.slot;
 			std::array<std::byte, 144> bytes{};
-			readExact(fd, (2 + root.slot) * rootPage, bytes);
-			require(digest(bytes) == selected.rootHash &&
-							std::ranges::equal(digest(Span(bytes).first(112)), Span(bytes).last(32)),
-					"Invalid confirmed native root");
-			Decoder r{bytes};
-			r.magic("ZYXrs001");
-			std::ranges::copy(r.take(16), root.id.begin());
-			root.baseEnd = r.count(extent);
-			root.end = r.count(extent);
-			root.generation = r.num();
+			readExact(fd, (2 + selected.slot) * rootPage, bytes);
+			require(digest(bytes) == selected.rootHash, "Invalid confirmed native root");
+			auto root = decodeRoot(bytes, extent);
+			root.slot = selected.slot;
 			require(root.generation == selected.sequence, "Native confirmation revision mismatch");
-			require(root.baseEnd >= baseStart + 144 && root.end >= root.baseEnd, "Invalid native root bounds");
-			std::ranges::copy(r.take(32), root.base.begin());
-			std::ranges::copy(r.take(32), root.chain.begin());
 			return root;
 		}
 
@@ -949,6 +953,11 @@ namespace graph::storage::nativewal {
 			needsStabilization = repairReceipts || files->exists(files->anchor()) || files->exists(files->log) ||
 								 files->exists(files->stage);
 		} else {
+			// A seal receipt pins the old immutable extent independently of the
+			// anchor control pages while they are being prepared for promotion.
+			std::optional<std::array<std::byte, 144>> sealBase;
+			if (m.remaining() == 144 + 32)
+				sealBase = m.fixed<144>();
 			finish(m);
 			auto [wal, length] = files->openInput(files->log);
 			require(length >= needed, "Missing native graph WAL prefix");
@@ -970,7 +979,13 @@ namespace graph::storage::nativewal {
 			std::array<std::byte, 8> anchorTag{};
 			readExact(anchor.first->fd, 0, anchorTag);
 			std::optional<EmbeddedRoot> rootedAnchor;
-			if (std::memcmp(anchorTag.data(), "ZYXrt002", 8) == 0) {
+			auto beforeAnchor = Files::metadata(anchor.first->fd);
+			if (sealBase) {
+				require(std::memcmp(anchorTag.data(), "ZYXrt002", 8) == 0, "Invalid seal dependency");
+				rootedAnchor = decodeRoot(*sealBase, anchor.second);
+				require(rootedAnchor->id == s->identity && rootedAnchor->generation == baseSequence,
+						"Invalid seal dependency identity");
+			} else if (std::memcmp(anchorTag.data(), "ZYXrt002", 8) == 0) {
 				bool repair = false;
 				rootedAnchor = readRoot(anchor.first->fd, anchor.second, repair);
 				// The external WAL supplies another authenticated binding to this
@@ -1019,6 +1034,8 @@ namespace graph::storage::nativewal {
 			}
 			walHash = log.hash;
 			walLength = needed;
+			if (!sealBase && rootedAnchor)
+				files->remember(anchor.first, beforeAnchor);
 			require(std::ranges::equal(walHash.finalize(), expected) && s->sequence == sequence,
 					"Incomplete native graph transaction");
 		}
@@ -1159,6 +1176,130 @@ namespace graph::storage::nativewal {
 			throw;
 		}
 	}
+	// Seal A independently of B so an interruption in dependency cleanup
+	// cannot report B as failed after making B visible. The exact old root
+	// is durable in main before the anchor's control area can be changed.
+	bool Journal::sealWal() {
+		if (!walLength || !files->stable)
+			return false;
+		files->checkAuthority();
+		files->checkBaseName(false);
+		const auto initial = Files::metadata(files->stable->fd);
+		const auto receiptFile = Files::metadata(files->authority->fd);
+		// Promoting an inode must preserve the private successor's access.
+		// A readable dependency is sufficient for normal full replacement.
+		if ((initial.st_mode & 07777) != 0600 || (receiptFile.st_mode & 07777) != 0600 ||
+			initial.st_uid != receiptFile.st_uid || initial.st_gid != receiptFile.st_gid)
+			return false;
+		std::array<std::byte, 8> tag{};
+		readExact(files->stable->fd, 0, tag);
+		if (std::memcmp(tag.data(), "ZYXrt002", 8) != 0)
+			return false;
+		bool repair = false;
+		auto root = readRoot(files->stable->fd, size_t(initial.st_size), repair);
+		require(root.id == current->identity && root.generation == baseSequence && root.chain == baseDigest,
+				"Native seal base mismatch");
+		size_t limit = (root.baseEnd - baseStart) / 2, used = root.end - root.baseEnd;
+		auto nodes = current->nodes.encodedBytes();
+		if (repair || used > limit || walLength > limit - used ||
+			(nodes < limit && current->edges.encodedBytes() < limit - nodes) ||
+			walLength > size_t(INT64_MAX) - root.end)
+			return false;
+		auto [wal, extentWal] = files->openInput(files->log);
+		require(extentWal >= walLength, "Missing native graph WAL prefix");
+		auto wstamp = Files::metadata(wal->fd);
+		auto budget = current->budget;
+		Cursor input(wal->fd, walLength, budget, budget->capacity());
+		auto expectedHash = walHash.finalize();
+		auto header = input.fixed<72>();
+		Decoder h{header};
+		h.magic("ZYXnw003");
+		require(std::ranges::equal(h.take(16), root.id) && h.num() == root.generation, "Native seal WAL generation");
+		auto alignment = h.count(65536);
+		require(alignment >= 4096 && !(alignment & (alignment - 1)) && std::ranges::equal(h.take(32), root.chain),
+				"Invalid native seal WAL header");
+		auto size = std::min({size_t(32768), budget->capacity() / 16, walLength - input.position});
+		require(size > 0, "Empty native seal WAL");
+		VersionCharge charge(budget, size);
+		Bytes buffer(size);
+		auto prior = root.encode();
+		std::shared_ptr<File> anchor;
+		try {
+			anchor = files->openInput(files->anchor(), O_RDWR).first;
+		} catch (const std::system_error &e) {
+			if (e.code() == std::errc::permission_denied || e.code() == std::errc::read_only_file_system)
+				return false;
+			throw;
+		}
+		require(Files::sameStamp(Files::metadata(anchor->fd), initial), "Native seal anchor changed");
+		auto flags = fcntl(files->stable->fd, F_GETFL);
+		if (flags < 0)
+			fail("inspect native anchor descriptor");
+		if ((flags & O_ACCMODE) == O_RDWR)
+			anchor = files->stable;
+		Files::lockFile(anchor->fd, false);
+		files->install(files->main, manifest(*current, baseSequence, prior, walLength, expectedHash));
+		files->checkBaseName(false);
+		while (input.remaining()) {
+			auto frame = input.fixed<24>();
+			Decoder tx{frame};
+			tx.magic("ZYXtx002");
+			require(root.generation < UINT64_MAX && tx.num() == ++root.generation, "Native seal sequence gap");
+			auto length = tx.count(input.remaining());
+			utils::Sha256 chain;
+			chain.update(root.chain);
+			auto put = [&](Span bytes) {
+				chain.update(bytes);
+				putAt(anchor->fd, root.end, bytes);
+				root.end += bytes.size();
+			};
+			put(frame);
+			while (length) {
+				auto part = std::span(buffer).first(std::min(length, size));
+				input.consume(part);
+				put(part);
+				length -= part.size();
+			}
+			root.chain = chain.finalize();
+			size_t padding = (alignment - input.position % alignment) % alignment;
+			while (padding) {
+				auto part = std::span(buffer).first(std::min(size, padding));
+				input.consume(part);
+				require(std::ranges::all_of(part, [](auto b) { return b == std::byte{}; }), "Invalid WAL padding");
+				padding -= part.size();
+			}
+		}
+		require(root.generation == current->sequence && input.hash.finalize() == expectedHash &&
+						Files::sameStamp(Files::metadata(wal->fd), wstamp), "Native seal receipt mismatch");
+		root.slot ^= 1;
+		auto record = root.encode(), ack = receipt(root, record);
+		putAt(anchor->fd, (2 + root.slot) * rootPage, record);
+		putAt(anchor->fd, receipt1, ack);
+		putAt(anchor->fd, receipt2, ack);
+		std::array<std::byte, 8> retired{};
+		putAt(anchor->fd, (2 + (root.slot ^ 1)) * rootPage, retired);
+		syncFile(anchor->fd);
+		files->checkAuthority();
+		struct stat named{};
+		if (fstatat(files->directory.fd, files->anchor().c_str(), &named, AT_SYMLINK_NOFOLLOW) < 0)
+			fail("stat native seal anchor");
+		require(named.st_nlink == 1 && named.st_dev == initial.st_dev && named.st_ino == initial.st_ino,
+				"Native seal authority changed");
+		if (renameat(files->directory.fd, files->anchor().c_str(), files->directory.fd, files->main.c_str()) < 0)
+			fail("promote native seal");
+		files->authority = anchor;
+		syncFile(files->directory.fd);
+		files->removeWal();
+		files->stable = anchor;
+		files->authenticated = Files::metadata(anchor->fd);
+		files->root = root;
+		baseSequence = root.generation;
+		baseDigest = root.chain;
+		walLength = 0;
+		walHash = utils::Sha256{};
+		needsStabilization = false;
+		return true;
+	}
 	void Journal::commit(const std::shared_ptr<const State> &expected, std::shared_ptr<State> next,
 						 const Changes &changed, bool standalone) {
 		std::lock_guard lock(gate);
@@ -1187,7 +1328,8 @@ namespace graph::storage::nativewal {
 		// yields a standalone compact base suitable for the sparse path below.
 		if (standalone && (needsStabilization || walLength)) {
 			try {
-				publishBase(std::make_shared<State>(*current), {}, true, true);
+				if (!sealWal())
+					publishBase(std::make_shared<State>(*current), {}, true, true);
 			} catch (...) {
 				poisoned = true;
 				throw;
@@ -1222,7 +1364,7 @@ namespace graph::storage::nativewal {
 				header.num(payload);
 				utils::Sha256 hash;
 				hash.update(root.chain);
-				auto window = std::min(size_t(32768), next->budget->capacity() / 16);
+				auto window = std::min({size_t(32768), next->budget->capacity() / 16, 24 + payload});
 				require(window > 0, "Empty embedded output window");
 				VersionCharge charge(next->budget, window);
 				Bytes buffer;

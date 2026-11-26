@@ -17,6 +17,7 @@ namespace graph::storage::nativewal {
 		std::shared_ptr<const State> current;
 		void publishBase(std::shared_ptr<State> next, const std::function<void()> &beforePublish = {},
 						 bool retireDependencies = true, bool rooted = false);
+		bool sealWal();
 		void checkpointLocked();
 		void publishSchema(std::shared_ptr<State>, const std::function<void()> &check);
 

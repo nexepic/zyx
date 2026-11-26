@@ -98,6 +98,30 @@ ssize_t write(int fd, const void *data, size_t len) {
 	}
 	return real(fd, data, len);
 }
+// Anchor preparation happens only under a seal receipt. Give it distinct
+// events so a fault aimed at B cannot accidentally fire while preparing A.
+static int sealFd = -1;
+ssize_t pwrite(int fd, const void *bytes, size_t length, off_t offset) {
+	static auto real = reinterpret_cast<decltype(&pwrite)>(dlsym(RTLD_NEXT, "pwrite"));
+	const char *setting = getenv("ZYX_TEST_NATIVE_IO");
+	if (!setting || setting[0] != 's')
+		return real(fd, bytes, length, offset);
+	if (fd == partial) {
+		partial = -1;
+		errno = EIO;
+		return -1;
+	}
+	sealFd = fd;
+	const char *event = offset >= 20480 ? "data" : offset == 4096 ? "first" : offset == 16384 ? "second" :
+						length == 8 ? "retire" : "root";
+	if (!strcmp(action('s', event), "partial-eio") && length > 1) {
+		partial = fd;
+		return real(fd, bytes, length / 2, offset);
+	}
+	if (fault('s', event) < 0)
+		return -1;
+	return real(fd, bytes, length, offset);
+}
 int fsync(int fd) {
 	static int (*real)(int);
 	if (!real)
@@ -106,7 +130,7 @@ int fsync(int fd) {
 	if (fstat(fd, &st) < 0)
 		return -1;
 	int dir = S_ISDIR(st.st_mode);
-	char k = dir ? last : kind;
+	char k = dir ? last : fd == sealFd ? 's' : kind;
 	const char *name = dir ? "dirsync" : "sync";
 	if (fault(k, name) < 0)
 		return -1;
@@ -119,7 +143,7 @@ int renameat(int a, const char *old, int b, const char *newname) {
 	static int (*real)(int, const char *, int, const char *);
 	if (!real)
 		real = reinterpret_cast<decltype(real)>(dlsym(RTLD_NEXT, "renameat"));
-	char k = strstr(newname, ".wal") ? 'w' : 'm';
+	char k = strstr(old, ".base") ? 's' : strstr(newname, ".wal") ? 'w' : 'm';
 	if (fault(k, "rename") < 0)
 		return -1;
 	int ret = real(a, old, b, newname);

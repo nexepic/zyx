@@ -137,6 +137,15 @@ int main(int argc, char **argv) try {
 		long_property_test::exercise(op, path, argc > 3 ? argv[3] : nullptr);
 		return 0;
 	}
+	if (op == "seal-prefix" || op == "seal-batch") {
+		zyx::Database db(path);
+		db.open();
+		auto tx = op == "seal-prefix" ? db.beginTransaction() : db.beginBulkTransaction();
+		(void)tx.createNode("SealValue", {{"value", int64_t(op == "seal-prefix" ? 41 : 42)}});
+		if (argc > 3) setenv("ZYX_TEST_NATIVE_IO", argv[3], 1);
+		tx.commit();
+		_Exit(0);
+	}
 	if (op == "embedded-batch") {
 		zyx::Database db(path);
 		db.open();
